@@ -30,8 +30,42 @@ pub mod tuning {
 }
 
 pub fn plugin(app: &mut App) {
-    app.init_resource::<crate::level::Levels>();
+    app.init_resource::<crate::level::Levels>()
+        .init_resource::<LevelRun>()
+        .add_message::<RestartLevel>();
 }
+
+/// The hero. Exactly one while a level is loaded.
+#[derive(Component, Debug, Default, Reflect)]
+#[reflect(Component)]
+pub struct Player;
+
+/// Gus the plumber, who follows the player around. Exactly one while a level is loaded.
+#[derive(Component, Debug, Default, Reflect)]
+#[reflect(Component)]
+pub struct Gus;
+
+/// Everything spawned for the current level; despawned when the level unloads.
+#[derive(Component, Debug, Default, Reflect)]
+#[reflect(Component)]
+pub struct LevelEntity;
+
+/// Stats for the level in progress (read by the HUD).
+#[derive(Resource, Debug, Clone, Default, Reflect)]
+#[reflect(Resource)]
+pub struct LevelRun {
+    pub nuggets: u32,
+    pub nuggets_total: u32,
+    /// Seconds of play (not counting pause).
+    pub time: f32,
+    /// Index of the last checkpoint reached, if any.
+    pub checkpoint: Option<usize>,
+    pub deaths: u32,
+}
+
+/// Ask the game to restart the current level from scratch (R key, pause menu).
+#[derive(Message, Debug, Clone, Copy, Default)]
+pub struct RestartLevel;
 
 /// Presentation half of the game: sprites, animation, camera, particles.
 pub fn visuals_plugin(_app: &mut App) {}
