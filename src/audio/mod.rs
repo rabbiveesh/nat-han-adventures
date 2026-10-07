@@ -6,6 +6,10 @@
 //! - [`synth`]: renders a [`Song`] / sound effect to stereo frames.
 //! - [`songs`]: the soundtrack — chunky 8-bit takes on public-domain (pre-1931) jazz standards.
 //! - [`sfx`]: sound effects (toot, splat, nugget, flush, ...).
+//! - [`chart`]: chord charts ([`Song::chords`]); [`theory`]: just intonation, Coltrane changes,
+//!   melodic-minor and quartal harmony; [`accomp`]: generated comping + bass for the
+//!   reharmonizing [`Filters`]; [`director`]: picks the filters from how the player is doing;
+//!   [`demo`]: a ii-V-I exercise for hearing the filters.
 //!
 //! # MML dialect
 //! Whitespace and `|` (bar lines) are ignored.
@@ -46,29 +50,46 @@
 //! - Melodic channels are case-sensitive: notes are lowercase only; `t` is rejected.
 //!
 //! # Playback
-//! [`plugin`] renders all sfx at startup and each song lazily, the first time it's needed
-//! (only one world song is kept in memory at a time). Music follows [`AppState`]; see
-//! [`desired_music`].
+//! [`plugin`] renders all sfx (and the level-clear jingle) at startup and each song when it
+//! starts. Music follows [`AppState`]; see [`desired_music`]. A song (re)starts plain
+//! ([`Filters::default`]); during a level, the [`director`] picks new [`Filters`] from how the
+//! player is doing (after a death, on reaching a checkpoint; back to plain on level start).
+//! A new decision doesn't restart the song: the new version is rendered incrementally (a few
+//! ms per frame, see [`synth::RenderJob`]) and swapped in at the next bar line, at the same song
+//! position, with a short crossfade — the band changing its mind on the fly. Only the playing
+//! render and the one being prepared are kept in memory. [`NowPlaying`] says what's on;
+//! [`MusicStarted`] / [`MusicChanged`] fire when a track starts / switches filters.
+//!
+//! Dev override (native only): `NATHAN_MUSIC=coltrane|quartal|melodic|original[+ji]` (or just
+//! `ji`) forces the filters of every looping song.
 
+pub mod accomp;
+pub mod chart;
+pub mod demo;
+pub mod director;
 pub mod mml;
 pub mod sfx;
 pub mod songs;
 pub mod synth;
+pub mod theory;
 
 use std::time::Duration;
 
 use bevy::{platform::collections::HashMap, prelude::*};
 use bevy_kira_audio::prelude::{
     AudioApp, AudioChannel, AudioControl, AudioEasing, AudioInstance, AudioPlugin, AudioSource, AudioTween,
-    StaticSoundData, StaticSoundSettings,
+    PlaybackState, StaticSoundData, StaticSoundSettings,
 };
 use rand::Rng;
 
 use crate::{
     events::{CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied},
+    game::{LevelRun, RestartLevel},
     level::Levels,
     state::{AppState, CurrentLevel, PlayState},
 };
+
+use director::PlayStats;
 
 /// Music volume (dB). Sfx play at 0 dB on their own channel.
 const MUSIC_DB: f32 = -4.0;
@@ -76,6 +97,12 @@ const MUSIC_DB: f32 = -4.0;
 const PAUSE_DUCK_DB: f32 = -12.0;
 const FADE_OUT: Duration = Duration::from_millis(450);
 const FADE_IN: Duration = Duration::from_millis(250);
+/// Crossfade when the filters switch mid-song.
+const SWITCH_FADE: Duration = Duration::from_millis(150);
+/// Per-frame time budget for rendering a new version of the playing song.
+const RENDER_BUDGET: Duration = Duration::from_micros(3500);
+/// A bar line closer than this (seconds) is too close to switch on; take the next one.
+const SWITCH_MARGIN: f64 = 0.03;
 /// Max fall speed in px/s ([`crate::game::tuning::MAX_FALL`]), for scaling the landing thud.
 const LAND_FULL_SPEED: f32 = 420.0;
 
@@ -94,50 +121,57 @@ pub fn plugin(app: &mut App) {
     app.add_audio_channel::<MusicChannel>()
         .add_audio_channel::<SfxChannel>()
         .init_resource::<MusicPlayer>()
+        .init_resource::<NowPlaying>()
+        .init_resource::<SongSource>()
+        .init_resource::<Director>()
         .init_resource::<HanBabble>()
+        .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (follow_state, duck_on_pause, play_sfx, babble).chain());
+        .add_systems(
+            Update,
+            (follow_state, direct, prepare_switch, switch, duck_on_pause, play_sfx, babble).chain(),
+        );
 }
 
-/// Rendered audio, as kira assets. Music is rendered on first use.
+/// Where songs come from: [`songs::song`], unless a test swaps in its own.
+#[derive(Resource, Clone, Copy)]
+pub struct SongSource(pub fn(Music) -> Song);
+
+impl Default for SongSource {
+    fn default() -> Self {
+        SongSource(songs::song)
+    }
+}
+
+/// `NATHAN_MUSIC` (native dev builds): forced filters for every looping song.
+#[derive(Resource, Debug, Clone, Copy, Default)]
+pub struct MusicOverride(pub Option<Filters>);
+
+fn music_override() -> Option<Filters> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let v = std::env::var("NATHAN_MUSIC").ok()?;
+        let f = Filters::parse(&v);
+        if f.is_none() {
+            warn!("NATHAN_MUSIC={v:?} not understood (try coltrane, quartal, melodic, original, +ji)");
+        }
+        f
+    }
+    #[cfg(target_arch = "wasm32")]
+    None
+}
+
+/// Rendered sound effects (and the short level-clear jingle), as kira assets.
 #[derive(Resource)]
 pub struct AudioBank {
     sfx: HashMap<Sfx, Handle<AudioSource>>,
     han: Vec<Handle<AudioSource>>,
-    music: HashMap<Music, Handle<AudioSource>>,
+    jingle: Option<Handle<AudioSource>>,
 }
 
 impl AudioBank {
     pub fn sfx(&self, sfx: Sfx) -> Handle<AudioSource> {
         self.sfx[&sfx].clone()
-    }
-
-    /// The music asset, rendering it now if needed. Only one world song is cached at a time
-    /// (they're the big ones); the others are dropped when a new world's song is rendered.
-    /// `None` (and an error log) if the song's MML doesn't parse.
-    pub fn music(&mut self, music: Music, assets: &mut Assets<AudioSource>) -> Option<Handle<AudioSource>> {
-        if let Some(h) = self.music.get(&music) {
-            return Some(h.clone());
-        }
-        let started = bevy::platform::time::Instant::now();
-        let rendered = match synth::render_song(&songs::song(music)) {
-            Ok(r) => r,
-            Err(e) => {
-                error!("{e}");
-                return None;
-            }
-        };
-        debug!(
-            "rendered {music:?}: {:.1}s of audio in {:.0}ms",
-            rendered.duration_secs(),
-            started.elapsed().as_secs_f32() * 1000.0
-        );
-        if matches!(music, Music::World(_)) {
-            self.music.retain(|m, _| !matches!(m, Music::World(_)));
-        }
-        let h = assets.add(to_source(rendered));
-        self.music.insert(music, h.clone());
-        Some(h)
     }
 }
 
@@ -152,15 +186,19 @@ pub fn to_source(r: synth::Rendered) -> AudioSource {
     }
 }
 
-fn setup(mut commands: Commands, mut assets: ResMut<Assets<AudioSource>>) {
+fn setup(mut commands: Commands, mut assets: ResMut<Assets<AudioSource>>, source: Res<SongSource>) {
     let started = bevy::platform::time::Instant::now();
     let sfx = Sfx::ALL.into_iter().map(|s| (s, assets.add(to_source(sfx::render(s))))).collect();
     let han = (0..sfx::HAN_VARIANTS).map(|v| assets.add(to_source(sfx::han_blip(v)))).collect();
-    let mut bank = AudioBank { sfx, han, music: HashMap::default() };
-    // The title song is needed straight away.
-    bank.music(Music::Title, &mut assets);
+    let jingle = match synth::render_song(&(source.0)(Music::LevelClear)) {
+        Ok(r) => Some(assets.add(to_source(r))),
+        Err(e) => {
+            error!("{e}");
+            None
+        }
+    };
+    commands.insert_resource(AudioBank { sfx, han, jingle });
     debug!("audio startup render: {:.0}ms", started.elapsed().as_secs_f32() * 1000.0);
-    commands.insert_resource(bank);
 }
 
 /// Which music goes with an app state.
@@ -176,17 +214,116 @@ pub fn desired_music(state: AppState, levels: Option<&Levels>, current: CurrentL
     }
 }
 
-/// What the music channel is playing.
+/// What's playing, for the UI ("now playing" toasts).
+#[derive(Resource, Debug, Clone, PartialEq)]
+pub struct NowPlaying {
+    pub music: Music,
+    pub title: &'static str,
+    pub filters: Filters,
+    /// Why the band plays it this way ("GIANT STEPS!"), or "".
+    pub reason: &'static str,
+}
+
+impl Default for NowPlaying {
+    fn default() -> Self {
+        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "" }
+    }
+}
+
+impl NowPlaying {
+    /// E.g. "GIANT STEPS! - COLTRANE CHANGES"; just the label without a reason; "" when plain.
+    pub fn toast(&self) -> String {
+        let label = self.filters.label();
+        match (self.reason, label.as_str()) {
+            (_, "") => String::new(),
+            ("", l) => l.to_string(),
+            (r, l) => format!("{r} - {l}"),
+        }
+    }
+}
+
+/// A track started from the top.
+#[derive(Message, Debug, Clone, PartialEq)]
+pub struct MusicStarted(pub NowPlaying);
+
+/// The playing track switched filters mid-song (at a bar line).
+#[derive(Message, Debug, Clone, PartialEq)]
+pub struct MusicChanged {
+    pub now: NowPlaying,
+    /// Song position (seconds) of the bar line where the new version came in.
+    pub at_secs: f64,
+}
+
+/// The music channel's state.
 #[derive(Resource, Default)]
 pub struct MusicPlayer {
-    current: Option<(Music, Handle<AudioInstance>)>,
+    current: Option<Current>,
+    /// A new version of the current song, being rendered / waiting for its bar line.
+    pending: Option<Pending>,
+    /// Filters the director asked for (applied by [`prepare_switch`]).
+    wanted: Option<(Filters, &'static str)>,
     /// Duck state last applied to the current instance (`None`: not yet applied).
     ducked: Option<bool>,
 }
 
+struct Current {
+    music: Music,
+    song: Song,
+    filters: Filters,
+    instance: Handle<AudioInstance>,
+    /// Kept alive while it plays.
+    _source: Option<Handle<AudioSource>>,
+    /// Real time (s) at which song position 0 was (or would have been) playing.
+    origin: f64,
+    /// Loop length (s); 0 for one-shots.
+    len_secs: f64,
+}
+
+struct Pending {
+    filters: Filters,
+    reason: &'static str,
+    job: Option<synth::RenderJob>,
+    ready: Option<Handle<AudioSource>>,
+    /// Real time of the switch, and the song position (a bar line) it lands on.
+    at: Option<(f64, f64)>,
+}
+
 impl MusicPlayer {
     pub fn now_playing(&self) -> Option<Music> {
-        self.current.as_ref().map(|(m, _)| *m)
+        self.current.as_ref().map(|c| c.music)
+    }
+
+    /// Filters of the version that's playing.
+    pub fn filters(&self) -> Option<Filters> {
+        self.current.as_ref().map(|c| c.filters)
+    }
+
+    /// Filters of a version being prepared, if any.
+    pub fn pending_filters(&self) -> Option<Filters> {
+        self.pending.as_ref().map(|p| p.filters)
+    }
+}
+
+/// The filters a song can actually take: no reharmonizing without a chart.
+fn effective(filters: Filters, song: &Song) -> Filters {
+    if song.chords.trim().is_empty() { Filters { harmony: Harmony::Original, ..filters } } else { filters }
+}
+
+/// Start a render job for `filters` (falling back to the original harmony if the chart is
+/// unusable; errors are logged).
+fn start_job(song: &Song, filters: Filters) -> Option<(synth::RenderJob, Filters)> {
+    let seed = rand::rng().random::<u64>();
+    match synth::RenderJob::new(song, filters, seed) {
+        Ok(j) => Some((j, filters)),
+        Err(e) if filters.harmony != Harmony::Original => {
+            error!("{e}");
+            let plain = Filters { harmony: Harmony::Original, ..filters };
+            synth::RenderJob::new(song, plain, seed).ok().map(|j| (j, plain))
+        }
+        Err(e) => {
+            error!("{e}");
+            None
+        }
     }
 }
 
@@ -195,14 +332,19 @@ fn follow_state(
     state: Res<State<AppState>>,
     levels: Option<Res<Levels>>,
     current_level: Res<CurrentLevel>,
+    time: Res<Time<Real>>,
+    bank: Option<Res<AudioBank>>,
+    source: Res<SongSource>,
+    overrides: Res<MusicOverride>,
     mut player: ResMut<MusicPlayer>,
-    mut bank: ResMut<AudioBank>,
+    mut now_playing: ResMut<NowPlaying>,
+    mut started: MessageWriter<MusicStarted>,
     mut sources: ResMut<Assets<AudioSource>>,
     mut instances: ResMut<Assets<AudioInstance>>,
     channel: Res<AudioChannel<MusicChannel>>,
 ) {
     let want = desired_music(*state.get(), levels.as_deref(), *current_level);
-    if player.current.as_ref().is_some_and(|(m, _)| *m == want) {
+    if player.current.as_ref().is_some_and(|c| c.music == want) {
         return;
     }
     // The fanfare cuts in quickly; everything else crossfades.
@@ -210,19 +352,224 @@ fn follow_state(
         Music::LevelClear => (Duration::from_millis(120), Duration::from_millis(10)),
         _ => (FADE_OUT, FADE_IN),
     };
-    if let Some((_, old)) = player.current.take()
-        && let Some(mut instance) = instances.get_mut(&old)
+    if let Some(old) = player.current.take()
+        && let Some(mut instance) = instances.get_mut(&old.instance)
     {
         instance.stop(AudioTween::new(fade_out, AudioEasing::OutPowi(2)));
     }
+    player.pending = None;
+    player.wanted = None;
     player.ducked = None;
-    let Some(source) = bank.music(want, &mut sources) else {
+    let song = (source.0)(want);
+    let mut filters = Filters::default();
+    let handle = if want == Music::LevelClear {
+        bank.and_then(|b| b.jingle.clone())
+    } else {
+        if let Some(f) = overrides.0 {
+            filters = effective(f, &song);
+        }
+        let t = bevy::platform::time::Instant::now();
+        let job = start_job(&song, filters).and_then(|(mut job, f)| {
+            filters = f;
+            while !job.step(Duration::MAX) {}
+            job.into_rendered()
+        });
+        debug!("rendered {want:?} {filters:?} in {:.0}ms", t.elapsed().as_secs_f32() * 1000.0);
+        job.map(|r| sources.add(to_source(r)))
+    };
+    let now = time.elapsed_secs_f64();
+    let len_secs = if song.looping { song_secs(&song) } else { 0.0 };
+    let instance = match &handle {
+        Some(h) => channel.play(h.clone()).with_volume(MUSIC_DB).fade_in(AudioTween::linear(fade_in)).handle(),
         // Unplayable song: remember it anyway so we don't retry every frame.
-        player.current = Some((want, Handle::default()));
+        None => Handle::default(),
+    };
+    player.current = Some(Current { music: want, song: song.clone(), filters, instance, _source: handle, origin: now, len_secs });
+    let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
+    *now_playing = NowPlaying { music: want, title: song.title, filters, reason };
+    started.write(MusicStarted(now_playing.clone()));
+}
+
+/// Length of one loop of a song, in seconds (the longest track).
+fn song_secs(song: &Song) -> f64 {
+    let beats = [
+        (song.pulse1, mml::Channel::Melodic),
+        (song.pulse2, mml::Channel::Melodic),
+        (song.triangle, mml::Channel::Melodic),
+        (song.noise, mml::Channel::Drums),
+    ]
+    .iter()
+    .filter_map(|(src, ch)| mml::parse(src, *ch).ok())
+    .map(|t| t.length)
+    .fold(0.0, f64::max);
+    // The renderer rounds to whole samples.
+    (beats * synth::SAMPLE_RATE as f64 * 60.0 / song.bpm as f64).round() / synth::SAMPLE_RATE as f64
+}
+
+/// The director's bookkeeping between frames.
+#[derive(Resource, Debug, Default)]
+pub struct Director {
+    /// Level-long counters (the rolling-window fields are filled in at each decision).
+    pub stats: PlayStats,
+    /// What happened in the last [`director::MUSIC_CHECK_SECS`] of play.
+    pub window: director::Window,
+    /// [`LevelRun::time`] when the level started, and of the next periodic check.
+    level_start: f32,
+    next_check: f32,
+    was_playing: bool,
+}
+
+/// Track play stats and make decisions at level start, death, checkpoints and every
+/// [`director::MUSIC_CHECK_SECS`] of play.
+#[allow(clippy::too_many_arguments)]
+fn direct(
+    state: Res<State<AppState>>,
+    run: Option<Res<LevelRun>>,
+    overrides: Res<MusicOverride>,
+    mut director: ResMut<Director>,
+    mut player: ResMut<MusicPlayer>,
+    mut restart: MessageReader<RestartLevel>,
+    mut jumped: MessageReader<Jumped>,
+    mut nuggets: MessageReader<NuggetCollected>,
+    mut died: MessageReader<PlayerDied>,
+    mut checkpoints: MessageReader<CheckpointReached>,
+) {
+    let playing = *state.get() == AppState::Playing;
+    let restarted = restart.read().count() > 0;
+    let toots = jumped.read().filter(|j| j.double).count() as u32;
+    let got = nuggets.read().count() as u32;
+    let deaths = died.read().count() as u32;
+    let cps = checkpoints.read().count();
+    // Play time (pause excluded): the director's clock.
+    let now = run.as_ref().map_or(0.0, |r| r.time);
+    let d = &mut *director;
+    let mut decision = None;
+    if playing && (!d.was_playing || restarted) {
+        // Level start: everything resets, the band plays it straight.
+        d.stats = PlayStats::default();
+        d.window = director::Window::default();
+        d.level_start = now;
+        d.next_check = now + director::MUSIC_CHECK_SECS;
+        decision = Some((Filters::default(), ""));
+    }
+    d.was_playing = playing;
+    if !playing {
+        return;
+    }
+    d.window.record(now, toots, got, deaths);
+    d.stats.level_deaths += deaths;
+    d.stats.checkpoint_deaths += deaths;
+    if deaths > 0 || cps > 0 || now >= d.next_check {
+        d.window.fill(&mut d.stats, now, d.level_start);
+        decision = Some(director::choose_filters(&d.stats));
+        d.next_check = now + director::MUSIC_CHECK_SECS;
+        if cps > 0 {
+            d.stats.checkpoint_deaths = 0;
+        }
+    }
+    if let Some((filters, reason)) = decision {
+        let decided = match overrides.0 {
+            Some(f) => (f, "NATHAN_MUSIC"),
+            None => (filters, reason),
+        };
+        player.wanted = Some(decided);
+    }
+}
+
+/// Turn a director decision into a render job; step the job within the frame budget; once
+/// rendered, schedule the switch at the next bar line.
+fn prepare_switch(
+    time: Res<Time<Real>>,
+    mut player: ResMut<MusicPlayer>,
+    mut sources: ResMut<Assets<AudioSource>>,
+    instances: Res<Assets<AudioInstance>>,
+) {
+    let player = &mut *player;
+    let Some(cur) = &player.current else {
+        player.wanted = None;
         return;
     };
-    let instance = channel.play(source).with_volume(MUSIC_DB).fade_in(AudioTween::linear(fade_in)).handle();
-    player.current = Some((want, instance));
+    if let Some((wanted, reason)) = player.wanted.take()
+        && cur.len_secs > 0.0
+    {
+        let want = effective(wanted, &cur.song);
+        match &mut player.pending {
+            Some(p) if p.filters == want => p.reason = reason,
+            _ if cur.filters == want => player.pending = None,
+            _ => {
+                // A newer decision replaces whatever was being prepared.
+                player.pending = start_job(&cur.song, want).map(|(job, filters)| Pending {
+                    filters,
+                    reason,
+                    job: Some(job),
+                    ready: None,
+                    at: None,
+                });
+            }
+        }
+    }
+    let Some(p) = &mut player.pending else { return };
+    if let Some(job) = &mut p.job {
+        if !job.step(RENDER_BUDGET) {
+            return;
+        }
+        let rendered = p.job.take().and_then(|j| j.into_rendered()).expect("job finished");
+        p.ready = Some(sources.add(to_source(rendered)));
+    }
+    if p.at.is_none() {
+        let now = time.elapsed_secs_f64();
+        let pos = position(cur, now, &instances);
+        let bar = 4.0 * 60.0 / cur.song.bpm as f64;
+        let next = ((pos + SWITCH_MARGIN) / bar).ceil() * bar;
+        p.at = Some((now + (next - pos), next.rem_euclid(cur.len_secs)));
+    }
+}
+
+/// Song position (s) of the current track: kira's when it reports one, else our own clock.
+fn position(cur: &Current, now: f64, instances: &Assets<AudioInstance>) -> f64 {
+    let ours = (now - cur.origin).rem_euclid(cur.len_secs.max(1e-9));
+    match instances.get(&cur.instance).map(|i| i.state()) {
+        Some(PlaybackState::Playing { position }) => position.rem_euclid(cur.len_secs.max(1e-9)),
+        _ => ours,
+    }
+}
+
+/// At the scheduled bar line: crossfade to the new version at the same song position.
+#[allow(clippy::too_many_arguments)]
+fn switch(
+    time: Res<Time<Real>>,
+    mut player: ResMut<MusicPlayer>,
+    mut now_playing: ResMut<NowPlaying>,
+    mut changed: MessageWriter<MusicChanged>,
+    mut instances: ResMut<Assets<AudioInstance>>,
+    channel: Res<AudioChannel<MusicChannel>>,
+) {
+    let now = time.elapsed_secs_f64();
+    let due = player.pending.as_ref().is_some_and(|p| p.ready.is_some() && p.at.is_some_and(|(t, _)| now >= t));
+    if !due {
+        return;
+    }
+    let p = player.pending.take().expect("checked");
+    let (at, bar_pos) = p.at.expect("checked");
+    let source = p.ready.expect("checked");
+    let Some(cur) = &mut player.current else { return };
+    if let Some(mut old) = instances.get_mut(&cur.instance) {
+        old.stop(AudioTween::new(SWITCH_FADE, AudioEasing::OutPowi(2)));
+    }
+    // We're a little past the bar line (frames are discrete): start that far into it.
+    let pos = (bar_pos + (now - at)).rem_euclid(cur.len_secs);
+    cur.instance = channel
+        .play(source.clone())
+        .start_from(pos)
+        .with_volume(MUSIC_DB)
+        .fade_in(AudioTween::linear(SWITCH_FADE))
+        .handle();
+    cur._source = Some(source);
+    cur.filters = p.filters;
+    cur.origin = now - pos;
+    *now_playing = NowPlaying { music: cur.music, title: cur.song.title, filters: p.filters, reason: p.reason };
+    player.ducked = None;
+    changed.write(MusicChanged { now: now_playing.clone(), at_secs: bar_pos });
 }
 
 fn duck_on_pause(
@@ -234,9 +581,9 @@ fn duck_on_pause(
     if player.ducked == Some(duck) {
         return;
     }
-    let Some((_, handle)) = &player.current else { return };
+    let Some(cur) = &player.current else { return };
     // The instance appears once bevy_kira_audio has processed the play command; retry until then.
-    let Some(mut instance) = instances.get_mut(handle) else { return };
+    let Some(mut instance) = instances.get_mut(&cur.instance) else { return };
     let db = if duck { MUSIC_DB + PAUSE_DUCK_DB } else { MUSIC_DB };
     instance.set_decibels(db, AudioTween::linear(Duration::from_millis(200)));
     player.ducked = Some(duck);
@@ -389,12 +736,17 @@ pub struct Song {
 /// One entry per 4/4 bar, bars separated by `|` (leading/trailing `|` and whitespace ignored),
 /// covering the song from its first bar to its loop point — exactly `length_in_beats / 4` bars.
 /// A bar holds 1, 2 or 4 space-separated chord tokens that split it evenly (4, 2+2, 1+1+1+1 beats).
-/// `%` repeats the previous chord. Chord token: root `A`–`G` with optional `#`/`b`, then a quality:
+/// `%` repeats the previous chord (as a whole bar `| % |` or inside one, `C % F C/E`).
+/// Chord token: root `A`–`G` with optional `#`/`b`, then a quality:
 /// `` (major triad), `6`, `maj7`, `7`, `9`, `7b9`, `7#9`, `7#5`, `7sus4`, `m`, `m6`, `m7`,
 /// `mMaj7`, `m7b5`, `dim7`, `aug`; optionally `/<note>` for a slash bass. E.g.
-/// `| D7 | % | G7 | % | C7 | % | F6 | Am7b5 D7 |`.
+/// `| D7 | % | G7 | % | C7 | % | F6 | Am7b5 D7 |`. Parsed by [`chart::parse`]; errors name
+/// the bar and token. For harmonic analysis `6`/`maj7`/triads are all "major" (tonics are
+/// usually written `F6`), and the dominant family is `7 9 7b9 7#9 7#5 7sus4`.
 ///
-/// "Filters" rolled at random each time a song starts, to make the music clunkier and stranger.
+/// "Filters" chosen by the [`director`] from how the player is doing, to make the music
+/// clunkier and stranger. See [`theory`] for the music theory, [`accomp`] for the generated
+/// accompaniment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
 pub struct Filters {
     pub harmony: Harmony,
@@ -414,6 +766,54 @@ pub enum Harmony {
     Quartal,
     /// Every chord replaced by a melodic minor sonority (altered, lydian dominant, mMaj7, ...).
     MelodicMinor,
+}
+
+impl Harmony {
+    pub const ALL: [Harmony; 4] = [Harmony::Original, Harmony::Coltrane, Harmony::Quartal, Harmony::MelodicMinor];
+
+    /// Short upper-case label ("" for the original).
+    pub fn label(self) -> &'static str {
+        match self {
+            Harmony::Original => "",
+            Harmony::Coltrane => "COLTRANE CHANGES",
+            Harmony::Quartal => "QUARTAL",
+            Harmony::MelodicMinor => "MELODIC MINOR",
+        }
+    }
+
+    /// Lower-case name for files and the `NATHAN_MUSIC` override.
+    pub fn slug(self) -> &'static str {
+        match self {
+            Harmony::Original => "original",
+            Harmony::Coltrane => "coltrane",
+            Harmony::Quartal => "quartal",
+            Harmony::MelodicMinor => "melodic",
+        }
+    }
+}
+
+impl Filters {
+    /// "COLTRANE CHANGES", "JUST INTONATION", "QUARTAL + JUST INTONATION", or "" when plain.
+    pub fn label(&self) -> String {
+        match (self.harmony.label(), self.just_intonation) {
+            (h, false) => h.to_string(),
+            ("", true) => "JUST INTONATION".to_string(),
+            (h, true) => format!("{h} + JUST INTONATION"),
+        }
+    }
+
+    /// Parse `coltrane`, `quartal`, `melodic`, `original`, each optionally `+ji`, or just `ji`
+    /// (case-insensitive). `None` if not understood.
+    pub fn parse(s: &str) -> Option<Filters> {
+        let mut f = Filters::default();
+        for part in s.to_ascii_lowercase().split('+').map(str::trim).filter(|p| !p.is_empty()) {
+            match part {
+                "ji" => f.just_intonation = true,
+                p => f.harmony = *Harmony::ALL.iter().find(|h| h.slug() == p || (p == "melodicminor" && **h == Harmony::MelodicMinor))?,
+            }
+        }
+        Some(f)
+    }
 }
 
 /// Sound effects.
