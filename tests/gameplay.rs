@@ -458,7 +458,7 @@ fn spray_kills_only_while_on() {
     let mut app = app(SPRAY);
     let p = single::<Player>(&mut app);
     let s = single::<Spray>(&mut app);
-    // Hover right in the jet column above the can (column 13 fires from t=1.25s).
+    // Hover right in the jet column above the can (all cans fire from t=1.5s).
     let hover = Vec2::new(13.5 * TILE, standing(TILE) + TILE);
     for i in 0..120 {
         app.world_mut().get_mut::<Pos>(p).unwrap().0 = hover;

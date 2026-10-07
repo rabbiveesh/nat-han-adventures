@@ -8,7 +8,7 @@
 //! world: 1
 //! intro: Gus's line when the level starts.
 //! say: Gus's line at the first checkpoint.
-//! say: ...at the second checkpoint (checkpoints are numbered in reading order: left to right, then top to bottom).
+//! say: ...at the second checkpoint (checkpoints are numbered in reading order: top row first, left to right within a row).
 //! 1: dx=6 dy=0 period=4 kind=tp
 //! ---
 //! ....................
@@ -30,7 +30,7 @@
 //! | `v` | spikes hanging from the ceiling, deadly; top half of the tile |
 //! | `~` | deadly liquid (sewage); the whole tile, surface drawn at the top |
 //! | `F` | fly swarm: hovers in a circle (radius ~1 tile) around its tile, deadly |
-//! | `S` | air-freshener spray: a jet firing straight up 3 tiles, on/off cycle, deadly while on. Sits on the floor |
+//! | `S` | air-freshener spray: a jet firing straight up 3 tiles, deadly while on. All cans share one on/off clock. Sits on the floor |
 //! | `1`-`9` | moving platform: a horizontal run of the same digit is one platform, configured by its `N:` header line |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.

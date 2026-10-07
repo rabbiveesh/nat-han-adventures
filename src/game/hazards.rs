@@ -34,9 +34,11 @@ pub const SPRAY_HEIGHT: f32 = 3.0 * TILE;
 pub const SPRAY_WIDTH: f32 = 8.0;
 
 /// Is the jet of the spray in column `col` firing at sim time `t`?
-pub fn spray_on(col: usize, t: f32) -> bool {
-    // Offset half a cycle per column, so neighbours alternate.
-    (t + col as f32 * SPRAY_CYCLE / 2.0).rem_euclid(SPRAY_CYCLE) < SPRAY_ON
+/// All cans share one clock (levels design spray rows as a rhythm to run through together);
+/// `col` is kept so per-can phases can come back without touching callers.
+pub fn spray_on(_col: usize, t: f32) -> bool {
+    // Off first, so nothing is firing the moment a level (re)starts.
+    t.rem_euclid(SPRAY_CYCLE) >= SPRAY_CYCLE - SPRAY_ON
 }
 
 fn move_flies(clock: Res<SimClock>, mut flies: Query<(&Fly, &mut Pos)>) {
