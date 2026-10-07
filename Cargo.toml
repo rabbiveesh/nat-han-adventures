@@ -1,0 +1,39 @@
+[package]
+name = "durhay"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# bevy_audio is off: bevy_kira_audio replaces it (we feed it PCM from our own chiptune synth).
+bevy = { version = "0.19.1", default-features = false, features = ["2d", "ui", "default_font"] }
+bevy_kira_audio = { version = "0.26", default-features = false, features = ["wav"] }
+leafwing-input-manager = "0.21"
+rand = "0.9"
+bevy_brp_extras = { version = "0.22", optional = true }
+
+[features]
+default = ["dev"]
+# Fast iteration: dynamically link bevy. Disable for release builds (`--no-default-features`).
+dev = ["bevy/dynamic_linking", "brp"]
+# Bevy Remote Protocol (+ extras: screenshots, key input) so tools/agents can drive the game.
+brp = ["dep:bevy_brp_extras", "bevy/png"]
+
+# Optimise deps even in dev; our own crate stays fast to compile.
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+# wasm: getrandom needs to be told to use the browser's crypto API.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+web-sys = { version = "0.3", features = ["Window", "Storage"] }
+
+# Web release: small and fast. Used by Trunk (see index.html).
+[profile.wasm-release]
+inherits = "release"
+opt-level = "s"
+lto = "fat"
+codegen-units = 1
+strip = "debuginfo"

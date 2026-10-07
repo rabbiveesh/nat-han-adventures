@@ -1,0 +1,10 @@
+# Per-checkout overrides (e.g. `[build] rustc-wrapper = "kache"`) go in the gitignored
+# `.cargo/config.local.toml`.
+include = [{ path = "config.local.toml", optional = true }]
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

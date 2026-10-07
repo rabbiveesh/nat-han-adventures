@@ -1,0 +1,7 @@
+name: Placeholder 06
+world: 1
+intro: Placeholder level.
+---
+....................
+.P....o.o.o.....C..G
+####################
