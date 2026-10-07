@@ -134,6 +134,8 @@ fn sweet_georgia_brown() -> Song {
             "o2 f4 a4 d4 f+4 | o2 g4 b4 c4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 c4 o1 a4 o2 c+4 | ", // 29-32
         ),
         noise: concat!("v9 [", swing8!(), "]4"),
+        key: 5,
+        chords: "",
     }
 }
 
@@ -195,6 +197,8 @@ fn the_entertainer() -> Song {
             "]2",
         ),
         noise: concat!("v8 [[", two_beat!(), "]7 ", fill!(), "]4"),
+        key: 0,
+        chords: "",
     }
 }
 
@@ -300,6 +304,8 @@ fn tiger_rag() -> Song {
             fill!(),
             tiger_drums8!(),
         ),
+        key: 10,
+        chords: "",
     }
 }
 
@@ -481,6 +487,8 @@ fn muskrat_ramble() -> Song {
             "[k4. s8 r4 h8 h8]7 ",
             fill2!(),
         ),
+        key: 10,
+        chords: "",
     }
 }
 
@@ -602,6 +610,8 @@ fn st_louis_blues() -> Song {
             fill2!(),
             stl_drums_blues!(),
         ),
+        key: 7,
+        chords: "",
     }
 }
 
@@ -694,6 +704,8 @@ fn i_got_rhythm() -> Song {
             fill!(),
             swing8!(),
         ),
+        key: 10,
+        chords: "",
     }
 }
 
@@ -710,6 +722,8 @@ fn shave_and_a_haircut() -> Song {
         pulse2: "v8 @2 o4 e4 e8 e8 f4 e4 | o4 r4 f4 e2",
         triangle: "o2 c4 r4 f4 e4 | o2 r4 o1 g4 o2 c2",
         noise: "v10 k4 s8 s8 k4 s4 | r4 s4 H2",
+        key: 0,
+        chords: "",
     }
 }
 
@@ -767,6 +781,8 @@ fn when_the_saints() -> Song {
             two_beat!(),
             "]7 s16 s16 s16 s16 s8 s8 k8 s8 H4",
         ),
+        key: 5,
+        chords: "",
     }
 }
 

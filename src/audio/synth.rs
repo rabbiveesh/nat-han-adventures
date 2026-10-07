@@ -463,7 +463,7 @@ mod tests {
     use super::*;
 
     fn song(bpm: f32, swing_amt: f32, looping: bool, p1: &'static str, tri: &'static str, noise: &'static str) -> Song {
-        Song { title: "test", bpm, swing: swing_amt, looping, pulse1: p1, pulse2: "", triangle: tri, noise }
+        Song { title: "test", bpm, swing: swing_amt, looping, pulse1: p1, pulse2: "", triangle: tri, noise, key: 0, chords: "" }
     }
 
     fn left(r: &Rendered) -> Vec<f32> {

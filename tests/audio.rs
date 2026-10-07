@@ -69,6 +69,8 @@ fn a_long_busy_song_renders_fast_and_loops_cleanly() {
         pulse2: "[ o4 l8 v9 @2 e g e g f a f a ]60",
         triangle: "[ o2 l8 c c g g a a e& e ]60",
         noise: "[ k8 h8 s8 h16 h16 k8 k8 s8 H8 ]60",
+        key: 0,
+        chords: "",
     };
     let t = Instant::now();
     let r = synth::render_song(&song).unwrap();

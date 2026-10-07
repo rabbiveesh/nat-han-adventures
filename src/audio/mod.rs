@@ -377,6 +377,43 @@ pub struct Song {
     pub triangle: &'static str,
     /// Drums (noise).
     pub noise: &'static str,
+    /// Home key's tonic as a pitch class (0 = C, 1 = C#/Db, ... 11 = B). Just intonation tunes
+    /// every note relative to it.
+    pub key: u8,
+    /// Chord chart for the whole song (see "Chord charts" below). Reharmonizing filters build new
+    /// bass + comping from it. Empty = the song can't be reharmonized (only [`Harmony::Original`]).
+    pub chords: &'static str,
+}
+
+/// # Chord charts
+/// One entry per 4/4 bar, bars separated by `|` (leading/trailing `|` and whitespace ignored),
+/// covering the song from its first bar to its loop point — exactly `length_in_beats / 4` bars.
+/// A bar holds 1, 2 or 4 space-separated chord tokens that split it evenly (4, 2+2, 1+1+1+1 beats).
+/// `%` repeats the previous chord. Chord token: root `A`–`G` with optional `#`/`b`, then a quality:
+/// `` (major triad), `6`, `maj7`, `7`, `9`, `7b9`, `7#9`, `7#5`, `7sus4`, `m`, `m6`, `m7`,
+/// `mMaj7`, `m7b5`, `dim7`, `aug`; optionally `/<note>` for a slash bass. E.g.
+/// `| D7 | % | G7 | % | C7 | % | F6 | Am7b5 D7 |`.
+///
+/// "Filters" rolled at random each time a song starts, to make the music clunkier and stranger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
+pub struct Filters {
+    pub harmony: Harmony,
+    /// Retune everything to 5-limit just intonation relative to [`Song::key`].
+    pub just_intonation: bool,
+}
+
+/// How the accompaniment (pulse 2 + triangle) is harmonized. The melody and drums never change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
+pub enum Harmony {
+    /// As written.
+    #[default]
+    Original,
+    /// Coltrane changes: ii-V-I / V-I resolutions become Giant Steps cycles through major thirds.
+    Coltrane,
+    /// McCoy Tyner: quartal voicings (stacked fourths), pounding root-fifth left hand.
+    Quartal,
+    /// Every chord replaced by a melodic minor sonority (altered, lydian dominant, mMaj7, ...).
+    MelodicMinor,
 }
 
 /// Sound effects.
