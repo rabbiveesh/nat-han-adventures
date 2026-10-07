@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Number Two</title>
+    <link data-trunk rel="rust" data-cargo-no-default-features data-cargo-profile-release="wasm-release" data-wasm-opt="z" />
+    <script>
+      // Autoplay policy: an AudioContext made before any user gesture starts suspended.
+      // Remember every context the game creates and resume them on the first click / key.
+      (function () {
+        const Orig = window.AudioContext || window.webkitAudioContext;
+        if (!Orig) return;
+        const contexts = [];
+        window.AudioContext = window.webkitAudioContext = new Proxy(Orig, {
+          construct(target, args) { const c = new target(...args); contexts.push(c); return c; },
+        });
+        const resume = () => contexts.forEach((c) => { if (c.state !== "running") c.resume(); });
+        for (const ev of ["pointerdown", "keydown", "touchend"]) document.addEventListener(ev, resume, true);
+      })();
+    </script>
+    <style>
+      html, body { margin: 0; height: 100%; background: #1a120c; overflow: hidden; }
+      canvas#game { width: 100%; height: 100%; display: block; outline: none; image-rendering: pixelated; }
+      #start {
+        position: fixed; inset: 0; display: grid; place-items: center; cursor: pointer;
+        background: #1a120c; color: #ffc72e; text-align: center;
+        font: bold 20px/1.6 ui-monospace, monospace; letter-spacing: 2px;
+      }
+      #start small { display: block; color: #b39a7a; font-size: 14px; font-weight: normal; }
+    </style>
+  </head>
+  <body>
+    <canvas id="game" tabindex="0"></canvas>
+    <div id="start">
+      <div>
+        <span id="start-msg">loading&hellip;</span>
+        <small>arrows to move &middot; space to jump (twice to toot) &middot; esc to pause</small>
+      </div>
+    </div>
+    <script>
+      // Browsers only allow audio after a user gesture: an overlay asks for a click or key,
+      // then gets out of the way and gives the canvas keyboard focus.
+      const canvas = document.getElementById("game");
+      const start = document.getElementById("start");
+      const msg = document.getElementById("start-msg");
+      let ready = false;
+      new ResizeObserver(() => {
+        if (!ready && canvas.width > 0) { ready = true; msg.textContent = "click or press any key to start"; }
+      }).observe(canvas);
+      function go(e) {
+        if (!ready) return;
+        if (e) e.preventDefault();
+        start.remove();
+        canvas.focus();
+        window.removeEventListener("keydown", go);
+      }
+      start.addEventListener("pointerdown", go);
+      window.addEventListener("keydown", go);
+      canvas.addEventListener("pointerdown", () => canvas.focus());
+    </script>
+  </body>
+</html>
