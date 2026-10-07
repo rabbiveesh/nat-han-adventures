@@ -1,0 +1,112 @@
+//! Gus (Han) the plumber follows the player like Tails in Sonic 2: he replays the player's
+//! recorded path a fraction of a second later, so he takes the same jumps.
+
+use std::collections::VecDeque;
+
+use bevy::prelude::*;
+
+use super::physics::{Body, Dead};
+use super::{ActiveLevel, GameSet, Gus, Player, Pos, PrevPos};
+use crate::level::{Level, TILE, Tile};
+
+pub(super) fn plugin(app: &mut App) {
+    app.add_systems(FixedUpdate, follow.in_set(GameSet::Follow));
+}
+
+/// Gus replays the player's position this many fixed steps (at 60 Hz) late.
+pub const GUS_DELAY_STEPS: usize = 21;
+/// Farther than this from the player and he pops right next to them.
+pub const GUS_POP_DISTANCE: f32 = 12.0 * TILE;
+/// How fast Gus can close a gap (px/s), e.g. after a respawn.
+pub const GUS_CATCH_UP_SPEED: f32 = 600.0;
+/// Speed (px/s) above which he counts as running.
+const RUN_THRESHOLD: f32 = 20.0;
+
+/// What Han says when the player splats (every 3rd death).
+pub const DEATH_LINES: &[&str] = &[
+    "Don't worry, Nat. I've unclogged worse.",
+    "Nat! That's not how plumbing works!",
+    "Shake it off, Nat. Gravity's just a big drain.",
+    "Ooh. I'm puttin' that one on the invoice.",
+    "Happens to the best of us. Mostly to you, Nat.",
+    "Nat, you go AROUND the pointy stuff.",
+];
+
+/// The player's recent path: (position, on ground), oldest first.
+#[derive(Component, Debug, Clone, Default)]
+pub struct GusTrail(pub VecDeque<(Vec2, bool)>);
+
+/// Gus's velocity over the last step (px/s), derived from motion.
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct GusMotion {
+    pub vel: Vec2,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Reflect)]
+pub enum GusPose {
+    #[default]
+    Idle,
+    Run,
+    Jump,
+}
+
+/// For visuals: what Gus is doing and which way he faces.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect)]
+#[reflect(Component)]
+pub struct GusAnim {
+    pub pose: GusPose,
+    pub facing_left: bool,
+}
+
+/// A spot just behind `at` (facing `facing`, ±1), or `at` itself if that's inside a wall.
+pub fn behind(level: &Level, at: Vec2, facing: f32) -> Vec2 {
+    let p = at - Vec2::new(facing * 18.0, 0.0);
+    let (col, row) = level.cell_at(p);
+    if level.tile(col, row) == Tile::Solid { at } else { p }
+}
+
+#[allow(clippy::type_complexity)]
+fn follow(
+    time: Res<Time>,
+    active: Res<ActiveLevel>,
+    player: Query<(&Pos, &Body, Has<Dead>, &super::PlayerControl), (With<Player>, Without<Gus>)>,
+    mut gus: Query<(&mut Pos, &mut PrevPos, &mut GusTrail, &mut GusMotion, &mut GusAnim), With<Gus>>,
+) {
+    let dt = time.delta_secs();
+    let Ok((ppos, pbody, dead, ctl)) = player.single() else { return };
+    let Ok((mut pos, mut prev, mut trail, mut motion, mut anim)) = gus.single_mut() else {
+        return;
+    };
+
+    let mut grounded = true;
+    if !dead {
+        trail.0.push_back((ppos.0, pbody.on_ground));
+        if pos.0.distance(ppos.0) > GUS_POP_DISTANCE {
+            pos.0 = behind(&active.level, ppos.0, ctl.facing);
+            prev.0 = pos.0;
+            trail.0.clear();
+        }
+    }
+    if trail.0.len() > GUS_DELAY_STEPS {
+        let (target, on_ground) = trail.0.pop_front().unwrap();
+        grounded = on_ground;
+        let to = target - pos.0;
+        let max = GUS_CATCH_UP_SPEED * dt;
+        pos.0 += if to.length() > max { to.normalize() * max } else { to };
+    }
+
+    motion.vel = if dt > 0.0 { (pos.0 - prev.0) / dt } else { Vec2::ZERO };
+    let pose = if !grounded {
+        GusPose::Jump
+    } else if motion.vel.x.abs() > RUN_THRESHOLD {
+        GusPose::Run
+    } else {
+        GusPose::Idle
+    };
+    let facing_left = if motion.vel.x.abs() > 1.0 { motion.vel.x < 0.0 } else { anim.facing_left };
+    let new = GusAnim { pose, facing_left };
+    if *anim != new {
+        *anim = new;
+    }
+}
