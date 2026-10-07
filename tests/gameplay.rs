@@ -614,3 +614,18 @@ fn walls_and_level_edges_block() {
     step(&mut app, 5.0);
     assert_eq!(player_pos(&mut app).x, 29.0 * TILE - tuning::PLAYER_SIZE.0 / 2.0);
 }
+
+/// Every real level loads into the simulation, and standing still at the start for 5s is safe
+/// (no hazard reaches the spawn, nothing falls through the floor).
+#[test]
+fn real_levels_start_safe() {
+    for (i, src) in durhay::level::LEVEL_SOURCES.iter().enumerate() {
+        let mut app = app(src);
+        let start = player_pos(&mut app);
+        step(&mut app, 5.0);
+        assert_eq!(counted::<PlayerDied>(&app), 0, "level {}: died standing at the start", i + 1);
+        assert!(body(&mut app).on_ground, "level {}: not on the ground after 5s", i + 1);
+        assert!(player_pos(&mut app).distance(start) < TILE * 2.0, "level {}: drifted", i + 1);
+        assert_eq!(app_state(&app), AppState::Playing);
+    }
+}
