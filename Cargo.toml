@@ -39,4 +39,7 @@ codegen-units = 1
 strip = "debuginfo"
 
 [dev-dependencies]
+# examples/sprite_sheet.rs writes a PNG contact sheet of all the art.
 png = "0.18"
+# examples/render_audio.rs writes the synth's output to WAV files for listening.
+hound = "3.5"
