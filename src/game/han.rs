@@ -20,6 +20,9 @@ pub const HAN_DELAY_STEPS: usize = 21;
 pub const HAN_POP_DISTANCE: f32 = 12.0 * TILE;
 /// How fast Han can close a gap (px/s), e.g. after a respawn.
 pub const HAN_CATCH_UP_SPEED: f32 = 600.0;
+/// Han never stands closer than this (horizontally) to the player, so he stays visible even when
+/// the player only hops in place.
+pub const HAN_MIN_GAP: f32 = 14.0;
 /// Speed (px/s) above which he counts as running.
 const RUN_THRESHOLD: f32 = 20.0;
 
@@ -103,6 +106,16 @@ fn follow(
         let to = target - pos.0;
         let max = HAN_CATCH_UP_SPEED * dt;
         pos.0 += if to.length() > max { to.normalize() * max } else { to };
+    }
+
+    let dx = pos.0.x - ppos.0.x;
+    if dx.abs() < HAN_MIN_GAP {
+        let side = if dx.abs() > 0.5 { dx.signum() } else { -ctl.facing };
+        let x = ppos.0.x + side * HAN_MIN_GAP;
+        let (col, row) = active.level.cell_at(Vec2::new(x, pos.0.y));
+        if active.level.tile(col, row) != Tile::Solid {
+            pos.0.x = x;
+        }
     }
 
     motion.vel = if dt > 0.0 { (pos.0 - prev.0) / dt } else { Vec2::ZERO };

@@ -215,7 +215,8 @@ pub fn desired_music(state: AppState, levels: Option<&Levels>, current: CurrentL
 }
 
 /// What's playing, for the UI ("now playing" toasts).
-#[derive(Resource, Debug, Clone, PartialEq)]
+#[derive(Resource, Debug, Clone, PartialEq, Reflect)]
+#[reflect(Resource)]
 pub struct NowPlaying {
     pub music: Music,
     pub title: &'static str,

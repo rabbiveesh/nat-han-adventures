@@ -665,3 +665,17 @@ fn quick_double_tap_clears_five_tiles() {
     assert_eq!(counted::<Jumped>(&app), 2, "ground jump + toot");
     assert!(top > 5.0 * TILE + 2.0, "feet rose only {top}px");
 }
+
+/// Hopping in place (no sideways movement) never pulls Han on top of the player.
+#[test]
+fn han_stays_beside_a_player_hopping_in_place() {
+    let mut app = app(FLAT);
+    for _ in 0..6 {
+        hold(&mut app, JUMP);
+        step(&mut app, 0.1);
+        release(&mut app, JUMP);
+        step(&mut app, 0.6);
+        let (p, h) = (player_pos(&mut app), han_pos(&mut app));
+        assert!((p.x - h.x).abs() >= 13.0, "han at {h}, player at {p}: overlapping");
+    }
+}

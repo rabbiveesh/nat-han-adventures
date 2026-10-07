@@ -1,12 +1,17 @@
-//! In-level HUD: nuggets, level name, timer, splats; the "LEVEL N" intro card; checkpoint toast.
+//! In-level HUD: nuggets, level name, timer, splats; the "LEVEL N" intro card; checkpoint toast;
+//! and the band toast when the music changes style to match how you play.
 
 use bevy::prelude::*;
 
 use super::{palette::*, *};
+use crate::audio::{MusicChanged, NowPlaying};
 use crate::events::CheckpointReached;
 use crate::game::LevelRun;
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel};
+
+/// How long the band toast stays up.
+const BAND_SECS: f32 = 3.0;
 
 /// How long the level intro card stays up.
 const INTRO_SECS: f32 = 1.6;
@@ -14,7 +19,7 @@ const INTRO_SECS: f32 = 1.6;
 pub fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::Playing), (spawn_hud, spawn_intro)).add_systems(
         Update,
-        (update_hud, tick_intro, checkpoint_toast).run_if(in_state(AppState::Playing)),
+        (update_hud, tick_intro, checkpoint_toast, band_toast).run_if(in_state(AppState::Playing)),
     );
 }
 
@@ -129,5 +134,61 @@ fn tick_intro(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mu
 fn checkpoint_toast(mut commands: Commands, font: Res<UiFont>, mut reader: MessageReader<CheckpointReached>) {
     if reader.read().last().is_some() {
         spawn_toast(&mut commands, &font, "CHECKPOINT!", 1.5);
+    }
+}
+
+/// The band reacting to your play: why (gold) over what they switched to (cream), top of screen.
+fn band_toast(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    mut reader: MessageReader<MusicChanged>,
+    old: Query<Entity, With<BandToast>>,
+) {
+    let Some(change) = reader.read().last() else { return };
+    let (why, what) = band_lines(&change.now);
+    for e in &old {
+        commands.entity(e).despawn();
+    }
+    commands
+        .spawn((
+            Name::new("BandToast"),
+            BandToast,
+            Toast { ttl: BAND_SECS },
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(28.0),
+                width: percent(100.0),
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            GlobalZIndex(20),
+        ))
+        .with_children(|t| {
+            t.spawn(panel(Node {
+                padding: UiRect::axes(px(8.0), px(4.0)),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(4.0),
+                ..default()
+            }))
+            .with_children(|p| {
+                p.spawn(label(&font, why, 8.0, GOLD));
+                p.spawn(label(&font, what, 8.0, CREAM));
+            });
+        });
+}
+
+#[derive(Component)]
+struct BandToast;
+
+/// The toast's two lines. Switching back to the plain arrangement gets its own line.
+fn band_lines(now: &NowPlaying) -> (String, String) {
+    let label = now.filters.label();
+    if label.is_empty() {
+        ("THE BAND CALMS DOWN".into(), "BACK TO THE CHART".into())
+    } else if now.reason.is_empty() {
+        ("THE BAND IS FEELING IT".into(), label)
+    } else {
+        (now.reason.to_string(), label)
     }
 }
