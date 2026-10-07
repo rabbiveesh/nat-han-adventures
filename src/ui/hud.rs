@@ -1,0 +1,133 @@
+//! In-level HUD: nuggets, level name, timer, splats; the "LEVEL N" intro card; checkpoint toast.
+
+use bevy::prelude::*;
+
+use super::{palette::*, *};
+use crate::events::CheckpointReached;
+use crate::game::LevelRun;
+use crate::level::Levels;
+use crate::state::{AppState, CurrentLevel};
+
+/// How long the level intro card stays up.
+const INTRO_SECS: f32 = 1.6;
+
+pub fn plugin(app: &mut App) {
+    app.add_systems(OnEnter(AppState::Playing), (spawn_hud, spawn_intro)).add_systems(
+        Update,
+        (update_hud, tick_intro, checkpoint_toast).run_if(in_state(AppState::Playing)),
+    );
+}
+
+#[derive(Component)]
+enum HudText {
+    Nuggets,
+    Name,
+    Time,
+    Splats,
+}
+
+#[derive(Component)]
+struct IntroCard {
+    age: f32,
+}
+
+fn level_name(levels: &Levels, i: usize) -> String {
+    levels.0.get(i).map_or_else(|| "???".into(), |l| l.name.to_uppercase())
+}
+
+fn spawn_hud(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    sprites: Option<Res<Sprites>>,
+    levels: Res<Levels>,
+    current: Res<CurrentLevel>,
+) {
+    let f = &*font;
+    commands
+        .spawn((
+            Name::new("Hud"),
+            DespawnOnExit(AppState::Playing),
+            Node {
+                position_type: PositionType::Absolute,
+                width: percent(100.0),
+                padding: UiRect::all(px(8.0)),
+                justify_content: JustifyContent::SpaceBetween,
+                align_items: AlignItems::Start,
+                ..default()
+            },
+        ))
+        .with_children(|bar| {
+            bar.spawn(Node { column_gap: px(4.0), align_items: AlignItems::Center, min_width: px(64.0), ..default() })
+                .with_children(|n| {
+                    n.spawn(icon(sprites.as_deref(), SpriteId::IconNugget, 8.0, 8.0));
+                    n.spawn((label(f, "0/0", 8.0, GOLD), HudText::Nuggets));
+                });
+            bar.spawn((label(f, level_name(&levels, current.0), 8.0, CREAM), HudText::Name));
+            bar.spawn(Node {
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::End,
+                row_gap: px(4.0),
+                min_width: px(64.0),
+                ..default()
+            })
+            .with_children(|c| {
+                c.spawn((label(f, "00:00", 8.0, CREAM), HudText::Time));
+                c.spawn((label(f, "", 8.0, DIM_CREAM), HudText::Splats));
+            });
+        });
+}
+
+fn update_hud(
+    run: Res<LevelRun>,
+    levels: Res<Levels>,
+    current: Res<CurrentLevel>,
+    mut q: Query<(&HudText, &mut Text)>,
+) {
+    for (h, mut text) in &mut q {
+        let s = match h {
+            HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),
+            HudText::Name => level_name(&levels, current.0),
+            HudText::Time => format_time(run.time),
+            HudText::Splats if run.deaths == 0 => String::new(),
+            HudText::Splats => format!("SPLATS {}", run.deaths),
+        };
+        if text.0 != s {
+            text.0 = s;
+        }
+    }
+}
+
+fn spawn_intro(mut commands: Commands, font: Res<UiFont>, levels: Res<Levels>, current: Res<CurrentLevel>) {
+    let f = &*font;
+    let world = levels.0.get(current.0).map_or(1, |l| l.world);
+    commands
+        .spawn((
+            Name::new("IntroCard"),
+            IntroCard { age: 0.0 },
+            DespawnOnExit(AppState::Playing),
+            Node { padding: UiRect::bottom(px(48.0)), ..fullscreen() },
+        ))
+        .with_children(|root| {
+            root.spawn(panel(Node { padding: UiRect::axes(px(16.0), px(8.0)), ..column(8.0, 8.0) }))
+                .with_children(|p| {
+                    p.spawn(label(f, format!("LEVEL {}", current.0 + 1), 16.0, GOLD));
+                    p.spawn(label(f, level_name(&levels, current.0), 8.0, CREAM));
+                    p.spawn(label(f, format!("WORLD {world}: {}", world_name(world)), 8.0, DIM_CREAM));
+                });
+        });
+}
+
+fn tick_intro(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mut IntroCard)>) {
+    for (e, mut card) in &mut q {
+        card.age += time.delta_secs();
+        if card.age >= INTRO_SECS {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
+fn checkpoint_toast(mut commands: Commands, font: Res<UiFont>, mut reader: MessageReader<CheckpointReached>) {
+    if reader.read().last().is_some() {
+        spawn_toast(&mut commands, &font, "CHECKPOINT!", 1.5);
+    }
+}
