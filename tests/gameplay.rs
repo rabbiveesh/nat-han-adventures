@@ -239,7 +239,9 @@ fn coyote_time_allows_a_late_ground_jump() {
     hold(&mut app, JUMP);
     app.update();
     assert_eq!(counted::<Jumped>(&app), 1);
-    assert!(body(&mut app).vel.y > tuning::DOUBLE_JUMP_SPEED, "got the full ground jump");
+    let p = single::<Player>(&mut app);
+    let ctl = app.world().get::<durhay::game::PlayerControl>(p).unwrap();
+    assert!(ctl.has_toot, "got the ground jump, not the toot");
     // And the toot is still there.
     release(&mut app, JUMP);
     step(&mut app, 0.2);
@@ -642,4 +644,24 @@ fn han_stops_behind_a_standing_player() {
     let (p, g) = (player_pos(&mut app), han_pos(&mut app));
     assert!(p.x - g.x > TILE, "han at {g}, player at {p}: should be visibly behind");
     assert!(p.x - g.x < 5.0 * TILE, "han at {g}, player at {p}: shouldn't lag far behind");
+}
+
+/// A quick double-tap (0.1s press, 0.1s gap, releasing in between) still gets the
+/// feet over a 5-tile wall, even though releasing cuts the first jump short.
+#[test]
+fn quick_double_tap_clears_five_tiles() {
+    let mut app = app(FLAT);
+    let floor = standing(TILE);
+    hold(&mut app, JUMP);
+    step(&mut app, 0.1);
+    release(&mut app, JUMP);
+    step(&mut app, 0.1);
+    hold(&mut app, JUMP);
+    let mut top = 0.0f32;
+    for _ in 0..90 {
+        app.update();
+        top = top.max(player_pos(&mut app).y - floor);
+    }
+    assert_eq!(counted::<Jumped>(&app), 2, "ground jump + toot");
+    assert!(top > 5.0 * TILE + 2.0, "feet rose only {top}px");
 }

@@ -36,8 +36,10 @@ pub mod tuning {
     pub const AIR_ACCEL: f32 = 1000.0;
     /// Initial upward speed of the ground jump (apex ~51px ≈ 3.2 tiles).
     pub const JUMP_SPEED: f32 = 380.0;
-    /// Upward speed set by the mid-air toot jump (adds ~39px ≈ 2.4 tiles).
-    pub const DOUBLE_JUMP_SPEED: f32 = 330.0;
+    /// Upward speed set by the mid-air toot jump (adds ~57px ≈ 3.6 tiles). Generous on purpose:
+    /// tooting means releasing jump first, which cuts a still-rising first jump short, so a quick
+    /// double-tap must still clear a 5-tile wall (see `quick_double_tap_clears_five_tiles`).
+    pub const DOUBLE_JUMP_SPEED: f32 = 400.0;
     /// Releasing jump while rising multiplies vertical speed by this (variable jump height).
     pub const JUMP_CUT: f32 = 0.5;
     /// Can still ground-jump this long after walking off a ledge.
