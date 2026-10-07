@@ -1,7 +1,28 @@
 //! The simulation: level spawning, player physics, Gus, platforms, hazards, nuggets,
 //! checkpoints, the goal and the camera.
+//!
+//! The simulation runs in `FixedUpdate` at 60 Hz (deterministic). Simulated entities carry a
+//! [`Pos`] (authoritative position) and [`PrevPos`] (position at the start of the step);
+//! `Transform` is synced from `Pos` after every step, and the visuals interpolate between the
+//! two so motion is smooth at any refresh rate.
 
 use bevy::prelude::*;
+
+use crate::level::{Level, PlatformKind};
+use crate::state::PlayState;
+
+mod gus;
+mod hazards;
+mod lifecycle;
+mod physics;
+mod pickups;
+mod platforms;
+mod visuals;
+
+pub use gus::{DEATH_LINES, GUS_DELAY_STEPS, GusAnim, GusMotion, GusPose, GusTrail};
+pub use pickups::CHECKPOINT_QUIPS;
+pub use physics::{Body, Dead, PlayerControl};
+pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
 
 /// Physics and feel tuning. Units: pixels and seconds; a tile is 16px. Level design relies on
 /// these (see `tests/levels.rs`): single jump clears ~3 tiles up / ~4 tiles across,
@@ -29,10 +50,153 @@ pub mod tuning {
     pub const RESPAWN_DELAY: f32 = 0.8;
 }
 
+/// Simulation rate.
+pub const FIXED_HZ: f64 = 60.0;
+
 pub fn plugin(app: &mut App) {
     app.init_resource::<crate::level::Levels>()
         .init_resource::<LevelRun>()
-        .add_message::<RestartLevel>();
+        .init_resource::<SimClock>()
+        .add_message::<RestartLevel>()
+        .insert_resource(Time::<Fixed>::from_hz(FIXED_HZ))
+        .configure_sets(
+            FixedUpdate,
+            (
+                GameSet::Prepare,
+                GameSet::World,
+                GameSet::Player,
+                GameSet::Interact,
+                GameSet::Follow,
+                GameSet::Sync,
+            )
+                .chain()
+                .run_if(in_state(PlayState::Running).and_then(resource_exists::<ActiveLevel>)),
+        )
+        .add_systems(FixedUpdate, sync_transforms.in_set(GameSet::Sync))
+        .add_plugins((
+            lifecycle::plugin,
+            physics::plugin,
+            platforms::plugin,
+            hazards::plugin,
+            pickups::plugin,
+            gus::plugin,
+        ));
+}
+
+/// Order of the fixed-step simulation. Everything only runs while [`PlayState::Running`].
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum GameSet {
+    /// Tick clocks, remember previous positions.
+    Prepare,
+    /// Moving platforms, flies, spray jets.
+    World,
+    /// Player input + physics.
+    Player,
+    /// Hazards, nuggets, checkpoints, goal, death/respawn.
+    Interact,
+    /// Gus.
+    Follow,
+    /// Copy [`Pos`] into `Transform`.
+    Sync,
+}
+
+/// Simulated position (world pixels, y up) of a moving entity: the player's/Gus's box center,
+/// a platform's center, a fly's center. Authoritative; `Transform` follows it.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect)]
+#[reflect(Component)]
+pub struct Pos(pub Vec2);
+
+/// [`Pos`] at the start of the current fixed step (for interpolation and platform carrying).
+/// Equal to `Pos` right after a teleport.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect)]
+#[reflect(Component)]
+pub struct PrevPos(pub Vec2);
+
+/// Seconds of simulated (running, unpaused) time since the level (re)started. Drives platforms,
+/// flies and sprays deterministically.
+#[derive(Resource, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Resource)]
+pub struct SimClock {
+    pub time: f32,
+    pub steps: u64,
+}
+
+/// The level currently loaded (a copy of `Levels[CurrentLevel]` taken when it was spawned).
+/// Physics queries this grid directly. Exists while level entities exist.
+#[derive(Resource, Debug, Clone)]
+pub struct ActiveLevel {
+    pub index: usize,
+    pub level: Level,
+}
+
+/// A static tile of the level grid (for drawing; physics uses [`ActiveLevel`]).
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct LevelTile {
+    pub col: usize,
+    pub row: usize,
+    pub tile: crate::level::Tile,
+    /// The tile above is a different kind (draw the surface variant: grass top / liquid top).
+    pub top: bool,
+    pub world: u8,
+}
+
+/// A moving platform (one-way, carries riders). `Pos` is the center of its top tile row.
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+pub struct MovingPlatform {
+    /// `Pos` at phase 0 (the grid position).
+    pub base: Vec2,
+    /// Travel in pixels (y up).
+    pub travel: Vec2,
+    pub period: f32,
+    pub phase: f32,
+    /// Width in tiles.
+    pub width: usize,
+    pub kind: PlatformKind,
+}
+
+/// A golden nugget waiting to be picked up.
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct Nugget;
+
+/// Toilet-paper-holder checkpoint number `index` (level order). `active` once touched.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct Checkpoint {
+    pub index: usize,
+    pub active: bool,
+}
+
+/// The goal flag (a plunger with a flag, two tiles tall; the entity sits at the bottom-center
+/// of its `G` cell, so the art is anchored bottom-center).
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct Goal;
+
+/// A fly circling `center`. `Pos` is its current position.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct Fly {
+    pub center: Vec2,
+    /// Phase offset in turns (0..1).
+    pub phase: f32,
+}
+
+/// Air-freshener can at the bottom-center of its cell; its jet fires 3 tiles up while `on`.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct Spray {
+    pub col: usize,
+    pub on: bool,
+}
+
+fn sync_transforms(mut q: Query<(&Pos, &mut Transform)>) {
+    for (pos, mut tf) in &mut q {
+        tf.translation.x = pos.0.x;
+        tf.translation.y = pos.0.y;
+    }
 }
 
 /// The hero. Exactly one while a level is loaded.
@@ -68,4 +232,6 @@ pub struct LevelRun {
 pub struct RestartLevel;
 
 /// Presentation half of the game: sprites, animation, camera, particles.
-pub fn visuals_plugin(_app: &mut App) {}
+pub fn visuals_plugin(app: &mut App) {
+    visuals::plugin(app);
+}
