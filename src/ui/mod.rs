@@ -20,9 +20,11 @@ mod results;
 mod title;
 mod victory;
 
-/// The game's name, shown on the title screen and in the credits. (Working title.)
-pub const GAME_TITLE: &str = "NUMBER TWO";
-pub const GAME_SUBTITLE: &str = "A Plumber's Tale";
+/// The game's name ("Nat Han Adventures"), shown on the title screen and in the credits,
+/// split in two lines so it fits the 24px title font.
+pub const GAME_TITLE: &str = "NAT HAN";
+pub const GAME_SUBTITLE: &str = "ADVENTURES";
+pub const GAME_TAGLINE: &str = "a plumber's tale";
 /// Player-facing names of the hero (the poo) and his plumber sidekick.
 pub const HERO_NAME: &str = "Nat";
 pub const SIDEKICK_NAME: &str = "Han";

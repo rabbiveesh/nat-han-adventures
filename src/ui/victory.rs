@@ -44,7 +44,8 @@ fn credits() -> Vec<Line> {
     let role = |n: &str, r: &str| Text(dotted(n, r, LINE_CHARS));
     let mut lines = vec![
         Heading(GAME_TITLE.into()),
-        Text(GAME_SUBTITLE.to_uppercase()),
+        Heading(GAME_SUBTITLE.into()),
+        Text(GAME_TAGLINE.to_uppercase()),
         Gap,
         Heading("STARRING".into()),
         role(&HERO_NAME.to_uppercase(), "AS HIMSELF"),

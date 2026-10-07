@@ -6,7 +6,7 @@ fn main() {
         DefaultPlugins
             .set(WindowPlugin {
                 primary_window: Some(Window {
-                    title: "durhay".into(),
+                    title: "Nat Han Adventures".into(),
                     // Web: render into the page's canvas and keep arrows/space from scrolling it.
                     canvas: Some("#game".into()),
                     fit_canvas_to_parent: true,
@@ -18,8 +18,8 @@ fn main() {
             // Chunky pixels: never blur our 16x16 sprites.
             .set(ImagePlugin::default_nearest()),
         bevy_kira_audio::AudioPlugin,
-        durhay::gameplay,
-        durhay::presentation,
+        nat_han_adventures::gameplay,
+        nat_han_adventures::presentation,
     ))
     .insert_resource(ClearColor(Color::srgb_u8(0x1a, 0x12, 0x0c)));
 

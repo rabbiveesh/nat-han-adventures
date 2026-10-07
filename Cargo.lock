@@ -2403,21 +2403,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d8b14ccef22fc6f5a8f4d7d768562a182c04ce9a3b3157b91390b52ddfdf1a76"
 
 [[package]]
-name = "durhay"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "bevy_brp_extras",
- "bevy_kira_audio",
- "getrandom 0.3.4",
- "hound",
- "leafwing-input-manager",
- "png",
- "rand 0.9.5",
- "web-sys",
-]
-
-[[package]]
 name = "dyn-clone"
 version = "1.0.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3628,6 +3613,21 @@ dependencies = [
  "thiserror 2.0.21",
  "tracing",
  "unicode-ident",
+]
+
+[[package]]
+name = "nat-han-adventures"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "bevy_brp_extras",
+ "bevy_kira_audio",
+ "getrandom 0.3.4",
+ "hound",
+ "leafwing-input-manager",
+ "png",
+ "rand 0.9.5",
+ "web-sys",
 ]
 
 [[package]]

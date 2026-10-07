@@ -45,7 +45,7 @@ pub struct RecordOutcome {
     pub unlocked_next: bool,
 }
 
-const HEADER: &str = "durhay-progress 1";
+const HEADER: &str = "nat-han-adventures-progress 1";
 
 impl Progress {
     /// Record a completed run of `level`: unlock the next one and keep the bests.
@@ -77,7 +77,7 @@ impl Progress {
 
     /// Tiny line-based text format:
     /// ```text
-    /// durhay-progress 1
+    /// nat-han-adventures-progress 1
     /// unlocked 3
     /// level 1 12 63.250
     /// ```
@@ -155,7 +155,7 @@ fn save_progress(progress: Res<Progress>, mut last: Local<Option<String>>) {
 
 #[cfg(target_arch = "wasm32")]
 mod storage {
-    const KEY: &str = "durhay.progress";
+    const KEY: &str = "nat-han-adventures.progress";
 
     fn local_storage() -> Option<web_sys::Storage> {
         web_sys::window()?.local_storage().ok().flatten()
@@ -175,18 +175,18 @@ mod storage {
 mod storage {
     use std::path::PathBuf;
 
-    /// `$DURHAY_SAVE` if set (e.g. a scratch file for agent/headless runs), else
-    /// `$XDG_DATA_HOME/durhay/progress.txt` (or `~/.local/share/...`, `%APPDATA%\...`),
+    /// `$NATHAN_SAVE` if set (e.g. a scratch file for agent/headless runs), else
+    /// `$XDG_DATA_HOME/nat-han-adventures/progress.txt` (or `~/.local/share/...`, `%APPDATA%\...`),
     /// falling back to next to the executable.
     fn path() -> PathBuf {
         let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
-        if let Some(p) = env("DURHAY_SAVE") {
+        if let Some(p) = env("NATHAN_SAVE") {
             return p;
         }
         let dir = env("XDG_DATA_HOME")
             .or_else(|| env("APPDATA"))
             .or_else(|| env("HOME").map(|h| h.join(".local/share")))
-            .map(|d| d.join("durhay"))
+            .map(|d| d.join("Nat Han Adventures"))
             .or_else(|| std::env::current_exe().ok()?.parent().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("."));
         dir.join("progress.txt")
@@ -226,14 +226,14 @@ mod tests {
         assert_eq!(Progress::from_text(""), None);
         assert_eq!(Progress::from_text("hello\nunlocked 3"), None);
         let p = Progress::from_text(
-            "durhay-progress 1\nunlocked 99\nlevel 2 7 10.0\nlevel 42 1 1.0\nlevel x y z\ngarbage\nlevel 3 5 NaN\n",
+            "nat-han-adventures-progress 1\nunlocked 99\nlevel 2 7 10.0\nlevel 42 1 1.0\nlevel x y z\ngarbage\nlevel 3 5 NaN\n",
         )
         .unwrap();
         assert_eq!(p.unlocked, LEVEL_COUNT);
         assert_eq!(p.best_nuggets[2], Some(7));
         assert_eq!(p.best_time[2], Some(10.0));
         assert_eq!(p.best_nuggets[3], None);
-        let p = Progress::from_text("durhay-progress 1\nunlocked 0\n").unwrap();
+        let p = Progress::from_text("nat-han-adventures-progress 1\nunlocked 0\n").unwrap();
         assert_eq!(p.unlocked, 1);
     }
 

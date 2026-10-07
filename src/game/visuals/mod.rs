@@ -69,13 +69,13 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, dev_jump_to_level);
 }
 
-/// Dev shortcut: `DURHAY_LEVEL=3 cargo run` starts straight in level 3.
+/// Dev shortcut: `NATHAN_LEVEL=3 cargo run` starts straight in level 3.
 #[cfg(not(target_arch = "wasm32"))]
 fn dev_jump_to_level(
     mut current: ResMut<crate::state::CurrentLevel>,
     mut next: ResMut<NextState<crate::state::AppState>>,
 ) {
-    if let Some(n) = std::env::var("DURHAY_LEVEL").ok().and_then(|v| v.parse::<usize>().ok()) {
+    if let Some(n) = std::env::var("NATHAN_LEVEL").ok().and_then(|v| v.parse::<usize>().ok()) {
         current.0 = n.saturating_sub(1);
         next.set(crate::state::AppState::Playing);
     }

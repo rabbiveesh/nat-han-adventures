@@ -7,7 +7,7 @@
 
 use std::{path::Path, time::Instant};
 
-use durhay::audio::{Music, Sfx, sfx, songs, synth};
+use nat_han_adventures::audio::{Music, Sfx, sfx, songs, synth};
 
 fn main() {
     let mut args = std::env::args().skip(1);

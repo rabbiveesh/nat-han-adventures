@@ -14,8 +14,8 @@
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use durhay::game::tuning::*;
-use durhay::level::*;
+use nat_han_adventures::game::tuning::*;
+use nat_han_adventures::level::*;
 
 const PLAN: [(&str, u8); LEVEL_COUNT] = [
     ("Bathroom Floor", 1),

@@ -36,7 +36,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
         .with_children(|root| {
             root.spawn(Node { flex_grow: 1.0, ..default() });
             root.spawn(label(f, GAME_TITLE, 24.0, GOLD));
-            root.spawn((label(f, GAME_SUBTITLE, 8.0, CREAM), Node { margin: UiRect::top(px(8.0)), ..default() }));
+            root.spawn((label(f, GAME_SUBTITLE, 16.0, GOLD), Node { margin: UiRect::top(px(8.0)), ..default() }));
             // The stars, bobbing on a little stage.
             root.spawn(Node {
                 margin: UiRect::vertical(px(16.0)),
@@ -60,7 +60,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                     });
                 }
             });
-            root.spawn(label(f, format!("starring {HERO_NAME} & {SIDEKICK_NAME}"), 8.0, DIM_CREAM));
+            root.spawn(label(f, GAME_TAGLINE, 8.0, DIM_CREAM));
             root.spawn((
                 label(f, "PRESS ENTER", 8.0, GOLD),
                 Node { margin: UiRect::top(px(24.0)), ..default() },

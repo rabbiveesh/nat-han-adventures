@@ -3,7 +3,7 @@
 
 use std::time::Instant;
 
-use durhay::audio::{Music, Sfx, Song, sfx, songs, synth};
+use nat_han_adventures::audio::{Music, Sfx, Song, sfx, songs, synth};
 
 /// Render budget for everything. Generous in debug builds (this crate is built at opt-level 1).
 fn budget_secs() -> f64 {
@@ -84,7 +84,7 @@ fn a_long_busy_song_renders_fast_and_loops_cleanly() {
 #[test]
 fn music_follows_state() {
     use bevy::{prelude::*, state::app::StatesPlugin};
-    use durhay::{
+    use nat_han_adventures::{
         audio::MusicPlayer,
         level::Levels,
         state::{AppState, CurrentLevel},
@@ -96,8 +96,8 @@ fn music_follows_state() {
         StatesPlugin,
         bevy::input::InputPlugin,
         AssetPlugin::default(),
-        durhay::gameplay,
-        durhay::audio::plugin,
+        nat_han_adventures::gameplay,
+        nat_han_adventures::audio::plugin,
     ));
     app.update();
     let playing = |app: &App| app.world().resource::<MusicPlayer>().now_playing();

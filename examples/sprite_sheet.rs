@@ -6,7 +6,7 @@
 //! - `backdrops.png`: the five backdrops, each drawn twice side by side (to check tiling), 1x.
 //! - `scenes.png`: a mock gameplay scene per world at 2x, to judge readability in context.
 
-use durhay::art::{Pixels, SpriteId, render};
+use nat_han_adventures::art::{Pixels, SpriteId, render};
 use std::path::PathBuf;
 
 fn main() {

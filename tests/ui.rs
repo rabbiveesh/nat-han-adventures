@@ -2,10 +2,10 @@
 
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use durhay::events::HanSays;
-use durhay::game::{Han, LevelRun};
-use durhay::save::Progress;
-use durhay::state::{AppState, CurrentLevel};
+use nat_han_adventures::events::HanSays;
+use nat_han_adventures::game::{Han, LevelRun};
+use nat_han_adventures::save::Progress;
+use nat_han_adventures::state::{AppState, CurrentLevel};
 
 fn app() -> App {
     let mut app = App::new();
@@ -13,8 +13,8 @@ fn app() -> App {
         MinimalPlugins,
         StatesPlugin,
         bevy::input::InputPlugin,
-        durhay::gameplay,
-        durhay::ui::plugin,
+        nat_han_adventures::gameplay,
+        nat_han_adventures::ui::plugin,
     ));
     app.update();
     app

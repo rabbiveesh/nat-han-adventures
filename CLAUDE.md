@@ -1,6 +1,6 @@
-# durhay (working title)
+# Nat Han Adventures
 
-A 2D platformer: a brave little poo named Nat (the hero) runs, jumps and toot-double-jumps through 10 levels
+A 2D platformer (crate `nat-han-adventures`): a brave little poo named Nat (the hero) runs, jumps and toot-double-jumps through 10 levels
 of increasingly unsanitary terrain, followed everywhere by **Han the plumber**, his sidekick. The hero is named **Nat** (Nat + Han = the brother, Nathan).
 Golden nuggets are the coins; toilet-paper holders are checkpoints; a plunger with a flag is the goal.
 The soundtrack is chunky 8-bit covers of public-domain (pre-1931) jazz standards, synthesized at runtime.

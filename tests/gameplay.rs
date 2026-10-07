@@ -5,7 +5,7 @@
 use std::time::Duration;
 
 use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
-use durhay::{
+use nat_han_adventures::{
     events::*,
     game::{
         Body, Checkpoint, Dead, HAN_DELAY_STEPS, Han, LevelRun, MovingPlatform, Nugget, Player,
@@ -25,7 +25,7 @@ fn app(level: &str) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
         .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
-        .add_plugins(durhay::gameplay)
+        .add_plugins(nat_han_adventures::gameplay)
         .insert_resource(Levels(vec![Level::parse(level).expect("test level parses")]));
     count::<Jumped>(&mut app);
     count::<Landed>(&mut app);
@@ -240,7 +240,7 @@ fn coyote_time_allows_a_late_ground_jump() {
     app.update();
     assert_eq!(counted::<Jumped>(&app), 1);
     let p = single::<Player>(&mut app);
-    let ctl = app.world().get::<durhay::game::PlayerControl>(p).unwrap();
+    let ctl = app.world().get::<nat_han_adventures::game::PlayerControl>(p).unwrap();
     assert!(ctl.has_toot, "got the ground jump, not the toot");
     // And the toot is still there.
     release(&mut app, JUMP);
@@ -273,7 +273,7 @@ fn jump_buffer_fires_on_landing() {
     let p = single::<Player>(&mut app);
     app.world_mut().get_mut::<Pos>(p).unwrap().0.y += 2.0 * TILE;
     // Burn the toot first, then press just before landing.
-    app.world_mut().get_mut::<durhay::game::PlayerControl>(p).unwrap().has_toot = false;
+    app.world_mut().get_mut::<nat_han_adventures::game::PlayerControl>(p).unwrap().has_toot = false;
     app.update();
     for _ in 0..60 {
         if player_pos(&mut app).y < standing(TILE) + 4.0 {
@@ -456,7 +456,7 @@ const SPRAY: &str = "name: Spray
 
 #[test]
 fn spray_kills_only_while_on() {
-    use durhay::game::Spray;
+    use nat_han_adventures::game::Spray;
     let mut app = app(SPRAY);
     let p = single::<Player>(&mut app);
     let s = single::<Spray>(&mut app);
@@ -622,7 +622,7 @@ fn walls_and_level_edges_block() {
 /// (no hazard reaches the spawn, nothing falls through the floor).
 #[test]
 fn real_levels_start_safe() {
-    for (i, src) in durhay::level::LEVEL_SOURCES.iter().enumerate() {
+    for (i, src) in nat_han_adventures::level::LEVEL_SOURCES.iter().enumerate() {
         let mut app = app(src);
         let start = player_pos(&mut app);
         step(&mut app, 5.0);
