@@ -28,6 +28,34 @@ pub enum EventKind {
     Note(u8),
     Rest,
     Drum(Drum),
+    /// A chord played as a fast chiptune arpeggio (the voice cycles through the notes every
+    /// [`super::synth::ARP_STEP`] seconds). Only the accompaniment generator makes these; MML
+    /// has no syntax for them.
+    Arp(Arp),
+}
+
+/// Up to [`Arp::MAX`] MIDI notes, played in order and cycled.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Arp {
+    notes: [u8; Arp::MAX],
+    len: u8,
+}
+
+impl Arp {
+    pub const MAX: usize = 6;
+
+    /// The first [`Arp::MAX`] of `notes` (at least one is required).
+    pub fn new(notes: &[u8]) -> Self {
+        assert!(!notes.is_empty(), "an arpeggio needs at least one note");
+        let len = notes.len().min(Self::MAX);
+        let mut a = [0; Self::MAX];
+        a[..len].copy_from_slice(&notes[..len]);
+        Arp { notes: a, len: len as u8 }
+    }
+
+    pub fn notes(&self) -> &[u8] {
+        &self.notes[..self.len as usize]
+    }
 }
 
 /// One note, rest or drum hit.

@@ -12,10 +12,13 @@
 //! songs are rendered exactly one loop long, and anything ringing past the loop end (drum tails)
 //! is wrapped around onto the start, so the loop is seamless.
 
+use std::time::Duration;
+
+use bevy::platform::time::Instant;
 use bevy_kira_audio::prelude::Frame;
 
-use super::Song;
-use super::mml::{self, Channel, Drum, Event, EventKind, Track};
+use super::mml::{self, Arp, Channel, Drum, Event, EventKind, Track};
+use super::{Filters, Harmony, Song, accomp, chart, theory};
 
 /// Output sample rate. 32 kHz keeps memory and render time down (a 60s song is ~15 MB of
 /// frames) while leaving plenty of headroom above the highest notes and hats.
@@ -86,49 +89,306 @@ pub fn midi_to_hz(note: u8) -> f32 {
     440.0 * 2f32.powf((note as f32 - 69.0) / 12.0)
 }
 
-/// Render a song. Errors name the song and channel of the bad MML.
+/// Arpeggio speed: one chord tone per NES frame.
+pub const ARP_STEP: f32 = 1.0 / 60.0;
+
+/// Render a song as written (no filters). Errors name the song and channel of the bad MML.
 pub fn render_song(song: &Song) -> Result<Rendered, String> {
-    let parse = |name: &str, src: &str, ch: Channel| {
-        mml::parse(src, ch).map_err(|e| format!("song \"{}\", {name}: {e}", song.title))
-    };
-    let p1 = parse("pulse1", song.pulse1, Channel::Melodic)?;
-    let p2 = parse("pulse2", song.pulse2, Channel::Melodic)?;
-    let tri = parse("triangle", song.triangle, Channel::Melodic)?;
-    let noise = parse("noise", song.noise, Channel::Drums)?;
+    render_song_with(song, Filters::default(), 0)
+}
 
-    let beats = [&p1, &p2, &tri, &noise].iter().map(|t| t.length).fold(0.0, f64::max);
-    if beats <= 0.0 {
-        return Err(format!("song \"{}\" is empty", song.title));
-    }
-    if !song.bpm.is_finite() || song.bpm <= 0.0 {
-        return Err(format!("song \"{}\": bpm must be positive", song.title));
-    }
-    let timing = Timing { samples_per_beat: SR as f64 * 60.0 / song.bpm as f64 };
-    let [p1, p2, tri, noise] = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));
-    let len = timing.at(beats);
-    let tail = (TAIL * SR) as usize;
-    let mut out = vec![Frame::ZERO; len + tail];
+/// Render a song through `filters`; `seed` varies the generated accompaniment.
+pub fn render_song_with(song: &Song, filters: Filters, seed: u64) -> Result<Rendered, String> {
+    let mut job = RenderJob::new(song, filters, seed)?;
+    while !job.step(Duration::MAX) {}
+    Ok(job.into_rendered().expect("finished"))
+}
 
-    render_pulse(&mut out, &p1, &timing, pan(PULSE1_PAN, PULSE_GAIN), true);
-    render_pulse(&mut out, &p2, &timing, pan(PULSE2_PAN, PULSE_GAIN), false);
-    render_triangle(&mut out, &tri, &timing, pan(0.0, TRIANGLE_GAIN));
-    render_drums(&mut out, &noise, &timing, pan(0.0, NOISE_GAIN));
+/// A resumable render: [`RenderJob::new`] parses (and generates the accompaniment, which is
+/// cheap), then each [`RenderJob::step`] renders whole events until its time budget is spent.
+/// Every event is rendered exactly as a one-shot render would (oscillator state is carried in
+/// the job), so the result doesn't depend on how the work was sliced.
+pub struct RenderJob {
+    looping: bool,
+    timing: Timing,
+    /// Loop length in samples.
+    len: usize,
+    out: Vec<Frame>,
+    /// pulse1, pulse2, triangle, noise (swung).
+    tracks: [Track; 4],
+    /// Indices of the audible drum hits in `tracks[3]`.
+    hits: Vec<usize>,
+    ji: Option<u8>,
+    stage: Stage,
+    /// Next event (or drum hit) of the current channel.
+    cursor: usize,
+    phase: f32,
+    lfsr: Lfsr,
+}
 
-    if song.looping {
-        // Wrap whatever rings past the loop point onto the start.
-        let (head, spill) = out.split_at_mut(len);
-        for (i, f) in spill.iter().enumerate() {
-            head[i % len] += *f;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stage {
+    Channel(usize),
+    Wrap,
+    Master(usize),
+    Done,
+}
+
+/// Frames mastered per unit of work.
+const MASTER_CHUNK: usize = 16_384;
+
+impl RenderJob {
+    pub fn new(song: &Song, filters: Filters, seed: u64) -> Result<Self, String> {
+        let parse = |name: &str, src: &str, ch: Channel| {
+            mml::parse(src, ch).map_err(|e| format!("song \"{}\", {name}: {e}", song.title))
+        };
+        let p1 = parse("pulse1", song.pulse1, Channel::Melodic)?;
+        let mut p2 = parse("pulse2", song.pulse2, Channel::Melodic)?;
+        let mut tri = parse("triangle", song.triangle, Channel::Melodic)?;
+        let noise = parse("noise", song.noise, Channel::Drums)?;
+
+        let beats = [&p1, &p2, &tri, &noise].iter().map(|t| t.length).fold(0.0, f64::max);
+        if beats <= 0.0 {
+            return Err(format!("song \"{}\" is empty", song.title));
         }
-        out.truncate(len);
-    } else {
-        // Trim trailing silence (keeping a few ms), then make sure it ends at zero.
-        let last = out.iter().rposition(|f| f.left.abs().max(f.right.abs()) > 1e-4).unwrap_or(0);
-        out.truncate((last + 64).min(out.len()));
-        fade_out(&mut out, 0.005);
+        if !song.bpm.is_finite() || song.bpm <= 0.0 {
+            return Err(format!("song \"{}\": bpm must be positive", song.title));
+        }
+        if filters.harmony != Harmony::Original {
+            if song.chords.trim().is_empty() {
+                return Err(format!("song \"{}\" has no chord chart to reharmonize", song.title));
+            }
+            let chart = chart::parse(song.chords).map_err(|e| format!("song \"{}\": {e}", song.title))?;
+            if (chart.beats() - beats).abs() > 1e-6 {
+                return Err(format!(
+                    "song \"{}\": the chord chart has {} bars ({} beats) but the song is {beats} beats",
+                    song.title,
+                    chart.bars,
+                    chart.beats()
+                ));
+            }
+            (p2, tri) = accomp::generate(&chart, filters.harmony, song.key, seed);
+        }
+
+        let timing = Timing { samples_per_beat: SR as f64 * 60.0 / song.bpm as f64 };
+        let tracks = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));
+        let hits = (0..tracks[3].events.len())
+            .filter(|&i| {
+                let e = &tracks[3].events[i];
+                matches!(e.kind, EventKind::Drum(_)) && e.volume > 0
+            })
+            .collect();
+        let len = timing.at(beats);
+        let tail = (TAIL * SR) as usize;
+        Ok(RenderJob {
+            looping: song.looping,
+            timing,
+            len,
+            out: vec![Frame::ZERO; len + tail],
+            tracks,
+            hits,
+            ji: filters.just_intonation.then_some(song.key % 12),
+            stage: Stage::Channel(0),
+            cursor: 0,
+            phase: 0.0,
+            lfsr: Lfsr::default(),
+        })
     }
-    master(&mut out);
-    Ok(Rendered { frames: out, sample_rate: SAMPLE_RATE, looping: song.looping })
+
+    pub fn is_done(&self) -> bool {
+        self.stage == Stage::Done
+    }
+
+    /// Render for about `budget` (always at least one unit of work: one event, or a chunk of
+    /// mastering). Returns true once finished.
+    pub fn step(&mut self, budget: Duration) -> bool {
+        let started = Instant::now();
+        while self.stage != Stage::Done {
+            self.unit();
+            if started.elapsed() >= budget {
+                break;
+            }
+        }
+        self.is_done()
+    }
+
+    /// The finished render (`None` until [`RenderJob::step`] has returned true).
+    pub fn into_rendered(self) -> Option<Rendered> {
+        let done = self.is_done();
+        done.then_some(Rendered { frames: self.out, sample_rate: SAMPLE_RATE, looping: self.looping })
+    }
+
+    /// One small piece of work: an event, the loop wrap, or a chunk of mastering.
+    fn unit(&mut self) {
+        match self.stage {
+            Stage::Channel(ch) => {
+                let more = if ch == 3 { self.drum_hit() } else { self.tone_event(ch) };
+                if !more {
+                    self.stage = if ch == 3 { Stage::Wrap } else { Stage::Channel(ch + 1) };
+                    self.cursor = 0;
+                    self.phase = 0.0;
+                }
+            }
+            Stage::Wrap => {
+                let len = self.len;
+                if self.looping {
+                    // Wrap whatever rings past the loop point onto the start.
+                    let (head, spill) = self.out.split_at_mut(len);
+                    for (i, f) in spill.iter().enumerate() {
+                        head[i % len] += *f;
+                    }
+                    self.out.truncate(len);
+                } else {
+                    // Trim trailing silence (keeping a few ms), then make sure it ends at zero.
+                    let out = &mut self.out;
+                    let last = out.iter().rposition(|f| f.left.abs().max(f.right.abs()) > 1e-4).unwrap_or(0);
+                    out.truncate((last + 64).min(out.len()));
+                    fade_out(out, 0.005);
+                }
+                self.stage = Stage::Master(0);
+            }
+            Stage::Master(from) => {
+                let to = (from + MASTER_CHUNK).min(self.out.len());
+                master(&mut self.out[from..to]);
+                self.stage = if to == self.out.len() { Stage::Done } else { Stage::Master(to) };
+            }
+            Stage::Done => {}
+        }
+    }
+
+    /// Render the next note/arpeggio of melodic channel `ch` (skipping rests). False when the
+    /// channel is finished.
+    fn tone_event(&mut self, ch: usize) -> bool {
+        let events = &self.tracks[ch].events;
+        while let Some(e) = events.get(self.cursor) {
+            let i = self.cursor;
+            self.cursor += 1;
+            let notes: &[u8] = match &e.kind {
+                EventKind::Note(n) => std::slice::from_ref(n),
+                EventKind::Arp(a) => a.notes(),
+                _ => continue,
+            };
+            let slur_out = events.get(i + 1).is_some_and(|next| {
+                next.tie && matches!(next.kind, EventKind::Note(_)) && (next.start - (e.start + e.dur)).abs() < 1e-9
+            });
+            let (gain, voice) = match ch {
+                0 => (pan(PULSE1_PAN, PULSE_GAIN), Voice::Pulse { vibrato: true }),
+                1 => (pan(PULSE2_PAN, PULSE_GAIN), Voice::Pulse { vibrato: false }),
+                _ => (pan(0.0, TRIANGLE_GAIN), Voice::Triangle),
+            };
+            let tone = Tone { e, notes, slur_out, gain, voice, ji: self.ji };
+            tone.render(&mut self.out, &self.timing, &mut self.phase);
+            return true;
+        }
+        false
+    }
+
+    /// Render the next drum hit. False when there are no more.
+    fn drum_hit(&mut self) -> bool {
+        let k = self.cursor;
+        let Some(&idx) = self.hits.get(k) else { return false };
+        self.cursor += 1;
+        let events = &self.tracks[3].events;
+        let e = &events[idx];
+        let EventKind::Drum(d) = e.kind else { unreachable!() };
+        let timing = &self.timing;
+        let (gl, gr) = pan(0.0, NOISE_GAIN);
+        let out = &mut self.out;
+        let s0 = timing.at(e.start);
+        let mut n = (drum_len(d) * SR) as usize;
+        // The open hat is choked by the next hit (with a short fade).
+        let choke = (d == Drum::OpenHat)
+            .then(|| self.hits.get(k + 1).map(|&next| timing.at(events[next].start).saturating_sub(s0)))
+            .flatten();
+        if let Some(c) = choke {
+            n = n.min(c + (0.004 * SR) as usize);
+        }
+        let n = n.min(out.len().saturating_sub(s0));
+        let amp = e.volume as f32 / 15.0;
+        let mut buf = vec![0.0f32; n];
+        drum(d, &mut buf, &mut self.lfsr);
+        let fade_from = choke.unwrap_or(usize::MAX);
+        for (i, (f, v)) in out[s0..s0 + n].iter_mut().zip(buf).enumerate() {
+            let mut v = v * amp;
+            if i >= fade_from {
+                v *= 1.0 - (i - fade_from) as f32 / (0.004 * SR);
+            }
+            f.left += v * gl;
+            f.right += v * gr;
+        }
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
+enum Voice {
+    Pulse { vibrato: bool },
+    Triangle,
+}
+
+/// One note or arpeggio on a pulse / triangle voice.
+struct Tone<'a> {
+    e: &'a Event,
+    notes: &'a [u8],
+    slur_out: bool,
+    gain: (f32, f32),
+    voice: Voice,
+    ji: Option<u8>,
+}
+
+impl Tone<'_> {
+    fn render(&self, out: &mut [Frame], timing: &Timing, phase: &mut f32) {
+        let e = self.e;
+        let (s0, s1) = timing.span(e);
+        let n = s1.saturating_sub(s0);
+        if n == 0 || e.volume == 0 {
+            return;
+        }
+        let (gl, gr) = self.gain;
+        let edges = Edges::new(e, self.slur_out, n);
+        let mut dts = [0.0f32; Arp::MAX];
+        for (dt, &note) in dts.iter_mut().zip(self.notes) {
+            *dt = (theory::note_hz(note, self.ji) / SR as f64) as f32;
+        }
+        let k = self.notes.len();
+        let step = ((ARP_STEP * SR) as usize).max(1);
+        let amp = e.volume as f32 / 15.0;
+        match self.voice {
+            Voice::Pulse { vibrato } => {
+                // Gentle decay towards 65% over ~a second, like a soft NES envelope.
+                let decay = (-1.0 / (0.8 * SR)).exp();
+                let vib_delay = (0.18 * SR) as usize;
+                let vib_ramp = 0.25 * SR;
+                let vib_rate = 5.5 / SR;
+                let vibrato = vibrato && k == 1;
+                let duty = DUTIES[e.duty as usize];
+                let mut env = 1.0f32;
+                let mut lfo = 0.0f32;
+                for (i, f) in out[s0..s1].iter_mut().enumerate() {
+                    let mut dt = if k == 1 { dts[0] } else { dts[(i / step) % k] };
+                    if vibrato && i > vib_delay {
+                        let depth = (((i - vib_delay) as f32) / vib_ramp).min(1.0) * 0.006;
+                        advance(&mut lfo, vib_rate);
+                        dt *= 1.0 + depth * (triangle_lfo(lfo));
+                    }
+                    let v = pulse(*phase, dt, duty) * amp * (0.65 + 0.35 * env) * edges.gain(i, n);
+                    env *= decay;
+                    advance(phase, dt);
+                    f.left += v * gl;
+                    f.right += v * gr;
+                }
+            }
+            Voice::Triangle => {
+                for (i, f) in out[s0..s1].iter_mut().enumerate() {
+                    let dt = if k == 1 { dts[0] } else { dts[(i / step) % k] };
+                    let v = triangle(*phase) * amp * edges.gain(i, n);
+                    advance(phase, dt);
+                    f.left += v * gl;
+                    f.right += v * gr;
+                }
+            }
+        }
+    }
 }
 
 struct Timing {
@@ -149,20 +409,6 @@ impl Timing {
 /// Left/right gains for a pan position.
 fn pan(p: f32, gain: f32) -> (f32, f32) {
     (gain * (1.0 - p), gain * (1.0 + p))
-}
-
-/// The note events of a track, each with whether the next one slurs out of it.
-fn notes(track: &Track) -> impl Iterator<Item = (&Event, u8, bool)> {
-    let ev = &track.events;
-    ev.iter().enumerate().filter_map(move |(i, e)| match e.kind {
-        EventKind::Note(n) => {
-            let slur_out = ev.get(i + 1).is_some_and(|next| {
-                next.tie && matches!(next.kind, EventKind::Note(_)) && (next.start - (e.start + e.dur)).abs() < 1e-9
-            });
-            Some((e, n, slur_out))
-        }
-        _ => None,
-    })
 }
 
 /// Linear attack/release ramps, so note starts and ends never click.
@@ -238,65 +484,10 @@ fn advance(phase: &mut f32, dt: f32) {
     }
 }
 
-fn render_pulse(out: &mut [Frame], track: &Track, timing: &Timing, (gl, gr): (f32, f32), vibrato: bool) {
-    let mut phase = 0.0f32;
-    // Gentle decay towards 65% over ~a second, like a soft NES envelope.
-    let decay = (-1.0 / (0.8 * SR)).exp();
-    let vib_delay = (0.18 * SR) as usize;
-    let vib_ramp = 0.25 * SR;
-    let vib_rate = 5.5 / SR;
-    for (e, note, slur_out) in notes(track) {
-        let (s0, s1) = timing.span(e);
-        let n = s1.saturating_sub(s0);
-        if n == 0 || e.volume == 0 {
-            continue;
-        }
-        let edges = Edges::new(e, slur_out, n);
-        let base_dt = midi_to_hz(note) / SR;
-        let duty = DUTIES[e.duty as usize];
-        let amp = e.volume as f32 / 15.0;
-        let mut env = 1.0f32;
-        let mut lfo = 0.0f32;
-        for (i, f) in out[s0..s1].iter_mut().enumerate() {
-            let mut dt = base_dt;
-            if vibrato && i > vib_delay {
-                let depth = (((i - vib_delay) as f32) / vib_ramp).min(1.0) * 0.006;
-                advance(&mut lfo, vib_rate);
-                dt *= 1.0 + depth * (triangle_lfo(lfo));
-            }
-            let v = pulse(phase, dt, duty) * amp * (0.65 + 0.35 * env) * edges.gain(i, n);
-            env *= decay;
-            advance(&mut phase, dt);
-            f.left += v * gl;
-            f.right += v * gr;
-        }
-    }
-}
-
 /// Smooth-ish -1..1 triangle LFO.
 #[inline]
 fn triangle_lfo(phase: f32) -> f32 {
     4.0 * (phase - 0.5).abs() - 1.0
-}
-
-fn render_triangle(out: &mut [Frame], track: &Track, timing: &Timing, (gl, gr): (f32, f32)) {
-    let mut phase = 0.0f32;
-    for (e, note, slur_out) in notes(track) {
-        let (s0, s1) = timing.span(e);
-        let n = s1.saturating_sub(s0);
-        if n == 0 || e.volume == 0 {
-            continue;
-        }
-        let edges = Edges::new(e, slur_out, n);
-        let dt = midi_to_hz(note) / SR;
-        let amp = e.volume as f32 / 15.0;
-        for (i, f) in out[s0..s1].iter_mut().enumerate() {
-            let v = triangle(phase) * amp * edges.gain(i, n);
-            advance(&mut phase, dt);
-            f.left += v * gl;
-            f.right += v * gr;
-        }
-    }
 }
 
 /// The NES noise generator: a 15-bit LFSR. Short mode (tap 6) gives a metallic buzz.
@@ -338,37 +529,6 @@ fn drum_len(d: Drum) -> f32 {
         Drum::Snare => 0.2,
         Drum::ClosedHat => 0.05,
         Drum::OpenHat => 0.3,
-    }
-}
-
-fn render_drums(out: &mut [Frame], track: &Track, timing: &Timing, (gl, gr): (f32, f32)) {
-    let mut lfsr = Lfsr::default();
-    let hits: Vec<_> =
-        track.events.iter().filter(|e| matches!(e.kind, EventKind::Drum(_)) && e.volume > 0).collect();
-    for (k, e) in hits.iter().enumerate() {
-        let EventKind::Drum(d) = e.kind else { unreachable!() };
-        let s0 = timing.at(e.start);
-        let mut n = (drum_len(d) * SR) as usize;
-        // The open hat is choked by the next hit (with a short fade).
-        let choke = (d == Drum::OpenHat)
-            .then(|| hits.get(k + 1).map(|next| timing.at(next.start).saturating_sub(s0)))
-            .flatten();
-        if let Some(c) = choke {
-            n = n.min(c + (0.004 * SR) as usize);
-        }
-        let n = n.min(out.len().saturating_sub(s0));
-        let amp = e.volume as f32 / 15.0;
-        let mut buf = vec![0.0f32; n];
-        drum(d, &mut buf, &mut lfsr);
-        let fade_from = choke.unwrap_or(usize::MAX);
-        for (i, (f, v)) in out[s0..s0 + n].iter_mut().zip(buf).enumerate() {
-            let mut v = v * amp;
-            if i >= fade_from {
-                v *= 1.0 - (i - fade_from) as f32 / (0.004 * SR);
-            }
-            f.left += v * gl;
-            f.right += v * gr;
-        }
     }
 }
 
@@ -577,6 +737,74 @@ mod tests {
     fn errors_name_the_channel() {
         let e = render_song(&song(120.0, 0.0, true, "c", "", "x")).unwrap_err();
         assert!(e.contains("noise") && e.contains("test"), "{e}");
+    }
+
+    #[test]
+    fn arpeggios_cycle_the_chord_tones() {
+        // A C major arpeggio on pulse 2 for 4s; each ARP_STEP window holds one chord tone.
+        let mut job = RenderJob::new(&song(60.0, 0.0, true, "", "", "r1"), Filters::default(), 0).unwrap();
+        job.tracks[1] = Track {
+            events: vec![Event { start: 0.0, dur: 4.0, kind: EventKind::Arp(Arp::new(&[60, 64, 67])), volume: 12, duty: 2, tie: false }],
+            length: 4.0,
+        };
+        while !job.step(Duration::MAX) {}
+        let x = left(&job.into_rendered().unwrap());
+        let step = (ARP_STEP * SR) as usize;
+        let want = [261.63, 329.63, 392.0];
+        for j in 1..60 {
+            let f = freq(&x[j * step + 20..(j + 1) * step - 20]);
+            let w = want[j % 3];
+            assert!((f - w).abs() / w < 0.02, "step {j}: {f} vs {w}");
+        }
+    }
+
+    #[test]
+    fn just_intonation_retunes_rendered_notes() {
+        // E4 in C, justly tuned: 5/4 above an equal-tempered C4.
+        let mut s = song(120.0, 0.0, true, "e1", "", "");
+        s.key = 0;
+        let ji = Filters { just_intonation: true, ..Filters::default() };
+        let f = freq(&left(&render_song_with(&s, ji, 0).unwrap())[3200..60000]);
+        assert!((f - 261.626 * 1.25).abs() < 0.5, "{f}");
+        let f = freq(&left(&render_song(&s).unwrap())[3200..60000]);
+        assert!((f - 329.63).abs() < 0.5, "{f}");
+    }
+
+    #[test]
+    fn incremental_render_matches_one_shot() {
+        let s = Song {
+            chords: "| Dm7 | G7 | Cmaj7 | % |",
+            pulse2: "o4 f1 f1 e1 e1",
+            ..song(150.0, 0.3, true, "l8 o5 [d f a > c < b a g f]2 e2 g2 e1", "[o2 d4 a4]8", "[k8 h8 s8 h8]6 H4 r2.")
+        };
+        for h in Harmony::ALL {
+            let f = Filters { harmony: h, just_intonation: h == Harmony::Quartal };
+            let one = render_song_with(&s, f, 7).unwrap();
+            let mut job = RenderJob::new(&s, f, 7).unwrap();
+            let mut steps = 0;
+            while !job.step(Duration::ZERO) {
+                steps += 1;
+            }
+            assert!(steps > 20, "{steps}");
+            let inc = job.into_rendered().unwrap();
+            assert_eq!(one.frames.len(), inc.frames.len());
+            for (i, (a, b)) in one.frames.iter().zip(&inc.frames).enumerate() {
+                assert!(a.left.to_bits() == b.left.to_bits() && a.right.to_bits() == b.right.to_bits(), "{h:?} frame {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn reharmonizing_needs_a_matching_chart() {
+        let f = Filters { harmony: Harmony::Coltrane, just_intonation: false };
+        let e = render_song_with(&song(120.0, 0.0, true, "c1", "", ""), f, 0).unwrap_err();
+        assert!(e.contains("no chord chart"), "{e}");
+        let s = Song { chords: "| C | G7 |", ..song(120.0, 0.0, true, "c1", "", "") };
+        let e = render_song_with(&s, f, 0).unwrap_err();
+        assert!(e.contains("2 bars") && e.contains("4 beats"), "{e}");
+        let s = Song { chords: "| C | Gx |", ..song(120.0, 0.0, true, "c1 c1", "", "") };
+        let e = render_song_with(&s, f, 0).unwrap_err();
+        assert!(e.contains("bar 2") && e.contains("Gx"), "{e}");
     }
 
     #[test]

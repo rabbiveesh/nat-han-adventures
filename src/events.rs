@@ -11,7 +11,9 @@ pub fn plugin(app: &mut App) {
         .add_message::<CheckpointReached>()
         .add_message::<LevelCompleted>()
         .add_message::<HanSays>()
-        .add_message::<PlaySfx>();
+        .add_message::<PlaySfx>()
+        .add_message::<crate::audio::MusicStarted>()
+        .add_message::<crate::audio::MusicChanged>();
 }
 
 /// Picked up a golden nugget (the coin) at `pos`.
