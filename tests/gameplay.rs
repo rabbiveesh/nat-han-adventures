@@ -589,7 +589,8 @@ fn gus_follows_the_same_path() {
     release(&mut app, JUMP);
     step(&mut app, 1.5);
     let (p, g) = (player_pos(&mut app), gus_pos(&mut app));
-    assert!(g.distance(p) < 1.0, "caught up when the player stops: {g} vs {p}");
+    assert!((g.y - p.y).abs() < 1.0, "landed, not frozen mid-jump: {g} vs {p}");
+    assert!(p.x - g.x > 0.0 && p.x - g.x < 5.0 * TILE, "waits a little behind: {g} vs {p}");
 }
 
 #[test]
@@ -628,4 +629,17 @@ fn real_levels_start_safe() {
         assert!(player_pos(&mut app).distance(start) < TILE * 2.0, "level {}: drifted", i + 1);
         assert_eq!(app_state(&app), AppState::Playing);
     }
+}
+
+/// When the player stops, Gus waits a little behind rather than standing inside them.
+#[test]
+fn gus_stops_behind_a_standing_player() {
+    let mut app = app(FLAT);
+    hold(&mut app, RIGHT);
+    step(&mut app, 1.0);
+    release(&mut app, RIGHT);
+    step(&mut app, 2.0);
+    let (p, g) = (player_pos(&mut app), gus_pos(&mut app));
+    assert!(p.x - g.x > TILE, "gus at {g}, player at {p}: should be visibly behind");
+    assert!(p.x - g.x < 5.0 * TILE, "gus at {g}, player at {p}: shouldn't lag far behind");
 }

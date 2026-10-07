@@ -1,5 +1,6 @@
 //! Gus (Han) the plumber follows the player like Tails in Sonic 2: he replays the player's
-//! recorded path a fraction of a second later, so he takes the same jumps.
+//! recorded path a fraction of a second later, so he takes the same jumps. The path only
+//! grows while the player moves, so he waits a short way behind when they stop.
 
 use std::collections::VecDeque;
 
@@ -81,14 +82,22 @@ fn follow(
 
     let mut grounded = true;
     if !dead {
-        trail.0.push_back((ppos.0, pbody.on_ground));
+        // Only record actual movement: when the player stands still, Gus stops a few steps
+        // behind instead of walking right into them (and vanishing behind their sprite).
+        let moved = trail.0.back().is_none_or(|(last, _)| last.distance(ppos.0) > 0.5);
+        if moved {
+            trail.0.push_back((ppos.0, pbody.on_ground));
+        }
         if pos.0.distance(ppos.0) > GUS_POP_DISTANCE {
             pos.0 = behind(&active.level, ppos.0, ctl.facing);
             prev.0 = pos.0;
             trail.0.clear();
         }
     }
-    if trail.0.len() > GUS_DELAY_STEPS {
+    // Keep going past the delay if he'd otherwise freeze mid-jump (the player stopped right
+    // after landing): finish the arc down to the ground.
+    let mid_air = anim.pose == GusPose::Jump;
+    if trail.0.len() > GUS_DELAY_STEPS || (mid_air && !trail.0.is_empty()) {
         let (target, on_ground) = trail.0.pop_front().unwrap();
         grounded = on_ground;
         let to = target - pos.0;
