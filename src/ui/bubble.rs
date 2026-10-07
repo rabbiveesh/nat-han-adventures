@@ -9,7 +9,7 @@ use bevy::window::PrimaryWindow;
 
 use super::{UiFont, VIRTUAL_HEIGHT, palette::INK};
 use crate::events::HanSays;
-use crate::game::Han;
+use crate::game::{GameCamera, Han, VisualSet};
 use crate::state::AppState;
 
 /// Characters per line.
@@ -26,12 +26,20 @@ const STAY: f32 = 3.5;
 /// Tip of the tail, above Han's origin.
 const OFFSET: Vec2 = Vec2::new(0.0, 11.0);
 const Z: f32 = 10.0;
+/// Keep the box at least this far (world px) inside the camera view's left/right edges.
+const EDGE_MARGIN: f32 = 4.0;
 /// A line said while there's no Han (e.g. the same frame his level spawns) waits this long for him.
 const WAIT_FOR_HAN: f32 = 0.5;
 
 pub fn plugin(app: &mut App) {
     app.add_systems(Update, (receive, spawn_pending, typewriter).chain())
-        .add_systems(PostUpdate, follow.before(TransformSystems::Propagate));
+        .add_systems(
+            PostUpdate,
+            follow
+                .after(VisualSet::Camera)
+                .after(VisualSet::Interpolate)
+                .before(TransformSystems::Propagate),
+        );
 }
 
 #[derive(Resource)]
@@ -49,6 +57,13 @@ pub struct SpeechBubble {
 
 #[derive(Component)]
 struct BubbleText;
+
+/// The box (border, fill, text), a child of the bubble. It slides sideways to stay on screen
+/// while the tail keeps pointing at Han.
+#[derive(Component)]
+struct BubbleBox {
+    half_width: f32,
+}
 
 /// Greedy word wrap to `width` characters; words longer than a line are split.
 pub fn wrap(text: &str, width: usize) -> Vec<String> {
@@ -146,8 +161,26 @@ fn spawn_pending(
             Visibility::Hidden,
         ))
         .with_children(|b| {
-            b.spawn(rect(INK, size + 2.0, box_center, 0.0));
-            b.spawn(rect(Color::WHITE, size, box_center, 0.1));
+            b.spawn((BubbleBox { half_width: size.x / 2.0 + 1.0 }, Transform::default(), Visibility::Inherited))
+                .with_children(|bx| {
+                    bx.spawn(rect(INK, size + 2.0, box_center, 0.0));
+                    bx.spawn(rect(Color::WHITE, size, box_center, 0.1));
+                    bx.spawn((
+                        BubbleText,
+                        Text2d::new(""),
+                        TextFont {
+                            font: font.map(|f| f.0.clone()).unwrap_or_default().into(),
+                            font_size: FontSize::Px(GLYPH * k),
+                            font_smoothing: FontSmoothing::None,
+                            ..default()
+                        },
+                        LineHeight::Px(LINE * k),
+                        TextColor(INK),
+                        Anchor::TOP_LEFT,
+                        Transform::from_xyz(-size.x / 2.0 + PAD, TAIL + size.y - PAD, 0.2)
+                            .with_scale(Vec3::splat(1.0 / k)),
+                    ));
+                });
             // The tail: a little pixel triangle pointing down at Han, outlined.
             for i in 0..TAIL as usize {
                 let w = 2.0 * i as f32 + 1.0;
@@ -158,31 +191,17 @@ fn spawn_pending(
             b.spawn(rect(INK, Vec2::ONE, Vec2::new(0.0, -0.5), 0.0));
             // Open the box's bottom border where the tail joins.
             b.spawn(rect(Color::WHITE, Vec2::new(2.0 * TAIL - 1.0, 1.0), Vec2::new(0.0, TAIL - 0.5), 0.15));
-            b.spawn((
-                BubbleText,
-                Text2d::new(""),
-                TextFont {
-                    font: font.map(|f| f.0.clone()).unwrap_or_default().into(),
-                    font_size: FontSize::Px(GLYPH * k),
-                    font_smoothing: FontSmoothing::None,
-                    ..default()
-                },
-                LineHeight::Px(LINE * k),
-                TextColor(INK),
-                Anchor::TOP_LEFT,
-                Transform::from_xyz(-size.x / 2.0 + PAD, TAIL + size.y - PAD, 0.2)
-                    .with_scale(Vec3::splat(1.0 / k)),
-            ));
         });
 }
 
 fn typewriter(
     mut commands: Commands,
     time: Res<Time>,
-    mut bubbles: Query<(Entity, &mut SpeechBubble, &Children)>,
+    mut bubbles: Query<(Entity, &mut SpeechBubble)>,
+    children: Query<&Children>,
     mut texts: Query<&mut Text2d, With<BubbleText>>,
 ) {
-    for (e, mut b, children) in &mut bubbles {
+    for (e, mut b) in &mut bubbles {
         b.age += time.delta_secs();
         let total: usize = b.lines.iter().map(|l| l.chars().count()).sum();
         let reveal_time = total as f32 / REVEAL_CPS;
@@ -194,7 +213,7 @@ fn typewriter(
         if n != b.shown {
             b.shown = n;
             let s = revealed(&b.lines, n);
-            for c in children.iter() {
+            for c in children.iter_descendants(e) {
                 if let Ok(mut t) = texts.get_mut(c) {
                     t.0 = s.clone();
                 }
@@ -203,12 +222,22 @@ fn typewriter(
     }
 }
 
-/// Stick to Han (pixel-snapped); vanish with him.
+/// Stick to Han (pixel-snapped); vanish with him. The box slides to stay inside the view.
+#[allow(clippy::type_complexity)]
 fn follow(
     mut commands: Commands,
-    han: Query<(&Transform, &GlobalTransform, Has<ChildOf>), (With<Han>, Without<SpeechBubble>)>,
-    mut bubbles: Query<(Entity, &mut Transform, &mut Visibility), With<SpeechBubble>>,
+    han: Query<(&Transform, &GlobalTransform, Has<ChildOf>), (With<Han>, Without<SpeechBubble>, Without<BubbleBox>)>,
+    camera: Query<(&Transform, &Projection), (With<GameCamera>, Without<SpeechBubble>, Without<BubbleBox>, Without<Han>)>,
+    mut bubbles: Query<(Entity, &mut Transform, &mut Visibility), (With<SpeechBubble>, Without<BubbleBox>)>,
+    mut boxes: Query<(&BubbleBox, &mut Transform), Without<SpeechBubble>>,
+    children: Query<&Children>,
 ) {
+    let view = camera.iter().next().and_then(|(t, p)| match p {
+        Projection::Orthographic(o) if o.area.width() > 0.0 => {
+            Some((t.translation.x + o.area.min.x, t.translation.x + o.area.max.x))
+        }
+        _ => None,
+    });
     let pos = han.iter().next().map(|(t, g, child)| if child { g.translation() } else { t.translation });
     for (e, mut t, mut vis) in &mut bubbles {
         let Some(p) = pos else {
@@ -218,12 +247,40 @@ fn follow(
         let target = (p.truncate() + OFFSET).round();
         t.translation = target.extend(Z);
         vis.set_if_neq(Visibility::Inherited);
+        for c in children.iter_descendants(e) {
+            if let Ok((bx, mut bt)) = boxes.get_mut(c) {
+                let dx = view.map_or(0.0, |(left, right)| clamp_shift(target.x, bx.half_width, left, right));
+                bt.translation.x = dx.round();
+            }
+        }
     }
+}
+
+/// How far to slide a box of `half_width` centered at `x` so it fits in `[left, right]` (with a
+/// margin). Never further than the tail can reach, so the tail always touches the box.
+fn clamp_shift(x: f32, half_width: f32, left: f32, right: f32) -> f32 {
+    let (lo, hi) = (left + EDGE_MARGIN + half_width, right - EDGE_MARGIN - half_width);
+    let dx = if lo > hi { (left + right) / 2.0 - x } else { x.clamp(lo, hi) - x };
+    let reach = (half_width - TAIL - 1.0).max(0.0);
+    dx.clamp(-reach, reach)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn box_slides_inside_the_view() {
+        // Han near the left edge: the box moves right, but no further than needed.
+        let dx = clamp_shift(10.0, 40.0, 0.0, 384.0);
+        assert_eq!(dx, 34.0);
+        // Centered: no shift.
+        assert_eq!(clamp_shift(200.0, 40.0, 0.0, 384.0), 0.0);
+        // Right edge: moves left.
+        assert!(clamp_shift(380.0, 40.0, 0.0, 384.0) < 0.0);
+        // Han right at the screen edge: the tail still stays under the box.
+        assert!(clamp_shift(0.0, 40.0, 0.0, 384.0) <= 40.0 - TAIL - 1.0);
+    }
 
     #[test]
     fn wraps_words() {
