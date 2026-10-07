@@ -10,7 +10,8 @@
 //! - pulse1 = lead (`@1`/`@2`, loud), pulse2 = comping / harmony (other duty, quieter),
 //!   triangle = walking bass in o1–o2 (no `v`/`@`), noise = swing ride / backbeat + fills.
 //!
-//! Each `// n:` comment gives bar numbers and chord changes.
+//! Each `// n:` comment gives bar numbers and chord changes; [`Song::chords`] is the same harmony
+//! as a machine-readable chart (bar for bar with the loop, checked against the bass in the tests).
 
 use super::{Music, Song};
 
@@ -135,7 +136,12 @@ fn sweet_georgia_brown() -> Song {
         ),
         noise: concat!("v9 [", swing8!(), "]4"),
         key: 5,
-        chords: "",
+        chords: concat!(
+            "| D7 | % | % | % | G7 | % | % | % ", // 1-8: the cycle, D7 -> G7
+            "| C7 | % | % | % | F6 | % | Dm7 | F6 A7 ", // 9-16: C7 -> F, A7 back to D7
+            "| D7 | % | % | % | G7 | % | % | % ", // 17-24
+            "| Dm | A7 | Dm | A7 | F6 D7 | G7 C7 | F6 | F6 A7 |", // 25-32
+        ),
     }
 }
 
@@ -198,7 +204,12 @@ fn the_entertainer() -> Song {
         ),
         noise: concat!("v8 [[", two_beat!(), "]7 ", fill!(), "]4"),
         key: 0,
-        chords: "",
+        chords: concat!(
+            "| C | % | G7 | C | C | C D7 | G D7 | G7 ", // 1-8
+            "| C | % | G7 | C C7 | Fmaj7 | F#dim7 | C/G G7 | C ", // 9-16
+            "| C | % | G7 | C | C | C D7 | G D7 | G7 ", // 17-24: the strain again
+            "| C | % | G7 | C C7 | Fmaj7 | F#dim7 | C/G G7 | C |", // 25-32
+        ),
     }
 }
 
@@ -305,7 +316,12 @@ fn tiger_rag() -> Song {
             tiger_drums8!(),
         ),
         key: 10,
-        chords: "",
+        chords: concat!(
+            "| Bb6 | % | F7 | % | F7 | % | Bb6 | Bb6 F7 ",  // 1-8
+            "| Bb6 | % | F7 | % | F7 | % | Bb6 | Bb7 ",     // 9-16
+            "| Eb6 | % | Edim7 | % | Bb/F | G7 | C7 | F7 ", // 17-24
+            "| Bb6 | % | F7 | % | F7 | % | Bb6 | Bb6 F7 |", // 25-32
+        ),
     }
 }
 
@@ -488,7 +504,12 @@ fn muskrat_ramble() -> Song {
             fill2!(),
         ),
         key: 10,
-        chords: "",
+        chords: concat!(
+            "| Bb6 | % | F7 | % | Bb6 | % | F7 | % ",            // 1-8
+            "| Bb6 | Bb7 | Eb6 | Edim7 | Bb/F | F7 | Bb6 | D7 ", // 9-16
+            "| Gm | % | D7 | % | Gm | % | D7 | Gm ",             // 17-24: G minor stop-time
+            "| Cm | Gm | D7 | Gm | Eb | D7 | Gm7 C7 | F7 |",     // 25-32
+        ),
     }
 }
 
@@ -611,7 +632,12 @@ fn st_louis_blues() -> Song {
             stl_drums_blues!(),
         ),
         key: 7,
-        chords: "",
+        chords: concat!(
+            "| G7 | C7 | G7 | G7 | C7 | % | G6 | % | D7 | C7 | G6 | D7 ", // 1-12: blues
+            "| Gm | D7b9 | % | Gm | Gm | D7b9 | % | Gm ",                 // 13-20: habanera
+            "| Gm | D7b9 | % | Gm | Cm | Gm | D7b9 | % ",                 // 21-28
+            "| G7 | C7 | G7 | G7 | C7#9 | C7 | G6 | % | D7 | C7 | G6 | D7 |", // 29-40: blues
+        ),
     }
 }
 
@@ -705,7 +731,13 @@ fn i_got_rhythm() -> Song {
             swing8!(),
         ),
         key: 10,
-        chords: "",
+        chords: concat!(
+            "| Bb6 | Eb6 | Bb/F | F7 ", // intro
+            "| Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 | Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 F7 ", // A
+            "| Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 | Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 ", // A
+            "| D7 | % | G7 | % | C7 | % | F7 | % ", // B
+            "| Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 | Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 |", // A
+        ),
     }
 }
 
@@ -723,7 +755,7 @@ fn shave_and_a_haircut() -> Song {
         triangle: "o2 c4 r4 f4 e4 | o2 r4 o1 g4 o2 c2",
         noise: "v10 k4 s8 s8 k4 s4 | r4 s4 H2",
         key: 0,
-        chords: "",
+        chords: "| C % F C/E | G7 % C % |",
     }
 }
 
@@ -782,7 +814,10 @@ fn when_the_saints() -> Song {
             "]7 s16 s16 s16 s16 s8 s8 k8 s8 H4",
         ),
         key: 5,
-        chords: "",
+        chords: concat!(
+            "| F6 | % | % | % | % | % | % | C7 | F6 | F7 | Bb6 | Bbm6 | F6 | C7 | F6 | F6 C7 ", // 1-16
+            "| F6 | % | % | % | % | % | % | C7 | F6 | F7 | Bb6 | Bbm6 | F6 | C7 | F6 | F6 |", // 17-32
+        ),
     }
 }
 
@@ -804,6 +839,9 @@ mod tests {
         Noise,
     }
 
+    /// A note, rest or drum hit: (start, pitch class or `None`, length), in units.
+    type Event = (u64, Option<u8>, u64);
+
     struct Checker<'a> {
         src: &'a [u8],
         i: usize,
@@ -811,6 +849,11 @@ mod tests {
         octave: Option<i32>,
         default_len: Option<u64>,
         oct_range: (i32, i32),
+        /// Current time in units.
+        t: u64,
+        /// Every note/rest/drum as written, repeats expanded: (start, pitch class or `None` for
+        /// rests and drums, length).
+        events: Vec<Event>,
     }
 
     impl Checker<'_> {
@@ -822,6 +865,11 @@ mod tests {
                 self.i,
                 String::from_utf8_lossy(&self.src[lo..hi])
             )
+        }
+
+        fn push(&mut self, pc: Option<u8>, len: u64) {
+            self.events.push((self.t, pc, len));
+            self.t += len;
         }
 
         fn skip_ws(&mut self) {
@@ -895,6 +943,7 @@ mod tests {
                     b'[' => {
                         self.i += 1;
                         let before = self.octave;
+                        let (t0, first_event) = (self.t, self.events.len());
                         // A body that starts with an absolute `o` is state-independent.
                         self.skip_ws();
                         let starts_absolute = self.src.get(self.i) == Some(&b'o');
@@ -910,18 +959,35 @@ mod tests {
                             return Err(self.err("repeat body changes octave"));
                         }
                         total += body * n;
+                        let once = self.events[first_event..].to_vec();
+                        for k in 1..n {
+                            self.events
+                                .extend(once.iter().map(|&(t, pc, len)| (t + k * body, pc, len)));
+                        }
+                        self.t = t0 + body * n;
                     }
                     b'a'..=b'g' if melodic => {
                         self.i += 1;
-                        if matches!(self.src.get(self.i), Some(b'+' | b'#' | b'-')) {
-                            self.i += 1;
+                        let mut pc = [9, 11, 0, 2, 4, 5, 7][(c - b'a') as usize];
+                        match self.src.get(self.i) {
+                            Some(b'+' | b'#') => {
+                                pc += 1;
+                                self.i += 1;
+                            }
+                            Some(b'-') => {
+                                pc += 11;
+                                self.i += 1;
+                            }
+                            _ => {}
                         }
                         let oct = self.octave.ok_or_else(|| self.err("note before any `o`"))?;
                         if oct < self.oct_range.0 || oct > self.oct_range.1 {
                             return Err(self
                                 .err(&format!("octave {oct} out of range {:?}", self.oct_range)));
                         }
-                        total += self.length()?;
+                        let len = self.length()?;
+                        self.push(Some(pc % 12), len);
+                        total += len;
                         self.skip_ws();
                         if self.src.get(self.i) == Some(&b'&') {
                             self.i += 1;
@@ -931,13 +997,17 @@ mod tests {
                             }
                         }
                     }
-                    b'k' | b's' | b'h' | b'H' if !melodic => {
-                        self.i += 1;
-                        total += self.length()?;
-                    }
                     b'r' => {
                         self.i += 1;
-                        total += self.length()?;
+                        let len = self.length()?;
+                        self.push(None, len);
+                        total += len;
+                    }
+                    b'k' | b's' | b'h' | b'H' if !melodic => {
+                        self.i += 1;
+                        let len = self.length()?;
+                        self.push(None, len);
+                        total += len;
                     }
                     b'o' if melodic => {
                         self.i += 1;
@@ -994,15 +1064,23 @@ mod tests {
 
     /// Duration of a track in units (whole note = 192), or a description of what's wrong.
     fn measure(src: &str, chan: Chan, oct_range: (i32, i32)) -> Result<u64, String> {
-        Checker {
+        events(src, chan, oct_range).map(|(len, _)| len)
+    }
+
+    /// Duration of a track plus its events (see [`Checker::events`]).
+    fn events(src: &str, chan: Chan, oct_range: (i32, i32)) -> Result<(u64, Vec<Event>), String> {
+        let mut c = Checker {
             src: src.as_bytes(),
             i: 0,
             chan,
             octave: None,
             default_len: None,
             oct_range,
-        }
-        .seq(false)
+            t: 0,
+            events: Vec::new(),
+        };
+        let len = c.seq(false)?;
+        Ok((len, c.events))
     }
 
     fn tracks(s: &Song) -> [(&'static str, &'static str, Chan, (i32, i32)); 4] {
@@ -1119,5 +1197,213 @@ mod tests {
     fn out_of_range_worlds_still_have_music() {
         assert_eq!(song(Music::World(0)).title, song(Music::World(1)).title);
         assert_eq!(song(Music::World(9)).title, song(Music::World(5)).title);
+    }
+
+    // -----------------------------------------------------------------------------------------
+    // Chord charts (grammar in `audio/mod.rs`, "Chord charts").
+
+    /// Chord qualities and their chord tones (root, 3rd, 5th, 7th/6th) in semitones above the root.
+    const QUALITIES: [(&str, &[u8]); 16] = [
+        ("", &[0, 4, 7]),
+        ("6", &[0, 4, 7, 9]),
+        ("maj7", &[0, 4, 7, 11]),
+        ("7", &[0, 4, 7, 10]),
+        ("9", &[0, 4, 7, 10]),
+        ("7b9", &[0, 4, 7, 10]),
+        ("7#9", &[0, 4, 7, 10]),
+        ("7#5", &[0, 4, 8, 10]),
+        ("7sus4", &[0, 5, 7, 10]),
+        ("m", &[0, 3, 7]),
+        ("m6", &[0, 3, 7, 9]),
+        ("m7", &[0, 3, 7, 10]),
+        ("mMaj7", &[0, 3, 7, 11]),
+        ("m7b5", &[0, 3, 6, 10]),
+        ("dim7", &[0, 3, 6, 9]),
+        ("aug", &[0, 4, 8]),
+    ];
+
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    struct Chord {
+        name: String,
+        root: u8,
+        quality: &'static str,
+        bass: Option<u8>,
+    }
+
+    impl Chord {
+        /// Pitch classes of the chord tones, plus the slash bass.
+        fn tones(&self) -> Vec<u8> {
+            let (_, intervals) = QUALITIES.iter().find(|(q, _)| *q == self.quality).unwrap();
+            let mut t: Vec<u8> = intervals.iter().map(|i| (self.root + i) % 12).collect();
+            t.extend(self.bass);
+            t
+        }
+    }
+
+    /// `C`, `F#`, `Bb`, ... as a pitch class, and the rest of the string.
+    fn note(s: &str) -> Option<(u8, &str)> {
+        let mut chars = s.chars();
+        let pc: u8 = match chars.next()? {
+            'C' => 0,
+            'D' => 2,
+            'E' => 4,
+            'F' => 5,
+            'G' => 7,
+            'A' => 9,
+            'B' => 11,
+            _ => return None,
+        };
+        let rest = chars.as_str();
+        Some(if let Some(r) = rest.strip_prefix('#') {
+            ((pc + 1) % 12, r)
+        } else if let Some(r) = rest.strip_prefix('b') {
+            ((pc + 11) % 12, r)
+        } else {
+            (pc, rest)
+        })
+    }
+
+    fn chord(token: &str) -> Result<Chord, String> {
+        let (root, rest) = note(token).ok_or_else(|| format!("`{token}`: bad root"))?;
+        let (quality, bass) = match rest.split_once('/') {
+            Some((q, b)) => match note(b) {
+                Some((pc, "")) => (q, Some(pc)),
+                _ => return Err(format!("`{token}`: bad slash bass")),
+            },
+            None => (rest, None),
+        };
+        let quality = QUALITIES
+            .iter()
+            .map(|(q, _)| *q)
+            .find(|q| *q == quality)
+            .ok_or_else(|| format!("`{token}`: unknown quality `{quality}`"))?;
+        Ok(Chord {
+            name: token.to_string(),
+            root,
+            quality,
+            bass,
+        })
+    }
+
+    /// Bars of (chord, length in beats), `%` resolved.
+    fn parse_chart(src: &str) -> Result<Vec<Vec<(Chord, u64)>>, String> {
+        let body = src.trim().trim_start_matches('|').trim_end_matches('|');
+        let mut prev: Option<Chord> = None;
+        let mut bars = Vec::new();
+        for (n, bar) in body.split('|').enumerate() {
+            let tokens: Vec<&str> = bar.split_whitespace().collect();
+            if ![1, 2, 4].contains(&tokens.len()) {
+                return Err(format!(
+                    "bar {}: {} chords `{}`",
+                    n + 1,
+                    tokens.len(),
+                    bar.trim()
+                ));
+            }
+            let beats = 4 / tokens.len() as u64;
+            let mut chords = Vec::new();
+            for t in tokens {
+                let c = if t == "%" {
+                    prev.clone()
+                        .ok_or_else(|| "chart starts with `%`".to_string())?
+                } else {
+                    chord(t).map_err(|e| format!("bar {}: {e}", n + 1))?
+                };
+                prev = Some(c.clone());
+                chords.push((c, beats));
+            }
+            bars.push(chords);
+        }
+        Ok(bars)
+    }
+
+    #[test]
+    fn chart_parser_follows_the_grammar() {
+        let bars = parse_chart("| D7 | % | G7 | Am7b5 D7 | Bb6 Gm7 Cm7 F7 | F#dim7/C |").unwrap();
+        assert_eq!(bars.len(), 6);
+        assert_eq!(bars[1][0].0.name, "D7");
+        assert_eq!(bars[3][1].1, 2);
+        assert_eq!(bars[4].len(), 4);
+        assert_eq!(bars[5][0].0.tones(), vec![6, 9, 0, 3, 0]);
+        assert_eq!(chord("Bbm7").unwrap().tones(), vec![10, 1, 5, 8]);
+        assert_eq!(chord("Ebm6").unwrap().tones(), vec![3, 6, 10, 0]);
+        assert_eq!(chord("C").unwrap().tones(), vec![0, 4, 7]);
+        assert_eq!(chord("C/E").unwrap().bass, Some(4));
+        for bad in [
+            "| % | C |",
+            "| C D E |",
+            "| C | | D |",
+            "| H7 |",
+            "| Cmaj9 |",
+            "| C/X |",
+            "| c7 |",
+        ] {
+            assert!(parse_chart(bad).is_err(), "{bad} should not parse");
+        }
+    }
+
+    /// The pitch class sounding at time `t`, if any.
+    fn sounding(events: &[Event], t: u64) -> Option<u8> {
+        events
+            .iter()
+            .find(|&&(s, _, len)| s <= t && t < s + len)
+            .and_then(|e| e.1)
+    }
+
+    #[test]
+    fn every_song_has_a_chart_that_fits_its_bass() {
+        let names = [
+            "C", "Db", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B",
+        ];
+        for music in Music::ALL {
+            let s = song(music);
+            assert!(s.key < 12, "{music:?}: key {}", s.key);
+            let bars = parse_chart(s.chords).unwrap_or_else(|e| panic!("{music:?}: {e}"));
+            let (len, bass) = events(s.triangle, Chan::Triangle, (1, 3)).unwrap();
+            assert_eq!(
+                bars.len() as u64,
+                len / BAR,
+                "{music:?}: chart has {} bars, the song {}",
+                bars.len(),
+                len / BAR
+            );
+            // On every downbeat and chord change, is the bass on a chord tone (or the slash bass)?
+            let (mut checked, mut good) = (0, 0);
+            for (b, bar) in bars.iter().enumerate() {
+                let mut beat = 0;
+                for (i, (c, beats)) in bar.iter().enumerate() {
+                    let t = b as u64 * BAR + beat * BAR / 4;
+                    beat += beats;
+                    if i > 0 && bar[i - 1].0 == *c {
+                        continue;
+                    }
+                    let Some(pc) = sounding(&bass, t) else {
+                        continue;
+                    };
+                    checked += 1;
+                    if c.tones().contains(&pc) {
+                        good += 1;
+                    } else {
+                        println!(
+                            "{music:?} bar {} beat {}: bass {} under {}",
+                            b + 1,
+                            beat - beats + 1,
+                            names[pc as usize],
+                            c.name
+                        );
+                    }
+                }
+            }
+            let pct = 100.0 * good as f64 / checked as f64;
+            println!(
+                "{music:?}: key {}, {} bars, bass fits {good}/{checked} chord changes ({pct:.0}%)",
+                names[s.key as usize],
+                bars.len()
+            );
+            assert!(
+                pct >= 85.0,
+                "{music:?}: only {pct:.0}% of chord changes have a chord tone in the bass"
+            );
+        }
     }
 }
