@@ -10,7 +10,8 @@ pub fn plugin(app: &mut App) {
         .add_message::<PlayerRespawned>()
         .add_message::<CheckpointReached>()
         .add_message::<LevelCompleted>()
-        .add_message::<GusSays>();
+        .add_message::<GusSays>()
+        .add_message::<PlaySfx>();
 }
 
 /// Picked up a golden nugget (the coin) at `pos`.
@@ -65,3 +66,7 @@ pub struct LevelCompleted {
 pub struct GusSays {
     pub text: String,
 }
+
+/// Play a one-shot sound effect (menus etc.; gameplay sounds are driven by the messages above).
+#[derive(Message, Debug, Clone, Copy)]
+pub struct PlaySfx(pub crate::audio::Sfx);
