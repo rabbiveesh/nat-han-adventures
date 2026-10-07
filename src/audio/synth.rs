@@ -7,7 +7,7 @@
 //! - triangle: the NES's 32-step (4-bit) stepped triangle, for that gritty bass.
 //! - noise: drums built from a 15-bit LFSR noise generator plus pitch-swept triangle blips.
 //!
-//! Timing: MML beats are swung (see [`swing`]) and converted to sample positions; each event is
+//! Timing: MML beats are swung (see [`apply_swing`]) and converted to sample positions; each event is
 //! rendered independently into the mix, with oscillator phase carried across notes. Looping
 //! songs are rendered exactly one loop long, and anything ringing past the loop end (drum tails)
 //! is wrapped around onto the start, so the loop is seamless.
@@ -50,20 +50,36 @@ impl Rendered {
     }
 }
 
-/// Map an unswung time (beats) to a swung one. Each beat is split at its midpoint: the first
-/// half is stretched to `(1 + swing) / 2` of the beat and the second squashed into the rest. So
-/// an off-beat 8th starts `swing` 8ths late and the on-beat 8th before it lasts that much longer;
-/// quarter notes and whole beats are untouched; 16ths are warped proportionally.
-pub fn swing(beats: f64, swing: f32) -> f64 {
+/// Swing a track: an 8th note (or 8th rest) that starts on an off-beat 8th position starts
+/// `swing` 8ths late, and the event right before it is lengthened to meet it. Nothing else moves:
+/// 16ths, dotted rhythms, quarters and every downbeat stay put, and since each event is placed
+/// from its own unswung time, no error ever accumulates.
+pub fn apply_swing(track: &Track, swing: f32) -> Track {
+    const EPS: f64 = 1e-6;
     if swing == 0.0 {
-        return beats;
+        return track.clone();
     }
-    let s = swing.clamp(0.0, 0.9) as f64;
-    let beat = beats.floor();
-    let f = beats - beat;
-    let mid = 0.5 * (1.0 + s);
-    let g = if f < 0.5 { f / 0.5 * mid } else { mid + (f - 0.5) / 0.5 * (1.0 - mid) };
-    beat + g
+    let delay = swing.clamp(0.0, 0.9) as f64 * 0.5;
+    let swung = |e: &Event| {
+        let frac = e.start - e.start.floor();
+        (frac - 0.5).abs() < EPS && (e.dur - 0.5).abs() < EPS
+    };
+    let ev = &track.events;
+    let start = |e: &Event| if swung(e) { e.start + delay } else { e.start };
+    let events = ev
+        .iter()
+        .enumerate()
+        .map(|(i, e)| {
+            let end = e.start + e.dur;
+            let end = match ev.get(i + 1) {
+                Some(next) if (next.start - end).abs() < EPS => start(next),
+                _ => end,
+            };
+            let s = start(e);
+            Event { start: s, dur: end - s, ..*e }
+        })
+        .collect();
+    Track { events, length: track.length }
 }
 
 pub fn midi_to_hz(note: u8) -> f32 {
@@ -84,10 +100,11 @@ pub fn render_song(song: &Song) -> Result<Rendered, String> {
     if beats <= 0.0 {
         return Err(format!("song \"{}\" is empty", song.title));
     }
-    if !(song.bpm > 0.0) {
+    if !song.bpm.is_finite() || song.bpm <= 0.0 {
         return Err(format!("song \"{}\": bpm must be positive", song.title));
     }
-    let timing = Timing { samples_per_beat: SR as f64 * 60.0 / song.bpm as f64, swing: song.swing };
+    let timing = Timing { samples_per_beat: SR as f64 * 60.0 / song.bpm as f64 };
+    let [p1, p2, tri, noise] = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));
     let len = timing.at(beats);
     let tail = (TAIL * SR) as usize;
     let mut out = vec![Frame::ZERO; len + tail];
@@ -116,13 +133,12 @@ pub fn render_song(song: &Song) -> Result<Rendered, String> {
 
 struct Timing {
     samples_per_beat: f64,
-    swing: f32,
 }
 
 impl Timing {
-    /// Sample index of a (unswung) beat time.
+    /// Sample index of a beat time.
     fn at(&self, beats: f64) -> usize {
-        (swing(beats, self.swing) * self.samples_per_beat).round() as usize
+        (beats * self.samples_per_beat).round() as usize
     }
 
     fn span(&self, e: &Event) -> (usize, usize) {
@@ -399,7 +415,12 @@ pub fn drum(d: Drum, buf: &mut [f32], lfsr: &mut Lfsr) {
             }
         }
     }
-    // End exactly at zero.
+    // Start from zero (a 1ms ramp keeps the attack punchy without a pop)...
+    let ramp = ((0.001 * SR) as usize).min(n);
+    for (i, s) in buf.iter_mut().take(ramp).enumerate() {
+        *s *= i as f32 / ramp as f32;
+    }
+    // ...and end exactly at zero.
     let ramp = ((0.003 * SR) as usize).min(n);
     for i in 0..ramp {
         buf[n - 1 - i] *= i as f32 / ramp as f32;
@@ -485,10 +506,19 @@ mod tests {
 
     #[test]
     fn swing_delays_offbeat_eighths() {
-        assert_eq!(swing(0.5, 0.0), 0.5);
-        assert!((swing(0.5, 1.0 / 3.0) - 2.0 / 3.0).abs() < 1e-6);
-        assert_eq!(swing(1.0, 0.33), 1.0);
-        assert!((swing(1.75, 0.5) - (1.75 + 0.125)).abs() < 1e-9);
+        let t = mml::parse("g8. g16 d8 b-8 c8 d8 e4 r8 f8 g16 a16 b8", Channel::Melodic).unwrap();
+        let sw = apply_swing(&t, 1.0 / 3.0);
+        let starts: Vec<f64> = sw.events.iter().map(|e| e.start).collect();
+        let d = 1.0 / 6.0;
+        let want = [0.0, 0.75, 1.0, 1.5 + d, 2.0, 2.5 + d, 3.0, 4.0, 4.5 + d, 5.0, 5.25, 5.5 + d];
+        for (got, want) in starts.iter().zip(want) {
+            assert!((got - want).abs() < 1e-6, "{starts:?}");
+        }
+        // Contiguous events stay contiguous; the total length doesn't change.
+        for w in sw.events.windows(2) {
+            assert!((w[0].start + w[0].dur - w[1].start).abs() < 1e-9);
+        }
+        assert_eq!(sw.length, t.length);
         // Rendered: "c8 r8 c8 r8" at 60bpm (1 beat = 1s) with triplet swing: the second note
         // starts at beat 1 (on-beat), and an off-beat one would start at 1/3 + 1/3 ...
         let r = render_song(&song(60.0, 1.0 / 3.0, true, "r8 c8 r8 c8", "", "")).unwrap();

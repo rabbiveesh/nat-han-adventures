@@ -36,8 +36,9 @@
 //!   `r4&r8` extends a rest. `&` before a rest/drum after a note is an error.
 //! - `[ ... ]` without a count repeats twice. State changes inside a repeat (octave, volume, ...)
 //!   carry over exactly as if the body were written out n times.
-//! - Swing is a time warp of every beat (see [`synth::swing`]): off-beat 8ths move by
-//!   `swing * an 8th`; quarters are unchanged; 16ths are warped proportionally.
+//! - Swing (see [`synth::apply_swing`]) moves only 8th notes/rests that start on an off-beat 8th
+//!   position; the event just before is lengthened to meet them. 16ths, dotted rhythms and
+//!   downbeats never move, and each event is placed from its own unswung time (no drift).
 //! - Notes play their full written length (with a ~2ms attack and ~8ms release inside it).
 //!   Drums ring for their natural length regardless of the written length (open hats are choked
 //!   by the next hit). A looping song's length is the longest track's length (trailing rests
@@ -175,11 +176,18 @@ pub fn desired_music(state: AppState, levels: Option<&Levels>, current: CurrentL
     }
 }
 
+/// What the music channel is playing.
 #[derive(Resource, Default)]
-struct MusicPlayer {
+pub struct MusicPlayer {
     current: Option<(Music, Handle<AudioInstance>)>,
     /// Duck state last applied to the current instance (`None`: not yet applied).
     ducked: Option<bool>,
+}
+
+impl MusicPlayer {
+    pub fn now_playing(&self) -> Option<Music> {
+        self.current.as_ref().map(|(m, _)| *m)
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

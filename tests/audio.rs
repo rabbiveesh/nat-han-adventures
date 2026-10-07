@@ -78,3 +78,46 @@ fn a_long_busy_song_renders_fast_and_loops_cleanly() {
     println!("90s busy song: {:.0}ms", secs * 1000.0);
     assert!(secs < budget_secs() / 4.0, "90s busy song took {secs:.2}s");
 }
+
+/// The playback plugin headless (no audio device: kira's manager fails to start, which
+/// bevy_kira_audio tolerates): music follows the app state.
+#[test]
+fn music_follows_state() {
+    use bevy::{prelude::*, state::app::StatesPlugin};
+    use durhay::{
+        audio::MusicPlayer,
+        level::Levels,
+        state::{AppState, CurrentLevel},
+    };
+
+    let mut app = App::new();
+    app.add_plugins((
+        MinimalPlugins,
+        StatesPlugin,
+        bevy::input::InputPlugin,
+        AssetPlugin::default(),
+        durhay::gameplay,
+        durhay::audio::plugin,
+    ));
+    app.update();
+    let playing = |app: &App| app.world().resource::<MusicPlayer>().now_playing();
+    assert_eq!(playing(&app), Some(Music::Title));
+
+    let world_of = |app: &App, i: usize| app.world().resource::<Levels>().0[i].world;
+    let go = |app: &mut App, s: AppState| {
+        app.world_mut().resource_mut::<NextState<AppState>>().set(s);
+        app.update();
+        app.update();
+    };
+    go(&mut app, AppState::LevelSelect);
+    assert_eq!(playing(&app), Some(Music::Title));
+    app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+    go(&mut app, AppState::Playing);
+    assert_eq!(playing(&app), Some(Music::World(world_of(&app, 0))));
+    go(&mut app, AppState::LevelComplete);
+    assert_eq!(playing(&app), Some(Music::LevelClear));
+    go(&mut app, AppState::Victory);
+    assert_eq!(playing(&app), Some(Music::Victory));
+    go(&mut app, AppState::Title);
+    assert_eq!(playing(&app), Some(Music::Title));
+}

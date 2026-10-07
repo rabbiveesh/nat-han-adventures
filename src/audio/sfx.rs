@@ -8,8 +8,19 @@ use super::Sfx;
 use super::synth::{self, Lfsr, Rendered, SAMPLE_RATE, pulse, triangle};
 
 const SR: f32 = SAMPLE_RATE as f32;
-/// Overall sfx level before the limiter.
-const GAIN: f32 = 0.55;
+/// Every sfx is normalized to this peak, then scaled by [`level`].
+const PEAK: f32 = 0.75;
+
+/// Relative level of each effect (small, frequent ones sit lower).
+fn level(sfx: Sfx) -> f32 {
+    match sfx {
+        Sfx::MenuMove => 0.55,
+        Sfx::GusBlip => 0.6,
+        Sfx::Jump | Sfx::Land => 0.75,
+        Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect => 0.85,
+        Sfx::Toot | Sfx::Splat | Sfx::Flush => 1.0,
+    }
+}
 
 impl Sfx {
     pub const ALL: [Sfx; 10] = [
@@ -43,7 +54,7 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::MenuSelect => menu_select(),
         Sfx::GusBlip => return gus_blip(0),
     };
-    finish(mono)
+    finish(mono, level(sfx))
 }
 
 /// One syllable of Gus's babble; `variant` (mod [`GUS_VARIANTS`]) picks pitch and contour.
@@ -65,7 +76,7 @@ pub fn gus_blip(variant: usize) -> Rendered {
             o.pulse(f, duty) * 0.5 * env_ar(i, n, 0.004, 0.02)
         })
         .collect();
-    finish(mono)
+    finish(mono, level(Sfx::GusBlip))
 }
 
 fn secs(s: f32) -> usize {
@@ -121,8 +132,10 @@ impl LowPass {
     }
 }
 
-fn finish(mono: Vec<f32>) -> Rendered {
-    let mut frames: Vec<Frame> = mono.into_iter().map(|v| Frame::from_mono(v * GAIN)).collect();
+fn finish(mono: Vec<f32>, level: f32) -> Rendered {
+    let peak = mono.iter().fold(0.0f32, |m, v| m.max(v.abs())).max(1e-6);
+    let gain = PEAK * level / peak;
+    let mut frames: Vec<Frame> = mono.into_iter().map(|v| Frame::from_mono(v * gain)).collect();
     synth::fade_out(&mut frames, 0.003);
     synth::master(&mut frames);
     Rendered { frames, sample_rate: SAMPLE_RATE, looping: false }
