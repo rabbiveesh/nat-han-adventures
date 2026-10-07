@@ -37,3 +37,6 @@ opt-level = "s"
 lto = "fat"
 codegen-units = 1
 strip = "debuginfo"
+
+[dev-dependencies]
+png = "0.18"

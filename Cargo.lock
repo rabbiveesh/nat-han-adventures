@@ -2411,6 +2411,7 @@ dependencies = [
  "bevy_kira_audio",
  "getrandom 0.3.4",
  "leafwing-input-manager",
+ "png",
  "rand 0.9.5",
  "web-sys",
 ]

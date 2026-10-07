@@ -4,6 +4,14 @@
 use bevy::{asset::RenderAssetUsages, platform::collections::HashMap, prelude::*};
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
+mod backdrops;
+mod characters;
+mod items;
+pub mod palette;
+mod tiles;
+
+pub use palette::Pixels;
+
 pub fn plugin(app: &mut App) {
     app.add_systems(PreStartup, build_sprites);
 }
@@ -84,37 +92,187 @@ impl Sprites {
     }
 }
 
-/// Placeholder: a solid magenta square per sprite, until the real art lands.
+impl SpriteId {
+    /// Every sprite, including each world's variants (1..=5). Handy for tests and tools.
+    pub fn all() -> Vec<SpriteId> {
+        use SpriteId::*;
+        let mut v = vec![
+            PooIdle, PooRun, PooJump, PooFall, PooSplat, GusIdle, GusRun, GusJump, Nugget,
+            CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, Fly, SprayCan,
+            SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, TootPuff, IconNugget,
+            IconLock,
+        ];
+        for w in tiles::WORLDS {
+            v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w)]);
+        }
+        v
+    }
+
+    /// Documented size of every frame of this sprite, in pixels.
+    pub fn size(self) -> (u32, u32) {
+        use SpriteId::*;
+        match self {
+            GoalFlag => (16, 32),
+            Throne => (32, 32),
+            Fly | IconNugget | IconLock => (8, 8),
+            Particle => (2, 2),
+            Backdrop(_) => (backdrops::W as u32, backdrops::H as u32),
+            _ => (16, 16),
+        }
+    }
+}
+
+/// Render every frame of a sprite as plain RGBA8 (sRGB) pixels. Pure: no Bevy app needed.
+/// World numbers outside 1..=5 are clamped.
+pub fn render(id: SpriteId) -> Vec<Pixels> {
+    use SpriteId::*;
+    match id {
+        PooIdle => characters::poo_idle(),
+        PooRun => characters::poo_run(),
+        PooJump => characters::poo_jump(),
+        PooFall => characters::poo_fall(),
+        PooSplat => characters::poo_splat(),
+        GusIdle => characters::gus_idle(),
+        GusRun => characters::gus_run(),
+        GusJump => characters::gus_jump(),
+        Nugget => items::nugget(),
+        CheckpointOff => items::checkpoint_off(),
+        CheckpointOn => items::checkpoint_on(),
+        GoalFlag => items::goal_flag(),
+        Throne => items::throne(),
+        SpikesUp => items::spikes_up(),
+        SpikesDown => items::spikes_down(),
+        LiquidTop(w) => tiles::liquid_top(w),
+        LiquidFill(w) => tiles::liquid_fill(w),
+        Fly => items::fly(),
+        SprayCan => items::spray_can(),
+        SprayJet => items::spray_jet(),
+        PlatformTp => items::platform_tp(),
+        PlatformDuck => items::platform_duck(),
+        PlatformPlunger => items::platform_plunger(),
+        GroundTop(w) => tiles::ground_top(w),
+        GroundFill(w) => tiles::ground_fill(w),
+        OneWay(w) => tiles::one_way(w),
+        Backdrop(w) => backdrops::backdrop(w),
+        Particle => items::particle(),
+        TootPuff => items::toot_puff(),
+        IconNugget => items::icon_nugget(),
+        IconLock => items::icon_lock(),
+    }
+}
+
 fn build_sprites(mut images: ResMut<Assets<Image>>, mut commands: Commands) {
     let mut sprites = Sprites::default();
-    let mut add = |id: SpriteId, w: u32, h: u32| {
-        let img = Image::new_fill(
-            Extent3d { width: w, height: h, depth_or_array_layers: 1 },
-            TextureDimension::D2,
-            &[255, 0, 255, 255],
-            TextureFormat::Rgba8UnormSrgb,
-            RenderAssetUsages::RENDER_WORLD,
-        );
-        sprites.map.entry(id).or_default().push(images.add(img));
-    };
-    use SpriteId::*;
-    for id in [PooIdle, PooRun, PooJump, PooFall, PooSplat, GusIdle, GusRun, GusJump, Nugget,
-        CheckpointOff, CheckpointOn, SpikesUp, SpikesDown, SprayCan, SprayJet, PlatformTp,
-        PlatformDuck, PlatformPlunger, TootPuff]
-    {
-        add(id, 16, 16);
-    }
-    add(GoalFlag, 16, 32);
-    add(Throne, 32, 32);
-    add(Fly, 8, 8);
-    add(Particle, 2, 2);
-    add(IconNugget, 8, 8);
-    add(IconLock, 8, 8);
-    for w in 1..=5 {
-        for id in [GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w)] {
-            add(id, 16, 16);
-        }
-        add(Backdrop(w), 256, 144);
+    for id in SpriteId::all() {
+        let frames = render(id)
+            .into_iter()
+            .map(|px| {
+                images.add(Image::new(
+                    Extent3d { width: px.w, height: px.h, depth_or_array_layers: 1 },
+                    TextureDimension::D2,
+                    px.data,
+                    TextureFormat::Rgba8UnormSrgb,
+                    RenderAssetUsages::RENDER_WORLD,
+                ))
+            })
+            .collect();
+        sprites.map.insert(id, frames);
     }
     commands.insert_resource(sprites);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_sprite_has_frames_of_the_documented_size() {
+        for id in SpriteId::all() {
+            let frames = render(id);
+            assert!(!frames.is_empty(), "{id:?} has no frames");
+            for (i, f) in frames.iter().enumerate() {
+                assert_eq!((f.w, f.h), id.size(), "{id:?} frame {i}");
+                assert_eq!(f.data.len(), (f.w * f.h * 4) as usize);
+                assert!(f.data.chunks_exact(4).any(|px| px[3] > 0), "{id:?} frame {i} is blank");
+            }
+        }
+    }
+
+    #[test]
+    fn every_world_is_covered() {
+        let all = SpriteId::all();
+        for w in 1..=5 {
+            for id in [
+                SpriteId::GroundTop(w),
+                SpriteId::GroundFill(w),
+                SpriteId::OneWay(w),
+                SpriteId::LiquidTop(w),
+                SpriteId::LiquidFill(w),
+                SpriteId::Backdrop(w),
+            ] {
+                assert!(all.contains(&id), "{id:?} missing");
+            }
+        }
+    }
+
+    #[test]
+    fn animation_frame_counts() {
+        use SpriteId::*;
+        let n = |id| render(id).len();
+        assert_eq!(n(PooRun), 4);
+        assert_eq!(n(PooIdle), 2);
+        assert_eq!(n(PooJump), 1);
+        assert_eq!(n(PooFall), 1);
+        assert_eq!(n(PooSplat), 3);
+        assert_eq!(n(GusIdle), 2);
+        assert_eq!(n(GusRun), 4);
+        assert_eq!(n(GusJump), 1);
+        assert_eq!(n(Nugget), 4);
+        assert!((2..=3).contains(&n(GoalFlag)));
+        assert_eq!(n(Fly), 2);
+        assert_eq!(n(SprayJet), 2);
+        assert!((3..=4).contains(&n(TootPuff)));
+        for w in tiles::WORLDS {
+            assert!((2..=3).contains(&n(LiquidTop(w))));
+        }
+    }
+
+    #[test]
+    fn grids_are_rectangular_and_use_only_palette_chars() {
+        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids());
+        for (name, rows, pal) in all {
+            if let Err(e) = palette::try_grid(&rows, pal) {
+                panic!("grid {name}: {e:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn sprites_keep_a_small_palette() {
+        for id in SpriteId::all() {
+            if matches!(id, SpriteId::Backdrop(_)) {
+                continue;
+            }
+            for f in render(id) {
+                assert!(f.colour_count() <= 12, "{id:?} uses {} colours", f.colour_count());
+            }
+        }
+    }
+
+    /// Ground fill tiles in all directions and tops horizontally: their edges must be fully
+    /// opaque so no gaps show between neighbours.
+    #[test]
+    fn ground_tiles_are_solid_at_the_edges() {
+        for w in tiles::WORLDS {
+            for id in [SpriteId::GroundTop(w), SpriteId::GroundFill(w), SpriteId::LiquidFill(w)] {
+                let f = &render(id)[0];
+                for i in 0..16 {
+                    assert_eq!(f.get(0, i)[3], 255, "{id:?}");
+                    assert_eq!(f.get(15, i)[3], 255, "{id:?}");
+                    assert_eq!(f.get(i, 15)[3], 255, "{id:?}");
+                    assert_eq!(f.get(i, 0)[3], 255, "{id:?}");
+                }
+            }
+        }
+    }
 }
