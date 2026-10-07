@@ -4,7 +4,7 @@ use bevy::prelude::*;
 
 use super::physics::{Body, Dead, Finished};
 use super::{ActiveLevel, Checkpoint, GameSet, Goal, LevelRun, Nugget, Player, Pos};
-use crate::events::{CheckpointReached, GusSays, LevelCompleted, NuggetCollected};
+use crate::events::{CheckpointReached, HanSays, LevelCompleted, NuggetCollected};
 use crate::level::TILE;
 use crate::state::AppState;
 
@@ -66,7 +66,7 @@ fn touch_checkpoints(
     mut checkpoints: Query<(&mut Checkpoint, &Transform)>,
     mut run: ResMut<LevelRun>,
     mut reached: MessageWriter<CheckpointReached>,
-    mut says: MessageWriter<GusSays>,
+    mut says: MessageWriter<HanSays>,
 ) {
     let Ok((pos, body)) = player.single() else { return };
     for (mut cp, tf) in &mut checkpoints {
@@ -88,7 +88,7 @@ fn touch_checkpoints(
         let text = active.level.says.get(cp.index).cloned().unwrap_or_else(|| {
             CHECKPOINT_QUIPS[cp.index % CHECKPOINT_QUIPS.len()].to_string()
         });
-        says.write(GusSays { text });
+        says.write(HanSays { text });
     }
 }
 

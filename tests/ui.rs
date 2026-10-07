@@ -2,8 +2,8 @@
 
 use bevy::prelude::*;
 use bevy::state::app::StatesPlugin;
-use durhay::events::GusSays;
-use durhay::game::{Gus, LevelRun};
+use durhay::events::HanSays;
+use durhay::game::{Han, LevelRun};
 use durhay::save::Progress;
 use durhay::state::{AppState, CurrentLevel};
 
@@ -65,14 +65,14 @@ fn bubbles(app: &mut App) -> usize {
 fn speech_bubble_follows_han_and_tolerates_his_absence() {
     let mut app = app();
     // No Han: the line is dropped quietly.
-    app.world_mut().write_message(GusSays { text: "Anyone there?".into() });
+    app.world_mut().write_message(HanSays { text: "Anyone there?".into() });
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(bubbles(&mut app), 0);
 
-    let han = app.world_mut().spawn((Gus, Transform::from_xyz(100.0, 50.0, 4.0))).id();
-    app.world_mut().write_message(GusSays { text: "Mind the brushes, kid. They bite!".into() });
+    let han = app.world_mut().spawn((Han, Transform::from_xyz(100.0, 50.0, 4.0))).id();
+    app.world_mut().write_message(HanSays { text: "Mind the brushes, kid. They bite!".into() });
     app.update();
     app.update();
     assert_eq!(bubbles(&mut app), 1);

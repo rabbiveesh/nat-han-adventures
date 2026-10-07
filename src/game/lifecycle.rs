@@ -3,13 +3,13 @@
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
-use super::gus::{GusAnim, GusMotion, GusTrail};
+use super::han::{HanAnim, HanMotion, HanTrail};
 use super::physics::{Body, PlayerControl};
 use super::{
-    ActiveLevel, Checkpoint, Fly, GameSet, Goal, Gus, LevelEntity, LevelRun, LevelTile,
+    ActiveLevel, Checkpoint, Fly, GameSet, Goal, Han, LevelEntity, LevelRun, LevelTile,
     MovingPlatform, Nugget, Player, Pos, PrevPos, RestartLevel, SimClock, Spray, tuning,
 };
-use crate::events::GusSays;
+use crate::events::HanSays;
 use crate::input::Action;
 use crate::level::{Level, Levels, TILE, ThingKind, Tile};
 use crate::state::{AppState, CurrentLevel, PlayState};
@@ -35,11 +35,11 @@ fn enter_level(
     levels: Res<Levels>,
     current: Res<CurrentLevel>,
     old: Query<Entity, With<LevelEntity>>,
-    mut says: MessageWriter<GusSays>,
+    mut says: MessageWriter<HanSays>,
 ) {
     let level = load(&mut commands, &levels, current.0, &old);
     if !level.intro.is_empty() {
-        says.write(GusSays { text: level.intro.clone() });
+        says.write(HanSays { text: level.intro.clone() });
     }
 }
 
@@ -214,7 +214,7 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
         ));
     }
 
-    // Player and Gus.
+    // Player and Han.
     let start = stand_pos(level, level.start.0, level.start.1);
     commands.spawn((
         Name::new("Player"),
@@ -226,17 +226,17 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
         PrevPos(start),
         Transform::from_translation(start.extend(5.0)),
     ));
-    let gus = super::gus::behind(level, start, 1.0);
+    let han = super::han::behind(level, start, 1.0);
     commands.spawn((
-        Name::new("Gus"),
+        Name::new("Han"),
         LevelEntity,
-        Gus,
-        GusTrail::default(),
-        GusMotion::default(),
-        GusAnim::default(),
-        Pos(gus),
-        PrevPos(gus),
-        Transform::from_translation(gus.extend(4.0)),
+        Han,
+        HanTrail::default(),
+        HanMotion::default(),
+        HanAnim::default(),
+        Pos(han),
+        PrevPos(han),
+        Transform::from_translation(han.extend(4.0)),
     ));
 }
 

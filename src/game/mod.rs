@@ -1,4 +1,4 @@
-//! The simulation: level spawning, player physics, Gus, platforms, hazards, nuggets,
+//! The simulation: level spawning, player physics, Han, platforms, hazards, nuggets,
 //! checkpoints, the goal and the camera.
 //!
 //! The simulation runs in `FixedUpdate` at 60 Hz (deterministic). Simulated entities carry a
@@ -11,7 +11,7 @@ use bevy::prelude::*;
 use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
-mod gus;
+mod han;
 mod hazards;
 mod lifecycle;
 mod physics;
@@ -19,7 +19,7 @@ mod pickups;
 mod platforms;
 mod visuals;
 
-pub use gus::{DEATH_LINES, GUS_DELAY_STEPS, GusAnim, GusMotion, GusPose, GusTrail};
+pub use han::{DEATH_LINES, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail};
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{Body, Dead, PlayerControl};
 pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
@@ -79,7 +79,7 @@ pub fn plugin(app: &mut App) {
             platforms::plugin,
             hazards::plugin,
             pickups::plugin,
-            gus::plugin,
+            han::plugin,
         ));
 }
 
@@ -94,13 +94,13 @@ pub enum GameSet {
     Player,
     /// Hazards, nuggets, checkpoints, goal, death/respawn.
     Interact,
-    /// Gus.
+    /// Han.
     Follow,
     /// Copy [`Pos`] into `Transform`.
     Sync,
 }
 
-/// Simulated position (world pixels, y up) of a moving entity: the player's/Gus's box center,
+/// Simulated position (world pixels, y up) of a moving entity: the player's/Han's box center,
 /// a platform's center, a fly's center. Authoritative; `Transform` follows it.
 #[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect)]
 #[reflect(Component)]
@@ -204,10 +204,10 @@ fn sync_transforms(mut q: Query<(&Pos, &mut Transform)>) {
 #[reflect(Component)]
 pub struct Player;
 
-/// Gus the plumber, who follows the player around. Exactly one while a level is loaded.
+/// Han the plumber, who follows the player around. Exactly one while a level is loaded.
 #[derive(Component, Debug, Default, Reflect)]
 #[reflect(Component)]
-pub struct Gus;
+pub struct Han;
 
 /// Everything spawned for the current level; despawned when the level unloads.
 #[derive(Component, Debug, Default, Reflect)]

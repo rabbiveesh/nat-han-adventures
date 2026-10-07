@@ -65,7 +65,7 @@ use bevy_kira_audio::prelude::{
 use rand::Rng;
 
 use crate::{
-    events::{CheckpointReached, GusSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied},
+    events::{CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied},
     level::Levels,
     state::{AppState, CurrentLevel, PlayState},
 };
@@ -94,7 +94,7 @@ pub fn plugin(app: &mut App) {
     app.add_audio_channel::<MusicChannel>()
         .add_audio_channel::<SfxChannel>()
         .init_resource::<MusicPlayer>()
-        .init_resource::<GusBabble>()
+        .init_resource::<HanBabble>()
         .add_systems(Startup, setup)
         .add_systems(Update, (follow_state, duck_on_pause, play_sfx, babble).chain());
 }
@@ -103,7 +103,7 @@ pub fn plugin(app: &mut App) {
 #[derive(Resource)]
 pub struct AudioBank {
     sfx: HashMap<Sfx, Handle<AudioSource>>,
-    gus: Vec<Handle<AudioSource>>,
+    han: Vec<Handle<AudioSource>>,
     music: HashMap<Music, Handle<AudioSource>>,
 }
 
@@ -155,8 +155,8 @@ pub fn to_source(r: synth::Rendered) -> AudioSource {
 fn setup(mut commands: Commands, mut assets: ResMut<Assets<AudioSource>>) {
     let started = bevy::platform::time::Instant::now();
     let sfx = Sfx::ALL.into_iter().map(|s| (s, assets.add(to_source(sfx::render(s))))).collect();
-    let gus = (0..sfx::GUS_VARIANTS).map(|v| assets.add(to_source(sfx::gus_blip(v)))).collect();
-    let mut bank = AudioBank { sfx, gus, music: HashMap::default() };
+    let han = (0..sfx::HAN_VARIANTS).map(|v| assets.add(to_source(sfx::han_blip(v)))).collect();
+    let mut bank = AudioBank { sfx, han, music: HashMap::default() };
     // The title song is needed straight away.
     bank.music(Music::Title, &mut assets);
     debug!("audio startup render: {:.0}ms", started.elapsed().as_secs_f32() * 1000.0);
@@ -242,22 +242,22 @@ fn duck_on_pause(
     player.ducked = Some(duck);
 }
 
-/// Pending Gus blips: seconds until each plays.
+/// Pending Han blips: seconds until each plays.
 #[derive(Resource, Default)]
-struct GusBabble(Vec<f32>);
+struct HanBabble(Vec<f32>);
 
 #[allow(clippy::too_many_arguments)]
 fn play_sfx(
     bank: Res<AudioBank>,
     channel: Res<AudioChannel<SfxChannel>>,
-    mut babble: ResMut<GusBabble>,
+    mut babble: ResMut<HanBabble>,
     mut jumped: MessageReader<Jumped>,
     mut landed: MessageReader<Landed>,
     mut nuggets: MessageReader<NuggetCollected>,
     mut died: MessageReader<PlayerDied>,
     mut checkpoints: MessageReader<CheckpointReached>,
     mut completed: MessageReader<LevelCompleted>,
-    mut gus: MessageReader<GusSays>,
+    mut han: MessageReader<HanSays>,
     mut requests: MessageReader<PlaySfx>,
 ) {
     let play = |s: Sfx, db: f32| {
@@ -287,7 +287,7 @@ fn play_sfx(
         play(*s, -2.0);
     }
     let mut rng = rand::rng();
-    for line in gus.read() {
+    for line in han.read() {
         // A few syllables over ~0.4s, roughly following how much he says.
         let syllables = line.text.split_whitespace().count().clamp(2, 4);
         let mut t = 0.0;
@@ -308,7 +308,7 @@ fn babble(
     time: Res<Time>,
     bank: Res<AudioBank>,
     channel: Res<AudioChannel<SfxChannel>>,
-    mut pending: ResMut<GusBabble>,
+    mut pending: ResMut<HanBabble>,
 ) {
     if pending.0.is_empty() {
         return;
@@ -322,13 +322,13 @@ fn babble(
             return true;
         }
         // Never the same syllable twice in a row.
-        let mut v = rng.random_range(0..bank.gus.len());
+        let mut v = rng.random_range(0..bank.han.len());
         if Some(v) == last {
-            v = (v + 1) % bank.gus.len();
+            v = (v + 1) % bank.han.len();
         }
         last = Some(v);
         channel
-            .play(bank.gus[v].clone())
+            .play(bank.han[v].clone())
             .with_volume(-4.0)
             .with_playback_rate(rng.random_range(0.92..1.12));
         false
@@ -393,6 +393,6 @@ pub enum Sfx {
     Flush,
     MenuMove,
     MenuSelect,
-    /// Gus talking: a little "blip blip" babble.
-    GusBlip,
+    /// Han talking: a little "blip blip" babble.
+    HanBlip,
 }

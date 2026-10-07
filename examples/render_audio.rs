@@ -55,8 +55,8 @@ fn main() {
         let r = sfx::render(s);
         write(&dir.join(format!("sfx_{s:?}.wav").to_lowercase()), &r, 1);
     }
-    for v in 0..sfx::GUS_VARIANTS {
-        write(&dir.join(format!("sfx_gusblip{v}.wav")), &sfx::gus_blip(v), 1);
+    for v in 0..sfx::HAN_VARIANTS {
+        write(&dir.join(format!("sfx_hanblip{v}.wav")), &sfx::han_blip(v), 1);
     }
     println!("all sfx: {:.1}ms", t.elapsed().as_secs_f64() * 1000.0);
 }

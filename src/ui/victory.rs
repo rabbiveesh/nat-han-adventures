@@ -104,7 +104,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                         r.spawn(icon(sprites.as_deref(), SpriteId::PooIdle, 16.0, 16.0));
                         r.spawn(icon(sprites.as_deref(), SpriteId::IconNugget, 8.0, 8.0));
                         r.spawn(label(f, format!("{got}/{total} NUGGETS"), 8.0, CREAM));
-                        r.spawn(icon(sprites.as_deref(), SpriteId::GusIdle, 16.0, 16.0));
+                        r.spawn(icon(sprites.as_deref(), SpriteId::HanIdle, 16.0, 16.0));
                     });
             });
             // The rolling credits, clipped to the space below the header.

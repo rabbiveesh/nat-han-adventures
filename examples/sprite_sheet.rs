@@ -99,7 +99,7 @@ fn scene(w: u8) -> Pixels {
     s.blit(&first(Nugget), 64, 48);
     s.blit(&nth(Nugget, 1), 80, 48);
     s.blit(&nth(Nugget, 3), 96, 48);
-    s.blit(&nth(GusRun, 0), 8, ground_y - 16);
+    s.blit(&nth(HanRun, 0), 8, ground_y - 16);
     s.blit(&nth(PooRun, 1), 28, ground_y - 16);
     s.blit(&nth(PooJump, 0), 150, 70);
     s.blit(&nth(TootPuff, 1), 150, 86);

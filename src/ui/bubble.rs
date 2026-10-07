@@ -1,5 +1,5 @@
-//! Han's speech bubble: a world-space bubble above the [`Gus`] entity showing the latest
-//! [`GusSays`] line with a typewriter reveal. A newer line replaces the old one.
+//! Han's speech bubble: a world-space bubble above the [`Han`] entity showing the latest
+//! [`HanSays`] line with a typewriter reveal. A newer line replaces the old one.
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -8,8 +8,8 @@ use bevy::transform::TransformSystems;
 use bevy::window::PrimaryWindow;
 
 use super::{UiFont, VIRTUAL_HEIGHT, palette::INK};
-use crate::events::GusSays;
-use crate::game::Gus;
+use crate::events::HanSays;
+use crate::game::Han;
 use crate::state::AppState;
 
 /// Characters per line.
@@ -97,7 +97,7 @@ fn revealed(lines: &[String], n: usize) -> String {
     out
 }
 
-fn receive(mut commands: Commands, mut reader: MessageReader<GusSays>) {
+fn receive(mut commands: Commands, mut reader: MessageReader<HanSays>) {
     if let Some(msg) = reader.read().last() {
         commands.insert_resource(Pending { text: msg.text.clone(), wait: WAIT_FOR_HAN });
     }
@@ -107,7 +107,7 @@ fn spawn_pending(
     mut commands: Commands,
     pending: Option<ResMut<Pending>>,
     time: Res<Time>,
-    han: Query<(), With<Gus>>,
+    han: Query<(), With<Han>>,
     old: Query<Entity, With<SpeechBubble>>,
     font: Option<Res<UiFont>>,
     window: Option<Single<&Window, With<PrimaryWindow>>>,
@@ -206,7 +206,7 @@ fn typewriter(
 /// Stick to Han (pixel-snapped); vanish with him.
 fn follow(
     mut commands: Commands,
-    han: Query<(&Transform, &GlobalTransform, Has<ChildOf>), (With<Gus>, Without<SpeechBubble>)>,
+    han: Query<(&Transform, &GlobalTransform, Has<ChildOf>), (With<Han>, Without<SpeechBubble>)>,
     mut bubbles: Query<(Entity, &mut Transform, &mut Visibility), With<SpeechBubble>>,
 ) {
     let pos = han.iter().next().map(|(t, g, child)| if child { g.translation() } else { t.translation });

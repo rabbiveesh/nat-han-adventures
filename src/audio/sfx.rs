@@ -1,6 +1,6 @@
 //! Sound effects, synthesized from the same NES-style building blocks as the music
 //! (pulse, stepped triangle, LFSR noise). All deterministic: randomness comes from fixed seeds
-//! (Gus's babble gets its variety from several pre-rendered [`gus_blip`] variants).
+//! (Han's babble gets its variety from several pre-rendered [`han_blip`] variants).
 
 use bevy_kira_audio::prelude::Frame;
 
@@ -15,7 +15,7 @@ const PEAK: f32 = 0.75;
 fn level(sfx: Sfx) -> f32 {
     match sfx {
         Sfx::MenuMove => 0.55,
-        Sfx::GusBlip => 0.6,
+        Sfx::HanBlip => 0.6,
         Sfx::Jump | Sfx::Land => 0.75,
         Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect => 0.85,
         Sfx::Toot | Sfx::Splat | Sfx::Flush => 1.0,
@@ -33,12 +33,12 @@ impl Sfx {
         Sfx::Flush,
         Sfx::MenuMove,
         Sfx::MenuSelect,
-        Sfx::GusBlip,
+        Sfx::HanBlip,
     ];
 }
 
-/// Number of distinct [`gus_blip`] variants.
-pub const GUS_VARIANTS: usize = 6;
+/// Number of distinct [`han_blip`] variants.
+pub const HAN_VARIANTS: usize = 6;
 
 /// Render a sound effect (mono, centred). Never loops.
 pub fn render(sfx: Sfx) -> Rendered {
@@ -52,18 +52,18 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::Flush => flush(),
         Sfx::MenuMove => menu_move(),
         Sfx::MenuSelect => menu_select(),
-        Sfx::GusBlip => return gus_blip(0),
+        Sfx::HanBlip => return han_blip(0),
     };
     finish(mono, level(sfx))
 }
 
-/// One syllable of Gus's babble; `variant` (mod [`GUS_VARIANTS`]) picks pitch and contour.
-pub fn gus_blip(variant: usize) -> Rendered {
-    const BASE: [f32; GUS_VARIANTS] = [220.0, 262.0, 196.0, 294.0, 247.0, 175.0];
+/// One syllable of Han's babble; `variant` (mod [`HAN_VARIANTS`]) picks pitch and contour.
+pub fn han_blip(variant: usize) -> Rendered {
+    const BASE: [f32; HAN_VARIANTS] = [220.0, 262.0, 196.0, 294.0, 247.0, 175.0];
     // Pitch contour over the syllable: start ratio -> end ratio.
-    const CONTOUR: [(f32, f32); GUS_VARIANTS] =
+    const CONTOUR: [(f32, f32); HAN_VARIANTS] =
         [(1.0, 1.15), (1.1, 0.9), (0.95, 1.2), (1.2, 1.0), (1.0, 0.85), (0.9, 1.1)];
-    let v = variant % GUS_VARIANTS;
+    let v = variant % HAN_VARIANTS;
     let (a, b) = CONTOUR[v];
     let mut o = Osc::default();
     let n = secs(0.075);
@@ -76,7 +76,7 @@ pub fn gus_blip(variant: usize) -> Rendered {
             o.pulse(f, duty) * 0.5 * env_ar(i, n, 0.004, 0.02)
         })
         .collect();
-    finish(mono, level(Sfx::GusBlip))
+    finish(mono, level(Sfx::HanBlip))
 }
 
 fn secs(s: f32) -> usize {
@@ -334,10 +334,10 @@ mod tests {
     }
 
     #[test]
-    fn gus_variants_differ() {
-        let a = gus_blip(0);
-        let b = gus_blip(1);
+    fn han_variants_differ() {
+        let a = han_blip(0);
+        let b = han_blip(1);
         assert_ne!(a.frames, b.frames);
-        assert_eq!(gus_blip(GUS_VARIANTS).frames, a.frames);
+        assert_eq!(han_blip(HAN_VARIANTS).frames, a.frames);
     }
 }

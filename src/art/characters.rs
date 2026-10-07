@@ -1,4 +1,4 @@
-//! The hero (a brave little poo) and Gus the plumber. Both face right; feet on the bottom row.
+//! The hero (a brave little poo) and Han the plumber. Both face right; feet on the bottom row.
 
 use super::palette::*;
 
@@ -231,9 +231,9 @@ pub fn poo_splat() -> Vec<Pixels> {
     vec![grid(SPLAT_1, POO_PAL), grid(SPLAT_2, POO_PAL), grid(SPLAT_3, POO_PAL)]
 }
 
-// ---------------------------------------------------------------- Gus
+// ---------------------------------------------------------------- Han
 
-pub const GUS_PAL: Palette = &[
+pub const HAN_PAL: Palette = &[
     ('k', hex(0x1b1420)), // outline, mustache
     ('r', hex(0xe0303a)), // cap, shirt
     ('R', hex(0x7a1a3a)), // plunger cup (maroon, distinct from the cap)
@@ -248,7 +248,7 @@ pub const GUS_PAL: Palette = &[
 ];
 
 /// Head and torso, rows 0..=12 (row 0 empty so he can bob).
-const GUS_TOP: &[&str] = &[
+const HAN_TOP: &[&str] = &[
     "................",
     "......kkkkk.....",
     ".kkk.krrrrrk....",
@@ -263,44 +263,44 @@ const GUS_TOP: &[&str] = &[
     ".ktk.kuuuuuuuuk.",
     ".ktk.kUuuuuuuUk.",
 ];
-const GUS_LEGS_IDLE: &[&str] = &["..k..kuUk.kUuk..", ".....knnk.knnnk.", ".....kkkk.kkkkk."];
-const GUS_LEGS_RUN: [&[&str]; 4] = [
+const HAN_LEGS_IDLE: &[&str] = &["..k..kuUk.kUuk..", ".....knnk.knnnk.", ".....kkkk.kkkkk."];
+const HAN_LEGS_RUN: [&[&str]; 4] = [
     &["..k.kuUk..kUuk..", "...knnk....knnnk", "...kkkk....kkkkk"],
     &["..k...kuUuk.....", ".......knnnk....", ".......kkkkk...."],
     &["..k.kUuk...kuUk.", "..knnnk....knnk.", "..kkkkk....kkkk."],
     &["..k...kUuuk.....", "......knnnnk....", "......kkkkkk...."],
 ];
-const GUS_LEGS_JUMP: &[&str] = &["..k.kuUk.kUuk...", "...knnk..knnk...", "................"];
+const HAN_LEGS_JUMP: &[&str] = &["..k.kuUk.kUuk...", "...knnk..knnk...", "................"];
 
-/// Assemble Gus: torso + legs; `up` shifts the torso up a pixel (stretching the overalls).
-fn gus(legs: &[&str], up: bool) -> Pixels {
+/// Assemble Han: torso + legs; `up` shifts the torso up a pixel (stretching the overalls).
+fn han(legs: &[&str], up: bool) -> Pixels {
     let mut rows: Vec<&str> = Vec::with_capacity(16);
     if up {
-        rows.extend_from_slice(&GUS_TOP[1..]);
-        rows.push(GUS_TOP[12]);
+        rows.extend_from_slice(&HAN_TOP[1..]);
+        rows.push(HAN_TOP[12]);
     } else {
-        rows.extend_from_slice(GUS_TOP);
+        rows.extend_from_slice(HAN_TOP);
     }
     rows.extend_from_slice(legs);
-    grid(&rows, GUS_PAL)
+    grid(&rows, HAN_PAL)
 }
 
-pub fn gus_idle() -> Vec<Pixels> {
+pub fn han_idle() -> Vec<Pixels> {
     // Breathe: second frame squashes the torso down a pixel.
-    let a = gus(GUS_LEGS_IDLE, false);
-    let mut rows: Vec<&str> = vec![GUS_TOP[0]];
-    rows.extend_from_slice(&GUS_TOP[..11]);
-    rows.push(GUS_TOP[12]);
-    rows.extend_from_slice(GUS_LEGS_IDLE);
-    vec![a, grid(&rows, GUS_PAL)]
+    let a = han(HAN_LEGS_IDLE, false);
+    let mut rows: Vec<&str> = vec![HAN_TOP[0]];
+    rows.extend_from_slice(&HAN_TOP[..11]);
+    rows.push(HAN_TOP[12]);
+    rows.extend_from_slice(HAN_LEGS_IDLE);
+    vec![a, grid(&rows, HAN_PAL)]
 }
 
-pub fn gus_run() -> Vec<Pixels> {
-    GUS_LEGS_RUN.iter().enumerate().map(|(i, l)| gus(l, i % 2 == 1)).collect()
+pub fn han_run() -> Vec<Pixels> {
+    HAN_LEGS_RUN.iter().enumerate().map(|(i, l)| han(l, i % 2 == 1)).collect()
 }
 
-pub fn gus_jump() -> Vec<Pixels> {
-    vec![gus(GUS_LEGS_JUMP, true)]
+pub fn han_jump() -> Vec<Pixels> {
+    vec![han(HAN_LEGS_JUMP, true)]
 }
 
 /// Every hand-authored grid in this module, for validation tests.
@@ -317,17 +317,17 @@ pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
         ("SPLAT_1", SPLAT_1.to_vec(), POO_PAL),
         ("SPLAT_2", SPLAT_2.to_vec(), POO_PAL),
         ("SPLAT_3", SPLAT_3.to_vec(), POO_PAL),
-        ("GUS_LEGS_IDLE", GUS_LEGS_IDLE.to_vec(), GUS_PAL),
-        ("GUS_LEGS_JUMP", GUS_LEGS_JUMP.to_vec(), GUS_PAL),
+        ("HAN_LEGS_IDLE", HAN_LEGS_IDLE.to_vec(), HAN_PAL),
+        ("HAN_LEGS_JUMP", HAN_LEGS_JUMP.to_vec(), HAN_PAL),
     ];
     for f in [FEET_A, FEET_B, FEET_C, FEET_D] {
         v.push(("FEET", f.to_vec(), POO_PAL));
     }
-    let mut top = GUS_TOP.to_vec();
-    top.extend_from_slice(GUS_LEGS_IDLE);
-    v.push(("GUS_TOP", top, GUS_PAL));
-    for l in GUS_LEGS_RUN {
-        v.push(("GUS_LEGS_RUN", l.to_vec(), GUS_PAL));
+    let mut top = HAN_TOP.to_vec();
+    top.extend_from_slice(HAN_LEGS_IDLE);
+    v.push(("HAN_TOP", top, HAN_PAL));
+    for l in HAN_LEGS_RUN {
+        v.push(("HAN_LEGS_RUN", l.to_vec(), HAN_PAL));
     }
     v
 }

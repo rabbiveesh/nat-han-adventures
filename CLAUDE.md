@@ -29,13 +29,13 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
 - `src/audio/` MML parser, NES-style synth, songs, sfx, playback via bevy_kira_audio.
-- `src/ui/` title, level select, HUD, pause, results, victory, Gus's speech bubble. `src/save.rs` progress.
+- `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 
 ## Look
 - Virtual resolution: 216px tall (13.5 tiles), width follows the window aspect. Camera2d with
   `ScalingMode::FixedVertical { viewport_height: 216.0 }`. Nearest-neighbour sampling.
 - Z order: backdrop -100, tiles 0, moving platforms 1, things (nuggets, hazards, checkpoints, goal) 2,
-  Gus 4, player 5, particles 6, speech bubble 10.
+  Han 4, player 5, particles 6, speech bubble 10.
 - Text: Press Start 2P at multiples of 8px.
 
 ## Dev loop

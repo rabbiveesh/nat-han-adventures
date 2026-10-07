@@ -4,12 +4,12 @@ use std::f32::consts::TAU;
 
 use bevy::prelude::*;
 
-use super::gus::{self, DEATH_LINES, GusTrail};
+use super::han::{self, DEATH_LINES, HanTrail};
 use super::physics::{Body, Dead, Finished, PlayerControl, cells, tile_at};
 use super::{
-    ActiveLevel, Fly, GameSet, Gus, LevelRun, Player, Pos, PrevPos, SimClock, Spray, tuning,
+    ActiveLevel, Fly, GameSet, Han, LevelRun, Player, Pos, PrevPos, SimClock, Spray, tuning,
 };
-use crate::events::{GusSays, PlayerDied, PlayerRespawned};
+use crate::events::{HanSays, PlayerDied, PlayerRespawned};
 use crate::level::{TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
@@ -73,7 +73,7 @@ pub(super) fn check_hazards(
     sprays: Query<(&Spray, &Transform)>,
     mut run: ResMut<LevelRun>,
     mut died: MessageWriter<PlayerDied>,
-    mut says: MessageWriter<GusSays>,
+    mut says: MessageWriter<HanSays>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
@@ -127,7 +127,7 @@ pub(super) fn check_hazards(
     // Han pipes up on the 1st, 4th, 7th... death.
     if run.deaths % 3 == 1 {
         let line = DEATH_LINES[(run.deaths as usize / 3) % DEATH_LINES.len()];
-        says.write(GusSays { text: line.to_string() });
+        says.write(HanSays { text: line.to_string() });
     }
 }
 
@@ -139,9 +139,9 @@ pub(super) fn respawn(
     run: Res<LevelRun>,
     mut player: Query<
         (Entity, &mut Dead, &mut Pos, &mut PrevPos, &mut Body, &mut PlayerControl),
-        (With<Player>, Without<Gus>),
+        (With<Player>, Without<Han>),
     >,
-    mut gus_q: Query<(&mut Pos, &mut PrevPos, &mut GusTrail), (With<Gus>, Without<Player>)>,
+    mut han_q: Query<(&mut Pos, &mut PrevPos, &mut HanTrail), (With<Han>, Without<Player>)>,
     mut respawned: MessageWriter<PlayerRespawned>,
 ) {
     let Ok((entity, mut dead, mut pos, mut prev, mut body, mut ctl)) = player.single_mut() else {
@@ -164,8 +164,8 @@ pub(super) fn respawn(
     commands.entity(entity).remove::<Dead>();
     respawned.write(PlayerRespawned { pos: at });
 
-    for (mut gpos, mut gprev, mut trail) in &mut gus_q {
-        gpos.0 = gus::behind(level, at, ctl.facing);
+    for (mut gpos, mut gprev, mut trail) in &mut han_q {
+        gpos.0 = han::behind(level, at, ctl.facing);
         gprev.0 = gpos.0;
         trail.0.clear();
     }

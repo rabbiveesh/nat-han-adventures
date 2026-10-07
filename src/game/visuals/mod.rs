@@ -13,10 +13,10 @@ use bevy::sprite::Anchor;
 pub use camera::GameCamera;
 pub use particles::Particle;
 
-use super::gus::{GusAnim, GusPose};
+use super::han::{HanAnim, HanPose};
 use super::physics::{Body, Dead, PlayerControl};
 use super::{
-    Checkpoint, Fly, Goal, Gus, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
+    Checkpoint, Fly, Goal, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
     PrevPos, Spray, tuning,
 };
 use crate::art::{SpriteId, Sprites};
@@ -47,14 +47,14 @@ pub(super) fn plugin(app: &mut App) {
     .add_observer(spray_sprite)
     .add_observer(platform_sprite)
     .add_observer(player_sprite)
-    .add_observer(gus_sprite)
+    .add_observer(han_sprite)
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
     .add_systems(
         PostUpdate,
         (
             frame_anims,
             animate_player,
-            animate_gus,
+            animate_han,
             relax_squash,
             update_checkpoints,
             update_sprays,
@@ -90,7 +90,7 @@ pub struct FrameAnim {
     pub offset: f32,
 }
 
-/// The sprite child of the player / Gus. Scaled for squash & stretch around the feet.
+/// The sprite child of the player / Han. Scaled for squash & stretch around the feet.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct CharacterSprite {
     pub squash: Vec2,
@@ -252,9 +252,9 @@ fn player_sprite(add: On<Add, Player>, sprites: Option<Res<Sprites>>, mut comman
     commands.entity(add.entity).insert(Visibility::default()).with_child(child);
 }
 
-fn gus_sprite(add: On<Add, Gus>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
     let Some(sprites) = sprites else { return };
-    let child = character_child(&sprites, SpriteId::GusIdle);
+    let child = character_child(&sprites, SpriteId::HanIdle);
     commands.entity(add.entity).insert(Visibility::default()).with_child(child);
 }
 
@@ -338,16 +338,16 @@ fn animate_player(
     }
 }
 
-fn animate_gus(
+fn animate_han(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    gus: Query<(&GusAnim, &Children), With<Gus>>,
+    han: Query<(&HanAnim, &Children), With<Han>>,
     mut kids: Query<(&mut Sprite, &mut CharacterSprite)>,
     mut was_jumping: Local<bool>,
 ) {
     let t = time.elapsed_secs();
-    for (anim, children) in &gus {
-        let jumping = anim.pose == GusPose::Jump;
+    for (anim, children) in &han {
+        let jumping = anim.pose == HanPose::Jump;
         for &child in children {
             let Ok((mut sprite, mut cs)) = kids.get_mut(child) else { continue };
             if jumping && !*was_jumping {
@@ -356,9 +356,9 @@ fn animate_gus(
                 cs.squash = Vec2::new(1.25, 0.8);
             }
             let (id, frame) = match anim.pose {
-                GusPose::Idle => (SpriteId::GusIdle, (t * 3.0) as usize),
-                GusPose::Run => (SpriteId::GusRun, (t * 12.0) as usize),
-                GusPose::Jump => (SpriteId::GusJump, (t * 10.0) as usize),
+                HanPose::Idle => (SpriteId::HanIdle, (t * 3.0) as usize),
+                HanPose::Run => (SpriteId::HanRun, (t * 12.0) as usize),
+                HanPose::Jump => (SpriteId::HanJump, (t * 10.0) as usize),
             };
             let img = sprites.frame(id, frame);
             if sprite.image != img {

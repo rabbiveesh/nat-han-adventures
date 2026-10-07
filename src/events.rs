@@ -10,7 +10,7 @@ pub fn plugin(app: &mut App) {
         .add_message::<PlayerRespawned>()
         .add_message::<CheckpointReached>()
         .add_message::<LevelCompleted>()
-        .add_message::<GusSays>()
+        .add_message::<HanSays>()
         .add_message::<PlaySfx>();
 }
 
@@ -61,9 +61,9 @@ pub struct LevelCompleted {
     pub time_secs: f32,
 }
 
-/// Gus the plumber pipes up: show `text` in a speech bubble above him for a few seconds.
+/// Han the plumber pipes up: show `text` in a speech bubble above him for a few seconds.
 #[derive(Message, Debug, Clone)]
-pub struct GusSays {
+pub struct HanSays {
     pub text: String,
 }
 

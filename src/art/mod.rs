@@ -26,10 +26,10 @@ pub enum SpriteId {
     PooFall,
     /// Death animation frames (squash into a splat).
     PooSplat,
-    // Gus the plumber: overalls, cap, mustache, plunger. 16x16 (he's short), feet at the bottom.
-    GusIdle,
-    GusRun,
-    GusJump,
+    // Han the plumber: overalls, cap, mustache, plunger. 16x16 (he's short), feet at the bottom.
+    HanIdle,
+    HanRun,
+    HanJump,
     /// Golden nugget, spinning frames. 16x16 with the nugget ~8px centered.
     Nugget,
     /// Checkpoint: toilet-paper holder, untouched / unrolled after touching. 16x16.
@@ -97,7 +97,7 @@ impl SpriteId {
     pub fn all() -> Vec<SpriteId> {
         use SpriteId::*;
         let mut v = vec![
-            PooIdle, PooRun, PooJump, PooFall, PooSplat, GusIdle, GusRun, GusJump, Nugget,
+            PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, TootPuff, IconNugget,
             IconLock,
@@ -132,9 +132,9 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         PooJump => characters::poo_jump(),
         PooFall => characters::poo_fall(),
         PooSplat => characters::poo_splat(),
-        GusIdle => characters::gus_idle(),
-        GusRun => characters::gus_run(),
-        GusJump => characters::gus_jump(),
+        HanIdle => characters::han_idle(),
+        HanRun => characters::han_run(),
+        HanJump => characters::han_jump(),
         Nugget => items::nugget(),
         CheckpointOff => items::checkpoint_off(),
         CheckpointOn => items::checkpoint_on(),
@@ -224,9 +224,9 @@ mod tests {
         assert_eq!(n(PooJump), 1);
         assert_eq!(n(PooFall), 1);
         assert_eq!(n(PooSplat), 3);
-        assert_eq!(n(GusIdle), 2);
-        assert_eq!(n(GusRun), 4);
-        assert_eq!(n(GusJump), 1);
+        assert_eq!(n(HanIdle), 2);
+        assert_eq!(n(HanRun), 4);
+        assert_eq!(n(HanJump), 1);
         assert_eq!(n(Nugget), 4);
         assert!((2..=3).contains(&n(GoalFlag)));
         assert_eq!(n(Fly), 2);

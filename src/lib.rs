@@ -1,4 +1,4 @@
-//! A 2D platformer about a brave little poo, its plumber sidekick Gus, and ten levels
+//! A 2D platformer about a brave little poo, its plumber sidekick Han, and ten levels
 //! of increasingly unsanitary terrain.
 //!
 //! Split into `gameplay` (headless-testable simulation) and `presentation`

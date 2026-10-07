@@ -6,8 +6,8 @@
 //! ```text
 //! name: Bathroom Floor
 //! world: 1
-//! intro: Gus's line when the level starts.
-//! say: Gus's line at the first checkpoint.
+//! intro: Han's line when the level starts.
+//! say: Han's line at the first checkpoint.
 //! say: ...at the second checkpoint (checkpoints are numbered in reading order: top row first, left to right within a row).
 //! 1: dx=6 dy=0 period=4 kind=tp
 //! ---
@@ -22,7 +22,7 @@
 //! | `.` or space | empty |
 //! | `#` | solid ground |
 //! | `=` | one-way platform (jump up through it, stand on top; hold Down+Jump does nothing — no drop-through) |
-//! | `P` | player start (exactly one). Gus spawns with you |
+//! | `P` | player start (exactly one). Han spawns with you |
 //! | `o` | golden nugget (the coin) |
 //! | `C` | checkpoint (toilet-paper holder) |
 //! | `G` | goal flag (exactly one) |
@@ -144,7 +144,7 @@ pub struct Level {
     /// 1..=5: picks tileset, backdrop and music.
     pub world: u8,
     pub intro: String,
-    /// Gus's line per checkpoint, in checkpoint order. Missing lines get a generic quip.
+    /// Han's line per checkpoint, in checkpoint order. Missing lines get a generic quip.
     pub says: Vec<String>,
     pub width: usize,
     pub height: usize,

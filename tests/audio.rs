@@ -49,8 +49,8 @@ fn every_song_and_sfx_renders_cleanly_and_quickly() {
     for s in Sfx::ALL {
         check(&format!("{s:?}"), &sfx::render(s));
     }
-    for v in 0..sfx::GUS_VARIANTS {
-        check(&format!("gus blip {v}"), &sfx::gus_blip(v));
+    for v in 0..sfx::HAN_VARIANTS {
+        check(&format!("han blip {v}"), &sfx::han_blip(v));
     }
     let secs = t.elapsed().as_secs_f64();
     assert!(secs < budget_secs(), "rendering everything took {secs:.2}s");

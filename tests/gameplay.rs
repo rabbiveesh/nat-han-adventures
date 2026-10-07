@@ -8,7 +8,7 @@ use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeU
 use durhay::{
     events::*,
     game::{
-        Body, Checkpoint, Dead, GUS_DELAY_STEPS, Gus, LevelRun, MovingPlatform, Nugget, Player,
+        Body, Checkpoint, Dead, HAN_DELAY_STEPS, Han, LevelRun, MovingPlatform, Nugget, Player,
         Pos, SimClock, tuning,
     },
     level::{Level, Levels, TILE},
@@ -34,7 +34,7 @@ fn app(level: &str) -> App {
     count::<NuggetCollected>(&mut app);
     count::<CheckpointReached>(&mut app);
     count::<LevelCompleted>(&mut app);
-    count::<GusSays>(&mut app);
+    count::<HanSays>(&mut app);
     app.finish();
     app.cleanup();
     app.update(); // Startup
@@ -80,8 +80,8 @@ fn player_pos(app: &mut App) -> Vec2 {
     app.world().get::<Pos>(e).unwrap().0
 }
 
-fn gus_pos(app: &mut App) -> Vec2 {
-    let e = single::<Gus>(app);
+fn han_pos(app: &mut App) -> Vec2 {
+    let e = single::<Han>(app);
     app.world().get::<Pos>(e).unwrap().0
 }
 
@@ -129,7 +129,7 @@ fn one_fixed_step_per_update() {
 #[test]
 fn level_starts_with_intro_and_player_on_the_ground() {
     let mut app = app(FLAT);
-    assert_eq!(counted::<GusSays>(&app), 1);
+    assert_eq!(counted::<HanSays>(&app), 1);
     step(&mut app, 0.2);
     let b = body(&mut app);
     assert!(b.on_ground);
@@ -375,7 +375,7 @@ say: First checkpoint line
 #[test]
 fn spikes_kill_and_respawn_at_checkpoint() {
     let mut app = app(SPIKES);
-    let says0 = counted::<GusSays>(&app);
+    let says0 = counted::<HanSays>(&app);
     hold(&mut app, RIGHT);
     for _ in 0..240 {
         app.update();
@@ -389,7 +389,7 @@ fn spikes_kill_and_respawn_at_checkpoint() {
     assert_eq!(run(&app).checkpoint, Some(0));
     assert_eq!(run(&app).deaths, 1);
     // Checkpoint line + the first-death line.
-    assert_eq!(counted::<GusSays>(&app) - says0, 2);
+    assert_eq!(counted::<HanSays>(&app) - says0, 2);
     let cp = single::<Checkpoint>(&mut app);
     assert!(app.world().get::<Checkpoint>(cp).unwrap().active);
 
@@ -404,8 +404,8 @@ fn spikes_kill_and_respawn_at_checkpoint() {
     let pos = player_pos(&mut app);
     assert_eq!(pos.x, 5.0 * TILE + TILE / 2.0);
     assert!((pos.y - standing(TILE)).abs() < 1.0);
-    // Gus pops back in behind.
-    assert!(gus_pos(&mut app).distance(pos) < 2.0 * TILE);
+    // Han pops back in behind.
+    assert!(han_pos(&mut app).distance(pos) < 2.0 * TILE);
 }
 
 const PIT: &str = "name: Pit
@@ -510,7 +510,7 @@ fn restart_resets_nuggets_and_position() {
     assert_eq!(run(&app).nuggets_total, 3);
     assert_eq!(app.world_mut().query::<&Nugget>().iter(app.world()).count(), 3);
     assert_eq!(app.world_mut().query::<&Player>().iter(app.world()).count(), 1);
-    assert_eq!(app.world_mut().query::<&Gus>().iter(app.world()).count(), 1);
+    assert_eq!(app.world_mut().query::<&Han>().iter(app.world()).count(), 1);
     assert_eq!(player_pos(&mut app), start);
 }
 
@@ -564,7 +564,7 @@ const LONG: &str = "name: Long
 ";
 
 #[test]
-fn gus_follows_the_same_path() {
+fn han_follows_the_same_path() {
     let mut app = app(LONG);
     hold(&mut app, RIGHT);
     let mut trail = Vec::new();
@@ -576,30 +576,30 @@ fn gus_follows_the_same_path() {
             release(&mut app, JUMP);
         }
         app.update();
-        let (p, g) = (player_pos(&mut app), gus_pos(&mut app));
+        let (p, g) = (player_pos(&mut app), han_pos(&mut app));
         trail.push(p);
-        assert!(g.distance(p) <= 12.0 * TILE, "Gus stays in range");
-        if trail.len() > GUS_DELAY_STEPS + 30 {
-            // Replaying the path ~GUS_DELAY_STEPS steps late.
-            let past = trail[trail.len() - 1 - GUS_DELAY_STEPS];
-            assert!(g.distance(past) < 1.0, "step {i}: gus {g} vs player's past {past}");
+        assert!(g.distance(p) <= 12.0 * TILE, "Han stays in range");
+        if trail.len() > HAN_DELAY_STEPS + 30 {
+            // Replaying the path ~HAN_DELAY_STEPS steps late.
+            let past = trail[trail.len() - 1 - HAN_DELAY_STEPS];
+            assert!(g.distance(past) < 1.0, "step {i}: han {g} vs player's past {past}");
         }
     }
     release(&mut app, RIGHT);
     release(&mut app, JUMP);
     step(&mut app, 1.5);
-    let (p, g) = (player_pos(&mut app), gus_pos(&mut app));
+    let (p, g) = (player_pos(&mut app), han_pos(&mut app));
     assert!((g.y - p.y).abs() < 1.0, "landed, not frozen mid-jump: {g} vs {p}");
     assert!(p.x - g.x > 0.0 && p.x - g.x < 5.0 * TILE, "waits a little behind: {g} vs {p}");
 }
 
 #[test]
-fn gus_pops_back_when_far() {
+fn han_pops_back_when_far() {
     let mut app = app(LONG);
     let p = single::<Player>(&mut app);
     app.world_mut().get_mut::<Pos>(p).unwrap().0.x += 30.0 * TILE;
     app.update();
-    let (pp, g) = (player_pos(&mut app), gus_pos(&mut app));
+    let (pp, g) = (player_pos(&mut app), han_pos(&mut app));
     assert!(g.distance(pp) < 2.0 * TILE, "popped next to the player");
 }
 
@@ -631,15 +631,15 @@ fn real_levels_start_safe() {
     }
 }
 
-/// When the player stops, Gus waits a little behind rather than standing inside them.
+/// When the player stops, Han waits a little behind rather than standing inside them.
 #[test]
-fn gus_stops_behind_a_standing_player() {
+fn han_stops_behind_a_standing_player() {
     let mut app = app(FLAT);
     hold(&mut app, RIGHT);
     step(&mut app, 1.0);
     release(&mut app, RIGHT);
     step(&mut app, 2.0);
-    let (p, g) = (player_pos(&mut app), gus_pos(&mut app));
-    assert!(p.x - g.x > TILE, "gus at {g}, player at {p}: should be visibly behind");
-    assert!(p.x - g.x < 5.0 * TILE, "gus at {g}, player at {p}: shouldn't lag far behind");
+    let (p, g) = (player_pos(&mut app), han_pos(&mut app));
+    assert!(p.x - g.x > TILE, "han at {g}, player at {p}: should be visibly behind");
+    assert!(p.x - g.x < 5.0 * TILE, "han at {g}, player at {p}: shouldn't lag far behind");
 }

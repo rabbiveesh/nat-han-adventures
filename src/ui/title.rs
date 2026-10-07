@@ -46,7 +46,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             })
             .with_children(|row| {
                 for (id, name, phase) in
-                    [(SpriteId::PooIdle, HERO_NAME, 0.0), (SpriteId::GusIdle, SIDEKICK_NAME, 0.5)]
+                    [(SpriteId::PooIdle, HERO_NAME, 0.0), (SpriteId::HanIdle, SIDEKICK_NAME, 0.5)]
                 {
                     row.spawn(Node {
                         flex_direction: FlexDirection::Column,
