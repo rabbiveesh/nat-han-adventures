@@ -317,14 +317,14 @@ const BRUSH_PAL: Palette = &[
 
 /// One upturned brush, 8 wide; two per tile.
 const BRUSH: &[&str] = &[
-    "w.w.w.w.",
-    "WwWwWwW.",
-    "kwWwWwk.",
-    "kWwWwWk.",
-    ".kkWkk..",
-    "..kbk...",
-    "..kbk...",
-    ".kbBbk..",
+    "w..w..w.",
+    "Wk.W.kW.",
+    ".WkWkW..",
+    ".kWwWk..",
+    "..kwk...",
+    ".kbbbk..",
+    ".kbBBk..",
+    "kkkkkkk.",
 ];
 
 pub fn spikes_up() -> Vec<Pixels> {

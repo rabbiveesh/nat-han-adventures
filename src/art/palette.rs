@@ -95,6 +95,16 @@ impl Pixels {
         self
     }
 
+    /// Scale every colour's brightness by `f` (palette-preserving: one colour in, one out).
+    pub fn shade(mut self, f: f32) -> Self {
+        for px in self.data.chunks_exact_mut(4) {
+            for c in &mut px[..3] {
+                *c = (*c as f32 * f).round().min(255.0) as u8;
+            }
+        }
+        self
+    }
+
     /// Replace colours exactly matching `from` with `to`.
     pub fn recolor(mut self, map: &[(Rgba, Rgba)]) -> Self {
         for px in self.data.chunks_exact_mut(4) {

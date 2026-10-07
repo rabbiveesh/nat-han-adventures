@@ -579,18 +579,9 @@ pub fn backdrop(w: u8) -> Vec<Pixels> {
         4 => (festival(), 1.0),
         _ => (plant(), 0.92),
     };
-    vec![darken(p, dim)]
+    vec![p.shade(dim)]
 }
 
-/// Scale every colour toward black, keeping the palette (each colour maps to exactly one).
-fn darken(mut p: Pixels, f: f32) -> Pixels {
-    for px in p.data.chunks_exact_mut(4) {
-        for c in &mut px[..3] {
-            *c = (*c as f32 * f).round() as u8;
-        }
-    }
-    p
-}
 
 #[cfg(test)]
 mod tests {

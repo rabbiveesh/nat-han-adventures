@@ -18,6 +18,8 @@ struct World {
     /// Rows drawn over the top of the fill to make the surface tile.
     cap: &'static [&'static str],
     oneway: &'static [&'static str],
+    /// Brightness of the fill (below the cap), so surfaces pop and big ground masses stay calm.
+    fill_shade: f32,
 }
 
 // ---------------------------------------------------------------- 1: bathroom
@@ -252,23 +254,23 @@ const PLANT_ONEWAY: &[&str] = &[
 ];
 
 const WORLD_DATA: [World; 5] = [
-    World { pal: BATH_PAL, fill: BATH_FILL, cap: BATH_CAP, oneway: BATH_ONEWAY },
-    World { pal: PIPE_PAL, fill: PIPE_FILL, cap: PIPE_CAP, oneway: PIPE_ONEWAY },
-    World { pal: SEWER_PAL, fill: SEWER_FILL, cap: SEWER_CAP, oneway: SEWER_ONEWAY },
-    World { pal: SEPTIC_PAL, fill: SEPTIC_FILL, cap: SEPTIC_CAP, oneway: SEPTIC_ONEWAY },
-    World { pal: PLANT_PAL, fill: PLANT_FILL, cap: PLANT_CAP, oneway: PLANT_ONEWAY },
+    World { pal: BATH_PAL, fill: BATH_FILL, cap: BATH_CAP, oneway: BATH_ONEWAY, fill_shade: 0.8 },
+    World { pal: PIPE_PAL, fill: PIPE_FILL, cap: PIPE_CAP, oneway: PIPE_ONEWAY, fill_shade: 0.6 },
+    World { pal: SEWER_PAL, fill: SEWER_FILL, cap: SEWER_CAP, oneway: SEWER_ONEWAY, fill_shade: 0.85 },
+    World { pal: SEPTIC_PAL, fill: SEPTIC_FILL, cap: SEPTIC_CAP, oneway: SEPTIC_ONEWAY, fill_shade: 0.72 },
+    World { pal: PLANT_PAL, fill: PLANT_FILL, cap: PLANT_CAP, oneway: PLANT_ONEWAY, fill_shade: 0.7 },
 ];
 
 pub fn ground_fill(w: u8) -> Vec<Pixels> {
     let d = &WORLD_DATA[world_index(w)];
-    vec![grid(d.fill, d.pal)]
+    vec![grid(d.fill, d.pal).shade(d.fill_shade)]
 }
 
 pub fn ground_top(w: u8) -> Vec<Pixels> {
     let d = &WORLD_DATA[world_index(w)];
-    let mut rows: Vec<&str> = d.cap.to_vec();
-    rows.extend_from_slice(&d.fill[d.cap.len()..]);
-    vec![grid(&rows, d.pal)]
+    let mut p = grid(d.fill, d.pal).shade(d.fill_shade);
+    p.blit(&grid(d.cap, d.pal), 0, 0);
+    vec![p]
 }
 
 pub fn one_way(w: u8) -> Vec<Pixels> {
