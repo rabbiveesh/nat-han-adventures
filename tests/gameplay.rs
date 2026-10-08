@@ -1040,8 +1040,9 @@ fn waltz_flies_circle_once_per_bar() {
 }
 
 /// Jump at `offset` seconds from a downbeat (negative: before it). Returns the take-off speed,
-/// whether a toot still works afterwards, and how many golden ONE jumps there were.
-fn jump_at(offset: f64) -> (f32, bool, usize) {
+/// the toot's take-off speed (if a toot still works afterwards), and how many golden ONE jumps
+/// there were.
+fn jump_at(offset: f64) -> (f32, Option<f32>, usize) {
     use nat_han_adventures::game::JumpedOnOne;
     let mut app = app(FLAT);
     step(&mut app, 0.3);
@@ -1059,27 +1060,52 @@ fn jump_at(offset: f64) -> (f32, bool, usize) {
     app.update();
     hold(&mut app, JUMP);
     app.update();
-    let tooted = counted::<Jumped>(&app) == 2;
-    (vy, tooted, counted::<JumpedOnOne>(&app))
+    let toot = (counted::<Jumped>(&app) == 2).then(|| body(&mut app).vel.y + tuning::GRAVITY * DT as f32);
+    (vy, toot, counted::<JumpedOnOne>(&app))
+}
+
+/// Highest the feet get from a ONE jump (held) plus its weak toot at frame `k`.
+fn one_jump_with_toot_at(k: usize) -> f32 {
+    let mut app = app(FLAT);
+    step(&mut app, 0.3);
+    let mut beats = 3.0 * 5.0;
+    waltz(&mut app, beats);
+    max_height_while(&mut app, 1.5, |app, i| {
+        beats += WALTZ_STEP;
+        waltz(app, beats);
+        match i {
+            0 => hold(app, JUMP),
+            i if i == k => release(app, JUMP),
+            i if i == k + 1 => hold(app, JUMP),
+            _ => {}
+        }
+    })
 }
 
 #[test]
-fn jump_on_one_is_higher_golden_and_spends_the_toot() {
-    use nat_han_adventures::game::{WALTZ_ONE_BOOST, WALTZ_ONE_WINDOW};
+fn jump_on_one_is_higher_golden_and_its_toot_is_weak() {
+    use nat_han_adventures::game::{WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW};
     let boosted = tuning::JUMP_SPEED * WALTZ_ONE_BOOST;
     assert!((WALTZ_ONE_WINDOW - 0.12).abs() < 1e-6);
     for offset in [0.0, 0.05, 0.11, -0.05, -0.11] {
-        let (vy, tooted, golden) = jump_at(offset);
+        let (vy, toot, golden) = jump_at(offset);
         assert!((vy - boosted).abs() < 0.5, "{offset}: {vy}");
-        assert!(!tooted, "{offset}: a ONE jump spends the toot");
+        let toot = toot.unwrap_or_else(|| panic!("{offset}: a ONE jump keeps a (weak) toot"));
+        assert!((toot - WALTZ_ONE_TOOT_SPEED).abs() < 0.5, "{offset}: weak toot at {toot}");
         assert_eq!(golden, 1, "{offset}");
     }
     for offset in [0.14, -0.14, 0.25, 0.5, -0.6] {
-        let (vy, tooted, golden) = jump_at(offset);
+        let (vy, toot, golden) = jump_at(offset);
         assert!((vy - tuning::JUMP_SPEED).abs() < 0.5, "{offset}: off-beat jumps are normal ({vy})");
-        assert!(tooted, "{offset}: the toot is still there");
+        let toot = toot.unwrap_or_else(|| panic!("{offset}: the toot is still there"));
+        assert!((toot - tuning::DOUBLE_JUMP_SPEED).abs() < 0.5, "{offset}: a full toot ({toot})");
         assert_eq!(golden, 0, "{offset}");
     }
+    // The ceiling: ONE jump + weak toot, toot at every frame, stays ≥ 6px under a giant wall.
+    let (best, k) = (5..45).map(|k| (one_jump_with_toot_at(k), k)).fold((0.0, 0), |a, b| if b.0 > a.0 { b } else { a });
+    println!("best ONE jump + weak toot: {best:.1}px (toot at frame {k})");
+    assert!(best > 5.0 * TILE, "the weak toot still helps: {best}");
+    assert!(best <= 6.0 * TILE - 6.0, "ONE + weak toot {best}px gets near a 6-tile giant wall");
     // Outside the waltz, a jump on a downbeat is just a jump.
     let mut app = app(FLAT);
     step(&mut app, 0.3);
@@ -1111,4 +1137,251 @@ fn han_counts_every_third_jump_on_one() {
         assert_eq!(app.world().resource::<OneJumps>().0, n);
         assert_eq!(counted::<HanSays>(&app) - said0, (n / WALTZ_ONE_LINE_EVERY) as usize, "after {n} ONE jumps");
     }
+}
+
+// --- Grease, sweaty grip, splat stains, rafts, hint spots. ---
+
+/// Dry floor (cols 0-9), grease (10-29), dry again; the goal far right.
+const GREASE: &str = "name: Grease
+---
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+..P....................................G
+##########____________________##########
+";
+
+/// Han's lines so far.
+#[derive(Resource, Default)]
+struct Said(Vec<String>);
+
+fn listen(app: &mut App) {
+    app.init_resource::<Said>().add_systems(Last, |mut r: MessageReader<HanSays>, mut s: ResMut<Said>| {
+        s.0.extend(r.read().map(|m| m.text.clone()))
+    });
+}
+
+fn said(app: &App) -> Vec<String> {
+    app.world().resource::<Said>().0.clone()
+}
+
+fn put_player(app: &mut App, x: f32, y: f32) {
+    let p = single::<Player>(app);
+    app.world_mut().get_mut::<Pos>(p).unwrap().0 = Vec2::new(x, y);
+    app.world_mut().get_mut::<nat_han_adventures::game::PrevPos>(p).unwrap().0 = Vec2::new(x, y);
+}
+
+#[test]
+fn grease_slides_steers_weakly_and_cant_be_jumped_from() {
+    let mut app = app(GREASE);
+    // Run onto the grease at full speed, then let go: no braking.
+    hold(&mut app, RIGHT);
+    step(&mut app, 1.1);
+    release(&mut app, RIGHT);
+    assert!(player_pos(&mut app).x > 10.0 * TILE + 8.0, "on the grease");
+    step(&mut app, 0.3);
+    assert_eq!(body(&mut app).vel.x, tuning::RUN_SPEED, "keeps sliding at full speed");
+    // Pushing back does nothing either.
+    hold(&mut app, LEFT);
+    step(&mut app, 0.2);
+    release(&mut app, LEFT);
+    assert_eq!(body(&mut app).vel.x, tuning::RUN_SPEED, "can't brake on grease");
+    // No jumping: neither a ground jump nor a toot from the ground.
+    let jumps = counted::<Jumped>(&app);
+    hold(&mut app, JUMP);
+    step(&mut app, 0.1);
+    release(&mut app, JUMP);
+    hold(&mut app, JUMP);
+    step(&mut app, 0.05);
+    release(&mut app, JUMP);
+    assert_eq!(counted::<Jumped>(&app), jumps, "can't jump off grease");
+    assert!(body(&mut app).on_ground);
+
+    // Weak steering: from a standstill on grease, a fifth of the usual acceleration.
+    let mut app = self::app(GREASE);
+    put_player(&mut app, 15.0 * TILE, standing(TILE));
+    step(&mut app, 0.1);
+    assert_eq!(body(&mut app).vel.x, 0.0, "standing still on grease is fine");
+    hold(&mut app, RIGHT);
+    step(&mut app, 0.1);
+    let v = body(&mut app).vel.x;
+    let want = tuning::GROUND_ACCEL * 0.2 * 0.1;
+    assert!((v - want).abs() < 5.0, "weak steering: {v} (want ~{want})");
+}
+
+#[test]
+fn sweaty_grip_brakes_and_jumps_on_grease() {
+    use nat_han_adventures::game::GRIP_LINE;
+    let mut app = app(GREASE);
+    listen(&mut app);
+    set_groove(&mut app, Harmony::MelodicMinor, false);
+    app.update();
+    assert!(said(&app).iter().any(|l| l == GRIP_LINE), "Han explains grip: {:?}", said(&app));
+    hold(&mut app, RIGHT);
+    step(&mut app, 1.4);
+    release(&mut app, RIGHT);
+    assert!(player_pos(&mut app).x > 10.0 * TILE + 8.0, "on the grease");
+    step(&mut app, 0.3);
+    assert_eq!(body(&mut app).vel.x, 0.0, "grip: brakes like on dry ground");
+    let jumps = counted::<Jumped>(&app);
+    hold(&mut app, JUMP);
+    step(&mut app, 0.1);
+    release(&mut app, JUMP);
+    assert_eq!(counted::<Jumped>(&app), jumps + 1, "grip: jumps off grease");
+}
+
+#[test]
+fn splats_on_spikes_leave_stains_that_are_safe_and_solid_on_top() {
+    use nat_han_adventures::game::{ActiveLevel, Stain};
+    use nat_han_adventures::level::Tile;
+    let mut app = app(SPIKES);
+    let stains = |app: &mut App| app.world_mut().query::<&Stain>().iter(app.world()).count();
+    // Splat twice walking right: each splat stains one of the two spike tiles.
+    for n in 1..=2 {
+        hold(&mut app, RIGHT);
+        for _ in 0..300 {
+            app.update();
+            if counted::<PlayerDied>(&app) == n {
+                break;
+            }
+        }
+        release(&mut app, RIGHT);
+        assert_eq!(counted::<PlayerDied>(&app), n);
+        assert_eq!(stains(&mut app), n);
+        step(&mut app, tuning::RESPAWN_DELAY + 0.1);
+    }
+    let level = &app.world().resource::<ActiveLevel>().level;
+    assert_eq!((level.tile(13, 2), level.tile(14, 2)), (Tile::StainUp, Tile::StainUp));
+    // Now it's safe: walk to the goal.
+    hold(&mut app, RIGHT);
+    step(&mut app, 3.0);
+    assert_eq!(counted::<PlayerDied>(&app), 2);
+    assert_eq!(counted::<LevelCompleted>(&app), 1);
+
+    // Standing on top of a stain.
+    let mut app = self::app(SPIKES);
+    hold(&mut app, RIGHT);
+    for _ in 0..300 {
+        app.update();
+        if counted::<PlayerDied>(&app) == 1 {
+            break;
+        }
+    }
+    release(&mut app, RIGHT);
+    step(&mut app, tuning::RESPAWN_DELAY + 0.1);
+    let level = app.world().resource::<ActiveLevel>().level.clone();
+    let col = (0..level.width).find(|&c| level.tile(c as i32, 2) == Tile::StainUp).expect("a stain");
+    put_player(&mut app, col as f32 * TILE + 8.0, standing(2.0 * TILE) + 8.0);
+    step(&mut app, 0.5);
+    assert!(body(&mut app).on_ground);
+    assert_eq!(player_pos(&mut app).y, standing(2.0 * TILE), "on top of the stain");
+    assert_eq!(counted::<PlayerDied>(&app), 1);
+
+    // A restart wipes them.
+    hold(&mut app, KeyCode::KeyR);
+    app.update();
+    release(&mut app, KeyCode::KeyR);
+    app.update();
+    assert_eq!(stains(&mut app), 0);
+    assert_eq!(app.world().resource::<ActiveLevel>().level.tile(col as i32, 2), Tile::SpikesUp);
+}
+
+const POOL: &str = "name: Pool
+---
+..........................
+..........................
+..........................
+..........................
+..........................
+.P.......................G
+#####~~~~~~~~~~~##########
+#####~~~~~~~~~~~##########
+";
+
+#[test]
+fn splats_in_liquid_float_a_raft_that_sinks() {
+    use nat_han_adventures::game::{MovingPlatform, RAFT_LIFE_FLOOR, Raft, RaftLife};
+    let mut app = app(POOL);
+    assert_eq!(app.world().resource::<RaftLife>().secs(), RAFT_LIFE_FLOOR);
+    hold(&mut app, RIGHT);
+    for _ in 0..300 {
+        app.update();
+        if counted::<PlayerDied>(&app) == 1 {
+            break;
+        }
+    }
+    release(&mut app, RIGHT);
+    app.update();
+    let rafts = |app: &mut App| {
+        app.world_mut().query_filtered::<&Pos, With<Raft>>().iter(app.world()).map(|p| p.0).collect::<Vec<_>>()
+    };
+    let r = rafts(&mut app);
+    assert_eq!(r.len(), 1, "one raft");
+    // At the surface (the pool's top row), in the pool's columns.
+    assert_eq!(r[0].y, 1.5 * TILE, "raft center at the surface tile");
+    assert!((5.0 * TILE..16.0 * TILE).contains(&r[0].x));
+    assert_eq!(app.world_mut().query::<&MovingPlatform>().iter(app.world()).count(), 1);
+    step(&mut app, tuning::RESPAWN_DELAY + 0.1);
+    // Drop onto it: it holds.
+    put_player(&mut app, r[0].x, standing(2.0 * TILE) + 10.0);
+    step(&mut app, 1.0);
+    assert!(body(&mut app).on_ground);
+    assert!(body(&mut app).riding.is_some());
+    assert_eq!(counted::<PlayerDied>(&app), 1);
+    // ...until it sinks, taking Nat with it.
+    step(&mut app, RAFT_LIFE_FLOOR);
+    // (The splat as it sinks floats a fresh raft on the same spot.)
+    let fresh: Vec<f32> = app.world_mut().query::<&Raft>().iter(app.world()).map(|r| r.age).collect();
+    assert!(fresh.len() == 1 && fresh[0] < 4.0, "the old raft sank, a fresh one floats: {fresh:?}");
+    assert_eq!(counted::<PlayerDied>(&app), 2, "into the drink");
+}
+
+const HINTED: &str = "name: Hinted
+hint@12,7: Hello from the hint spot!
+---
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+..P.........................^..........G
+########################################
+";
+
+#[test]
+fn hint_spots_speak_once_per_visit_and_again_after_a_restart() {
+    let mut app = app(HINTED);
+    listen(&mut app);
+    let hints = |app: &App| said(app).iter().filter(|l| l.as_str() == "Hello from the hint spot!").count();
+    step(&mut app, 0.5);
+    assert_eq!(hints(&app), 0, "not yet: Nat is 10 tiles away");
+    // Walk past it, into the spikes: the hint once, the splat doesn't repeat it.
+    hold(&mut app, RIGHT);
+    for _ in 0..400 {
+        app.update();
+        if counted::<PlayerDied>(&app) == 1 {
+            break;
+        }
+    }
+    release(&mut app, RIGHT);
+    assert_eq!(hints(&app), 1);
+    step(&mut app, tuning::RESPAWN_DELAY + 0.1);
+    hold(&mut app, RIGHT);
+    step(&mut app, 1.2);
+    release(&mut app, RIGHT);
+    assert_eq!(hints(&app), 1, "once per visit");
+    // A restart: again.
+    hold(&mut app, KeyCode::KeyR);
+    app.update();
+    release(&mut app, KeyCode::KeyR);
+    app.update();
+    hold(&mut app, RIGHT);
+    step(&mut app, 1.2);
+    assert_eq!(hints(&app), 2, "again after a restart");
 }

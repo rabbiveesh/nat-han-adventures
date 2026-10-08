@@ -17,7 +17,7 @@ use super::han::{HanAnim, HanPose};
 use super::physics::{Body, Dead, PlayerControl};
 use super::{
     Checkpoint, Fly, Goal, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
-    PrevPos, Spray, tuning,
+    PrevPos, Spray, Stain, tuning,
 };
 use crate::art::{SpriteId, Sprites};
 use crate::events::{Jumped, Landed};
@@ -46,6 +46,7 @@ pub(super) fn plugin(app: &mut App) {
     .add_observer(fly_sprite)
     .add_observer(spray_sprite)
     .add_observer(platform_sprite)
+    .add_observer(stain_sprite)
     .add_observer(player_sprite)
     .add_observer(han_sprite)
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
@@ -127,6 +128,10 @@ fn tile_sprite(
         Tile::SpikesDown => (SpriteId::SpikesDown, false),
         Tile::Liquid if t.top => (SpriteId::LiquidTop(w), true),
         Tile::Liquid => (SpriteId::LiquidFill(w), false),
+        Tile::Grease if t.top => (SpriteId::Grease(w), false),
+        Tile::Grease => (SpriteId::GroundFill(w), false),
+        Tile::StainUp => (SpriteId::StainUp, false),
+        Tile::StainDown => (SpriteId::StainDown, false),
     };
     let mut e = commands.entity(add.entity);
     e.insert(sprite(&sprites, id));
@@ -218,6 +223,13 @@ fn spray_sprite(add: On<Add, Spray>, sprites: Option<Res<Sprites>>, mut commands
         });
 }
 
+/// A splat stain, drawn over the spikes it covers.
+fn stain_sprite(add: On<Add, Stain>, q: Query<&Stain>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else { return };
+    let id = if s.tile == Tile::StainDown { SpriteId::StainDown } else { SpriteId::StainUp };
+    commands.entity(add.entity).insert(sprite(&sprites, id));
+}
+
 fn platform_sprite(
     add: On<Add, MovingPlatform>,
     q: Query<&MovingPlatform>,
@@ -229,7 +241,17 @@ fn platform_sprite(
         PlatformKind::Tp => SpriteId::PlatformTp,
         PlatformKind::Duck => SpriteId::PlatformDuck,
         PlatformKind::Plunger => SpriteId::PlatformPlunger,
+        PlatformKind::Raft => SpriteId::StainRaft,
     };
+    if p.kind == PlatformKind::Raft {
+        // One bobbing blob.
+        commands.entity(add.entity).insert(Visibility::default()).with_child((
+            Sprite::from_image(sprites.get(id)),
+            FrameAnim { id, fps: 2.0, offset: p.base.x * 0.01 },
+            Transform::default(),
+        ));
+        return;
+    }
     let width = p.width;
     commands.entity(add.entity).insert(Visibility::default()).with_children(|c| {
         for i in 0..width {

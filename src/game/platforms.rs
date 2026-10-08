@@ -17,7 +17,7 @@ pub fn platform_pos(platform: &MovingPlatform, t: f32) -> Vec2 {
     platform.base + platform.travel * f
 }
 
-fn move_platforms(clock: Res<SimClock>, mut q: Query<(&MovingPlatform, &mut Pos)>) {
+pub(super) fn move_platforms(clock: Res<SimClock>, mut q: Query<(&MovingPlatform, &mut Pos)>) {
     for (platform, mut pos) in &mut q {
         pos.0 = platform_pos(platform, clock.platform_time);
     }

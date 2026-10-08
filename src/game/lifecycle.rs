@@ -128,7 +128,7 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
             }
             let above = level.tile(col as i32, row as i32 - 1);
             let top = match tile {
-                Tile::Solid => above != Tile::Solid,
+                Tile::Solid | Tile::Grease => !above.is_solid(),
                 Tile::Liquid => above != Tile::Liquid,
                 _ => true,
             };
@@ -188,6 +188,14 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
                 ));
             }
         }
+    }
+
+    for hint in &level.hints {
+        commands.spawn((
+            Name::new("HintSpot"),
+            LevelEntity,
+            super::HintSpot { center: level.tile_center(hint.col, hint.row), text: hint.text.clone(), said: false },
+        ));
     }
 
     commands.spawn((

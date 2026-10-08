@@ -11,7 +11,7 @@ use crate::state::AppState;
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<NuggetsAtRisk>().add_systems(
         FixedUpdate,
-        (collect_nuggets, touch_checkpoints, touch_goal)
+        (collect_nuggets, touch_checkpoints, hear_hints, touch_goal)
             .chain()
             .in_set(GameSet::Interact)
             .after(super::hazards::check_hazards)
@@ -96,10 +96,27 @@ fn touch_checkpoints(
             run.checkpoint = Some(cp.index);
         }
         reached.write(CheckpointReached { index: cp.index, pos: floor });
-        let text = active.level.says.get(cp.index).cloned().unwrap_or_else(|| {
-            CHECKPOINT_QUIPS[cp.index % CHECKPOINT_QUIPS.len()].to_string()
-        });
+        let text = active.level.checkpoint_line(cp.index).map_or_else(
+            || CHECKPOINT_QUIPS[cp.index % CHECKPOINT_QUIPS.len()].to_string(),
+            str::to_string,
+        );
         says.write(HanSays { text });
+    }
+}
+
+/// Hint spots: Han says each one the first time Nat comes close.
+fn hear_hints(
+    player: Query<&Pos, Alive>,
+    mut hints: Query<&mut super::HintSpot>,
+    mut says: MessageWriter<HanSays>,
+) {
+    let Ok(pos) = player.single() else { return };
+    for mut hint in &mut hints {
+        if !hint.said && hint.center.distance(pos.0) <= crate::level::HINT_RADIUS {
+            hint.said = true;
+            says.write(HanSays { text: hint.text.clone() });
+            return; // one at a time
+        }
     }
 }
 
