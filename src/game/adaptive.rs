@@ -159,13 +159,21 @@ pub fn assists_for(dial: f32, clean_streak: u32) -> Assists {
     }
 }
 
-/// The band's freedom for a mood, scaled lightly so the tunes stay recognizable: at a calm,
-/// sparse mood (struggling) everyone plays (nearly) as written; flying, the lead ornaments up
-/// to ~0.35 and the drums fill up to ~0.4.
+/// The band's freedom for a mood. A neutral mood sits around 0.35 (the low tier of the
+/// ornaments in full and the first of the mid: the tunes recognizable, the band clearly
+/// alive), flying pushes toward 0.7 (planing, digital patterns, trading fours), and
+/// struggling stays calm (~0.15: grace notes, echoes, the odd approach). Curved, so the
+/// middle of the dial is where most play happens.
 pub fn band_freedom(mood: BandMood) -> BandFreedom {
     let f = mood.freedom.clamp(0.0, 1.0);
     let i = mood.intensity.clamp(0.0, 1.0);
-    BandFreedom { lead: 0.35 * f, comp: 0.3 * f, bass: 0.15 * f, drums: 0.25 * f + 0.15 * i, dynamics: 0.5 * i }
+    BandFreedom {
+        lead: 0.14 + 0.28 * f + 0.3 * f * f,
+        comp: 0.12 + 0.28 * f + 0.25 * f * f,
+        bass: 0.1 + 0.25 * f + 0.25 * f * f,
+        drums: 0.12 + 0.2 * f + 0.2 * f * f + 0.15 * i,
+        dynamics: 0.5 * i,
+    }
 }
 
 /// The story's mood: [`adapt::band_mood`]'s formula over the last checkpoint segments (and the
@@ -640,6 +648,9 @@ mod tests {
         let struggling = band_freedom(story_mood(&StoryAssist::new(0.6), &[bad; 6]));
         assert!(struggling.lead < flying.lead && struggling.drums < flying.drums);
         assert!(struggling.dynamics < flying.dynamics);
-        assert!(flying.lead <= 0.35 && flying.drums <= 0.4, "{flying:?}");
+        let neutral = band_freedom(BandMood::NEUTRAL);
+        assert!((neutral.lead - 0.35).abs() < 0.02 && (neutral.drums - 0.35).abs() < 0.03, "{neutral:?}");
+        assert!(flying.lead > 0.5 && flying.lead <= 0.75 && flying.drums <= 0.75, "{flying:?}");
+        assert!(struggling.lead <= 0.2 && struggling.comp <= 0.2, "{struggling:?}");
     }
 }

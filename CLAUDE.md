@@ -42,7 +42,11 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (`audio::plugin`: music + sfx on one kira manager; `AudioOutput::Headless` for tests).
 - `src/audio/live/` the real-time music engine (game-free): the game's music, generated a few
   ms ahead of the speaker so the band follows play (filters land on the next bar line; the
-  waltz switches meter at a shared bar line). Songs are `music/*.song`. Offline renders
+  waltz switches meter at a shared bar line). Songs are `music/*.song` (with FamiTracker-style
+  `[instruments]`: macros, kits, palettes; `@i name` in the MML). The musicians ornament by
+  their freedom dial (`musician/`, `ornament.rs`; the bar's shared `band.rs` plan keeps hits,
+  reharms, trades and flourishes in step); `cargo run --release --example ornaments` renders
+  listening WAVs with a log of what fired per bar. Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator
@@ -54,7 +58,8 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `dev`, never in the game binary or the web build): egui on Bevy, the full live engine with
   gameplay simulated by buttons/dials (the same `Input`s and director as the game), tracker /
   piano roll / text views of one `.song` text, hot-swapped into the engine on every parse,
-  Save writes `music/<song>.song`. `--help` lists the scripting options; screenshots:
+  Save writes `music/<song>.song`; an Instruments tab edits `[instruments]` (macro graphs,
+  previews, try-outs). `--help` lists the scripting options; screenshots:
   `NATHAN_AUDIO=headless VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
   xvfb-run -a cargo run --bin editor -- --view piano --play --screenshot out.png`.
 

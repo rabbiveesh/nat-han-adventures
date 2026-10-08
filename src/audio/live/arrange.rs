@@ -14,8 +14,9 @@
 use crate::audio::chart::Chart;
 use crate::audio::mml::{EventKind, Track};
 use crate::audio::synth::apply_swing;
-use crate::audio::{Harmony, accomp, melody, tuning, waltz};
+use crate::audio::{Harmony, accomp, melody, theory, tuning, waltz};
 
+use super::ornament::{Harm, Scale};
 use super::song::SongFile;
 
 /// A song's timing, at one sample rate.
@@ -109,6 +110,19 @@ impl Shape {
     }
 }
 
+/// Give each event of a generated `track` the instrument the `written` one plays at its time
+/// (`warp`: the generated track is the waltz's, in 3/4 beats).
+fn inherit_instruments(track: &mut Track, written: &Track, warp: bool) {
+    if written.events.iter().all(|e| e.inst == 0) {
+        return;
+    }
+    for e in &mut track.events {
+        let t = if warp { waltz::unwarp(e.start) } else { e.start };
+        let k = written.events.partition_point(|w| w.start <= t + 1e-9);
+        e.inst = written.events[k.saturating_sub(1)].inst;
+    }
+}
+
 /// The four parts in one harmony, swung, with each bar's events.
 #[derive(Debug, Clone)]
 pub struct Arrangement {
@@ -119,6 +133,13 @@ pub struct Arrangement {
     pub anchors: [u8; 3],
     /// Per channel and bar: the range of event indices starting in that bar.
     pub bar_events: [Vec<(usize, usize)>; 4],
+    /// The harmony in force, chord by chord, in this harmony's version of the chart (Coltrane's
+    /// substitutions, the waltz's 3/4 chart) with the scale the band draws from (the melodic
+    /// minor's modes, quartal's lydian): `(start, end, harmony)` in song beats. Empty without a
+    /// chart.
+    pub harm: Vec<(f64, f64, Harm)>,
+    /// The song's swing (off-beat 8ths start this many 8ths late).
+    pub swing: f32,
 }
 
 impl Arrangement {
@@ -141,6 +162,13 @@ impl Arrangement {
             } else {
                 (p2, tri) = accomp::generate(chart, harmony, song.key, seed);
                 p1 = melody::reharmonize(&p1, chart, harmony);
+            }
+        }
+        if harmony != Harmony::Original {
+            // Generated parts play the instrument the written part plays at that point.
+            let warp = harmony == Harmony::Waltz;
+            for (t, ch) in [(&mut p1, 0), (&mut p2, 1), (&mut tri, 2), (&mut noise, 3)] {
+                inherit_instruments(t, &song.tracks[ch], warp);
             }
         }
         let tracks = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));
@@ -166,6 +194,39 @@ impl Arrangement {
                 })
                 .collect()
         });
-        Ok(Arrangement { harmony, tracks, anchors, bar_events })
+        let harm = chart.map(|c| harmony_slots(c, harmony)).unwrap_or_default();
+        Ok(Arrangement { harmony, tracks, anchors, bar_events, harm, swing: song.swing })
     }
+
+    /// The harmony at song beat `beat` (wrapping round the loop), if the song has a chart.
+    pub fn harm_at(&self, beat: f64) -> Option<Harm> {
+        let end = self.harm.last()?.1;
+        let t = beat.rem_euclid(end);
+        let i = self.harm.partition_point(|s| s.0 <= t + 1e-9);
+        Some(self.harm[i.saturating_sub(1)].2)
+    }
+}
+
+/// [`Arrangement::harm`] for a chart in a harmony.
+fn harmony_slots(chart: &Chart, harmony: Harmony) -> Vec<(f64, f64, Harm)> {
+    let c = match harmony {
+        Harmony::Coltrane => theory::coltrane(chart),
+        Harmony::Waltz => waltz::warp_chart(chart),
+        _ => chart.clone(),
+    };
+    let slots = c.merged();
+    (0..slots.len())
+        .map(|i| {
+            let s = slots[i];
+            let scale = match harmony {
+                Harmony::MelodicMinor => {
+                    let mm = theory::melodic_minor(&slots, i);
+                    Scale::from_pcs(s.chord.root, &mm.scale())
+                }
+                Harmony::Quartal => Scale::of(&s.chord, true),
+                _ => Scale::of(&s.chord, false),
+            };
+            (s.start, s.end(), Harm { chord: s.chord, scale })
+        })
+        .collect()
 }

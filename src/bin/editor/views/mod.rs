@@ -2,6 +2,7 @@
 
 pub mod bottom;
 pub mod feed;
+pub mod instruments;
 pub mod left;
 pub mod piano;
 pub mod text;
@@ -35,6 +36,7 @@ pub fn frame(ed: &mut Editor, ctx: &egui::Context) {
             View::Tracker => tracker::ui(ed, ui),
             View::Piano => piano::ui(ed, ui),
             View::Text => text::ui(ed, ui),
+            View::Instruments => instruments::ui(ed, ui),
         }
     });
 }
