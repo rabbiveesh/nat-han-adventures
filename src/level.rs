@@ -25,10 +25,10 @@
 //! - `hint@<col>,<row>[ topic...]: text`: a *hint spot*. Han says the line the first time Nat
 //!   comes within [`HINT_RADIUS`] of that cell; once per level visit (dying doesn't repeat it),
 //!   and again after a restart. Optional [`Topic`] words name the mechanics it teaches; the
-//!   validator (`validate`) checks that every mechanic is taught by a hint before the
+//!   validator ([`validate`]) checks that every mechanic is taught by a hint before the
 //!   player first meets it.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
-//!   three splats that make the band nervous for a grease chute). `validate` checks it; the
+//!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
 //! - `N: ...` (a digit): a moving platform, see below.
 //!
@@ -72,6 +72,8 @@
 
 use bevy::prelude::*;
 
+
+pub mod validate;
 
 pub const TILE: f32 = 16.0;
 /// Han says a hint when Nat comes this close (px) to its cell's center.

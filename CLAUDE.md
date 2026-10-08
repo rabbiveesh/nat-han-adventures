@@ -25,7 +25,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/state.rs` AppState (Title, LevelSelect, Playing{Running,Paused}, LevelComplete, Victory) + `CurrentLevel`.
 - `src/input.rs` leafwing `Action`s on one global entity: `Single<&ActionState<Action>>`.
 - `src/events.rs` gameplay messages (NuggetCollected, Jumped, Landed, PlayerDied, ...).
-- `src/level.rs` the ASCII level format (documented at the top of the file) and parser.
+- `src/level.rs` the ASCII level format (documented at the top of the file) and parser;
+  `src/level/validate.rs` the level validator (reachability, gates, splat stains, grease
+  chutes, teaching hints). Pure and wasm-safe; `tests/levels.rs` runs it on the campaign.
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
 - `src/audio/` MML parser, NES-style synth, songs, sfx, playback via bevy_kira_audio.
