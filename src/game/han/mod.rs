@@ -24,9 +24,10 @@
 //!   toots to get under Nat (the goalkeeper; [`intercept`](crate::level::buddy::intercept)), so
 //!   mid-air chains work.
 //! - **"Lemme check that"**: Nat standing still facing a hazard for [`go_ahead_delay`] → Han
-//!   marches ahead into it. Spray jets stop at his body and stay plugged [`HAN_PLUG_LINGER`]
-//!   after him ([`SprayPlug`]), flies bounce off him, and Nat walking right behind him (he's
-//!   solid from the side while he marches) is safe. Into sewage: he splats and sinks, leaving a
+//!   marches ahead into it, waiting for Nat to keep up ([`ESCORT_LEAD`]). Spray jets stop at
+//!   his body and stay plugged while he escorts Nat through (and [`HAN_PLUG_LINGER`] after:
+//!   [`SprayPlug`]), flies bounce off him, and Nat walking behind him (he's solid from the side
+//!   while he marches, so Nat can't overtake him into the jets) is safe. Into sewage: he splats and sinks, leaving a
 //!   big raft ([`HAN_RAFT_WIDTH`] tiles, [`HAN_RAFT_LIFE_FLOOR`] s × the assist), and
 //!   parachutes back [`HAN_SEWAGE_RESPAWN`] s later. Not Nat's death: nothing counts it.
 //! - **Overuse**: more than [`overuse_limit`] boosts in a row and his back goes ("My back! I'm
@@ -78,7 +79,10 @@ pub const HAN_SEWAGE_RESPAWN: f32 = 3.0;
 /// Han's raft: width (tiles) and how long it floats at least (s; × `Assists::raft_life_mult`).
 pub const HAN_RAFT_WIDTH: usize = 3;
 pub const HAN_RAFT_LIFE_FLOOR: f32 = 30.0;
-/// A spray jet Han walked through stays plugged (sputtering) this long after him (s).
+/// Going ahead, Han waits for Nat when he's this far (px) in front of him.
+pub const ESCORT_LEAD: f32 = 1.5 * TILE;
+/// A spray jet Han walked through stays plugged (sputtering) this long after him (s), and all
+/// the while he's escorting Nat through.
 pub const HAN_PLUG_LINGER: f32 = 0.5;
 /// How far ahead (tiles) a hazard counts as "facing" it.
 pub const LOOK_AHEAD: i32 = 4;

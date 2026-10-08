@@ -91,8 +91,11 @@ pub(super) fn han_hazards(
             && min.x < base.x + SPRAY_WIDTH / 2.0
             && max.y > base.y
             && min.y < base.y + SPRAY_HEIGHT;
+        // Escorting Nat through: the jets he's plugged stay plugged.
+        let escorting = matches!(brain.mode, HanMode::Ahead { .. });
         let new = match plug.as_deref() {
             _ if inside => SprayPlug { top: Some(min.y), linger: HAN_PLUG_LINGER },
+            Some(p) if escorting && p.linger > 0.0 => SprayPlug { top: None, linger: HAN_PLUG_LINGER },
             Some(p) => SprayPlug { top: None, linger: (p.linger - dt).max(0.0) },
             None => continue,
         };

@@ -510,15 +510,19 @@ pub(super) fn think(
         HanMode::Ahead { dir, t } => {
             let t = t + dt;
             let me_cell = feet_cell(level, pos.0);
-            let past = (pos.0.x - nat.pos.x) * dir > 1.5 * TILE;
+            // An escort: he waits for Nat to keep up, and he's done when they're both through.
+            let lead = (pos.0.x - nat.pos.x) * dir;
             let clear = !hazard_ahead(level, me_cell, dir);
+            let nat_clear = !hazard_ahead(level, feet_cell(level, nat.pos), dir);
             let next_ok = level.han_allowed(level.cell_at(pos.0 + Vec2::new(dir * TILE, 0.0)));
-            if (past && clear) || t > 12.0 || !next_ok || (body.on_ground && !ahead_floor(pos.0.x, dir)) {
+            let backed_off = lead > 6.0 * TILE;
+            if (lead > TILE && clear && nat_clear) || backed_off || t > 20.0 || !next_ok || (body.on_ground && !ahead_floor(pos.0.x, dir)) {
                 brain.mode = HanMode::Follow;
                 brain.replan = 0.0;
             } else {
                 brain.mode = HanMode::Ahead { dir, t };
-                input = HanInput { dir, speed: super::HAN_MARCH_SPEED / phys.speed, ..default() };
+                let wait = lead > super::ESCORT_LEAD && !clear;
+                input = HanInput { dir: if wait { 0.0 } else { dir }, speed: super::HAN_MARCH_SPEED / phys.speed, ..default() };
             }
         }
         HanMode::Intercept => {

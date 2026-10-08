@@ -750,3 +750,31 @@ fn buddy_raft_and_shield_timing() {
     let lag = (tuning::PLAYER_SIZE.0 + 8.0) / HAN_MARCH_SPEED;
     assert!(lag < HAN_PLUG_LINGER, "lag {lag}s");
 }
+
+/// Going ahead is an escort: Nat may dawdle, Han waits for him and keeps the jets plugged.
+#[test]
+fn han_escorts_a_dawdling_nat_through_the_shield_row() {
+    let mut app = app(&shield_level());
+    press(&mut app, RIGHT);
+    while nat(&mut app).x < 28.0 * TILE {
+        app.update();
+    }
+    release(&mut app, RIGHT);
+    while !matches!(brain(&mut app).mode, HanMode::Ahead { .. }) {
+        app.update();
+    }
+    step(&mut app, 2.0);
+    let lead = han(&mut app).x - nat(&mut app).x;
+    assert!(lead < 2.5 * TILE, "Han waited for Nat: {lead}");
+    press(&mut app, RIGHT);
+    for _ in 0..1200 {
+        app.update();
+        if nat(&mut app).x > 56.0 * TILE {
+            break;
+        }
+    }
+    let at = nat(&mut app);
+    assert_eq!(heard(&app).died, 0, "sprayed at {at}");
+    assert!(at.x > 56.0 * TILE);
+}
+
