@@ -8,6 +8,7 @@
 #                              with the container only slows the build down)
 #   KACHE_S3_REGION            bucket region (default us-east-1)
 #   KACHE_S3_PREFIX            key prefix (default artifacts)
+#   KACHE_S3_ENDPOINT          for S3-compatible stores (R2, MinIO, ...; region "auto" for R2)
 #   KACHE_S3_ACCESS_KEY / KACHE_S3_SECRET_KEY   (or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
 # Set them as environment variables of the cloud environment, never in the repo.
 # Does nothing outside cloud sessions (your own machine is yours to configure).
@@ -55,6 +56,9 @@ bucket = "$KACHE_S3_BUCKET"
 region = "${KACHE_S3_REGION:-us-east-1}"
 prefix = "${KACHE_S3_PREFIX:-artifacts}"
 EOF
+if [[ -n "${KACHE_S3_ENDPOINT:-}" ]]; then
+  echo "endpoint = \"$KACHE_S3_ENDPOINT\"" >> "$conf"
+fi
 log "kache remote: s3://$KACHE_S3_BUCKET/${KACHE_S3_PREFIX:-artifacts}"
 
 # The checkout's own wrapper setting (the same gitignored file a laptop uses).
