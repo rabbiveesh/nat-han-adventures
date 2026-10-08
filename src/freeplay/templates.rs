@@ -99,10 +99,48 @@ fn arc(c: &mut Canvas, c0: usize, n: usize, stand: usize, h: usize) {
     }
 }
 
+/// The highest and lowest ground surfaces a room's terrain goes to (rows from the top): up to
+/// 7 tiles above the floor, 2 below it.
+const HIGH: i32 = FLOOR as i32 - 7;
+const LOW: i32 = FLOOR as i32 + 2;
+
+/// About `n` columns of rolling ground, from the floor and back to it: humps and dips 2-5
+/// columns wide, up to 2 (band 1) .. 4 (band 10) tiles high and 2 deep, a hop (≤ 2 tiles) from
+/// one to the next, nuggets on the high ones. The connective tissue between a room's
+/// features, so no room is all flat.
+fn hills(c: &mut Canvas, d: &mut Dice, band: Band, n: usize) {
+    let rise = 2 + d.scaled(band, 0.0, 2.0, 0);
+    let end = c.width() + n;
+    let mut top = FLOOR as i32;
+    while c.width() + 5 < end {
+        let w = d.int(2, 5) as usize;
+        let next = (top + d.pick(&[-2, -1, 1, 2])).clamp(FLOOR as i32 - rise, LOW);
+        let x = c.width();
+        c.ground(w, next as usize);
+        if next < FLOOR as i32 - 1 {
+            arc(c, x, w, next as usize - 1, 1);
+        }
+        top = next;
+    }
+    while top != FLOOR as i32 {
+        top += (FLOOR as i32 - top).clamp(-2, 2);
+        c.ground(2, top as usize);
+    }
+    while c.width() < end {
+        c.ground(1, FLOOR);
+    }
+}
+
+/// How long a room's rolling lead-in is (columns).
+fn lead_in(d: &mut Dice) -> usize {
+    d.int(6, 12) as usize
+}
+
 // ─── Precision: jump gauntlets ───────────────────────────────────────────────
 
-/// Gaps (2 → 6 tiles: the widest need a toot), steps up and down, pillars and floating shelves;
-/// landings shrink from 5 tiles to 1-2 as the band rises.
+/// Gaps (2 → 6 tiles: the widest need a toot), steps up and down, pillars, floating shelves and
+/// climbs (stairs up to 7 tiles above the floor, and a drop back down); landings shrink from 5
+/// tiles to 1-2 as the band rises.
 fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     let tb = t(band);
     c.ground(3, FLOOR);
@@ -114,12 +152,13 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
             checkpoint = Some((c.width() + 1, top - 1));
             c.ground(3, top);
         }
-        match d.int(0, if band >= 3 { 3 } else { 1 }) {
+        let kind = if band < 3 && d.chance(0.3) { 4 } else { d.int(0, if band >= 3 { 4 } else { 1 }) };
+        match kind {
             // A gap, maybe to a ledge up or down.
             0 | 1 => {
                 let g = (d.scaled(band, 2.0, 4.6, 1) as usize).clamp(2, 6);
                 let max_up = if g >= 5 { 1 } else { 2 + (tb > 0.5) as i32 };
-                let next = (top as i32 - d.int(-2, max_up)).clamp(FLOOR as i32 - 4, FLOOR as i32) as usize;
+                let next = (top as i32 - d.int(-2, max_up)).clamp(HIGH, LOW) as usize;
                 let x = c.width();
                 c.pit(g);
                 arc(c, x, g, top.min(next) - 1, 2);
@@ -132,13 +171,37 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 for _ in 0..2 + d.scaled(band, 0.0, 2.0, 0) as usize {
                     let g = d.int(2, 2 + (tb * 2.0).round() as i32) as usize;
                     c.pit(g);
-                    top = (top as i32 - d.int(-1, 1)).clamp(FLOOR as i32 - 4, FLOOR as i32) as usize;
+                    top = (top as i32 - d.int(-1, 1)).clamp(HIGH, FLOOR as i32) as usize;
                     let w = (lerpi(band, 3.0, 1.0) + d.int(0, 1) as usize).max(1);
                     let x = c.width();
                     c.ground(w, top);
                     c.nugget(x, top - 1);
                 }
                 c.ground(2, top);
+            }
+            // A climb: stairs up two tiles at a time, then a drop back down (over a pit, from
+            // band 5).
+            4 => {
+                let steps = d.int(2, 4);
+                for _ in 0..steps {
+                    let next = (top as i32 - 2).max(HIGH) as usize;
+                    if next == top {
+                        break;
+                    }
+                    let w = (lerpi(band, 3.0, 2.0) + d.int(0, 1) as usize).max(2);
+                    let x = c.width();
+                    c.ground(w, next);
+                    c.nugget(x + w / 2, next - 1);
+                    top = next;
+                }
+                if band >= 5 {
+                    let x = c.width();
+                    let g = d.int(2, 3) as usize;
+                    c.pit(g);
+                    arc(c, x, g, top - 1, 2);
+                }
+                top = (top as i32 + d.int(3, 6)).min(FLOOR as i32) as usize;
+                c.ground(3, top);
             }
             // Floating shelves (`=`) over a pit.
             _ => {
@@ -148,7 +211,7 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 for _ in 0..shelves {
                     let g = d.int(2, 2 + (tb * 2.0).round() as i32) as usize;
                     c.pit(g);
-                    row = (row as i32 - d.int(-1, 2)).clamp(FLOOR as i32 - 4, FLOOR as i32) as usize;
+                    row = (row as i32 - d.int(-1, 2)).clamp(HIGH, FLOOR as i32) as usize;
                     let x = c.width();
                     c.pit(w);
                     for k in 0..w {
@@ -158,7 +221,7 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 }
                 let g = d.int(2, 3) as usize;
                 c.pit(g);
-                top = (row as i32 + d.int(0, 1)).clamp(FLOOR as i32 - 4, FLOOR as i32) as usize;
+                top = (row as i32 + d.int(0, 1)).clamp(HIGH, FLOOR as i32) as usize;
                 c.ground(3, top);
             }
         }
@@ -177,6 +240,8 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// rises; 2 → 7 hazards.
 fn hazards(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(4, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let n = 2 + d.scaled(band, 0.0, 4.0, 1) as usize;
     let (mut flies, mut sprays) = (false, false);
     let mut checkpoint = None;
@@ -235,6 +300,8 @@ fn hazards(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// high ledges; platforms shrink (3 → 1 tiles) and speed up (5 s → 2.6 s round trips).
 fn platforms(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(3, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let sections = 1 + d.scaled(band, 0.0, 2.0, 1) as usize;
     let mut checkpoint = None;
     for i in 0..sections.min(3) {
@@ -284,6 +351,8 @@ fn platforms(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// the wall.
 fn giant_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(2, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let checkpoint = Some((c.width(), STAND));
     let runway = (lerpi(band, 12.0, 8.0) + d.int(0, 1) as usize).max(9);
     c.ground(runway, FLOOR);
@@ -317,6 +386,8 @@ fn giant_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// (6 → 3 tiles); higher bands add a jump after it.
 fn long_gap(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built {
     c.ground(2, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let checkpoint = Some((c.width(), STAND));
     c.ground(2, FLOOR);
     let line = 4 + dress.extra_nuggets as usize + (band <= 3) as usize;
@@ -364,6 +435,8 @@ fn waltz_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     static CANS: OnceLock<Vec<usize>> = OnceLock::new();
     let cans = CANS.get_or_init(waltz_cans);
     c.ground(2, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let checkpoint = Some((c.width(), STAND));
     c.ground(lerpi(band, 9.0, 7.0) + d.int(0, 1) as usize, FLOOR);
     let k = ((cans.len() - 1) as f32 * t(band) * 0.8).round() as usize + d.int(0, 1) as usize;
@@ -391,10 +464,20 @@ fn waltz_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// over it; higher bands add a jump after it.
 fn stain_pit(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(4, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let w = d.scaled(band, 14.0, 18.0, 1) as usize;
     let x = c.width();
     for _ in 0..w {
-        c.column(|r| if r == FLOOR { b'^' } else if r > FLOOR { b'#' } else { b'.' });
+        c.column(|r| {
+            if r == FLOOR {
+                b'^'
+            } else if r > FLOOR {
+                b'#'
+            } else {
+                b'.'
+            }
+        });
     }
     for k in (2..w - 1).step_by(3) {
         c.nugget(x + k, STAND - 3);
@@ -413,6 +496,8 @@ fn stain_pit(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// nervous); the way out is a jump off the grease, which only sweaty grip allows.
 fn grease_chute(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(4, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
     let w = d.scaled(band, 15.0, 20.0, 1) as usize;
     let spikes = crate::audio::director::NERVOUS_DEATHS as usize;
     let x = c.width();

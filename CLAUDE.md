@@ -53,7 +53,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator
   (seeded dice + `validate::check_room` with a lean jump set, re-roll on failure), rooms stitched
-  pipe-to-pipe into one growing level, the adaptive engine picks each next room.
+  pipe-to-pipe into one growing level, the adaptive engine picks each next room. On web the
+  validation runs in a Web Worker (`offload.rs`; `src/bin/roomgen.rs`, a second Trunk wasm in
+  `index.html`): only the plan and the verdict cross as text, the game redraws the room and
+  checks its fingerprint, and falls back to the main thread on any mismatch or worker error.
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
 - `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 - `src/capture/` deterministic video capture (native dev, the `capture` feature): frame-stepped
