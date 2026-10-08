@@ -30,8 +30,8 @@
 //!   toots to get under Nat (the goalkeeper; [`intercept`](crate::level::buddy::intercept)), so
 //!   mid-air chains work.
 //! - **"Lemme check that"**: Nat standing still facing a hazard for [`go_ahead_delay`] → Han
-//!   marches ahead into it, waiting for Nat to keep up ([`ESCORT_LEAD`]). Spray jets stop at
-//!   his body and stay plugged while he escorts Nat through (and [`HAN_PLUG_LINGER`] after:
+//!   marches ahead into it, waiting for Nat to keep up ([`ESCORT_LEAD`]). Spray jets (and the
+//!   cans firing them) stop at his body and stay plugged while he escorts Nat through (and [`HAN_PLUG_LINGER`] after:
 //!   [`SprayPlug`]), flies bounce off him, and Nat walking behind him (he's solid from the side
 //!   while he marches, so Nat can't overtake him into the jets) is safe. Into sewage: he splats and sinks, leaving a
 //!   big raft ([`HAN_RAFT_WIDTH`] tiles, [`HAN_RAFT_LIFE_FLOOR`] s × the assist), and

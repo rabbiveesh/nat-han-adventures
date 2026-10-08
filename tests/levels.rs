@@ -305,7 +305,7 @@ fn validator_catches_broken_levels() {
 fn validator_knows_waltz_rows() {
     // The numbers (see `dash_through`): a row of n adjacent cans is a danger zone of 16n px.
     // Normal timing leaves 1.5 s to cross it; the waltz 2.5 s (on for the big ONE's beat).
-    let row = |n: usize| WaltzRow { row: 11, c0: 20, c1: 20 + n as i32 - 1 };
+    let row = |n: usize| WaltzRow { row: 11, c0: 20, c1: 20 + n as i32 - 1, grated: true };
     for n in [4, 10, 13] {
         assert!(dash_through(n, RUN_SPEED, Mode::Normal), "{n} cans: time enough at normal timing");
     }
@@ -478,6 +478,33 @@ fn floor_level(w: usize, header: &str, edit: impl Fn(&mut Vec<Vec<char>>)) -> Le
     level_of(&format!("say@8,9: hey\n{header}"), &rows, 9)
 }
 
+/// Waltz rows on the floor (no grating): the cans you walk among are deadly while they fire,
+/// so the row is the same gate with the same lengths, and still needs its low ceiling.
+#[test]
+fn validator_knows_floor_waltz_rows() {
+    let level = |cans: usize, ceiling: bool| {
+        floor_level(20 + cans + 20, "gate: waltz 15,9 45,9\n", |rows| {
+            let (c0, c1) = (20, 20 + cans - 1);
+            for r in 0..=7 {
+                for c in c0..=c1 {
+                    rows[r][c] = if ceiling || r < 6 { '#' } else { '.' };
+                }
+            }
+            for c in c0..=c1 {
+                rows[9][c] = 'S';
+            }
+        })
+    };
+    let good = run(&level(20, true));
+    assert!(good.errs.is_empty(), "{:?}", good.errs);
+    assert_eq!(gates(&good), [Gate::WaltzRow]);
+    assert!(good.gated_goal, "the only way past the cans is the waltz dash");
+    let short = run(&level(12, true));
+    assert!(short.errs.iter().any(|e| e.contains("run through with Normal")), "{:?}", short.errs);
+    let open = run(&level(20, false));
+    assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
+}
+
 /// A bottomless chasm `width` wide from col 30.
 fn chasm_level(width: usize, header: &str) -> Level {
     floor_level(30 + width + 20, header, |rows| {
@@ -574,8 +601,8 @@ fn validator_knows_shield_rows() {
     let open = run(&level(26, false));
     assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
     // No mode dashes 24 cans, the waltz included; 20 is the waltz's.
-    assert!(shield_row_timing(&WaltzRow { row: 11, c0: 30, c1: 53 }).is_empty());
-    assert!(shield_row_timing(&WaltzRow { row: 11, c0: 30, c1: 49 }).iter().any(|e| e.contains("Waltz")));
+    assert!(shield_row_timing(&WaltzRow { row: 11, c0: 30, c1: 53, grated: true }).is_empty());
+    assert!(shield_row_timing(&WaltzRow { row: 11, c0: 30, c1: 49, grated: true }).iter().any(|e| e.contains("Waltz")));
 }
 
 /// Buddy raft pools: sewage under ceiling spikes, too wide for Nat's own rafts.

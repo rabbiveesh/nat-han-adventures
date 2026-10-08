@@ -251,6 +251,42 @@ fn hazards_forgive_by_the_configured_px() {
     assert!(stand_near_spike(-5.0), "negative forgiveness is ignored (never below the floor)");
 }
 
+const CAN: &str = "name: Can
+---
+..........
+..........
+..P...S...G
+##########
+";
+
+/// Nat stands still beside a firing spray can (all cans fire from 1.5 s to 2.5 s), his box
+/// 1.5 px into the can's body (counting the normal forgiveness), under its jet.
+fn stand_near_can(px: f32) -> bool {
+    let mut app = app_with(&[CAN], |w| {
+        w.insert_resource(AssistMode::Manual);
+        w.insert_resource(Assists { hitbox_forgiveness_px: px, ..default() });
+    });
+    step(&mut app, 1.6);
+    assert_eq!(heard(&app).deaths, 0);
+    let p = player(&mut app);
+    // The can's body starts at 6 tiles + (16 - CAN_WIDTH) / 2 px.
+    let can_left = 6.0 * TILE + (TILE - nat_han_adventures::game::CAN_WIDTH) / 2.0;
+    let half = nat_han_adventures::game::tuning::PLAYER_SIZE.0 / 2.0;
+    let at = Vec2::new(can_left + 1.5 - (half - nat_han_adventures::game::FORGIVE), app.world().get::<Pos>(p).unwrap().0.y);
+    app.world_mut().get_mut::<Pos>(p).unwrap().0 = at;
+    app.world_mut().get_mut::<PrevPos>(p).unwrap().0 = at;
+    step(&mut app, 0.5);
+    heard(&app).deaths > 0
+}
+
+#[test]
+fn spray_cans_forgive_by_the_configured_px() {
+    assert!(stand_near_can(0.0), "1.5 px into a firing can kills");
+    assert!(stand_near_can(1.0), "1 px of forgiveness isn't enough");
+    assert!(!stand_near_can(2.0), "2 px forgives it");
+    assert!(stand_near_can(-5.0), "negative forgiveness is ignored");
+}
+
 const LEDGE: &str = "name: Ledge
 ---
 ..............................

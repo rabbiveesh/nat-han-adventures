@@ -477,6 +477,60 @@ fn spray_kills_only_while_on() {
     panic!("spray never fired");
 }
 
+/// Keep Nat standing on the can's own tile (and Han out of the way, so he plugs nothing) for a
+/// step: did that step kill him?
+fn stand_on_the_can(app: &mut App) -> bool {
+    let (p, h) = (single::<Player>(app), single::<Han>(app));
+    let at = Vec2::new(13.5 * TILE, standing(TILE));
+    app.world_mut().get_mut::<Pos>(p).unwrap().0 = at;
+    app.world_mut().get_mut::<Body>(p).unwrap().vel = Vec2::ZERO;
+    app.world_mut().get_mut::<Pos>(h).unwrap().0 = Vec2::new(2.5 * TILE, standing(TILE));
+    let before = counted::<PlayerDied>(app);
+    app.update();
+    counted::<PlayerDied>(app) > before
+}
+
+#[test]
+fn spray_can_kills_on_its_own_tile_only_while_on() {
+    use nat_han_adventures::game::Spray;
+    let mut app = app(SPRAY);
+    let s = single::<Spray>(&mut app);
+    // Standing on the floor next to the can's nozzle (under the jet: only the can can hit him).
+    for i in 0..120 {
+        let died = stand_on_the_can(&mut app);
+        let on = app.world().get::<Spray>(s).unwrap().on;
+        assert_eq!(on, died, "step {i}: the can kills exactly while it fires");
+        if died {
+            assert!(i > 60, "harmless while off");
+            return;
+        }
+    }
+    panic!("spray never fired");
+}
+
+#[test]
+fn spray_can_tile_follows_the_waltz() {
+    use nat_han_adventures::game::{BeatClock, Spray};
+    let mut app = app(SPRAY);
+    let s = single::<Spray>(&mut app);
+    // From beat 1 of bar 0 (off) to the next big ONE (bar 2's downbeat, beat 6): 2.5 s off,
+    // the normal clock's cans would have fired in between (from 1.5 s).
+    let mut i = 0;
+    loop {
+        let beats = 1.0 + i as f64 * WALTZ_STEP;
+        waltz(&mut app, beats);
+        let died = stand_on_the_can(&mut app);
+        let c = BeatClock::at(beats, 0.5, 3);
+        assert_eq!(app.world().get::<Spray>(s).unwrap().on, died, "step {i}: bar {} beat {}", c.bar, c.beat);
+        if died {
+            assert_eq!((c.bar, c.beat), (2, 0), "the can fires on the big ONE");
+            return;
+        }
+        i += 1;
+        assert!(i < 200, "the can never fired");
+    }
+}
+
 const NUGGETS: &str = "name: Nuggets
 ---
 ..............................
