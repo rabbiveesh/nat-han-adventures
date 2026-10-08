@@ -5,7 +5,8 @@ hazards and the level validator), alongside the adaptive-engine wiring.
 
 ## Body and navigation
 - Han is a real physics body: same collisions, gravity and moving-platform riding as Nat, with
-  **his own per-mode physics** (below). He's invulnerable.
+  **his own per-mode physics** (below). He's invulnerable to spikes, flies and sprays — but
+  **not to sewage** (see "Han in sewage").
 - He navigates the level's **jump graph** (the validator's reachability graph of standable cells
   and jump arcs, per mode), planning routes to a **follow slot ~1.5 tiles behind Nat** (on the
   side Nat came from) and executing the walks/jumps/toots with his own physics. Re-plans when
@@ -31,6 +32,13 @@ hazards and the level validator), alongside the adaptive-engine wiring.
 - **"Lemme check that"**: if Nat stands still facing a hazard for ~1.5 s, Han **goes ahead** into
   it. Invulnerable, he **absorbs hazards**: spray jets stop at his body, flies bounce off him; he
   takes the hit with a comedic splat + wobble. Walking right behind him, you're shielded.
+- **Han in sewage**: liquid still gets him — he **splats and sinks** like Nat, leaving a **splat
+  raft** at that spot (same as Nat's liquid-death raft: floats ~12 s, then sinks), and
+  **parachutes back in** a few seconds later. It is **not** Nat's death: no effect on the band's
+  death counters, the death count or the adaptive engine. Combined with "lemme check that"
+  (stand still facing a sewage pool → he wades in), the player can use him to **make a raft**
+  ("I'm fine! I'm a professional!"). Bottomless drains (under the long quartal gaps) leave no
+  raft, so this can't bridge those.
 - **Overuse**: stomping him a lot in a row → he complains ("My back! I'm union, Nat!") and, past a
   limit, needs a short breather (cooldown). The limit/cooldown **slides with the adaptive assist
   dial**. **Carve-out: no overuse limit inside chain-jump chasms** (zones you can only cross by
