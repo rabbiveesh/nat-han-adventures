@@ -20,6 +20,8 @@ mod pickups;
 mod platforms;
 mod visuals;
 
+pub mod assist;
+pub use assist::Assists;
 pub use groove::{
     BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, BeatClock, FIRED_UP_SPEED, GIANT_STEPS_GRAVITY,
     GIANT_STEPS_SPEED, Groove, JumpedOnOne, NERVOUS_TIME, OneJumps, WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
@@ -69,6 +71,7 @@ pub mod tuning {
 pub const FIXED_HZ: f64 = 60.0;
 
 pub fn plugin(app: &mut App) {
+    assist::plugin(app);
     app.init_resource::<crate::level::Levels>()
         .init_resource::<LevelRun>()
         .init_resource::<SimClock>()
