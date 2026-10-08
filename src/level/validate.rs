@@ -8,7 +8,9 @@
 //! with the real tuning constants and tile AABB collision, and follow every arc that lands without
 //! touching anything deadly. Moving platforms are approximated as one-way tiles along their whole
 //! path (as if you can ride them anywhere they go). Flies are treated as static deadly squares
-//! covering their whole circle; spray jets are treated as passable (they're timed).
+//! covering their whole circle; spray cans and their jets are treated as passable (they're
+//! timed: a can and its jet fire together, 1.0 s on / 1.5 s off, and a lone can or a few in a
+//! row are a stroll in the off-beat), except in waltz and shield rows (below).
 //!
 //! The music bends the physics (`Groove`), and levels have gates that need a mode ([`Gate`]):
 //! - a **giant wall** (6 tiles) needs Giant Steps, which the player summons by tooting 5 times,
@@ -18,10 +20,12 @@
 //!   between: nuggets since the checkpoint come back after a splat) and a flat run-up;
 //! - a **waltz row** needs the waltzing band, summoned by 3 evenly spaced ground jumps, so it
 //!   must have a flat, hazard-free runway of [`WALTZ_RUNWAY`] tiles before it. It's a run of at
-//!   least [`WALTZ_ROW_MIN`] *adjacent* spray cans (with gaps you could wait between the jets)
-//!   under a one-way grating you walk on, with a low ceiling so nobody jumps over the jets
-//!   (they're deadly here, whatever the timing). Running through is checked by simulating the
-//!   jets as time-varying hazards ([`dash_through`]) with the game's own clocks: impossible at
+//!   least [`WALTZ_ROW_MIN`] *adjacent* spray cans (with gaps you could wait between the jets),
+//!   either on the floor you walk on (the cans are deadly while they fire) or under a one-way
+//!   grating you walk on (in the jets: the campaign's tunnels), with a low ceiling so nobody
+//!   jumps over the jets (they're deadly here, whatever the timing). Running through is checked
+//!   by simulating the cans and jets as time-varying hazards ([`dash_through`]) with the game's
+//!   own clocks: impossible at
 //!   any phase with the normal shared timing (1.0 s on / 1.5 s off) at the top speed of every
 //!   other mode (fired up included), possible in the waltz (on for the big ONE's beat, 2.5 s
 //!   off) at a human 90% of top speed. The waltz's jump on ONE (×1.15, weak toot) is checked
@@ -74,7 +78,7 @@ use super::buddy::{Chasm, HAN_CATCH_RISE, HAN_CHASM_CATCH_RISE, HanPhys, chain_c
 use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    BOOST_SPEED, BeatClock, FORGIVE, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
+    BOOST_SPEED, BeatClock, CAN_WIDTH, FORGIVE, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
     WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
@@ -320,12 +324,15 @@ const RAFT: u16 = 2048;
 const DEADLY_TILE: u16 = SPIKE_UP | SPIKE_DOWN | LIQUID;
 const FLOOR_ONEWAY: u16 = ONEWAY | VIRT | STAIN | RAFT;
 
-/// A run of adjacent spray cans `c0..=c1` sitting in row `row`.
+/// A run of adjacent spray cans `c0..=c1` sitting in row `row`: under a one-way grating
+/// (`grated`, the campaign's tunnels: you walk on the grating, in the jets) or on the floor
+/// you walk on (the cans themselves are deadly while they fire, see `game::CAN_WIDTH`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WaltzRow {
     pub row: i32,
     pub c0: i32,
     pub c1: i32,
+    pub grated: bool,
 }
 
 impl WaltzRow {
@@ -333,9 +340,10 @@ impl WaltzRow {
         (self.c1 - self.c0 + 1) as usize
     }
 
-    /// The row the player stands in on the grating above the cans.
+    /// The row the player walks through the row in: on the grating above the cans, or among
+    /// the cans themselves.
     pub fn walk_row(&self) -> i32 {
-        self.row - 2
+        if self.grated { self.row - 2 } else { self.row }
     }
 }
 
@@ -468,14 +476,18 @@ impl<'a> Map<'a> {
         for (c, r) in cans {
             match waltz_rows.last_mut() {
                 Some(w) if w.row == r && w.c1 + 1 == c => w.c1 = c,
-                _ => waltz_rows.push(WaltzRow { row: r, c0: c, c1: c }),
+                _ => waltz_rows.push(WaltzRow { row: r, c0: c, c1: c, grated: false }),
             }
+        }
+        for w in &mut waltz_rows {
+            w.grated = (w.c0..=w.c1).all(|c| level.tile(c, w.row - 1) == Tile::OneWay);
         }
         let shield_rows: Vec<WaltzRow> = waltz_rows.iter().copied().filter(|w| w.cans() >= SHIELD_ROW_MIN).collect();
         waltz_rows.retain(|w| (WALTZ_ROW_MIN..SHIELD_ROW_MIN).contains(&w.cans()));
+        // A row's cans and jets are deadly (the timing is the dash's, see `dash_through`).
         for wr in waltz_rows.iter().chain(&shield_rows) {
             for c in wr.c0..=wr.c1 {
-                for k in 1..=3 {
+                for k in 0..=3 {
                     if let Some(i) = at(c, wr.row - k) {
                         flags[i] |= JET;
                     }
@@ -1315,8 +1327,9 @@ fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &
 /// the jets for the best moment (every start phase is tried) and enters at full speed.
 pub fn dash_through(n: usize, vx: f32, mode: Mode) -> bool {
     const STEP: f32 = 1.0 / 60.0;
-    // The player's center is in danger within this distance of a jet's center.
-    let reach = HALF_W - FORGIVE + SPRAY_WIDTH / 2.0;
+    // The player's center is in danger within this distance of a can's center (its jet, or
+    // the can itself on the floor you walk on: both fire together).
+    let reach = HALF_W - FORGIVE + SPRAY_WIDTH.max(CAN_WIDTH) / 2.0;
     let zone = TILE * (n - 1) as f32 + 2.0 * reach;
     let period = mode.jets_period();
     let starts = (period / STEP).round() as usize;
@@ -1385,8 +1398,9 @@ pub fn shield_row_timing(w: &WaltzRow) -> Vec<String> {
     errs
 }
 
-/// Is there a ceiling at most 2 tiles above the grating all along the row (so nobody can
-/// jump clear of the jets, which reach 2 tiles above it)?
+/// Is there a ceiling at most 2 tiles above the walk all along the row (so nobody can jump
+/// clear of the jets, or hop over the cans in the off-beats and hang above them while they
+/// fire)?
 fn low_ceiling(map: &Map, w: &WaltzRow) -> bool {
     let r = w.walk_row();
     (w.c0..=w.c1).all(|c| (1..=2).any(|k| map.is_solid(c, r - k)))
@@ -2514,7 +2528,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         errs.extend(waltz_row_timing(w));
         if !low_ceiling(&map, w) {
             errs.push(format!(
-                "waltz row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the grating) all along",
+                "waltz row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the walk) all along",
                 w.c0, w.c1, w.row
             ));
         }
@@ -2523,7 +2537,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         errs.extend(shield_row_timing(w));
         if !low_ceiling(&map, w) {
             errs.push(format!(
-                "shield row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the grating) all along",
+                "shield row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the walk) all along",
                 w.c0, w.c1, w.row
             ));
         }

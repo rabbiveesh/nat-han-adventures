@@ -409,6 +409,12 @@ fn mid_air_intercept_chain_crosses_a_chasm() {
 
 /// A shield row: 24 adjacent cans under a grating, low ceiling.
 fn shield_level() -> String {
+    shield_level_on(true)
+}
+
+/// A shield row of 24 adjacent cans with a low ceiling: under a grating (`grated`), or on
+/// the floor Nat walks on (the cans themselves deadly while they fire).
+fn shield_level_on(grated: bool) -> String {
     let w = 80;
     let mut rows: Vec<Vec<char>> = vec![vec!['.'; w]; 14];
     for r in 10..14 {
@@ -420,8 +426,12 @@ fn shield_level() -> String {
         for r in 0..=7 {
             rows[r][c] = '#';
         }
-        rows[10][c] = '=';
-        rows[11][c] = 'S';
+        if grated {
+            rows[10][c] = '=';
+            rows[11][c] = 'S';
+        } else {
+            rows[9][c] = 'S';
+        }
     }
     rows[9][2] = 'P';
     rows[9][w - 3] = 'G';
@@ -431,7 +441,17 @@ fn shield_level() -> String {
 
 #[test]
 fn han_goes_ahead_and_shields_nat_from_sprays() {
-    let mut app = app(&shield_level());
+    shields_nat(&shield_level());
+}
+
+/// Han plugs the cans themselves too: a shield row on the floor, walked behind him.
+#[test]
+fn han_shields_nat_from_floor_cans() {
+    shields_nat(&shield_level_on(false));
+}
+
+fn shields_nat(level: &str) {
+    let mut app = app(level);
     // Walk up to the row and stand facing it.
     press(&mut app, RIGHT);
     while nat(&mut app).x < 28.0 * TILE {
@@ -467,7 +487,16 @@ fn han_goes_ahead_and_shields_nat_from_sprays() {
 
 #[test]
 fn without_han_the_shield_row_sprays_nat() {
-    let mut app = app(&shield_level());
+    sprays_nat_alone(&shield_level());
+}
+
+#[test]
+fn without_han_floor_cans_spray_nat() {
+    sprays_nat_alone(&shield_level_on(false));
+}
+
+fn sprays_nat_alone(level: &str) {
+    let mut app = app(level);
     // Han out of the way (far behind, and lazy).
     eagerness(&mut app, 0.0);
     press(&mut app, RIGHT);
