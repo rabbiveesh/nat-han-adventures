@@ -54,6 +54,8 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   pipe-to-pipe into one growing level, the adaptive engine picks each next room.
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
 - `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
+- `src/capture/` deterministic video capture (native dev, the `capture` feature): frame-stepped
+  time, screenshots, lockstep audio, the input timeline (Dev loop 4).
 - `src/bin/editor/` the native music editor (`cargo run --bin editor`; the `editor` feature, in
   `dev`, never in the game binary or the web build): egui on Bevy, the full live engine with
   gameplay simulated by buttons/dials (the same `Input`s and director as the game), tracker /
@@ -80,12 +82,25 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 3. To see the real game: `scripts/headless-run` (Xvfb + lavapipe, no window), then drive it with
    `scripts/brp` on port **15799** (`brp_extras/send_keys`, `brp_extras/screenshot`). Never use 15702
    (the user's own game).
-4. To see the phone/touch UI: `scripts/phone-shots [out-dir] [url]` drives headless Chrome at a
+4. To record a video of a scripted run (smooth, audio in sync, the same every take, however
+   busy the machine): `scripts/record-run --capture out.mp4 scripts/tours/flourish.timeline [level]`
+   (`CAPTURE_FPS=60`, `CAPTURE_DIR=dir` keeps the PNG frames + `audio.wav`). It runs the game
+   in capture mode (`NATHAN_CAPTURE=<dir>`, the `capture` feature in `dev`; `src/capture/`)
+   under Xvfb + lavapipe: game time steps exactly one frame per rendered frame, each frame's
+   screenshot is saved before the next update, music + sfx render in lockstep into a WAV
+   (`src/audio/capture.rs`: 48000/fps samples a frame, so its length is exactly frames/fps),
+   and keys come from a timeline in game time (`wait 4`, `hold Right Space 300ms`, `tap R`,
+   `t=4.1 press Space`, `repeat 5` ... `end`; format in `src/capture/timeline.rs`) sent as
+   keyboard messages, the path real keys take. Quits at the timeline's end; ~2x faster than
+   real time here. `tests/capture.rs` checks it headless. The old real-time recorder (x11grab
+   + a PulseAudio null sink + BRP keys, choppy under load) is `scripts/record-run out.mp4
+   tours/flourish.sh` without `--capture`.
+5. To see the phone/touch UI: `scripts/phone-shots [out-dir] [url]` drives headless Chrome at a
    landscape phone size with touch emulation (live Pages build with `?touch=1` by default) and
    saves screenshots of title → level select → level 1 with the stick and jump zone in use.
    `?touch=1`/`?touch=0` force touch mode on or off in any browser; `NATHAN_TOUCH=1 cargo run`
    does it natively.
-5. F9 in the game writes a debug dump (every reflected resource, Nat/Han state, director, raw
+6. F9 in the game writes a debug dump (every reflected resource, Nat/Han state, director, raw
    save, recent events): a download on web, a file next to the save on native.
 
 ## Formal checks

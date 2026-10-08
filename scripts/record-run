@@ -1,15 +1,58 @@
 #!/usr/bin/env bash
 # Record a video (with the game's real audio) of a scripted run, without touching your screen
-# or speakers: a private Xvfb display, a PulseAudio null sink (removed afterwards), ffmpeg
-# capturing both, and a key timeline driven over BRP.
+# or speakers.
+#
+#   scripts/record-run --capture <out.mp4> <timeline> [level-number] [extra cargo args...]
+# Deterministic capture (recommended): the game runs in capture mode (NATHAN_CAPTURE, see
+# src/capture/) on a private Xvfb with software Vulkan. Game time steps exactly one frame per
+# rendered frame, every frame is saved, the music + sfx render in lockstep into a WAV, and the
+# keys come from <timeline> (format: src/capture/timeline.rs; e.g. scripts/tours/flourish.timeline)
+# on exact frames. Perfectly smooth and in sync however loaded the machine is (slower just
+# takes longer), and repeatable. Then ffmpeg muxes it into an H.264/AAC MP4.
+# Env: CAPTURE_FPS (default 30; must divide 60), CAPTURE_DIR (keep the frames + audio.wav
+# there; default: a temp dir, removed afterwards), CRF (default 18).
+#
 #   scripts/record-run <out.mp4> <key-script> [level-number] [extra cargo args...]
+# Real time (the old way): a private Xvfb display, a PulseAudio null sink (removed afterwards),
+# ffmpeg capturing both, and a key timeline driven over BRP. Choppy when the machine is busy.
 # <key-script> is a bash file run with these helpers in scope:
 #   key <keys...> <ms>    hold the keys (BRP names: Space, ArrowRight, KeyR, ...) for <ms>
 #   pause <seconds>
 # Env: BRP_PORT (default 15881), DISPLAY_NUM (default 97), RECORD_SECS cap (default 120).
 set -euo pipefail
-out=$(realpath -m "$1"); script=$(realpath "$2"); level=${3:-1}; shift 3 || shift $#
 root="$(cd "$(dirname "$0")/.." && pwd)"
+
+if [[ ${1:-} == --capture ]]; then
+  shift
+  out=$(realpath -m "$1"); timeline=$(realpath "$2"); level=${3:-1}; shift 3 || shift $#
+  fps=${CAPTURE_FPS:-30}
+  if [[ -n ${CAPTURE_DIR:-} ]]; then
+    dir=$(realpath -m "$CAPTURE_DIR"); rm -rf "$dir"; mkdir -p "$dir"; keep=1
+  else
+    dir=$(mktemp -d); keep=
+  fi
+  [[ -z $keep ]] && trap 'rm -rf "$dir"' EXIT
+  (cd "$root" && nice -n 15 cargo build "$@" >/dev/null)
+  start=$(date +%s)
+  # No sound card is opened in capture mode; the null ALSA config is belt and braces.
+  (cd "$root" && NATHAN_CAPTURE="$dir" NATHAN_CAPTURE_TIMELINE="$timeline" NATHAN_CAPTURE_FPS="$fps" \
+    NATHAN_LEVEL="$level" NATHAN_SAVE="$dir/progress.txt" \
+    ALSA_CONFIG_PATH="$root/scripts/alsa-null.conf" \
+    VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json \
+    nice -n 15 xvfb-run -a -s "-screen 0 1280x720x24" cargo run "$@" >"$dir/game.log" 2>&1) \
+    || { tail -20 "$dir/game.log"; exit 1; }
+  grep -q '^ok true' "$dir/capture.txt" || { cat "$dir/capture.txt"; tail -20 "$dir/game.log"; exit 1; }
+  nice -n 15 /usr/bin/ffmpeg -hide_banner -loglevel error -y \
+    -framerate "$fps" -i "$dir/frame_%06d.png" -i "$dir/audio.wav" \
+    -c:v libx264 -preset medium -crf "${CRF:-18}" -pix_fmt yuv420p -r "$fps" \
+    -c:a aac -b:a 192k -movflags +faststart "$out"
+  frames=$(sed -n 's/^frames //p' "$dir/capture.txt"); secs=$(sed -n 's/^seconds //p' "$dir/capture.txt")
+  echo "recorded $out: $frames frames at $fps fps (${secs}s) in $(( $(date +%s) - start ))s"
+  [[ -n $keep ]] && echo "frames + audio.wav in $dir"
+  exit 0
+fi
+
+out=$(realpath -m "$1"); script=$(realpath "$2"); level=${3:-1}; shift 3 || shift $#
 port=${BRP_PORT:-15881}; disp=${DISPLAY_NUM:-97}; cap=${RECORD_SECS:-120}
 tmp=$(mktemp -d)
 cleanup() {

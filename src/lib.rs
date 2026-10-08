@@ -14,6 +14,8 @@
 pub mod adapt;
 pub mod art;
 pub mod audio;
+#[cfg(feature = "capture")]
+pub mod capture;
 pub mod debug;
 pub mod events;
 pub mod freeplay;

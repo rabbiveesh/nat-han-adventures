@@ -82,6 +82,8 @@
 //! `ji`, the laughing band's [`tuning::Tuning::Medley`]) forces the filters of every looping song.
 
 pub mod accomp;
+#[cfg(feature = "capture")]
+pub mod capture;
 pub mod chart;
 pub mod demo;
 pub mod director;

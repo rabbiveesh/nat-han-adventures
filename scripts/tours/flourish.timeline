@@ -1,0 +1,45 @@
+# Level 1 flourish tour, for `scripts/record-run --capture` (format: src/capture/timeline.rs).
+# Summon Giant Steps (5 toots), hop right through the nugget line (fired up; the even hops
+# may also start a waltz), then into the pit a few times (wah-wah; the laughing band; the
+# nervous band). ~60 s at any frame rate.
+
+# Han's intro.
+wait 4
+
+# Five toots (jump, double-jump) summon Giant Steps.
+repeat 5
+  hold Space 140ms
+  wait 120ms
+  hold Space 140ms
+  wait 0.9
+end
+wait 4
+
+# Hop right through the nugget line, up to the tall pillar.
+repeat 6
+  hold Right Space 300ms
+  hold Right 450ms
+end
+wait 2
+
+# Step back into the pit behind Nat: splat (wah-wah).
+hold Left 1.2
+wait 2.5
+
+# Three more times from the start: hop to the pillar, step back into the pit (the laughing
+# band at two deaths, the nervous band at three).
+repeat 3
+  repeat 6
+    hold Right Space 300ms
+    hold Right 450ms
+  end
+  hold Left 1.2
+  wait 2.5
+end
+
+# Even hops in place, nervously: the band may waltz.
+repeat 8
+  hold Space 300ms
+  wait 450ms
+end
+wait 4
