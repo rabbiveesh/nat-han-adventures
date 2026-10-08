@@ -61,17 +61,19 @@
 //! [`MusicStarted`] / [`MusicChanged`] fire when a track starts / switches filters.
 //!
 //! Dev override (native only): `NATHAN_MUSIC=coltrane|quartal|melodic|original[+ji]` (or just
-//! `ji`) forces the filters of every looping song.
+//! `ji`, the laughing band's [`tuning::Tuning::Medley`]) forces the filters of every looping song.
 
 pub mod accomp;
 pub mod chart;
 pub mod demo;
 pub mod director;
+pub mod melody;
 pub mod mml;
 pub mod sfx;
 pub mod songs;
 pub mod synth;
 pub mod theory;
+pub mod tuning;
 
 use std::time::Duration;
 
@@ -771,11 +773,14 @@ pub struct Song {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
 pub struct Filters {
     pub harmony: Harmony,
-    /// Retune everything to 5-limit just intonation relative to [`Song::key`].
+    /// The laughing band: retune everything to [`tuning::Tuning::Medley`] (a different tuning
+    /// every phrase — just intonation, harmonic series, 7-TET, Carlos alpha, Bohlen–Pierce —
+    /// relative to [`Song::key`], slightly drunk on top). The name is historical: it started out as
+    /// plain 5-limit just intonation, which [`tuning::Tuning::Just`] still forces.
     pub just_intonation: bool,
 }
 
-/// How the accompaniment (pulse 2 + triangle) is harmonized. The melody and drums never change.
+/// How the song is harmonized: new pulse 2 + triangle ([`accomp`]), the melody following ([`melody`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
 pub enum Harmony {
     /// As written.
@@ -814,12 +819,13 @@ impl Harmony {
 }
 
 impl Filters {
-    /// "COLTRANE CHANGES", "JUST INTONATION", "QUARTAL + JUST INTONATION", or "" when plain.
+    /// "COLTRANE CHANGES", "TUNING? WHAT TUNING", "QUARTAL + TUNING? WHAT TUNING", or "" when plain.
     pub fn label(&self) -> String {
+        const TUNING: &str = "TUNING? WHAT TUNING";
         match (self.harmony.label(), self.just_intonation) {
             (h, false) => h.to_string(),
-            ("", true) => "JUST INTONATION".to_string(),
-            (h, true) => format!("{h} + JUST INTONATION"),
+            ("", true) => TUNING.to_string(),
+            (h, true) => format!("{h} + {TUNING}"),
         }
     }
 
