@@ -68,7 +68,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             ));
             root.spawn(Node { flex_grow: 1.0, ..default() });
             root.spawn((
-                label(f, format!("a game by {SIDEKICK_NAME}'s #1 fan"), 8.0, DIM_CREAM),
+                label(f, "a game by their #2 fan", 8.0, DIM_CREAM),
                 Node { margin: UiRect::bottom(px(8.0)), ..default() },
             ));
         });
