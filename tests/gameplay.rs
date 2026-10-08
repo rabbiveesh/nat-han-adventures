@@ -886,3 +886,61 @@ fn han_stays_beside_a_player_hopping_in_place() {
         assert!((p.x - h.x).abs() >= 13.0, "han at {h}, player at {p}: overlapping");
     }
 }
+
+/// Walking off a ledge and stopping just past it: Han follows down and ends up standing on
+/// the floor, not hanging in the air at ledge height.
+#[test]
+fn han_follows_down_off_a_ledge() {
+    let mut app = app(LEDGE);
+    hold(&mut app, RIGHT);
+    for _ in 0..120 {
+        app.update();
+        if !body(&mut app).on_ground {
+            break;
+        }
+    }
+    // Land, take a step, stop.
+    for _ in 0..120 {
+        app.update();
+        if body(&mut app).on_ground {
+            break;
+        }
+    }
+    step(&mut app, 0.1);
+    release(&mut app, RIGHT);
+    step(&mut app, 2.0);
+    let (p, h) = (player_pos(&mut app), han_pos(&mut app));
+    assert!((h.y - p.y).abs() < 1.0, "han at {h} should stand on the floor with nat at {p}");
+}
+
+/// A pillar with open air on both sides, floor far below.
+const PILLAR: &str = "name: Pillar
+---
+........................................
+........................................
+........................................
+..................##....................
+..................##....................
+..................##....................
+..................##....................
+..................##....................
+.P................##...................G
+########################################
+";
+
+/// Han popping in next to a far-away player can land him in mid-air: he must fall to the floor.
+#[test]
+fn han_falls_after_popping_in_mid_air() {
+    let mut app = app(PILLAR);
+    // Teleport Nat onto the pillar's left edge, facing right: Han's pop spot (behind him) is
+    // off the pillar, in mid-air above the floor.
+    let p = single::<Player>(&mut app);
+    app.world_mut().get_mut::<Pos>(p).unwrap().0 = Vec2::new(18.0 * TILE + 3.0, standing(7.0 * TILE));
+    app.world_mut().get_mut::<nat_han_adventures::game::PlayerControl>(p).unwrap().facing = 1.0;
+    step(&mut app, 2.0);
+    let h = han_pos(&mut app);
+    let on_floor = (h.y - standing(TILE)).abs() < 1.0;
+    let on_pillar = (h.y - standing(7.0 * TILE)).abs() < 1.0;
+    assert!(h.x < 18.0 * TILE, "test setup: han should have popped in left of the pillar, at {h}");
+    assert!(on_floor || on_pillar, "han hanging in the air at {h}");
+}
