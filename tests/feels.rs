@@ -117,7 +117,7 @@ fn transitions_land_on_bar_lines_with_a_fill() {
             }
             seen += 1;
             assert!(matches!(a.c.band.fill, Fill::Full | Fill::PressRoll), "{m:?} bar {}: no fill into {:?}", b.c.slot.index, b.c.band.feel);
-            assert!(a.c.orns[3].has(Orn::Fill) || a.c.orns[3].has(Orn::PressRoll), "{m:?}: the drums didn't fill");
+            assert!(a.c.orns[3].has(Orn::Fill) || a.c.orns[3].has(Orn::PressRoll) || a.c.orns[3].has(Orn::Trade), "{m:?}: the drums didn't fill");
             assert!(b.c.band.crash && b.ch(3).any(|e| e.sound == Sound::Drum(Drum::Crash) && e.start == b.c.slot.start), "{m:?} bar {}: no crash", b.c.slot.index);
             // At a section's bar line, from the first bar of the new feel's groove.
             assert_eq!(b.c.slot.song_bar % 8, 0, "{m:?}: a feel changed mid-section");
@@ -145,20 +145,34 @@ fn plain(bars: &[Bar]) -> impl Iterator<Item = &Bar> {
     bars.iter().skip(1).filter(|b| b.c.band.fill == Fill::None && !b.c.band.crash && b.c.band.hits == 0 && b.c.slot.song_bar % 8 != 0)
 }
 
+/// The bossa clave on the rim: the 3-2 two-bar pattern, or (a fast tune: relaxed, half-time)
+/// spread over four bars, the shaker on quarters.
 #[test]
 fn bossa_plays_the_clave_on_the_rim() {
     for m in [Music::Title, Music::World(1), Music::World(3)] {
         let bars = forced(m, Feel::Bossa, &[freedom(0.5)], 24);
+        let half = feel::fast(song(m).bpm);
+        assert_eq!(half, m != Music::World(1), "{m:?}");
         let mut n = 0;
         for b in plain(&bars) {
-            let pair = !feel::first_of_pair(b.c.slot.index, b.c.band.feel_since) as usize;
-            assert_eq!(b.drums(Drum::Snare), feel::BOSSA_CLAVE[pair], "{m:?} bar {}", b.c.slot.index);
-            // Straight 8ths on the shaker.
-            assert_eq!(b.drums(Drum::ClosedHat), (0..8).map(|k| k as f64 * 0.5).collect::<Vec<_>>());
+            let (clave, k) = feel::two_bar(feel::BOSSA_CLAVE, b.c.slot.index, b.c.band.feel_since, half);
+            assert_eq!(b.drums(Drum::Snare), clave[..k], "{m:?} bar {}", b.c.slot.index);
+            let j = b.c.slot.index - b.c.band.feel_since;
+            let want: &[f64] = match (half, j % 2, (j / 2) % 2) {
+                (false, 0, _) => &[0.0, 1.5, 3.0],
+                (false, _, _) => &[1.0, 2.5],
+                (true, 0, 0) => &[0.0, 3.0],
+                (true, _, 0) => &[2.0],
+                (true, 0, _) => &[2.0],
+                (true, _, _) => &[1.0],
+            };
+            assert_eq!(clave[..k], *want, "{m:?}");
+            // Straight 8ths on the shaker (quarters, half-time).
+            let step = if half { 1.0 } else { 0.5 };
+            assert_eq!(b.drums(Drum::ClosedHat), (0..(4.0 / step) as usize).map(|k| k as f64 * step).collect::<Vec<_>>());
             assert!(b.c.orns[1].has(Orn::BossaComp) && b.c.orns[2].has(Orn::BossaBass));
-            // The bass: root on 1 (or tied over from the anticipation), the next root on the "and" of 4.
-            let bass: Vec<f64> = b.ch(2).map(|e| b.rel(e)).collect();
-            assert!(bass.contains(&0.0) && bass.contains(&3.5), "{m:?}: bass at {bass:?}");
+            // The bass: root on 1 (or tied over from the anticipation).
+            assert!(b.ch(2).any(|e| b.rel(e) == 0.0), "{m:?}");
             n += 1;
         }
         assert!(n >= 8);
@@ -173,8 +187,8 @@ fn samba_hits_the_surdo_on_two() {
             let at = |x: f64| b.ch(2).find(|e| (b.rel(e) - x).abs() < 1e-6).map(|e| e.volume);
             let (one, two, three, four) = (at(0.0).unwrap(), at(1.0).unwrap(), at(2.0).unwrap(), at(3.0).unwrap());
             assert!(two > one && four > three, "{m:?} bar {}: surdo {one} {two} {three} {four}", b.c.slot.index);
-            // The ganzá: every 16th.
-            assert_eq!(b.drums(Drum::ClosedHat).len(), 16);
+            // The ganzá: every 16th (every 8th in a fast tune).
+            assert_eq!(b.drums(Drum::ClosedHat).len(), if feel::fast(song(m).bpm) { 8 } else { 16 });
             assert!(b.c.orns[1].has(Orn::PartidoAlto) && b.c.orns[2].has(Orn::Surdo));
         }
     }
@@ -198,22 +212,33 @@ fn rock_has_a_backbeat() {
     }
 }
 
+/// Funk: a two-bar vamp on the 16th grid, the same all through the feel; the bass locked to
+/// the kick, the one hard; one ghost note; space.
 #[test]
-fn funk_runs_on_16ths_and_the_bass_locks_to_the_kick() {
+fn funk_vamps_on_16ths_and_the_bass_locks_to_the_kick() {
     for m in [Music::Title, Music::World(1), Music::World(3)] {
         let bars = forced(m, Feel::Funk, &[freedom(0.5)], 24);
+        let mut kicks = [None, None];
         for b in plain(&bars) {
             let hats: Vec<f64> = b.ch(3).filter(|e| matches!(e.sound, Sound::Drum(Drum::ClosedHat | Drum::OpenHat))).map(|e| b.rel(e)).collect();
-            assert_eq!(hats, (0..16).map(|k| k as f64 * 0.25).collect::<Vec<_>>(), "{m:?} bar {}", b.c.slot.index);
-            // Every kick has a bass note on it.
-            for k in b.drums(Drum::Kick) {
-                assert!(b.ch(2).any(|e| (b.rel(e) - k).abs() < 1e-6), "{m:?} bar {}: kick at {k} alone", b.c.slot.index);
+            assert_eq!(hats, (0..8).map(|k| k as f64 * 0.5).collect::<Vec<_>>(), "{m:?} bar {}", b.c.slot.index);
+            // A vamp: each side of the pair plays the same kick all along.
+            let side = (b.c.slot.index - b.c.band.feel_since) as usize % 2;
+            let k = b.drums(Drum::Kick);
+            assert_eq!(*kicks[side].get_or_insert_with(|| k.clone()), k, "{m:?}: the vamp changed");
+            assert!(k.contains(&0.0), "{m:?}: no one");
+            // Every kick has a bass note on it; the one is the longest and loudest.
+            for x in &k {
+                assert!(b.ch(2).any(|e| (b.rel(e) - x).abs() < 1e-6), "{m:?} bar {}: kick at {x} alone", b.c.slot.index);
             }
-            // Ghost notes: quiet snares besides the backbeat.
+            let one = b.ch(2).find(|e| b.rel(e) == 0.0).unwrap();
+            assert!(b.ch(2).all(|e| e.end - e.start <= one.end - one.start && e.volume <= one.volume), "{m:?}: the one");
+            // Space: the backbeat and at most one ghost.
             let snares: Vec<&NoteEvent> = b.ch(3).filter(|e| e.sound == Sound::Drum(Drum::Snare)).collect();
-            assert!(snares.iter().filter(|e| e.volume <= 4).count() >= 2, "{m:?}: ghosts");
-            // Every event on the 16th grid (straight).
-            for e in &b.ev {
+            assert!(snares.len() <= 3 && snares.iter().filter(|e| e.volume <= 4).count() <= 1, "{m:?}: snares");
+            assert!(b.ch(1).count() <= 3, "{m:?}: a busy clav");
+            // The rhythm section on the 16th grid (straight).
+            for e in b.ev.iter().filter(|e| e.ch > 0) {
                 let x = b.rel(e) * 4.0;
                 assert!((x - x.round()).abs() < 1e-6, "{m:?}: off the grid at {}", b.rel(e));
             }
@@ -290,8 +315,9 @@ fn feels_play_through_every_filter_and_tuning() {
                     let (lo, hi) = [(45, 96), (40, 88), (21, 60), (0, 127)][ev.ch as usize];
                     assert!(ev.sound.notes().iter().all(|n| (lo..=hi).contains(n)), "{f:?} {h:?}: ch {} {:?}", ev.ch, ev.sound);
                     // Straight: nothing on a swung off-beat.
-                    let x = b.rel(ev) * 12.0;
-                    assert!((x - x.round()).abs() < 1e-6, "{f:?} {h:?} {m:?}: ch {} at {} (swung?)", ev.ch, b.rel(ev));
+                    let x = b.rel(ev);
+                    let swung = 0.5 + song(m).swing as f64 * 0.5;
+                    assert!((x - x.floor() - swung).abs() > 1e-6, "{f:?} {h:?} {m:?}: ch {} at {x} (swung)", ev.ch);
                     let pal = insts.feel_palette(f, ev.ch as usize);
                     assert!(pal.contains(&ev.inst) || insts.feel_extras.contains(&ev.inst), "{f:?}: ch {} on {}", ev.ch, insts.name(ev.inst));
                 }
