@@ -19,7 +19,7 @@ use bevy_kira_audio::prelude::Frame;
 
 use super::mml::{self, Arp, Channel, Drum, Event, EventKind, Track};
 use super::tuning::{self, Tuning};
-use super::{Filters, Harmony, Song, accomp, chart};
+use super::{Filters, Harmony, Song, accomp, chart, melody};
 
 /// Output sample rate. 32 kHz keeps memory and render time down (a 60s song is ~15 MB of
 /// frames) while leaving plenty of headroom above the highest notes and hats.
@@ -162,7 +162,7 @@ impl RenderJob {
         let parse = |name: &str, src: &str, ch: Channel| {
             mml::parse(src, ch).map_err(|e| format!("song \"{}\", {name}: {e}", song.title))
         };
-        let p1 = parse("pulse1", song.pulse1, Channel::Melodic)?;
+        let mut p1 = parse("pulse1", song.pulse1, Channel::Melodic)?;
         let mut p2 = parse("pulse2", song.pulse2, Channel::Melodic)?;
         let mut tri = parse("triangle", song.triangle, Channel::Melodic)?;
         let noise = parse("noise", song.noise, Channel::Drums)?;
@@ -188,6 +188,7 @@ impl RenderJob {
                 ));
             }
             (p2, tri) = accomp::generate(&chart, filters.harmony, song.key, seed);
+            p1 = melody::reharmonize(&p1, &chart, filters.harmony);
         }
 
         let timing = Timing { samples_per_beat: SR as f64 * 60.0 / song.bpm as f64 };

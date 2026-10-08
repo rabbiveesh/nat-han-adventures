@@ -67,6 +67,7 @@ pub mod accomp;
 pub mod chart;
 pub mod demo;
 pub mod director;
+pub mod melody;
 pub mod mml;
 pub mod sfx;
 pub mod songs;
@@ -756,7 +757,7 @@ pub struct Filters {
     pub just_intonation: bool,
 }
 
-/// How the accompaniment (pulse 2 + triangle) is harmonized. The melody and drums never change.
+/// How the song is harmonized: new pulse 2 + triangle ([`accomp`]), the melody following ([`melody`]).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
 pub enum Harmony {
     /// As written.

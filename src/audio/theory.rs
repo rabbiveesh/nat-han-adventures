@@ -24,7 +24,8 @@
 //!   many of its last chords as fit at one chord per 2 beats (never faster); spare time goes
 //!   to the final V, so `| G7 | % | C | % |` becomes `| Eb7 Abmaj7 | B7 Emaj7 | G7 | C |`.
 //!
-//! The total length never changes, so cadences still land — just late, under a confused melody.
+//! The total length never changes, so cadences still land — just late; the melody follows the
+//! cycle (see [`super::melody`]).
 //!
 //! # Melodic minor ([`melodic_minor`])
 //! Every chord becomes a mode of a melodic-minor scale (parent root in brackets, relative to
