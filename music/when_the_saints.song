@@ -1,0 +1,44 @@
+; When the Saints Go Marching In (traditional)
+; Converted from src/audio/songs.rs. Each line ends with its bar numbers.
+
+[song]
+title = When the Saints Go Marching In (traditional)
+bpm = 168
+swing = 0.3
+key = F
+loop = yes
+meter = 4/4
+
+[chords]
+| F6 | % | % | % | % | % | % | C7 |                          ; 1-8
+| F6 | F7 | Bb6 | Bbm6 | F6 | C7 | F6 | F6 C7 |              ; 9-16
+| F6 | % | % | % | % | % | % | C7 |                          ; 17-24
+| F6 | F7 | Bb6 | Bbm6 | F6 | C7 | F6 | F6 |                 ; 25-32
+
+[pulse1]
+v12 @2 o4 r4 f4 a4 b-4 | o5 c1 | o4 r4 f4 a4 b-4 | o5 c1 |               ; 1-4
+o4 r4 f4 a4 b-4 | o5 c2 o4 a2 | o4 f2 a2 | o4 g1 |                       ; 5-8
+o4 r4 a4 a4 g4 | o4 f2. a4 | o5 c2 c4 o4 b-4& | b-2 r2 |                 ; 9-12
+o4 a4 b-4 o5 c4 o4 a4 | o4 f2 g2 | o4 f1 | o4 r1 |                       ; 13-16
+o5 r4 f8 g8 a4 b-4 | o6 c2 r4 o5 a8 o6 c8 | o5 r4 f8 g8 a4 b-4 | o6 c2. r4 | ; 17-20
+o5 r4 f8 g8 a4 b-4 | o6 c4. o5 a8 r8 a4. | o5 f4. a8 r8 g4. | o5 g4 e4 c4 e4 | ; 21-24
+o5 r4 a4 a8 a8 g4 | o5 f4. e-8 r8 f8 a4 | o6 c4 c8 c8 c4 o5 b-4 | o5 b-4 a-8 f8 d-4 r4 | ; 25-28
+o5 a4 b-4 o6 c4 o5 a4 | o5 f4. g8 r8 e8 c4 | o5 f4 a4 o6 c4 f4 | o6 f4 r4 r2 | ; 29-32
+
+[pulse2]
+v7 @1 o4 r4 c4 f4 g4 | o4 a1 | o4 r4 c4 f4 g4 | o4 a1 |                  ; 1-4
+o4 r4 c4 f4 g4 | o4 a2 f2 | o4 c2 f2 | o4 e1 |                           ; 5-8
+o4 r4 f4 f4 e4 | o4 c2. e-4 | o4 f2 f4 d4 | o4 d-2 r2 |                  ; 9-12
+o4 f4 g4 a4 f4 | o4 c2 e2 | o4 c1 | o4 r4 c8 d8 e8 g8 b-4 |              ; 13-16
+[o4 a4. a8 r4 c4 |]7 o4 b-4. b-8 r4 g4 |                                 ; 17-24
+o4 a4. a8 r4 c4 | o4 a4. a8 r4 e-4 | o4 b-4. b-8 r4 d4 | o4 d-4. d-8 r4 f4 | ; 25-28
+o4 a4. a8 r4 c4 | o4 b-4. b-8 r4 e4 | o4 a4. a8 r4 c4 | o4 c8 f8 a8 o5 c8 f4 r4 | ; 29-32
+
+[triangle]
+o2 [[o2 f4 a4 o3 c4 o2 a4 | o2 f4 c4 d4 e4 |]3 o2 f4 e4 d4 d-4 | o2 c4 e4 g4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 a4 o3 c4 o2 a4 | o2 b-4 o3 d4 f4 d4 | o2 b-4 o3 d-4 o2 f4 g4 | o2 f4 a4 d4 d-4 | o2 c4 e4 g4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 c4 d4 e4 | ]2 | ; 1-32
+
+[noise]
+v9 H4 s8 h8 k4 s8 h8 | [k4 s8 h8 k4 s8 h8 |]6 k8 s8 s8 s8 s16 s16 s8 k8 s8 | ; 1-8
+[k4 s8 h8 k4 s8 h8 |]7 k8 s8 s8 s8 s16 s16 s8 k8 s8 |                    ; 9-16
+H8 h8 s8 h8 k8 h8 s8 h8 | [k8 h8 s8 h8 k8 h8 s8 h8 |]6 k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 17-24
+[k8 h8 s8 h8 k8 h8 s8 h8 |]7 s16 s16 s16 s16 s8 s8 k8 s8 H4 |            ; 25-32
