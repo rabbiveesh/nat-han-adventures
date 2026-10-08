@@ -6,7 +6,7 @@
 //!   four, plays the wah-wah after a death, or solos (trading fours, a solo chorus);
 //! - or transforms the whole bar (high freedom): planing, a digital pattern, pentatonic
 //!   superimposition over a dominant, a hemiola, an 8th of displacement; or (mid) side-slips
-//!   half a bar a semitone off;
+//!   half a bar a semitone off (planing and side-slips over a long dominant only);
 //! - or decorates note by note: an octave displacement, a turn, a mordent or a grace note on a
 //!   long note, an enclosure into a note after a rest, an arpeggio flourish; vibrato, a slide
 //!   or a duty sweep on the note itself; an echo into the rest after it;
@@ -209,7 +209,8 @@ impl Lead {
         let center = first.sound.notes()[0];
         let h0 = ctx.harm_at(0.0);
         let fits_bar = self.src.iter().all(|e| ctx.rel(e) + ctx.len(e) <= bb + 1e-6) && ctx.rel(&first) >= -1e-9;
-        if orns.has(Orn::Planing) {
+        // (Planing rubs against the chord: over a dominant the whole bar long only.)
+        if orns.has(Orn::Planing) && ctx.long_dominant(0.0, bb) {
             let kind = [Plane::Fourths, Plane::Triad, Plane::Cluster][r.below(3)];
             for k in 0..self.src.len() {
                 let mut e = self.src[k];
@@ -326,11 +327,14 @@ impl Lead {
             }
             return Some(Orn::Displace);
         }
-        if orns.has(Orn::SideSlip) {
-            // Half a bar a semitone off, snapping back at the half.
-            let half = (bb / 2.0).floor().max(1.0);
-            let in_first = self.src.iter().filter(|e| ctx.rel(e) < half && matches!(e.sound, Sound::Note(_))).count();
-            let (from, to) = if in_first > 0 { (0.0, half) } else { (half, bb) };
+        // Half a bar a semitone off, snapping back at the half: only over a long dominant (one
+        // chord, a dominant, all through a half of at least two beats), where the tension is
+        // the chord's own.
+        let half = (bb / 2.0).floor();
+        let has_notes = |from: f64, to: f64| self.src.iter().any(|e| (from - 1e-9..to - 1e-9).contains(&ctx.rel(e)) && matches!(e.sound, Sound::Note(_)));
+        if orns.has(Orn::SideSlip)
+            && let Some((from, to)) = [(0.0, half), (half, bb)].into_iter().find(|&(from, to)| ctx.long_dominant(from, to) && has_notes(from, to))
+        {
             let dir: i32 = if r.chance(0.6) { 1 } else { -1 };
             for k in 0..self.src.len() {
                 let mut e = self.src[k];

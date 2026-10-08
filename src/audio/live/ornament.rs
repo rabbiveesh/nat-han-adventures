@@ -62,6 +62,7 @@ pub enum Orn {
     BassFill,
     Ostinato,
     SlipWalk,
+    SlipBass,
     // Drums.
     Ghost,
     OpenHat,
@@ -99,7 +100,7 @@ pub enum Orn {
 }
 
 impl Orn {
-    pub const ALL: [Orn; 74] = [
+    pub const ALL: [Orn; 75] = [
         Orn::Grace,
         Orn::Vibrato,
         Orn::FallOff,
@@ -143,6 +144,7 @@ impl Orn {
         Orn::BassFill,
         Orn::Ostinato,
         Orn::SlipWalk,
+        Orn::SlipBass,
         Orn::Ghost,
         Orn::OpenHat,
         Orn::Fill,
@@ -221,6 +223,7 @@ impl Orn {
             Orn::BassFill => "bass fill",
             Orn::Ostinato => "ostinato",
             Orn::SlipWalk => "side-slip walk",
+            Orn::SlipBass => "side-slip anticipation",
             Orn::Ghost => "ghost snare",
             Orn::OpenHat => "open hat",
             Orn::Fill => "fill",

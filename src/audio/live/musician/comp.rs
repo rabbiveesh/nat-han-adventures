@@ -4,9 +4,9 @@
 //! plan: swaps the bar's rhythm for a Charleston or "Freddie Green" quarters (mid) or rising
 //! McCoy Tyner fourths (high); voices the band's reharmonization ([`BandPlan::subs`]); turns
 //! chords into upper-structure polychords (high); moves the voicing on a held chord (mid);
-//! slides into the next phrase by side-slipping or planing (high); plays the band's hits (an
-//! anticipation of the next bar, an ending figure) and doesn't re-attack an anticipated
-//! downbeat; adds the odd extra stab (low); and lays out under a big drum fill. In a feel
+//! slides into the next phrase by side-slipping (with the bass) or planing (over a long
+//! dominant) (high); plays the band's hits (an anticipation of the next bar, an ending
+//! figure) and doesn't re-attack an anticipated downbeat; adds the odd extra stab (low); and lays out under a big drum fill. In a feel
 //! ([`crate::audio::live::feel`]) the bar's rhythm is the feel's (bossa's batida in extended
 //! voicings, samba's partido-alto, rock's power chords palm-muted and ringing, funk's clav
 //! stabs in 7#9s) on its instruments; the band's reharmonization and hits still apply.
@@ -232,7 +232,8 @@ impl Musician for Comp {
                 && let Some(nh) = next
             {
                 let target = ornament::voice(&nh.chord, center, 0);
-                if orns.has(Orn::PlaneChords) {
+                // (Planing rubs against the chord under it: over a long dominant only.)
+                if orns.has(Orn::PlaneChords) && ctx.long_dominant(bb - 2.0, bb) {
                     clear_from(ctx, &mut self.dst, bb - 1.5);
                     for (k, semis) in [-3, -2, -1].into_iter().enumerate() {
                         push(&mut self.dst, stab(bb - 1.5 + k as f64 * 0.5, 0.4, shift(target, semis)));
@@ -240,7 +241,7 @@ impl Musician for Comp {
                     fired.add(Orn::PlaneChords);
                 } else if orns.has(Orn::SlipVoicing) {
                     clear_from(ctx, &mut self.dst, bb - 0.5);
-                    push(&mut self.dst, stab(ctx.swing8(bb - 0.5), 0.45, shift(target, if r.chance(0.5) { 1 } else { -1 })));
+                    push(&mut self.dst, stab(ctx.swing8(bb - 0.5), 0.45, shift(target, ctx.slip_dir())));
                     fired.add(Orn::SlipVoicing);
                 }
             }

@@ -1,11 +1,11 @@
 //! The triangle: the bass line, and how it walks.
 //!
 //! From its written line the bass may, by the feel its plan rolled for the phrase, walk
-//! quarters through the changes (mid; side-slipping a half step for two beats, high), play a
+//! quarters through the changes (mid; side-slipping a half step for two beats over a long dominant, high), play a
 //! two-feel or a pedal point (mid), or an ostinato vamp (high). It plays the band's
 //! reharmonization's roots (tritone subs), hits with the comp (a root on the hit, then rest),
-//! ties over an anticipated downbeat, approaches the next bar chromatically (low) and fills
-//! into the next phrase (high). In a feel ([`crate::audio::live::feel`]) it plays the feel's
+//! ties over an anticipated downbeat, approaches the next bar chromatically (low), fills into
+//! the next phrase or slips into it a semitone off on its last 8th with the comp (high). In a feel ([`crate::audio::live::feel`]) it plays the feel's
 //! line: bossa's root-fifth two-feel with the next root anticipated (and tied over), samba's
 //! surdo, rock's pumping 8ths, funk's slap and pop locked to the kick.
 
@@ -101,7 +101,8 @@ impl Musician for Bass {
             self.ostinato(ctx, &tmpl, prev);
             fired.add(Orn::Ostinato);
         } else if has_harm && orns.has(Orn::Walking) {
-            let slip = orns.has(Orn::SlipWalk) && bb >= 4.0;
+            // (Only over a dominant the whole bar long, like the lead's side-slips.)
+            let slip = orns.has(Orn::SlipWalk) && bb >= 4.0 && ctx.long_dominant(0.0, bb);
             self.walk(ctx, &tmpl, prev, slip, &mut r);
             fired.add(Orn::Walking);
             if slip {
@@ -222,6 +223,19 @@ impl Musician for Bass {
                     push(&mut self.dst, ctx.make(&tmpl, b, (z - b) * 0.95, Sound::Note(fold(n as i32, LO, HI))));
                 }
                 fired.add(Orn::BassFill);
+            } else if phrase_last
+                && orns.has(Orn::SlipBass)
+                && feel == Feel::Swing
+                && tail <= bb + 1e-6
+            {
+                // The next root a semitone off on the last 8th (the way the comp slips), into
+                // the real one on the downbeat.
+                let b = ctx.swing8(bb - 0.5);
+                clear_span(ctx, &mut self.dst, b, bb);
+                let near = self.dst.iter().rev().find_map(|e| e.sound.notes().first().copied()).map_or(prev, |n| n as i32);
+                let n = nearest_pc(pc, near, LO + 1, HI - 1) as i32 + ctx.slip_dir();
+                push(&mut self.dst, ctx.make(&tmpl, b, (bb - b) * 0.95, Sound::Note(n as u8)));
+                fired.add(Orn::SlipBass);
             } else if orns.has(Orn::Approach)
                 && let Some(i) = last_i
             {

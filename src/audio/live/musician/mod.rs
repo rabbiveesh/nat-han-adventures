@@ -204,6 +204,12 @@ impl Ctx<'_> {
         unit(self.seed, role, self.bar.index, what)
     }
 
+    /// Which way this bar's side-slip anticipations go (+1 or -1 semitone): the same for the
+    /// comp and the bass, so the two slip together.
+    pub fn slip_dir(&self) -> i32 {
+        if unit(self.seed, Role::Comp, self.bar.index, 97) < 0.5 { 1 } else { -1 }
+    }
+
     /// A seeded RNG for this bar's decision `what`.
     pub fn rng(&self, role: Role, what: u64) -> Rng {
         band::rng(self.seed, role as usize, self.bar.index, what)
@@ -236,6 +242,14 @@ impl Ctx<'_> {
             Some(s) => Some(Harm::new(s.chord)),
             None => self.plain_harm_at(b),
         }
+    }
+
+    /// Is beats `from`..`to` of the bar one dominant chord all through (as played, a
+    /// reharmonization included), and at least two beats long? Where side-slips go.
+    pub fn long_dominant(&self, from: f64, to: f64) -> bool {
+        let Some(h) = self.harm_at(from) else { return false };
+        let same = |b: f64| self.harm_at(b).is_some_and(|x| x.chord == h.chord);
+        to - from >= 2.0 - 1e-9 && h.chord.family() == crate::audio::chart::Family::Dominant && (1..4).all(|k| same(from + (to - from) * k as f64 / 4.0)) && same(to - 0.01)
     }
 
     /// The filter's harmony at beat `b` of the bar (no reharmonization).
@@ -706,6 +720,7 @@ impl Player {
                     }
                     if last {
                         want!(Orn::BassFill, 0.6 * hi);
+                        want!(Orn::SlipBass, 0.4 * hi);
                     }
                     i.fill = last && f > 0.0;
                 }
