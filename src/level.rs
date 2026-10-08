@@ -31,6 +31,11 @@
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
 //! - `N: ...` (a digit): a moving platform, see below.
+//! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
+//!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
+//!   (long gap), `waltz` (waltz row), `grip` (grease chute), `stain` (stain pit), `boost`
+//!   (buddy ledge), `shield` (shield row), `chain` (chain-jump chasm), `buddyraft` (buddy raft
+//!   pool). See "Gate marks" below.
 //!
 //! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
 //!
@@ -57,6 +62,21 @@
 //! (dy positive = up), one full round trip per `period`. Platforms are solid on top only
 //! (like `=`) and carry whoever stands on them.
 //!
+//! # Gate marks
+//! Every gate is marked in the header, and [`validate`] checks the marks against what it finds
+//! (each crossing lies in a mark of its kind, each mark holds a crossing), so the marks can't
+//! lie. The game reads them instead of re-running the validator at load:
+//! - **Han keeps clear of the band's gates** (and the death gates): no route, no standing,
+//!   no steering within [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`,
+//!   `waltz`, `grip` or `stain` mark ([`Level::han_allowed`]). So no plunger boost ever opens
+//!   them: they always need their mode (the validator proves it with boosts from everywhere
+//!   Han may be).
+//! - **Chain-jump chasms** (`chain`) have no overuse limit: Han boosts you as often as it takes
+//!   while you're in the mark's columns ([`Level::in_chasm`]).
+//! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
+//!   emblem, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
+//!   "PLUMBERS ONLY" sign at their start.
+//!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is open sky, below is a bottomless pit (death).
 //!
@@ -73,6 +93,8 @@
 use bevy::prelude::*;
 
 
+pub mod buddy;
+pub mod nav;
 pub mod validate;
 
 pub const TILE: f32 = 16.0;
@@ -81,6 +103,10 @@ pub const HINT_RADIUS: f32 = 2.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
 pub const LEVEL_COUNT: usize = 10;
+/// Han stays this many columns away from the band's gates (see "Gate marks").
+pub const HAN_BERTH: i32 = 12;
+/// ...and this many rows above/below them.
+pub const HAN_BERTH_ROWS: i32 = 10;
 
 /// Source of every level, in play order.
 pub static LEVEL_SOURCES: [&str; LEVEL_COUNT] = [
@@ -180,10 +206,18 @@ pub enum Topic {
     Grease,
     /// Sweaty grip: the nervous band lets Nat brake on grease (`grip`).
     Grip,
+    /// Buddy ledges: land on Han's head and jump, the plunger boost (`boost`).
+    Boost,
+    /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
+    Shield,
+    /// Chain-jump chasms: boost off Han in mid-air, toot, again (`chain`).
+    Chain,
+    /// Buddy raft pools: Han wades in and leaves a big raft (`buddyraft`).
+    BuddyRaft,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 11] = [
+    pub const ALL: [Topic; 15] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -195,6 +229,10 @@ impl Topic {
         Topic::Stain,
         Topic::Grease,
         Topic::Grip,
+        Topic::Boost,
+        Topic::Shield,
+        Topic::Chain,
+        Topic::BuddyRaft,
     ];
 
     pub fn word(self) -> &'static str {
@@ -210,11 +248,63 @@ impl Topic {
             Topic::Stain => "stain",
             Topic::Grease => "grease",
             Topic::Grip => "grip",
+            Topic::Boost => "boost",
+            Topic::Shield => "shield",
+            Topic::Chain => "chain",
+            Topic::BuddyRaft => "buddyraft",
         }
     }
 
     pub fn from_word(w: &str) -> Option<Topic> {
         Topic::ALL.into_iter().find(|t| t.word() == w)
+    }
+
+    /// Topics that name a gate (the words a `gate:` mark takes).
+    pub fn is_gate(self) -> bool {
+        matches!(
+            self,
+            Topic::Giant
+                | Topic::Gap
+                | Topic::Waltz
+                | Topic::Grip
+                | Topic::Stain
+                | Topic::Boost
+                | Topic::Shield
+                | Topic::Chain
+                | Topic::BuddyRaft
+        )
+    }
+
+    /// The band's gates and the death gates: Han keeps clear of these marks.
+    pub fn han_keeps_clear(self) -> bool {
+        matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain)
+    }
+}
+
+/// A `gate:` header line: the cells `c0..=c1` x `r0..=r1` hold a gate of kind `topic`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub struct GateMark {
+    pub topic: Topic,
+    pub c0: i32,
+    pub r0: i32,
+    pub c1: i32,
+    pub r1: i32,
+}
+
+impl GateMark {
+    pub fn contains(&self, (c, r): (i32, i32)) -> bool {
+        (self.c0..=self.c1).contains(&c) && (self.r0..=self.r1).contains(&r)
+    }
+
+    /// Where Han won't go: the mark grown by [`HAN_BERTH`] x [`HAN_BERTH_ROWS`].
+    pub fn berth(&self) -> GateMark {
+        GateMark {
+            c0: self.c0 - HAN_BERTH,
+            c1: self.c1 + HAN_BERTH,
+            r0: self.r0 - HAN_BERTH_ROWS,
+            r1: self.r1 + HAN_BERTH_ROWS,
+            ..*self
+        }
     }
 }
 
@@ -299,9 +389,21 @@ pub struct Level {
     /// `ThingKind::Checkpoint` things.
     pub things: Vec<Thing>,
     pub platforms: Vec<MovingPlatformDef>,
+    /// `gate:` marks.
+    pub gates: Vec<GateMark>,
 }
 
 impl Level {
+    /// May Han be in cell (col, row)? Not within the berth of a band/death gate mark.
+    pub fn han_allowed(&self, cell: (i32, i32)) -> bool {
+        !self.gates.iter().any(|g| g.topic.han_keeps_clear() && g.berth().contains(cell))
+    }
+
+    /// Is column `col` inside a chain-jump chasm mark (no overuse limit there)?
+    pub fn in_chasm(&self, col: i32) -> bool {
+        self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
+    }
+
     pub fn tile(&self, col: i32, row: i32) -> Tile {
         if col < 0 || col >= self.width as i32 {
             Tile::Solid
@@ -372,6 +474,7 @@ impl Level {
         let mut say_at = Vec::new();
         let mut hints = Vec::new();
         let mut deaths = None;
+        let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
 
         for (n, line) in header.lines().enumerate() {
@@ -395,6 +498,20 @@ impl Level {
                 "say" => says.push(value.to_string()),
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
+                }
+                "gate" => {
+                    let bad = || format!("expected `gate: <topic> <c0>,<r0> <c1>,<r1>`, got `{value}`");
+                    let w: Vec<&str> = value.split_whitespace().collect();
+                    let [word, a, b] = w[..] else { return Err(bad()) };
+                    let topic = Topic::from_word(word)
+                        .filter(|t| t.is_gate())
+                        .ok_or_else(|| format!("gate: `{word}` is not a gate kind"))?;
+                    let cell = |s: &str| -> Option<(i32, i32)> {
+                        let (c, r) = s.split_once(',')?;
+                        Some((c.trim().parse().ok()?, r.trim().parse().ok()?))
+                    };
+                    let ((c0, r0), (c1, r1)) = (cell(a).ok_or_else(bad)?, cell(b).ok_or_else(bad)?);
+                    gates.push(GateMark { topic, c0: c0.min(c1), r0: r0.min(r1), c1: c0.max(c1), r1: r0.max(r1) });
                 }
                 k if k.starts_with("say@") || k.starts_with("hint@") => {
                     let (what, rest) = k.split_once('@').unwrap();
@@ -548,6 +665,7 @@ impl Level {
             goal: goal.ok_or("missing `G` (goal flag)")?,
             things,
             platforms,
+            gates,
         })
     }
 }
@@ -587,6 +705,19 @@ mod tests {
         assert_eq!(l.checkpoint_lines(), vec![Some("at four"), Some("plain")]);
         assert!(Level::parse("name: T\nhint@1,0 bogus: x\n---\nPG\n##\n").is_err());
         assert!(Level::parse("name: T\nhint@9,9: x\n---\nPG\n##\n").is_err());
+    }
+
+    #[test]
+    fn parses_gate_marks() {
+        let src = "name: T\ngate: giant 20,3 5,9\ngate: chain 30,1 40,9\n---\nPG\n##\n";
+        let l = Level::parse(src).unwrap();
+        assert_eq!(l.gates[0], GateMark { topic: Topic::Giant, c0: 5, r0: 3, c1: 20, r1: 9 });
+        assert!(!l.han_allowed((5 - HAN_BERTH, 3)));
+        assert!(l.han_allowed((5 - HAN_BERTH - 1, 3)));
+        assert!(l.han_allowed((35, 5)), "Han goes into chasms");
+        assert!(l.in_chasm(35) && !l.in_chasm(41));
+        assert!(Level::parse("name: T\ngate: toot 1,1 2,2\n---\nPG\n##\n").is_err());
+        assert!(Level::parse("name: T\ngate: giant 1,1\n---\nPG\n##\n").is_err());
     }
 
     #[test]
