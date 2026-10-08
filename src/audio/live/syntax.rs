@@ -14,6 +14,7 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
             ("loop = yes", "`yes`/`no` (`true`/`false`): loop at the end of the longest track"),
             ("meter = 4/4", "beats per bar / beat unit (default 4/4); every `|` is checked against it"),
             ("[chords]", "the chord chart, bar by bar (needed for the reharmonizing filters)"),
+            ("[instruments]", "FamiTracker-style instruments, drum kits and each channel's palette (optional)"),
             ("[pulse1]", "lead melody (pulse wave, slightly left)"),
             ("[pulse2]", "comping / harmony (pulse wave, slightly right)"),
             ("[triangle]", "bass (the 4-bit NES triangle)"),
@@ -49,6 +50,7 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
             ("<", "octave down"),
             ("v12", "volume 0..15"),
             ("@1", "pulse duty: @0 12.5%, @1 25%, @2 50%, @3 75%"),
+            ("@i brass", "play instrument `brass` from here on (can change mid-line); `@i default` = built-in"),
         ],
     ),
     (
@@ -61,7 +63,26 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
     ),
     (
         "Drums ([noise])",
-        &[("k", "kick"), ("s", "snare"), ("h", "closed hi-hat"), ("H", "open hi-hat (choked by the next hit)")],
+        &[("k", "kick"), ("s", "snare"), ("h", "closed hi-hat"), ("H", "open hi-hat (choked by the next hit)"), ("x", "crash cymbal")],
+    ),
+    (
+        "Instruments ([instruments])",
+        &[
+            ("lead : vol 15 12 | 9 8 | duty 2", "a tone instrument: `name : macros`; each step is one 60 Hz frame"),
+            ("vol 15 12 9 | 8 / 4 0", "volume 0..15 x the note's `v`; `|` loops from here, `/` starts the release"),
+            ("duty 0 1 2", "pulse duty per frame (overrides `@n`)"),
+            ("pitch +3 +1 0", "offset in semitones per frame (+0.5 = 50 cents); not cumulative"),
+            ("arp | 0 4 7", "the same as pitch: a looping arpeggio"),
+            ("vib delay=8 depth=12 speed=5.5 ramp=15", "vibrato: delay/ramp in frames, depth in cents, speed in Hz"),
+            ("fade 0.8", "the built-in pulses' gentle decay to 65% (seconds)"),
+            ("tri", "the triangle's 4-bit wave (on any channel)"),
+            ("| between macros", "optional separator (`|` before a keyword); a sequence without `|` holds its last step"),
+            ("kit : kick pitch=-24 decay=6 | snare noise=short", "a drum kit: `drum key=value` for kick snare hat ohat crash"),
+            ("kick pitch=-24 hz=48 sweep=1.5 decay=4 click=0.3", "kick: sweep start (semitones), bottom Hz, sweep and decay (frames), click 0..1"),
+            ("snare noise=short period=5 decay=3 tone=185 body=2", "snare: NES noise mode and period 0..15, rattle decay, tone Hz and its decay"),
+            ("hat decay=1 | ohat decay=5 | crash period=1 noise=long", "hats and crash: decay (frames), NES noise period 0..15, noise mode"),
+            ("pulse1 = default brass pluck", "a channel's palette: what its musician may switch to (`default` = built-in)"),
+        ],
     ),
     (
         "Chord chart ([chords])",
@@ -80,7 +101,7 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
 pub const SONG_KEYS: [&str; 6] = ["title", "bpm", "swing", "key", "loop", "meter"];
 
 /// The section names, in file order.
-pub const SECTIONS: [&str; 6] = ["song", "chords", "pulse1", "pulse2", "triangle", "noise"];
+pub const SECTIONS: [&str; 7] = ["song", "chords", "instruments", "pulse1", "pulse2", "triangle", "noise"];
 
 /// The cheat sheet as plain text (for terminals and docs).
 pub fn cheat_sheet_text() -> String {

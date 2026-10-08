@@ -338,7 +338,7 @@ impl Engine {
         spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0 });
         Ok(Engine {
             title: song.title.clone(),
-            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley]),
+            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley], &song.instruments),
             medley,
             shape,
             waltz,

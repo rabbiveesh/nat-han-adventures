@@ -109,6 +109,19 @@ impl Shape {
     }
 }
 
+/// Give each event of a generated `track` the instrument the `written` one plays at its time
+/// (`warp`: the generated track is the waltz's, in 3/4 beats).
+fn inherit_instruments(track: &mut Track, written: &Track, warp: bool) {
+    if written.events.iter().all(|e| e.inst == 0) {
+        return;
+    }
+    for e in &mut track.events {
+        let t = if warp { waltz::unwarp(e.start) } else { e.start };
+        let k = written.events.partition_point(|w| w.start <= t + 1e-9);
+        e.inst = written.events[k.saturating_sub(1)].inst;
+    }
+}
+
 /// The four parts in one harmony, swung, with each bar's events.
 #[derive(Debug, Clone)]
 pub struct Arrangement {
@@ -141,6 +154,13 @@ impl Arrangement {
             } else {
                 (p2, tri) = accomp::generate(chart, harmony, song.key, seed);
                 p1 = melody::reharmonize(&p1, chart, harmony);
+            }
+        }
+        if harmony != Harmony::Original {
+            // Generated parts play the instrument the written part plays at that point.
+            let warp = harmony == Harmony::Waltz;
+            for (t, ch) in [(&mut p1, 0), (&mut p2, 1), (&mut tri, 2), (&mut noise, 3)] {
+                inherit_instruments(t, &song.tracks[ch], warp);
             }
         }
         let tracks = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));

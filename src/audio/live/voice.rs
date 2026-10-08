@@ -9,15 +9,27 @@
 //! pass. The mix is summed channel by channel, then drum hits in order, then whatever rings
 //! over from the previous pass (so a looping song's second pass is a seamless loop: what the
 //! offline renderer keeps).
+//!
+//! # Instruments and effects
+//! Each note plays its [`NoteEvent::inst`] ([`super::instrument`]): the macros step once per
+//! 60 Hz frame, counted in samples from the note-on (`frame = i · 60 / rate`, integer), so
+//! they're sample-accurate and blind to the block size. The note's [`Fx`] (the band's
+//! ornaments: slides, fall-offs, vibrato, duty sweeps, the wah) step on the same frames. A
+//! note with neither renders exactly as the voices always did (every extra factor is skipped
+//! or exactly 1). A release part (`/` in a sequence) plays on after the note's end, until the
+//! next note starts (it ducks out over the usual release ramp just before) or slurs on.
+//!
+//! Nothing here allocates once built: instrument tables and drum buffers are made up front.
 
 use std::collections::VecDeque;
 
 use kira::Frame;
 
+use super::instrument::{Instruments, Kit, MAX_HIT_SECS, Tone, Wave};
 use crate::audio::mml::{Arp, Drum};
 use crate::audio::synth::{
-    ARP_STEP, ATTACK, DUTIES, Lfsr, MAX_DRUM_SECS, NOISE_GAIN, PULSE_GAIN, PULSE1_PAN, PULSE2_PAN, RELEASE, TRIANGLE_GAIN, advance,
-    drum, drum_len, pan, pulse, triangle, triangle_lfo,
+    ARP_STEP, ATTACK, DUTIES, Lfsr, NOISE_GAIN, PULSE_GAIN, PULSE1_PAN, PULSE2_PAN, RELEASE, TRIANGLE_GAIN, advance, drum_kit,
+    kit_drum_len, pan, pulse, triangle, triangle_lfo,
 };
 use crate::audio::tuning::{Medley, Tuning, Wobble};
 
@@ -42,6 +54,33 @@ impl Sound {
             Sound::Arp(a) => a.notes(),
             Sound::Drum(_) => &[],
         }
+    }
+}
+
+/// Per-note effects (the band's chiptune ornaments), stepped per 60 Hz frame like the
+/// instrument macros. [`Fx::NONE`] changes nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Fx {
+    /// Start this many semitones off the note (negative: below) and slide onto it over
+    /// `slide_frames`.
+    pub slide: i8,
+    pub slide_frames: u8,
+    /// Fall off by this many semitones (negative: down) over the note's last `fall_frames`.
+    pub fall: i8,
+    pub fall_frames: u8,
+    /// Vibrato this many cents deep (0: the instrument's own), from 0.1 s in.
+    pub vib: u8,
+    /// Sweep the duty a step every this many frames (0: off). Pulse waves only.
+    pub sweep: u8,
+    /// The plunger "wah": the volume and duty open and close about 3 times a second.
+    pub wah: bool,
+}
+
+impl Fx {
+    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false };
+
+    pub fn is_none(&self) -> bool {
+        *self == Fx::NONE
     }
 }
 
@@ -79,16 +118,31 @@ pub struct NoteEvent {
     pub tuning: Tuning,
     /// The voice's tuning anchor ([`crate::audio::tuning::anchor_tonic`]).
     pub anchor: u8,
+    /// Instrument: 0 the channel's built-in, `k` the song's `k`-th ([`Instruments`]).
+    pub inst: u8,
+    /// Ornament effects.
+    pub fx: Fx,
     /// Unique, increasing (set when committed).
     pub seq: u64,
+}
+
+/// A vibrato in samples.
+#[derive(Debug, Clone, Copy)]
+struct Vib {
+    delay: usize,
+    ramp: f32,
+    rate: f32,
+    depth: f32,
 }
 
 /// A note sounding on a tone voice.
 #[derive(Debug, Clone, Copy)]
 struct Active {
     ev: NoteEvent,
-    /// Length in samples.
+    /// Length in samples (to the note-off).
     n: usize,
+    /// Release samples after the note-off (0 without a release part).
+    tail: usize,
     /// Sample within the loop where it started (for the wobble's clock).
     s0: u64,
     dts: [f32; Arp::MAX],
@@ -100,17 +154,71 @@ struct Active {
     wobble: Option<Wobble>,
     env: f32,
     lfo: f32,
+    /// The gentle decay per sample (`fade`), if any.
+    decay: Option<f32>,
+    vib: Option<Vib>,
+    wave: Wave,
+    /// Macros or effects: something changes per frame.
+    modulated: bool,
+    inst: Tone,
+    /// Sample (from the note-on) of the next frame boundary.
+    next_frame: usize,
+    /// Frames in the held part.
+    held_frames: u32,
+    vol_mul: f32,
+    duty: f32,
+    pitch_mul: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Kind {
-    Pulse { vibrato: bool },
-    Triangle,
+impl Active {
+    /// The frame values at sample `i` (a frame boundary).
+    fn frame(&mut self, i: usize, sr: u64) {
+        let held = i < self.n;
+        let base = if held { 0 } else { self.n };
+        let f = ((i - base) as u64 * 60 / sr) as u32;
+        let mut next = base + ((f as u64 + 1) * sr).div_ceil(60) as usize;
+        if held {
+            next = next.min(self.n);
+        }
+        self.next_frame = next.max(i + 1);
+        // Frames since the note-on (for sequences without a release, and the effects).
+        let fh = if held { f } else { self.held_frames + f };
+        let at = |s: &super::instrument::Seq| if held || s.release().is_none() { s.held(fh) } else { s.released(f) };
+        let fx = self.ev.fx;
+        let mut vol = self.inst.vol.as_ref().map_or(1.0, |s| at(s).clamp(0, 15) as f32 / 15.0);
+        let mut duty = self.inst.duty.as_ref().map_or(self.ev.duty as usize, |s| at(s).clamp(0, 3) as usize);
+        if fx.sweep > 0 {
+            // Up and back down: 0 1 2 3 2 1 0 ...
+            const SWEEP: [usize; 6] = [0, 1, 2, 3, 2, 1];
+            duty = SWEEP[(duty + (fh / fx.sweep as u32) as usize) % 6];
+        }
+        let mut cents = self.inst.pitch.as_ref().map_or(0.0, |s| at(s) as f32);
+        if fx.slide != 0 && fh < fx.slide_frames as u32 {
+            cents += fx.slide as f32 * 100.0 * (1.0 - fh as f32 / fx.slide_frames as f32);
+        }
+        if fx.fall != 0 {
+            let from = self.held_frames.saturating_sub(fx.fall_frames as u32);
+            if fh >= from {
+                let p = ((fh - from + 1) as f32 / fx.fall_frames.max(1) as f32).min(1.0);
+                cents += fx.fall as f32 * 100.0 * p * p;
+            }
+        }
+        if fx.wah {
+            // Open and close every 18 frames (3.3 Hz): loud and bright, then muted and thin.
+            let ph = (fh % 18) as f32 / 18.0;
+            let open = 0.5 - 0.5 * (std::f32::consts::TAU * ph).cos();
+            vol *= 0.35 + 0.65 * open;
+            duty = if open > 0.55 { 2 } else { 0 };
+        }
+        self.vol_mul = vol;
+        self.duty = DUTIES[duty];
+        self.pitch_mul = if cents == 0.0 { 1.0 } else { 2f32.powf(cents / 1200.0) };
+    }
 }
 
 /// One monophonic pulse / triangle voice.
 struct ToneVoice {
-    kind: Kind,
+    ch: usize,
     gain: (f32, f32),
     phase: f32,
     /// Loop pass of the last note-on (the phase restarts each pass).
@@ -119,11 +227,15 @@ struct ToneVoice {
     active: Option<Active>,
     /// seq and end of the last event pushed (to set its `slur_out`).
     last: Option<(u64, u64)>,
+    /// Instrument `k` (0: the built-in).
+    insts: Vec<Tone>,
 }
 
 impl ToneVoice {
-    fn new(kind: Kind, gain: (f32, f32)) -> Self {
-        ToneVoice { kind, gain, phase: 0.0, pass_start: None, queue: VecDeque::with_capacity(QUEUE), active: None, last: None }
+    fn new(ch: usize, gain: (f32, f32), instruments: &Instruments) -> Self {
+        let n = instruments.defs.len() + 1;
+        let insts = (0..n).map(|k| instruments.tone(ch, k as u8)).collect();
+        ToneVoice { ch, gain, phase: 0.0, pass_start: None, queue: VecDeque::with_capacity(QUEUE), active: None, last: None, insts }
     }
 
     fn push(&mut self, ev: NoteEvent) {
@@ -176,18 +288,42 @@ impl ToneVoice {
         }
         let attack = if ev.tie { 0.0 } else { (ATTACK * sr).min(n as f32 / 4.0).max(1.0) };
         let release = (RELEASE * sr).min(n as f32 / 3.0).max(1.0);
+        let inst = self.insts.get(ev.inst as usize).copied().unwrap_or(self.insts[0]);
+        let wave = if self.ch == 2 { Wave::Triangle } else { inst.wave.unwrap_or(Wave::Pulse) };
+        let k = notes.len();
+        let vib = if ev.fx.vib > 0 {
+            let depth = 2f32.powf(ev.fx.vib as f32 / 1200.0) - 1.0;
+            Some(Vib { delay: (0.1 * sr) as usize, ramp: 0.12 * sr, rate: 6.0 / sr, depth })
+        } else {
+            inst.vib.map(|v| Vib { delay: (v.delay * sr) as usize, ramp: v.ramp * sr, rate: v.rate / sr, depth: v.depth })
+        }
+        .filter(|_| k == 1);
+        let sr_u = sr as u64;
+        let tail = (inst.release_frames() as u64 * sr_u).div_ceil(60) as usize;
+        let modulated = inst.has_macros() || !ev.fx.is_none();
         self.active = Some(Active {
             ev,
             n,
+            tail,
             s0: ev.start - ev.loop_start,
             dts,
-            k: notes.len(),
+            k,
             amp,
             attack,
             release,
             wobble,
             env: 1.0,
             lfo: 0.0,
+            decay: inst.fade.map(|tau| (-1.0 / (tau * sr)).exp()),
+            vib,
+            wave,
+            modulated,
+            inst,
+            next_frame: 0,
+            held_frames: (n as u64 * 60 / sr_u) as u32,
+            vol_mul: 1.0,
+            duty: DUTIES[ev.duty as usize & 3],
+            pitch_mul: 1.0,
         });
     }
 
@@ -207,22 +343,36 @@ impl ToneVoice {
                     _ => return,
                 }
             }
+            let next_start = self.queue.front().map(|e| e.start);
             let a = self.active.as_mut().unwrap();
-            let stop = end.min(a.ev.start + a.n as u64);
-            let i0 = (t - a.ev.start) as usize;
-            let frames = &mut out[(t - t0) as usize..(stop - t0) as usize];
-            Self::tone(a, self.kind, self.gain, &mut self.phase, frames, i0, sr);
-            if stop == a.ev.start + a.n as u64 {
+            let held_end = a.ev.start + a.n as u64;
+            let mut a_end = held_end + if a.ev.slur_out { 0 } else { a.tail as u64 };
+            // A release tail stops where the next note starts.
+            if a_end > held_end
+                && let Some(s) = next_start
+                && s < a_end
+            {
+                a_end = s.max(held_end);
+            }
+            let a_end = a_end.max(t);
+            let stop = end.min(a_end);
+            if stop > t {
+                let i0 = (t - a.ev.start) as usize;
+                let frames = &mut out[(t - t0) as usize..(stop - t0) as usize];
+                Self::tone(a, self.gain, &mut self.phase, frames, i0, sr, (a_end - a.ev.start) as usize);
+            }
+            if stop == a_end {
                 self.active = None;
             }
             t = stop;
         }
     }
 
-    /// Samples `i0..` of the note into `frames` (the offline `Tone::render`, resumable).
+    /// Samples `i0..` of the note into `frames` (the offline `Tone::render`, resumable). The
+    /// note (and its tail) ends at sample `n_end`.
     #[inline]
-    fn tone(a: &mut Active, kind: Kind, (gl, gr): (f32, f32), phase: &mut f32, frames: &mut [Frame], i0: usize, sr: f32) {
-        let n = a.n;
+    fn tone(a: &mut Active, (gl, gr): (f32, f32), phase: &mut f32, frames: &mut [Frame], i0: usize, sr: f32, n_end: usize) {
+        let n = n_end;
         let attack = a.attack;
         let release = if a.ev.slur_out { 0.0 } else { a.release };
         let edge = |i: usize| {
@@ -243,45 +393,42 @@ impl ToneVoice {
         let dts = a.dts;
         let step = ((ARP_STEP * sr) as usize).max(1);
         let amp = a.amp;
-        match kind {
-            Kind::Pulse { vibrato } => {
-                let decay = (-1.0 / (0.8 * sr)).exp();
-                let vib_delay = (0.18 * sr) as usize;
-                let vib_ramp = 0.25 * sr;
-                let vib_rate = 5.5 / sr;
-                let vibrato = vibrato && k == 1;
-                let duty = DUTIES[a.ev.duty as usize];
-                for (j, f) in frames.iter_mut().enumerate() {
-                    let i = i0 + j;
-                    let mut dt = if k == 1 { dts[0] } else { dts[(i / step) % k] };
-                    if wobbles {
-                        dt *= wobble(i);
-                    }
-                    if vibrato && i > vib_delay {
-                        let depth = (((i - vib_delay) as f32) / vib_ramp).min(1.0) * 0.006;
-                        advance(&mut a.lfo, vib_rate);
-                        dt *= 1.0 + depth * (triangle_lfo(a.lfo));
-                    }
-                    let v = pulse(*phase, dt, duty) * amp * (0.65 + 0.35 * a.env) * edge(i);
-                    a.env *= decay;
-                    advance(phase, dt);
-                    f.left += v * gl;
-                    f.right += v * gr;
-                }
+        let vib = a.vib;
+        let decay = a.decay;
+        let modulated = a.modulated;
+        let sr_u = sr as u64;
+        let pulse_wave = a.wave == Wave::Pulse;
+        for (j, f) in frames.iter_mut().enumerate() {
+            let i = i0 + j;
+            if modulated && i >= a.next_frame {
+                a.frame(i, sr_u);
             }
-            Kind::Triangle => {
-                for (j, f) in frames.iter_mut().enumerate() {
-                    let i = i0 + j;
-                    let mut dt = if k == 1 { dts[0] } else { dts[(i / step) % k] };
-                    if wobbles {
-                        dt *= wobble(i);
-                    }
-                    let v = triangle(*phase) * amp * edge(i);
-                    advance(phase, dt);
-                    f.left += v * gl;
-                    f.right += v * gr;
-                }
+            let mut dt = if k == 1 { dts[0] } else { dts[(i / step) % k] };
+            if wobbles {
+                dt *= wobble(i);
             }
+            if modulated {
+                dt *= a.pitch_mul;
+            }
+            if let Some(vb) = vib
+                && i > vb.delay
+            {
+                let depth = (((i - vb.delay) as f32) / vb.ramp).min(1.0) * vb.depth;
+                advance(&mut a.lfo, vb.rate);
+                dt *= 1.0 + depth * (triangle_lfo(a.lfo));
+            }
+            let mut v = if pulse_wave { pulse(*phase, dt, a.duty) } else { triangle(*phase) } * amp;
+            if let Some(d) = decay {
+                v *= 0.65 + 0.35 * a.env;
+                a.env *= d;
+            }
+            v *= edge(i);
+            if modulated {
+                v *= a.vol_mul;
+            }
+            advance(phase, dt);
+            f.left += v * gl;
+            f.right += v * gr;
         }
     }
 }
@@ -301,11 +448,13 @@ struct Drums {
     spare: Vec<Vec<f32>>,
     lfsr: Lfsr,
     pass_start: Option<u64>,
+    /// Kit `k` (0: the built-in).
+    kits: Vec<Kit>,
 }
 
 impl Drums {
-    fn new(sr: f32) -> Self {
-        let cap = (MAX_DRUM_SECS * sr) as usize + 1;
+    fn new(sr: f32, instruments: &Instruments) -> Self {
+        let cap = (MAX_HIT_SECS * sr) as usize + 1;
         Drums {
             gain: pan(0.0, NOISE_GAIN),
             queue: VecDeque::with_capacity(QUEUE),
@@ -313,6 +462,7 @@ impl Drums {
             spare: (0..DRUM_VOICES).map(|_| Vec::with_capacity(cap)).collect(),
             lfsr: Lfsr::default(),
             pass_start: None,
+            kits: (0..=instruments.defs.len()).map(|k| instruments.kit(k as u8)).collect(),
         }
     }
 
@@ -332,7 +482,8 @@ impl Drums {
                 self.lfsr = Lfsr::default();
             }
             let Some(mut buf) = self.spare.pop() else { continue };
-            let mut n = (drum_len(d) * sr) as usize;
+            let kit = self.kits.get(e.inst as usize).copied().unwrap_or(Kit::DEFAULT);
+            let mut n = (kit_drum_len(d, &kit) * sr) as usize;
             // The open hat is choked by the next hit of the same pass (with a short fade).
             let choke = (d == Drum::OpenHat)
                 .then(|| self.queue.front().filter(|next| next.loop_start == e.loop_start).map(|next| next.start.saturating_sub(e.start) as usize))
@@ -342,7 +493,7 @@ impl Drums {
             }
             buf.clear();
             buf.resize(n.min(buf.capacity()), 0.0);
-            drum(d, &mut buf, &mut self.lfsr, sr);
+            drum_kit(d, &kit, &mut buf, &mut self.lfsr, sr);
             let mut amp = e.volume as f32 / 15.0;
             if e.gain != 1.0 {
                 amp *= e.gain;
@@ -409,16 +560,17 @@ pub struct VoiceBank {
 pub const MAX_SEGMENT: usize = 1024;
 
 impl VoiceBank {
-    pub fn new(sample_rate: u32, medleys: [Medley; 2]) -> Self {
+    /// The voices for a song with `instruments` (an empty table: the built-ins only).
+    pub fn new(sample_rate: u32, medleys: [Medley; 2], instruments: &Instruments) -> Self {
         let sr = sample_rate as f32;
         VoiceBank {
             sr,
             tones: [
-                ToneVoice::new(Kind::Pulse { vibrato: true }, pan(PULSE1_PAN, PULSE_GAIN)),
-                ToneVoice::new(Kind::Pulse { vibrato: false }, pan(PULSE2_PAN, PULSE_GAIN)),
-                ToneVoice::new(Kind::Triangle, pan(0.0, TRIANGLE_GAIN)),
+                ToneVoice::new(0, pan(PULSE1_PAN, PULSE_GAIN), instruments),
+                ToneVoice::new(1, pan(PULSE2_PAN, PULSE_GAIN), instruments),
+                ToneVoice::new(2, pan(0.0, TRIANGLE_GAIN), instruments),
             ],
-            drums: Drums::new(sr),
+            drums: Drums::new(sr, instruments),
             medleys,
             spill: vec![Frame::ZERO; MAX_SEGMENT],
         }

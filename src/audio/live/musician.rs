@@ -25,7 +25,7 @@ use crate::audio::tuning::{self, Tuning};
 
 use super::arrange::{Arrangement, Shape};
 use super::engine::Input;
-use super::voice::{NoteEvent, Sound};
+use super::voice::{Fx, NoteEvent, Sound};
 
 /// Who plays what.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -111,6 +111,8 @@ impl Ctx<'_> {
             salt: tuning::salt(self.shape.song_hash, ch, idx, 0),
             tuning: self.tuning,
             anchor: if ch < 3 { self.arrangement.anchors[ch] } else { 0 },
+            inst: e.inst,
+            fx: Fx::NONE,
             seq: 0,
         }
     }

@@ -30,6 +30,8 @@ pub enum Drum {
     Snare,
     ClosedHat,
     OpenHat,
+    /// A crash cymbal (`x`).
+    Crash,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -83,6 +85,9 @@ pub struct Event {
     /// Slurred from the previous note (`c4&d4`): no re-attack. (A tie to the *same* pitch is
     /// merged into one longer note instead, so it never shows up here.)
     pub tie: bool,
+    /// Instrument (`@i name`): 0 is the channel's built-in, `k` the song's `k`-th
+    /// ([`super::live::instrument`]).
+    pub inst: u8,
 }
 
 /// A parsed channel.
@@ -112,11 +117,21 @@ impl fmt::Display for MmlError {
 
 impl std::error::Error for MmlError {}
 
-/// How strictly to read bar lines.
+/// How strictly to read bar lines, and the instruments `@i` may name.
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub struct Options {
+pub struct Options<'a> {
     /// Beats (quarter notes) per bar; `None` ignores bar lines (the game's dialect).
     pub bar_beats: Option<f64>,
+    /// The song's instruments, in order (`@i` names them; instrument `k + 1` is the `k`-th):
+    /// (name, is a kit). `default` (0) is always there.
+    pub instruments: &'a [(&'a str, bool)],
+}
+
+impl Options<'_> {
+    /// Bar lines checked every `bar_beats` (`None`: ignored), no song instruments.
+    pub fn bars(bar_beats: Option<f64>) -> Options<'static> {
+        Options { bar_beats, instruments: &[] }
+    }
 }
 
 /// One visit of the walker to a source position (repeats visit their body several times).
@@ -133,7 +148,7 @@ pub struct Visit {
 pub enum Item {
     /// A note, rest, drum hit or chord: moves time on.
     Sound,
-    /// `o l v @ < >`: changes state, takes no time.
+    /// `o l v @ @i < >`: changes state, takes no time.
     Command,
     /// `&`.
     Tie,
@@ -157,12 +172,12 @@ pub struct Parsed {
 
 /// Parse one channel; `|` bar lines are ignored. An empty string is an empty track.
 pub fn parse(src: &str, channel: Channel) -> Result<Track, MmlError> {
-    parse_with(src, channel, Options { bar_beats: None }).map(|p| p.track)
+    parse_with(src, channel, Options::bars(None)).map(|p| p.track)
 }
 
 /// Parse one channel with checked bar lines (`bar_beats` beats per bar): what `.song` files use.
 pub fn parse_checked(src: &str, channel: Channel, bar_beats: f64) -> Result<Track, MmlError> {
-    parse_with(src, channel, Options { bar_beats: Some(bar_beats) }).map(|p| p.track)
+    parse_with(src, channel, Options::bars(Some(bar_beats))).map(|p| p.track)
 }
 
 /// Parse one channel, keeping the walk's visits.
@@ -172,12 +187,13 @@ pub fn parse_with(src: &str, channel: Channel, opts: Options) -> Result<Parsed, 
     let mut w = Walker {
         src,
         opts,
-        state: State { octave: 4, length: 1.0, volume: 12, duty: 2 },
+        state: State { octave: 4, length: 1.0, volume: 12, duty: 2, inst: 0 },
         time: 0.0,
         last_bar: 0.0,
         events: Vec::new(),
         pending_tie: None,
         visits: Vec::new(),
+        walking_drums: channel == Channel::Drums,
     };
     w.walk(&nodes)?;
     if let Some(pos) = w.pending_tie {
@@ -219,6 +235,8 @@ enum NodeKind {
     Length(f64),
     Volume(u8),
     Duty(u8),
+    /// `@i name`.
+    Inst(String),
     Tie,
     Bar,
     Repeat { body: Vec<Node>, times: u32, close: usize },
@@ -390,21 +408,22 @@ impl Parser<'_> {
                     let semitones = self.chord(pos)?;
                     (NodeKind::Chord { semitones, len: self.length()? }, Item::Sound)
                 }
-                'k' | 's' | 'h' | 'H' if !melodic => {
+                'k' | 's' | 'h' | 'H' | 'x' if !melodic => {
                     let drum = match c {
                         'k' => Drum::Kick,
                         's' => Drum::Snare,
                         'h' => Drum::ClosedHat,
+                        'x' => Drum::Crash,
                         _ => Drum::OpenHat,
                     };
                     (NodeKind::Drum { drum, len: self.length()? }, Item::Sound)
                 }
                 'c' | 'd' | 'e' | 'f' | 'g' | 'a' | 'b' => {
-                    return Err(self.err(pos, format!("note `{c}` on the noise channel: use drums `k s h H` or `r`")));
+                    return Err(self.err(pos, format!("note `{c}` on the noise channel: use drums `k s h H x` or `r`")));
                 }
                 '{' => return Err(self.err(pos, "chords `{ }` need a melodic channel")),
                 '}' => return Err(self.err(pos, "`}` without a matching `{`")),
-                'k' | 's' | 'h' | 'H' => return Err(self.err(pos, format!("drum `{c}` on a melodic channel"))),
+                'k' | 's' | 'h' | 'H' | 'x' => return Err(self.err(pos, format!("drum `{c}` on a melodic channel"))),
                 'r' => (NodeKind::Rest { len: self.length()? }, Item::Sound),
                 'o' => (NodeKind::Octave(self.ranged(pos, 'o', 0..=8)? as i32), Item::Command),
                 '>' => (NodeKind::OctaveUp, Item::Command),
@@ -414,6 +433,18 @@ impl Parser<'_> {
                     None => return Err(self.err(pos, "`l` needs a length, e.g. `l8`")),
                 },
                 'v' => (NodeKind::Volume(self.ranged(pos, 'v', 0..=15)? as u8), Item::Command),
+                '@' if self.bytes.get(self.i) == Some(&b'i') => {
+                    self.i += 1;
+                    self.skip_ws();
+                    let from = self.i;
+                    while self.bytes.get(self.i).is_some_and(|b| b.is_ascii_alphanumeric() || *b == b'_') {
+                        self.i += 1;
+                    }
+                    if self.i == from {
+                        return Err(self.err(pos, "`@i` needs an instrument name, e.g. `@i brass`"));
+                    }
+                    (NodeKind::Inst(self.src[from..self.i].to_string()), Item::Command)
+                }
                 '@' => (NodeKind::Duty(self.ranged(pos, '@', 0..=3)? as u8), Item::Command),
                 '&' => (NodeKind::Tie, Item::Tie),
                 '|' => (NodeKind::Bar, Item::Bar),
@@ -450,11 +481,12 @@ struct State {
     length: f64,
     volume: u8,
     duty: u8,
+    inst: u8,
 }
 
 struct Walker<'a> {
     src: &'a str,
-    opts: Options,
+    opts: Options<'a>,
     state: State,
     time: f64,
     /// Time of the last checked bar line.
@@ -462,6 +494,7 @@ struct Walker<'a> {
     events: Vec<Event>,
     pending_tie: Option<usize>,
     visits: Vec<Visit>,
+    walking_drums: bool,
 }
 
 /// Bar-line tolerance, in beats.
@@ -509,6 +542,7 @@ impl Walker<'_> {
                 NodeKind::Length(l) => self.state.length = l,
                 NodeKind::Volume(v) => self.state.volume = v,
                 NodeKind::Duty(d) => self.state.duty = d,
+                NodeKind::Inst(ref name) => self.state.inst = self.instrument(name, pos)?,
                 NodeKind::Tie => {
                     let tieable = self.events.last().is_some_and(|e| e.start + e.dur >= self.time - 1e-9);
                     if !tieable || self.pending_tie.is_some() {
@@ -526,6 +560,24 @@ impl Walker<'_> {
             }
         }
         Ok(())
+    }
+
+    /// The number of instrument `name` (`default` is 0), checked against the channel.
+    fn instrument(&self, name: &str, pos: usize) -> Result<u8, MmlError> {
+        if name == "default" {
+            return Ok(0);
+        }
+        let insts = self.opts.instruments;
+        let Some(k) = insts.iter().position(|(n, _)| *n == name) else {
+            let known: Vec<&str> = std::iter::once("default").chain(insts.iter().map(|(n, _)| *n)).collect();
+            return Err(error(self.src, pos, format!("unknown instrument `{name}` (the song has: {})", known.join(" "))));
+        };
+        let drums = self.walking_drums;
+        match (insts[k].1, drums) {
+            (true, false) => Err(error(self.src, pos, format!("`{name}` is a drum kit: kits go on the noise channel"))),
+            (false, true) => Err(error(self.src, pos, format!("`{name}` is a tone instrument: the noise channel takes kits"))),
+            _ => Ok(k as u8 + 1),
+        }
     }
 
     fn bar_check(&mut self, pos: usize) -> Result<(), MmlError> {
@@ -558,7 +610,7 @@ impl Walker<'_> {
         if tie {
             let prev = self.events.last_mut().expect("checked when the `&` was read");
             match (prev.kind, kind) {
-                (a, b) if a == b && prev.volume == self.state.volume && prev.duty == self.state.duty => {
+                (a, b) if a == b && prev.volume == self.state.volume && prev.duty == self.state.duty && prev.inst == self.state.inst => {
                     prev.dur += dur;
                     return Ok(());
                 }
@@ -570,7 +622,7 @@ impl Walker<'_> {
                 _ => return Err(error(self.src, pos, "`&` can only join two notes (or two rests)")),
             }
         }
-        self.events.push(Event { start, dur, kind, volume: self.state.volume, duty: self.state.duty, tie });
+        self.events.push(Event { start, dur, kind, volume: self.state.volume, duty: self.state.duty, tie, inst: self.state.inst });
         Ok(())
     }
 }
@@ -623,7 +675,7 @@ mod tests {
         assert!(parse_checked("c2 d4 | e2.& | e4 f2 |", Channel::Melodic, 3.0).is_ok());
         assert!(parse_checked("c1 |", Channel::Melodic, 3.0).is_err());
         // The game's dialect ignores them.
-        assert!(parse_with("c4 | d4", Channel::Melodic, Options { bar_beats: None }).is_ok());
+        assert!(parse_with("c4 | d4", Channel::Melodic, Options::bars(None)).is_ok());
     }
 }
 
@@ -647,7 +699,7 @@ mod game_dialect_tests {
     fn defaults_and_pitches() {
         let t = parse("c d e- f+ g#8 a16 b2", Channel::Melodic).unwrap();
         let e = &t.events;
-        assert_eq!(e[0], Event { start: 0.0, dur: 1.0, kind: EventKind::Note(60), volume: 12, duty: 2, tie: false });
+        assert_eq!(e[0], Event { start: 0.0, dur: 1.0, kind: EventKind::Note(60), volume: 12, duty: 2, tie: false, inst: 0 });
         let pitches: Vec<_> = e.iter().map(|e| e.kind).collect();
         use EventKind::Note as N;
         assert_eq!(pitches, [N(60), N(62), N(63), N(66), N(68), N(69), N(71)]);
@@ -708,9 +760,9 @@ mod game_dialect_tests {
 
     #[test]
     fn errors_point_at_the_problem() {
-        let e = parse("c4 d4 x", Channel::Melodic).unwrap_err();
+        let e = parse("c4 d4 z", Channel::Melodic).unwrap_err();
         assert_eq!((e.line, e.col), (1, 7));
-        assert!(e.to_string().contains("unexpected `x`"), "{e}");
+        assert!(e.to_string().contains("unexpected `z`"), "{e}");
         assert!(e.context.ends_with("      ^"), "{:?}", e.context);
         let e = parse("c\n  [d e", Channel::Melodic).unwrap_err();
         assert!(e.msg.contains("missing `]`"), "{e}");

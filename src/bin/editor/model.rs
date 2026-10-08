@@ -54,14 +54,14 @@ impl Sound {
             }
             Sound::Drum(d) => {
                 let i = DRUMS.iter().position(|x| x == d).unwrap_or(0) as i32;
-                Sound::Drum(DRUMS[(i + semis).clamp(0, 3) as usize])
+                Sound::Drum(DRUMS[(i + semis).clamp(0, DRUMS.len() as i32 - 1) as usize])
             }
         }
     }
 }
 
 /// The drums, in row order (bottom to top in the piano roll).
-pub const DRUMS: [Drum; 4] = [Drum::Kick, Drum::Snare, Drum::ClosedHat, Drum::OpenHat];
+pub const DRUMS: [Drum; 5] = [Drum::Kick, Drum::Snare, Drum::ClosedHat, Drum::OpenHat, Drum::Crash];
 /// The lowest and highest notes MML can write (`o0 c` .. `o8 b`).
 pub const LOWEST: u8 = 12;
 pub const HIGHEST: u8 = 119;
@@ -378,6 +378,7 @@ pub fn drum_letter(d: Drum) -> &'static str {
         Drum::Snare => "s",
         Drum::ClosedHat => "h",
         Drum::OpenHat => "H",
+        Drum::Crash => "x",
     }
 }
 

@@ -18,6 +18,9 @@
 //! ...
 //! ```
 //!
+//! `[instruments]` (optional) names FamiTracker-style instruments and kits, and each channel's
+//! palette ([`super::instrument`]); `@i name` in the MML picks one.
+//!
 //! Every section is optional except `[song]` with `title` and `bpm`; missing channels are
 //! silent. The MML is the game's dialect plus chords, comments and checked bar lines (see
 //! [`crate::audio::mml`]). Every non-empty track must be whole bars long, and the chart (if any)
@@ -27,6 +30,8 @@ use std::fmt;
 
 use crate::audio::chart::{self, Chart};
 use crate::audio::mml::{self, Channel, Track};
+
+use super::instrument::Instruments;
 
 use super::syntax::{SECTIONS, SONG_KEYS};
 
@@ -79,6 +84,10 @@ pub struct SongFile {
     pub sources: [String; 4],
     /// Parsed (unswung) tracks.
     pub tracks: [Track; 4],
+    /// The `[instruments]` section, parsed.
+    pub instruments: Instruments,
+    /// Its text as written (comments included); "" if none.
+    pub instruments_src: String,
 }
 
 /// An error in a song file, with its 1-based line (and column, where known).
@@ -226,11 +235,23 @@ impl SongFile {
         let bpm = bpm.ok_or_else(|| err(*song_line, "`[song]` needs a `bpm`"))?;
         let bar_beats = meter.bar_beats();
 
+        let (instruments, instruments_src) = match get("instruments") {
+            None => (Instruments::default(), String::new()),
+            Some((_, _, body_line, body)) => {
+                let i = Instruments::parse(body).map_err(|(l, msg)| {
+                    let line = body.lines().nth(l - 1).unwrap_or("").to_string();
+                    SongError { line: body_line + l - 1, col: 0, msg: format!("[instruments]: {msg}"), context: format!("  {line}") }
+                })?;
+                (i, body.trim_end().to_string())
+            }
+        };
+        let names = instruments.for_mml();
+        let opts = mml::Options { bar_beats: Some(bar_beats), instruments: &names };
         let mut sources: [String; 4] = Default::default();
         let mut tracks: [Track; 4] = Default::default();
         for (ch, (name, channel)) in CHANNELS.iter().enumerate() {
             let Some((_, header_line, body_line, body)) = get(name) else { continue };
-            let t = mml::parse_checked(body, *channel, bar_beats).map_err(|e| SongError {
+            let t = mml::parse_with(body, *channel, opts).map(|p| p.track).map_err(|e| SongError {
                 line: body_line + e.line - 1,
                 col: e.col,
                 msg: format!("[{name}]: {}", e.msg),
@@ -268,7 +289,7 @@ impl SongFile {
                 }
             }
         };
-        Ok(SongFile { title, bpm, swing, key, looping, meter, chords, chart, sources, tracks })
+        Ok(SongFile { title, bpm, swing, key, looping, meter, chords, chart, sources, tracks, instruments, instruments_src })
     }
 
     /// A 4/4 song straight from MML (pulse 1, pulse 2, triangle, noise) and a chart (`""` for
@@ -307,6 +328,8 @@ impl SongFile {
             chart,
             sources: parts.map(str::to_string),
             tracks,
+            instruments: Instruments::default(),
+            instruments_src: String::new(),
         })
     }
 
@@ -323,6 +346,9 @@ impl SongFile {
         if !self.chords.is_empty() {
             s += "\n[chords]\n";
             s += &chart_lines(&self.chords, 8);
+        }
+        if !self.instruments_src.trim().is_empty() {
+            s += &format!("\n[instruments]\n{}\n", self.instruments_src.trim_end());
         }
         for ((name, _), src) in CHANNELS.iter().zip(&self.sources) {
             if !src.trim().is_empty() {

@@ -73,6 +73,7 @@ fn drum_name(d: nat_han_adventures::audio::mml::Drum) -> &'static str {
         Snare => "snare",
         ClosedHat => "hat",
         OpenHat => "open hat",
+        Crash => "crash",
     }
 }
 
@@ -467,7 +468,7 @@ enum Action {
 }
 
 fn sound_of(ch: usize, pitch: u8) -> Sound {
-    if ch == 3 { Sound::Drum(DRUMS[(pitch as usize).min(3)]) } else { Sound::Note(pitch) }
+    if ch == 3 { Sound::Drum(DRUMS[(pitch as usize).min(DRUMS.len() - 1)]) } else { Sound::Note(pitch) }
 }
 
 /// A note's rectangles (an arpeggio: one per chord note, the written lowest first).

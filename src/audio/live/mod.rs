@@ -67,6 +67,7 @@
 
 pub mod arrange;
 pub mod engine;
+pub mod instrument;
 pub mod library;
 pub mod musician;
 pub mod playback;

@@ -320,7 +320,7 @@ impl Editor {
         let start: usize = text.split_inclusive('\n').take(sec.body.0).map(str::len).sum();
         let end: usize = text.split_inclusive('\n').take(sec.body.1).map(str::len).sum();
         let body = &text[start..end.min(text.len())];
-        let parsed = mml::parse_with(body, CHANNELS[ch].1, Options { bar_beats: None }).ok()?;
+        let parsed = mml::parse_with(body, CHANNELS[ch].1, Options::bars(None)).ok()?;
         let at = byte - start;
         // The last visit at or before the cursor (first pass of a repeat).
         parsed.visits.iter().filter(|v| v.pos <= at).map(|v| (v.pos, v.time)).max_by(|a, b| a.0.cmp(&b.0).then(b.1.total_cmp(&a.1))).map(|v| v.1)
