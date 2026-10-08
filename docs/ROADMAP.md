@@ -36,16 +36,17 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   freedom. Never shown to the player.
 - **Free play** (`src/freeplay/`): procedural rooms from 8 templates, validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
+  On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
+  so a new room never hitches the game; the main thread takes over if the worker fails.
 - **Tooling**: level validator library (`src/level/validate.rs`), formal checks (tier 1 in every
   test run, tier 2 `scripts/check-deep` + non-blocking CI), music editor (`cargo run --bin
   editor`), F9 debug dump, phone touch controls (`scripts/phone-shots`), deterministic video
   capture (`scripts/record-run --capture`), headless BRP driving (`scripts/headless-run`).
 
-## In flight when this was written
-1. **Deadly spray cans** — a can's own tile kills while firing (Han's plug covers it); campaign
-   waltz/shield rows keep their gratings; free play uses plain floor-level can rows. Also syncs
-   the deep checker's `chain_try` with Han's weak-boost rules so `KNOWN_BYPASSES` empties.
-   Branch `worktree-agent-a19140d228fb5d7cf`.
+## In flight
+Nothing: everything from the original session is merged. Deadly spray cans landed (a can's tile
+kills while firing; Han's plug covers it; free-play waltz rows are floor cans with a low roof),
+and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 
 ## Planned (agreed, not started)
 - **Per-tuning physics nudges** in the laughing band's medley (each 4-bar phrase): Just = sober
@@ -55,7 +56,6 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   pitch wobble. Read the phrase tuning from `NowPlaying.tuning_now`; small, never unfair.
 - **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
   templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
-- **Free-play validation in a Web Worker** (optional): removes the ~20–60 ms per-room hitch on web.
 - **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
   (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending
   on the jingle, vamp-outs), stop-time choruses, call-and-response comping, pedal/vamp intros,

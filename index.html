@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Nat Han Adventures</title>
     <link data-trunk rel="rust" data-bin="nat-han-adventures" data-cargo-no-default-features data-cargo-profile-release="wasm-release" data-wasm-opt="z" />
+    <!-- Free play's room validator, off the game's thread (src/freeplay/offload.rs). -->
+    <link data-trunk rel="rust" data-type="worker" data-loader-shim data-bin="roomgen" data-cargo-no-default-features data-cargo-profile-release="wasm-release" data-wasm-opt="z" />
     <script>
       // Autoplay policy: an AudioContext made before any user gesture starts suspended.
       // Remember every context the game creates and resume them on the first click / key.

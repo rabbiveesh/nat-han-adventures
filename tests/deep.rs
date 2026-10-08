@@ -29,7 +29,7 @@ use formal_model::*;
 use nat_han_adventures::audio::{Harmony, director};
 use nat_han_adventures::game::tuning::*;
 use nat_han_adventures::game::{Groove, SIDE_STAIN_LIFE};
-use nat_han_adventures::level::buddy::{Chasm, GsSwitch, chain_plays, chain_try};
+use nat_han_adventures::level::buddy::{Chasm, ChasmMarks, GsSwitch, chain_plays, chain_try};
 use nat_han_adventures::level::nav::{Nav, Route};
 use nat_han_adventures::level::validate::{Map, Mode, Options, Physics, check_with};
 use nat_han_adventures::level::{GateMark, LEVEL_SOURCES, Level, TILE, ThingKind, Topic};
@@ -567,20 +567,17 @@ fn deep_campaign_gates_from_every_music_state() {
 
 // --- Boost chains near band gates ---
 
-/// Why the bypasses below are accepted for now.
-const FULL_BOOST: &str = "buddy::chain_try models Han's full-strength plunger boost everywhere; the weak-boost zone \
-                          near band gates (in progress) is meant to close these: once chain_try (or the game's \
-                          Han) uses it, this list should empty — a stale entry is reported";
-
-/// Chain-boost bypasses accepted for now: (level, gate topic word). Printed every run.
-const KNOWN_BYPASSES: &[(usize, &str)] =
-    &[(1, "giant"), (4, "giant"), (5, "gap"), (6, "grip"), (9, "grip"), (9, "gap"), (10, "giant")];
+/// Chain-boost bypasses accepted for now: (level, gate topic word). Printed every run. Empty:
+/// with Han's real head rules (the weak boost and no mid-air catches in band zones, the catch
+/// height cap) no chain carries Nat past a band gate.
+const KNOWN_BYPASSES: &[(usize, &str)] = &[];
 
 /// Han's chain boosts (the validator's own chain simulation, `buddy::chain_try`: Nat jumps,
-/// Han intercepts, Nat boosts off his head and toots, again), taken off from anywhere Nat can
-/// stand with Han allowed behind him on the way to a band gate, must not carry Nat past the
-/// gate's mark. Written against the public buddy API only, so a change to Han's boost near
-/// band gates (a weak-boost zone) is picked up as it lands.
+/// Han intercepts, Nat boosts off his head and toots, again, with the game's head rules: the
+/// weak boost and no mid-air catches in band zones, the catch height cap, the level's own
+/// chasm marks), taken off from anywhere Nat can stand with Han's boost full strength behind
+/// him on the way to a band gate, must not carry Nat past the gate's mark. Written against the
+/// public buddy API only, so a change to Han's head rules is picked up as it lands.
 #[test]
 #[ignore = "tier 2 (deep): scripts/check-deep"]
 fn deep_boost_chains_cant_bypass_band_gates() {
@@ -608,7 +605,7 @@ fn deep_boost_chains_cant_bypass_band_gates() {
                         };
                         for play in chain_plays() {
                             tried += 1;
-                            if let Some(land) = chain_try(level, &chasm, dir, play, GsSwitch::Never) {
+                            if let Some(land) = chain_try(level, &chasm, dir, play, GsSwitch::Never, ChasmMarks::Level) {
                                 let e = found.entry((li + 1, m.topic.word())).or_insert((0, String::new()));
                                 e.0 += 1;
                                 if e.1.is_empty() {
@@ -637,9 +634,6 @@ fn deep_boost_chains_cant_bypass_band_gates() {
                 eprintln!("BYPASS ({n} take-offs): {msg}");
                 fail.push(msg.clone());
             }
-        }
-        if !found.is_empty() {
-            eprintln!("(known bypasses: {FULL_BOOST})");
         }
         for k in KNOWN_BYPASSES.iter().filter(|k| !found.contains_key(k)) {
             eprintln!("STALE: L{} {} no longer bypassed: remove it from KNOWN_BYPASSES", k.0, k.1);

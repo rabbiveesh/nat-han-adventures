@@ -51,6 +51,10 @@ pub const RAFT_SINK_DEPTH: f32 = 12.0;
 /// Jet height (tiles above the can) and width (px).
 pub const SPRAY_HEIGHT: f32 = 3.0 * TILE;
 pub const SPRAY_WIDTH: f32 = 8.0;
+/// The can's own body (the sprite's 8×14 px, on the floor of its cell): deadly exactly while
+/// its jet fires (and isn't plugged by Han), harmless to walk past while it's off.
+pub const CAN_WIDTH: f32 = 8.0;
+pub const CAN_HEIGHT: f32 = 14.0;
 
 /// Is the jet of the spray in column `col` firing at sim time `t`?
 /// All cans share one clock (levels design spray rows as a rhythm to run through together);
@@ -270,11 +274,12 @@ pub(super) fn check_hazards(
     let fh = Vec2::splat(FLY_HITBOX / 2.0);
     dead |= flies.iter().any(|f| rects_overlap(min, max, f.0 - fh, f.0 + fh));
 
-    // Spray jets.
-    // (Han's body stops a jet: it's cut off above him, and stays plugged a moment after.)
+    // Spray jets, and the cans firing them.
+    // (Han's body stops a jet: it's cut off above him, and stays plugged a moment after; a
+    // jet plugged right down to the nozzle silences its can too.)
     dead |= sprays.iter().any(|(spray, tf, plug)| {
-        let base = tf.translation.truncate() + Vec2::new(0.0, TILE);
-        spray.on && SprayPlug::jet(plug, base).is_some_and(|(lo, hi)| rects_overlap(min, max, lo, hi))
+        let floor = tf.translation.truncate();
+        spray.on && SprayPlug::danger(plug, floor).into_iter().flatten().any(|(lo, hi)| rects_overlap(min, max, lo, hi))
     });
 
     if !dead {

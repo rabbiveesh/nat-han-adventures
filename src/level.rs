@@ -54,7 +54,7 @@
 //! | `v` | spikes hanging from the ceiling, deadly; top half of the tile |
 //! | `~` | deadly liquid (sewage); the whole tile, surface drawn at the top |
 //! | `F` | fly swarm: hovers in a circle (radius ~1 tile) around its tile, deadly |
-//! | `S` | air-freshener spray: a jet firing straight up 3 tiles, deadly while on. All cans share one on/off clock (while the band waltzes: the music's). Sits on the floor. 4+ adjacent cans under a `=` grating with a ceiling right above make a *waltz row* (see `tests/levels.rs`) |
+//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans on the floor you walk on, or under a `=` grating you walk on, with a ceiling at most 2 tiles above the walk make a *waltz row* (see `tests/levels.rs`) |
 //! | `1`-`9` | moving platform: a horizontal run of the same digit is one platform, configured by its `N:` header line |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.

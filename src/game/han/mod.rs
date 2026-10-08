@@ -13,7 +13,10 @@
 //! Nat came from, re-planning a few times a second when Nat moves on, and steers his body along
 //! the walks, jumps and toots (with corrections), waiting for moving platforms to come round.
 //! He follows Nat right up to the band's gates (the level's `gate:` marks), keeping out only of
-//! a waltz row and a grease chute's grease ([`Level::han_keeps_out`](crate::level::Level)). **Lost** (no route, or stuck for [`STUCK_SECS`]) and out of sight, he
+//! a waltz row and a grease chute's grease ([`Level::han_keeps_out`](crate::level::Level)).
+//! He takes off on the run when the jump still lands right from there at that speed (else he
+//! stops at the take-off point, as planned). **Lost** (no route, or stuck for [`STUCK_SECS`]),
+//! or left behind for [`FALL_BEHIND_SECS`], and out of sight, he
 //! **parachutes in** on his plunger from above Nat; he never teleports where you can see.
 //!
 //! **Mechanics.**
@@ -30,8 +33,8 @@
 //!   toots to get under Nat (the goalkeeper; [`intercept`](crate::level::buddy::intercept)), so
 //!   mid-air chains work.
 //! - **"Lemme check that"**: Nat standing still facing a hazard for [`go_ahead_delay`] → Han
-//!   marches ahead into it, waiting for Nat to keep up ([`ESCORT_LEAD`]). Spray jets stop at
-//!   his body and stay plugged while he escorts Nat through (and [`HAN_PLUG_LINGER`] after:
+//!   marches ahead into it, waiting for Nat to keep up ([`ESCORT_LEAD`]). Spray jets (and the
+//!   cans firing them) stop at his body and stay plugged while he escorts Nat through (and [`HAN_PLUG_LINGER`] after:
 //!   [`SprayPlug`]), flies bounce off him, and Nat walking behind him (he's solid from the side
 //!   while he marches, so Nat can't overtake him into the jets) is safe. Into sewage: he splats and sinks, leaving a
 //!   big raft ([`HAN_RAFT_WIDTH`] tiles, [`HAN_RAFT_LIFE_FLOOR`] s × the assist), and
@@ -74,6 +77,10 @@ pub const FOLLOW_GAP: f32 = 1.5 * TILE;
 pub const NERVOUS_GAP: f32 = 0.8 * TILE;
 /// No progress toward his slot for this long (s): he's lost.
 pub const STUCK_SECS: f32 = 3.0;
+/// Running along to catch up, far from his slot, he goes up to this × his top speed.
+pub const HAN_CATCH_UP: f32 = 1.3;
+/// Left behind out of sight (Nat ran on) this long (s): he parachutes in, like when he's lost.
+pub const FALL_BEHIND_SECS: f32 = 1.5;
 /// Re-plan at most this often (s).
 pub const REPLAN_SECS: f32 = 0.25;
 /// Parachute: falling speed (px/s) and how high above Nat he starts (px).

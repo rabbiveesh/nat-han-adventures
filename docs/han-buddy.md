@@ -101,6 +101,16 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   20-70 ms in wasm), so it's lazy: a cold 6-tile route costs ~0.5-1 ms. Moving platforms: he
   waits until the platform will be under the landing cell (real air time) and steers onto it.
   Lost (no route / stuck 3 s) and out of sight: parachute from ~8.5 tiles above, behind Nat.
+- **Keeping up with a running Nat** (`tests/han.rs` `han_keeps_up_with_a_zooming_nat`: ≤ 8
+  tiles behind over a run of hops; it was ~90 and a parachute): he takes off on the run when
+  the planned jump (or another one the same way) still lands on his route from there at that
+  speed (`Nav::lands_rolling`), else he stops at the take-off point as planned; when the slot
+  moves he keeps going on the old route until the new one is in; he keeps to a running Nat's
+  slot between re-plans (right in it, as the chain proofs assume) and runs on when Nat jumps;
+  far behind a Nat running away he runs up to 1.3x faster on the walks (not when the band's
+  fired up); a slot that keeps moving no longer hides that he's stuck; and left behind out of
+  sight for 1.5 s he parachutes in like a lost Han. Running after Nat, he stops 2.5 tiles short
+  of a chain chasm's drop, so a mid-air intercept still has its runway.
 - **Giant walls etc.: the band zone**: levels mark every gate (`gate: <topic> c0,r0 c1,r1`,
   validated against the crossings). Within 14 columns / 10 rows of a band or death gate mark
   (giant, gap, waltz, grip, stain) Han follows as usual, but jumping off his head is the
@@ -136,7 +146,8 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   speed (falls behind, "Wheeze..."), the waltz: steps only in the first 40% of each beat;
   nervous: 0.8-tile follow gap, trembling; laughing band: bounces (x1.3), rolls.
 - **Gates**: buddy ledges (a boost reaches it, no mode does); shield rows (24+ adjacent cans
-  under a grating and a low ceiling: no mode dashes them, the waltz included); chain chasms
+  on the floor or under a grating, with a low ceiling: no mode dashes them, the waltz
+  included; Han plugs both the jets and the cans); chain chasms
   (14+ bottomless columns; crossed by a co-simulated chain with the real reflex, for every
   moment the band might switch to Giant Steps after the chain's toots; one boost must not do
   it); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
