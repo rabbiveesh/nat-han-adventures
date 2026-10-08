@@ -42,7 +42,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
-- **Free play** (`src/freeplay/`): procedural rooms from 8 templates, validated as they're
+- **Free play** (`src/freeplay/`): procedural rooms from 13 templates (Han's four gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
   On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
   so a new room never hitches the game; the main thread takes over if the worker fails.
@@ -57,8 +57,6 @@ kills while firing; Han's plug covers it; free-play waltz rows are floor cans wi
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 
 ## Planned (agreed, not started)
-- **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
-  templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
 - **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
   (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending
   on the jingle, vamp-outs), stop-time choruses, call-and-response comping, pedal/vamp intros,

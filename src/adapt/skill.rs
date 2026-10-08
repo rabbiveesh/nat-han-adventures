@@ -23,10 +23,12 @@ pub enum Skill {
     Stains,
     /// Grease chutes with sweaty grip.
     Grease,
+    /// Han's gates: buddy ledges, buddy raft pools, shield rows, chain chasms.
+    Buddy,
 }
 
 impl Skill {
-    pub const ALL: [Skill; 8] = [
+    pub const ALL: [Skill; 9] = [
         Skill::Precision,
         Skill::HazardTiming,
         Skill::MovingPlatforms,
@@ -35,6 +37,7 @@ impl Skill {
         Skill::Waltz,
         Skill::Stains,
         Skill::Grease,
+        Skill::Buddy,
     ];
     pub const COUNT: usize = Self::ALL.len();
 
@@ -54,6 +57,7 @@ impl Skill {
             Skill::Waltz => "waltz",
             Skill::Stains => "stains",
             Skill::Grease => "grease",
+            Skill::Buddy => "buddy",
         }
     }
 }
