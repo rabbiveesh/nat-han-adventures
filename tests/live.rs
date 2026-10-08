@@ -154,8 +154,7 @@ fn streaming_matches_offline_at_freedom_0() {
     for m in Music::ALL {
         let song = songs::song(m);
         for harmony in Harmony::ALL {
-            // (The waltz isn't ported to the live engine yet.)
-            if harmony == Harmony::Waltz || harmony != Harmony::Original && song.chords.trim().is_empty() {
+            if harmony != Harmony::Original && song.chords.trim().is_empty() {
                 continue;
             }
             for just_intonation in [false, true] {
@@ -163,8 +162,10 @@ fn streaming_matches_offline_at_freedom_0() {
                 let name = if f == Filters::default() { "plain".to_string() } else { f.label() };
                 let off = synth::render_song_with(&song, f, SEED).unwrap();
                 let mut e = engine(m, &[Input::SetFilters(f)]);
-                let len = e.shape().len as usize;
-                let starts = e.shape().bar_starts.clone();
+                // The waltz plays on its own shape (3/4, its tempo) from the start.
+                let shape = if harmony == Harmony::Waltz { e.waltz_shape().unwrap() } else { e.shape() };
+                let len = shape.len as usize;
+                let starts = shape.bar_starts.clone();
                 if !song.looping {
                     // One-shot: identical up to the offline render's trim-and-fade at the end.
                     let live = render(&mut e, len + 32_000, 512);
@@ -198,7 +199,7 @@ fn block_size_doesnt_matter() {
         Input::SetFreedom { lead: 0.6, comp: 0.6, bass: 0.6, drums: 0.6, dynamics: 0.6 },
         Input::SetFilters(Filters { harmony: Harmony::Original, just_intonation: true }),
     ];
-    let later = [Input::Toot, Input::Toot, Input::Death, Input::ForceHarmony(Some(Harmony::Coltrane))];
+    let later = [Input::Toot, Input::Toot, Input::Death, Input::ForceHarmony(Some(Harmony::Waltz))];
     let at = 4096 * 40;
     let run = |block: usize| {
         let mut e = engine(Music::World(3), &setup);
@@ -480,4 +481,163 @@ fn freedom_brings_the_placeholders_in() {
     let free = count(&[Input::SetFreedom { lead: 1.0, comp: 1.0, bass: 1.0, drums: 1.0, dynamics: 1.0 }]);
     assert!(free.1 > plain.1 + 5, "grace notes: {plain:?} vs {free:?}");
     assert!(free.2 > plain.2 + 5, "fills: {plain:?} vs {free:?}");
+}
+
+// --- the waltz ----------------------------------------------------------------------------
+
+const WALTZ: Filters = Filters { harmony: Harmony::Waltz, just_intonation: false };
+
+/// Into the waltz: posted mid-bar, it comes in at the next bar line, which is the first of a
+/// pair of waltz bars at the same point of the tune (4/4 bar `k` is waltz bar `2k`): the
+/// waltz's own events for that bar, the clock in 3/4 at the waltz's tempo, the bars counting on.
+/// Out again: at the next waltz bar line that's also a 4/4 one (after the pair's second bar).
+#[test]
+fn the_waltz_switches_in_and_out_at_shared_bar_lines() {
+    use nat_han_adventures::audio::waltz;
+    for m in [Music::Title, Music::World(3), Music::World(5)] {
+        let mut e = engine(m, &[]);
+        let sh = e.shape().clone();
+        let wz = e.waltz_shape().expect("a song with a chart waltzes").clone();
+        assert_eq!((wz.bars, wz.bar_beats, wz.bpm), (2 * sh.bars, 3.0, waltz::WALTZ_BPM));
+        render_to(&mut e, (sh.bar_starts[2] + sh.bar_starts[3]) / 2);
+        e.post(Input::SetFilters(WALTZ));
+        let line = sh.bar_starts[3];
+        render_to(&mut e, line - 1);
+        assert_eq!(e.state().harmony, Harmony::Original);
+        assert_eq!(e.beat_clock().beats_per_bar, 4.0);
+        // What's committed from the bar line on is the waltz's bar 6, placed from the bar line.
+        let committed: Vec<_> =
+            e.pending_events().filter(|ev| ev.start >= line).map(|ev| (ev.ch, ev.start - line, ev.end - line, ev.sound)).collect();
+        let mut fresh = engine(m, &[Input::SetFilters(WALTZ)]);
+        render_to(&mut fresh, wz.bar_starts[6] - 10);
+        let w0 = wz.bar_starts[6];
+        let want: Vec<_> = fresh
+            .pending_events()
+            .filter(|ev| ev.start >= w0 && ev.start < wz.bar_starts[7])
+            .map(|ev| (ev.ch, ev.start - w0, ev.end - w0, ev.sound))
+            .collect();
+        assert!(!want.is_empty());
+        let mut got = committed.clone();
+        got.retain(|x| want.contains(x));
+        assert_eq!(got.len(), want.len(), "{m:?}: the waltz's bar 6 ({committed:?} vs {want:?})");
+        render_to(&mut e, line);
+        let c = e.beat_clock();
+        assert_eq!(e.state().harmony, Harmony::Waltz, "{m:?}");
+        assert_eq!((c.beats_per_bar, c.bpm, c.position.song_bar, c.position.beat), (3.0, waltz::WALTZ_BPM, 6, 0.0), "{m:?}");
+        assert_eq!(c.position.bar, 3, "{m:?}: bars count on");
+        assert!((c.position.song_beat - waltz::warp(12.0)).abs() < 1e-9);
+        // A beat and a half later: beat 2 of the bar.
+        render_to(&mut e, line + (wz.samples_per_beat * 1.5) as u64);
+        let c = e.beat_clock();
+        assert_eq!((c.position.song_bar, c.beat_index), (6, 1));
+
+        // Out, posted in the first bar of a pair: the pair finishes, 4/4 comes back at bar 4.
+        e.post(Input::SetFilters(Filters::default()));
+        let back = line + (wz.bar_starts[8] - wz.bar_starts[6]);
+        render_to(&mut e, back - 1);
+        assert_eq!(e.state().harmony, Harmony::Waltz, "{m:?}: the second bar of the pair is a waltz bar");
+        assert_eq!(e.beat_clock().position.song_bar, 7);
+        render_to(&mut e, back);
+        let c = e.beat_clock();
+        assert_eq!(e.state().harmony, Harmony::Original, "{m:?}");
+        assert_eq!((c.beats_per_bar, c.position.song_bar, c.position.beat, c.position.bar), (4.0, 4, 0.0, 5), "{m:?}");
+        // And it plays on through the loop, in 4/4, counting bars.
+        let end = back + sh.len - sh.bar_starts[4] + sh.bar_starts[1];
+        render_to(&mut e, end);
+        let c = e.beat_clock().position;
+        // (The pair was two bars: one more than the 4/4 bar it stood for.)
+        assert_eq!((c.pass, c.song_bar, c.bar), (1, 1, sh.bars as u64 + 2), "{m:?}");
+    }
+}
+
+/// Posted in the second bar of a pair, the way out waits for the next pair; the waltz loops
+/// round on its own shape; nothing clicks at a switch.
+#[test]
+fn the_waltz_loops_and_switches_cleanly() {
+    let m = Music::World(2);
+    let mut e = engine(m, &[Input::SetFilters(WALTZ)]);
+    let wz = e.waltz_shape().unwrap().clone();
+    let sh = e.shape().clone();
+    // Round the waltz's loop: pass 1, bar 1.
+    let mut out = render_to(&mut e, wz.len + wz.bar_starts[1] + 100);
+    let c = e.beat_clock();
+    assert_eq!((c.position.pass, c.position.song_bar, c.position.bar), (1, 1, wz.bars as u64 + 1));
+    assert_eq!(c.loop_beats, wz.beats);
+    // In the second bar of a pair (bar 1): out at bar 2 = 4/4 bar 1.
+    e.post(Input::SetFilters(Filters::default()));
+    let back = wz.len + wz.bar_starts[2];
+    out.extend(render_to(&mut e, back));
+    assert_eq!(e.state().harmony, Harmony::Original);
+    assert_eq!(e.beat_clock().position.song_bar, 1);
+    // Back in at 4/4 bar 3.
+    let at3 = back + sh.bar_starts[3] - sh.bar_starts[1];
+    out.extend(render_to(&mut e, at3 - (sh.samples_per_beat * 2.0) as u64));
+    e.post(Input::SetFilters(WALTZ));
+    out.extend(render_to(&mut e, at3 + 20_000));
+    assert_eq!(e.beat_clock().position.song_bar, 6);
+    let step = |i: usize| (out[i].left - out[i - 1].left).abs().max((out[i].right - out[i - 1].right).abs());
+    let max_inside = (1..out.len()).map(step).fold(0.0f32, f32::max);
+    for s in [back as usize, at3 as usize] {
+        let jump = (s - 2..s + 3).map(step).fold(0.0f32, f32::max);
+        assert!(jump <= max_inside.max(0.05), "switch at {s}: jump {jump} (max step {max_inside})");
+    }
+    assert!(out.iter().all(|f| f.left.is_finite() && f.left.abs() <= 1.0));
+}
+
+/// The laughing band's medley changes tuning where the 4/4 song's phrases change, waltz or not.
+#[test]
+fn the_medley_follows_the_tune_through_the_waltz() {
+    let laughing = Filters { harmony: Harmony::Original, just_intonation: true };
+    let m = Music::World(4);
+    let mut straight = engine(m, &[Input::SetFilters(laughing)]);
+    let mut w = engine(m, &[Input::SetFilters(Filters { just_intonation: true, ..WALTZ })]);
+    let (sh, wz) = (straight.shape().clone(), w.waltz_shape().unwrap().clone());
+    let mut seen = std::collections::HashSet::new();
+    for k in 0..sh.bars {
+        render_to(&mut straight, sh.bar_starts[k] + 5);
+        render_to(&mut w, wz.bar_starts[2 * k] + 5);
+        let (a, b) = (straight.state().medley_phrase, w.state().medley_phrase);
+        assert!(a.is_some());
+        assert_eq!(a, b, "bar {k}");
+        seen.insert(a);
+    }
+    assert!(seen.len() >= 2);
+}
+
+/// Without a game, the engine's own director hears a jump in threes (three evenly spaced ground
+/// jumps) and waltzes at the next bar line, as the game's does; a waltz step from an editor
+/// does the same.
+#[test]
+fn a_self_directed_engine_waltzes_on_a_jump_in_threes() {
+    let file = library::load(library::stem(Music::World(1))).unwrap();
+    let config = EngineConfig { seed: SEED, self_directed: true, ..EngineConfig::default() };
+    let sr = synth::SAMPLE_RATE as u64;
+    for steps in [&[Input::Jump { on_ground: true }; 3][..], &[Input::WaltzStep]] {
+        let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, config).unwrap();
+        e.post(Input::LevelStart);
+        render_to(&mut e, sr);
+        for (k, i) in steps.iter().enumerate() {
+            if k > 0 {
+                let to = e.beat_clock().position.sample + sr * 6 / 10;
+                render_to(&mut e, to);
+            }
+            e.post(*i);
+        }
+        e.fill(&mut []);
+        assert_eq!(e.state().filters.harmony, Harmony::Waltz, "{steps:?}");
+        let bar = e.shape().bar_starts[1];
+        let to = e.beat_clock().position.sample + 2 * bar;
+        render_to(&mut e, to);
+        assert_eq!(e.state().harmony, Harmony::Waltz, "{steps:?}");
+        assert_eq!(e.beat_clock().beats_per_bar, 3.0);
+    }
+    // Uneven jumps don't.
+    let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, config).unwrap();
+    for gap in [0.5, 0.9, 0.3] {
+        let to = e.beat_clock().position.sample + (gap * sr as f64) as u64;
+        render_to(&mut e, to);
+        e.post(Input::Jump { on_ground: true });
+    }
+    e.fill(&mut []);
+    assert_eq!(e.state().filters.harmony, Harmony::Original);
 }

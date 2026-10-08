@@ -247,14 +247,18 @@ fn direct(
     if !playing {
         return;
     }
-    let before = d.band.stats;
+    let (before, steps) = (d.band.stats, d.band.steps_taken);
     if let Some(decided) = d.band.step(now, ev) {
         decision = Some(decided);
     }
     let stats = d.band.stats;
+    let new_steps = d.band.steps_taken.saturating_sub(steps);
     let Some(h) = audio.handle.as_mut() else { return };
     if level_start {
         h.post(Input::LevelStart);
+    }
+    for _ in 0..new_steps {
+        h.post(Input::WaltzStep);
     }
     if stats != before || decision.is_some() {
         h.post(Input::SetStats(stats));

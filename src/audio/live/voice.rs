@@ -77,8 +77,12 @@ pub struct NoteEvent {
     pub slur_out: bool,
     /// Dynamics, on top of `volume` (exactly 1.0 when the dynamics dial is at 0).
     pub gain: f32,
-    /// Start in song beats (within the loop pass), for the medley's phrase.
+    /// Start in song beats (within the loop pass, in its shape's beats).
     pub beat: f64,
+    /// Start in 4/4 song beats, for the medley's phrase (the waltz's beats unwarped).
+    pub phrase_beat: f64,
+    /// Played in the waltz's shape (its medley's wobble fits the waltz's loop).
+    pub waltz: bool,
     /// Absolute sample where this event's loop pass starts.
     pub loop_start: u64,
     /// Tuning salt of the note-on ([`crate::audio::tuning::salt`]; arpeggio tone `j` adds `j`).
@@ -257,7 +261,8 @@ impl ToneVoice {
         }
     }
 
-    fn note_on(&mut self, ev: NoteEvent, medley: &Medley, sr: f32) {
+    fn note_on(&mut self, ev: NoteEvent, medleys: &[Medley; 2], sr: f32) {
+        let medley = &medleys[ev.waltz as usize];
         if self.pass_start != Some(ev.loop_start) {
             self.pass_start = Some(ev.loop_start);
             self.phase = 0.0;
@@ -271,7 +276,7 @@ impl ToneVoice {
         for (j, (dt, &note)) in dts.iter_mut().zip(notes).enumerate() {
             let salt = ev.salt.wrapping_add(j as u64);
             let hz = match ev.tuning {
-                Tuning::Medley => medley.hz(note, ev.anchor, ev.beat, salt),
+                Tuning::Medley => medley.hz(note, ev.anchor, ev.phrase_beat, salt),
                 t => t.hz(note, ev.anchor, salt),
             };
             *dt = (hz / sr as f64) as f32;
@@ -302,7 +307,7 @@ impl ToneVoice {
     }
 
     /// Add this voice into `out` (samples `t0..t0 + out.len()`).
-    fn render(&mut self, out: &mut [Frame], t0: u64, medley: &Medley, sr: f32) {
+    fn render(&mut self, out: &mut [Frame], t0: u64, medleys: &[Medley; 2], sr: f32) {
         let end = t0 + out.len() as u64;
         let mut t = t0;
         while t < end {
@@ -311,7 +316,7 @@ impl ToneVoice {
                     Some(e) if e.start < end => {
                         let e = self.queue.pop_front().unwrap();
                         t = t.max(e.start);
-                        self.note_on(e, medley, sr);
+                        self.note_on(e, medleys, sr);
                         continue;
                     }
                     _ => return,
@@ -509,7 +514,9 @@ pub struct VoiceBank {
     sr: f32,
     tones: [ToneVoice; 3],
     drums: Drums,
-    medley: Medley,
+    /// The medley for each shape: the straight one's, and the waltz's (the same phrases; the
+    /// wobble fitted to its loop).
+    medleys: [Medley; 2],
     spill: Vec<Frame>,
 }
 
@@ -517,7 +524,7 @@ pub struct VoiceBank {
 pub const MAX_SEGMENT: usize = 1024;
 
 impl VoiceBank {
-    pub fn new(sample_rate: u32, medley: Medley) -> Self {
+    pub fn new(sample_rate: u32, medleys: [Medley; 2]) -> Self {
         let sr = sample_rate as f32;
         VoiceBank {
             sr,
@@ -527,7 +534,7 @@ impl VoiceBank {
                 ToneVoice::new(Kind::Triangle, pan(0.0, TRIANGLE_GAIN)),
             ],
             drums: Drums::new(sr),
-            medley,
+            medleys,
             spill: vec![Frame::ZERO; MAX_SEGMENT],
         }
     }
@@ -550,7 +557,7 @@ impl VoiceBank {
     pub fn render(&mut self, out: &mut [Frame], t0: u64, pass: u64) {
         debug_assert!(out.len() <= MAX_SEGMENT);
         for v in &mut self.tones {
-            v.render(out, t0, &self.medley, self.sr);
+            v.render(out, t0, &self.medleys, self.sr);
         }
         self.drums.start_hits(t0 + out.len() as u64, self.sr);
         let spill = &mut self.spill[..out.len()];

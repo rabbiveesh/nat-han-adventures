@@ -4,9 +4,18 @@
 //!
 //! # Time
 //! The playhead is an absolute sample count. Bars are numbered from 0 since the engine
-//! started (a looping song keeps counting: bar `n` is bar `n % bars` of loop pass
-//! `n / bars`). Bar lines fall where the offline renderer puts them (`round(beats ·
-//! samples_per_beat)` within each pass).
+//! started and keep counting through loop passes and meter changes. Bar lines fall where the
+//! offline renderer puts them (`round(beats · samples_per_beat)` within each pass).
+//!
+//! # The waltz: two shapes
+//! The waltz ([`Harmony::Waltz`]) is the song re-cut into 3/4 at its own tempo, on its own
+//! [`Shape`] (twice the bars). The timeline is a run of [`Span`]s, each in one shape: a loop
+//! pass, or the part of one from a meter switch. A switch happens when a bar is committed, at a
+//! bar line both shapes share (as the old renderer's `switch_point` did): every bar line of the
+//! song's own shape is one (bar `k` becomes waltz bar `2k`, the first of a pair, where the 4/4
+//! downbeat lands); a waltz bar line only if it starts a pair (so leaving the waltz may finish
+//! the pair first). The tune carries on from the same point; the [`BeatClock`] turns 3/4 at
+//! the waltz's tempo; the medley keeps its phrases where the 4/4 song has them.
 //!
 //! # Scheduling
 //! Each bar is *committed* [`EngineConfig::commit_lead_beats`] before its bar line (default one
@@ -25,8 +34,11 @@
 //! The engine doesn't decide the filters: the game's director ([`crate::audio::director`]) stays
 //! where it is and sends its decisions as [`Input::SetFilters`]; [`Input::ForceHarmony`] /
 //! [`Input::ForceTuning`] override them (dev overrides, the editor's dials). An editor without
-//! a game can set [`EngineConfig::self_directed`], and the engine runs
-//! [`director::choose_filters`] on every [`Input::SetStats`].
+//! a game can set [`EngineConfig::self_directed`]: the engine then runs the director's
+//! [`director::Band`] itself on the gameplay inputs, on its own clock (summons, holds, the jump
+//! in threes spotted in [`Input::Jump`]s, [`Input::WaltzStep`] counting as one, a check every
+//! [`director::MUSIC_CHECK_SECS`]), and [`director::choose_filters`] on every
+//! [`Input::SetStats`] (stats dials).
 
 use std::collections::VecDeque;
 
@@ -54,7 +66,8 @@ pub enum Input {
     Jump { on_ground: bool },
     /// Landed, falling at `speed` px/s.
     Land { speed: f32 },
-    /// A step on the waltz's beat (for the Waltz, once it lands).
+    /// A jump in threes (the director spotted one; the game sends it). Self-directed, it counts
+    /// toward the waltz like the director's own.
     WaltzStep,
     LevelStart,
     Restart,
@@ -77,7 +90,7 @@ pub struct EngineConfig {
     pub seed: u64,
     /// How far before its bar line a bar is committed, in beats.
     pub commit_lead_beats: f64,
-    /// Run the director on [`Input::SetStats`] (for an editor without a game).
+    /// Run the director inside the engine (for an editor without a game; see the module docs).
     pub self_directed: bool,
 }
 
@@ -219,14 +232,47 @@ impl Default for EngineState {
 const ENERGY_TOOT: f32 = 0.06;
 const ENERGY_NUGGET: f32 = 0.05;
 const ENERGY_CHECKPOINT: f32 = 0.1;
+const ENERGY_WALTZ_STEP: f32 = 0.05;
 const ENERGY_DEATH: f32 = -0.25;
 const ENERGY_DECAY: f32 = 0.8;
+
+/// A stretch of the timeline played in one shape: a loop pass, or the part of one from a meter
+/// switch on (or up to one).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Span {
+    /// In the waltz's shape ([`Shape::waltz`]), else the song's own.
+    pub waltz: bool,
+    /// Absolute sample of its first bar line. Identifies the pass to the voices (oscillator
+    /// phases and the noise restart at it, like a one-loop render).
+    pub start: u64,
+    /// The song bar it starts at: 0, unless it starts at a meter switch.
+    pub entry: usize,
+    /// Absolute end: the loop's end, or a later meter switch.
+    pub end: u64,
+    /// Loop passes before it.
+    pub pass: u64,
+    /// Absolute bar number of bar `entry`.
+    pub first_bar: u64,
+}
+
+impl Span {
+    /// Absolute sample of bar line `b` (`b` up to `shape.bars`) of this span's pass.
+    fn bar_start(&self, shape: &Shape, b: usize) -> u64 {
+        self.start + shape.bar_starts[b] - shape.bar_starts[self.entry]
+    }
+}
+
+/// Spans kept (the playhead's to the committed horizon's: a few).
+const SPANS: usize = 8;
 
 /// The live engine.
 pub struct Engine {
     title: String,
     shape: Shape,
-    chart: Option<Chart>,
+    /// The waltz's shape, if the song can waltz.
+    waltz: Option<Shape>,
+    /// The chart, and the waltz's (warped) chart.
+    charts: [Option<Chart>; 2],
     /// Indexed like [`Harmony::ALL`]; `None` where the song can't take the harmony.
     arrangements: [Option<Arrangement>; 5],
     medley: Medley,
@@ -239,10 +285,16 @@ pub struct Engine {
     forced_tuning: Option<Tuning>,
     freedom: Freedom,
     stats: PlayStats,
+    /// [`EngineConfig::self_directed`]: the director, on the engine's clock.
+    band: director::Band,
     energy: f32,
     musicians: [Box<dyn Musician>; 4],
     committed: VecDeque<CommittedBar>,
+    /// The timeline from the playhead's span to the one being committed (the last).
+    spans: VecDeque<Span>,
+    /// The next bar to commit: absolute, and within the last span's shape.
     next_bar: u64,
+    next_song_bar: usize,
     bank: VoiceBank,
     scratch: Vec<NoteEvent>,
     seq: u64,
@@ -262,18 +314,29 @@ impl Engine {
             return Err(format!("\"{}\" is empty", song.title));
         }
         let chart = song.chart.clone();
-        let arrangements = Harmony::ALL.map(|h| Arrangement::new(song, chart.as_ref(), h, config.seed, &shape).ok());
+        let wshape = Shape::waltz(song, sample_rate);
+        let arrangements = Harmony::ALL.map(|h| {
+            let on = if h == Harmony::Waltz { &wshape } else { &shape };
+            Arrangement::new(song, chart.as_ref(), h, config.seed, on).ok()
+        });
         if arrangements[0].is_none() {
             return Err(format!("\"{}\" can't be arranged", song.title));
         }
-        let loop_secs = song.looping.then_some(shape.len as f64 / sample_rate as f32 as f64);
-        let medley = Medley::new(shape.song_hash, shape.beats, loop_secs);
+        let can_waltz = arrangements[harmony_index(Harmony::Waltz)].is_some() && wshape.bars == 2 * shape.bars;
+        let waltz = can_waltz.then_some(wshape);
+        let charts = [chart.clone(), chart.as_ref().filter(|_| can_waltz).map(crate::audio::waltz::warp_chart)];
+        let secs = |sh: &Shape| song.looping.then_some(sh.len as f64 / sample_rate as f32 as f64);
+        let medley = Medley::new(shape.song_hash, shape.beats, secs(&shape));
+        let waltz_medley = waltz.as_ref().map_or_else(|| medley.clone(), |w| Medley::new(shape.song_hash, shape.beats, secs(w)));
+        let mut spans = VecDeque::with_capacity(SPANS);
+        spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0 });
         Ok(Engine {
             title: song.title.clone(),
-            bank: VoiceBank::new(sample_rate, medley.clone()),
+            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley]),
             medley,
             shape,
-            chart,
+            waltz,
+            charts,
             arrangements,
             config,
             t: 0,
@@ -283,10 +346,13 @@ impl Engine {
             forced_tuning: None,
             freedom: Freedom::default(),
             stats: PlayStats::default(),
+            band: director::Band::default(),
             energy: 0.0,
             musicians: musician::band(config.seed),
             committed: VecDeque::with_capacity(16),
+            spans,
             next_bar: 0,
+            next_song_bar: 0,
             scratch: Vec::with_capacity(4096),
             seq: 0,
         })
@@ -296,8 +362,26 @@ impl Engine {
         &self.title
     }
 
+    /// The song's own shape (4/4, or whatever its meter is).
     pub fn shape(&self) -> &Shape {
         &self.shape
+    }
+
+    /// The waltz's shape, if the song can waltz.
+    pub fn waltz_shape(&self) -> Option<&Shape> {
+        self.waltz.as_ref()
+    }
+
+    /// The shape at the playhead.
+    pub fn playing_shape(&self) -> &Shape {
+        self.shape_of(self.span_at(self.t).waltz)
+    }
+
+    fn shape_of(&self, waltz: bool) -> &Shape {
+        match (&self.waltz, waltz) {
+            (Some(w), true) => w,
+            _ => &self.shape,
+        }
     }
 
     pub fn sample_rate(&self) -> u32 {
@@ -306,7 +390,7 @@ impl Engine {
 
     /// Can the song take this harmony (it has a chart)?
     pub fn can_play(&self, h: Harmony) -> bool {
-        self.arrangements[harmony_index(h)].is_some()
+        self.arrangements[harmony_index(h)].is_some() && (h != Harmony::Waltz || self.waltz.is_some())
     }
 
     /// Queue an input; it applies at the start of the next [`Engine::fill`].
@@ -335,13 +419,14 @@ impl Engine {
             if let Some(c) = self.commit_point() {
                 n = n.min(c - self.t);
             }
-            let pass_start = self.pass_start(self.t);
-            if self.shape.looping {
-                n = n.min(pass_start + self.shape.len - self.t);
+            let span = *self.span_at(self.t);
+            if self.t < span.end {
+                // Each segment stays within one pass (or span).
+                n = n.min(span.end - self.t);
             }
             let seg = &mut out[pos..pos + n as usize];
             seg.fill(Frame::ZERO);
-            self.bank.render(seg, self.t, pass_start);
+            self.bank.render(seg, self.t, span.start);
             for f in seg.iter_mut() {
                 f.left = soft_clip(f.left);
                 f.right = soft_clip(f.right);
@@ -351,39 +436,52 @@ impl Engine {
             while self.committed.len() > 1 && self.committed[0].slot.end <= self.t {
                 self.committed.pop_front();
             }
+            while self.spans.len() > 1 && self.spans[0].end <= self.t {
+                self.spans.pop_front();
+            }
         }
     }
 
-    /// Start of the loop pass sample `t` is in.
-    fn pass_start(&self, t: u64) -> u64 {
-        if self.shape.looping { t - t % self.shape.len } else { 0 }
+    /// The span sample `t` is in (the last one past the end of a one-shot).
+    fn span_at(&self, t: u64) -> &Span {
+        self.spans.iter().find(|s| t < s.end).unwrap_or_else(|| self.spans.back().expect("a span"))
     }
 
-    /// The bar `index` as a slot (`None` past a one-shot's end).
-    fn slot(&self, index: u64) -> Option<BarSlot> {
-        let (pass, song_bar) = self.shape.split(index);
-        if !self.shape.looping && pass > 0 {
-            return None;
+    /// The next bar to commit, in the current shape (`None` past a one-shot's end). At a loop's
+    /// end it's bar 0 of the next pass (a meter switch may still move it: see [`Engine::commit`]).
+    fn next_slot(&self) -> Option<BarSlot> {
+        let sp = self.spans.back().expect("a span");
+        let sh = self.shape_of(sp.waltz);
+        let b = self.next_song_bar;
+        if b < sh.bars {
+            return Some(BarSlot {
+                index: self.next_bar,
+                pass: sp.pass,
+                song_bar: b,
+                start: sp.bar_start(sh, b),
+                end: sp.bar_start(sh, b + 1),
+                loop_start: sp.start,
+            });
         }
-        let loop_start = pass * self.shape.len;
-        Some(BarSlot {
-            index,
-            pass,
-            song_bar,
-            start: loop_start + self.shape.bar_starts[song_bar],
-            end: loop_start + self.shape.bar_starts[song_bar + 1],
-            loop_start,
+        sh.looping.then(|| BarSlot {
+            index: self.next_bar,
+            pass: sp.pass + 1,
+            song_bar: 0,
+            start: sp.end,
+            end: sp.end + sh.bar_starts[1],
+            loop_start: sp.end,
         })
     }
 
     /// When the next bar gets committed.
     fn commit_point(&self) -> Option<u64> {
-        let s = self.slot(self.next_bar)?;
-        let lead = (self.config.commit_lead_beats * self.shape.samples_per_beat).round() as u64;
+        let s = self.next_slot()?;
+        let sh = self.shape_of(self.spans.back().expect("a span").waltz);
+        let lead = (self.config.commit_lead_beats * sh.samples_per_beat).round() as u64;
         Some(s.start.saturating_sub(lead))
     }
 
-    /// The harmony and tuning a bar committed now gets.
+    /// The harmony and tuning a bar committed now gets (before the meter has its say).
     fn current_filters(&self) -> (Harmony, Tuning) {
         let mut h = self.forced_harmony.unwrap_or(self.filters.harmony);
         if !self.can_play(h) {
@@ -393,17 +491,56 @@ impl Engine {
         (h, t)
     }
 
+    /// Commit the next bar. Into or out of the waltz, the meter changes here if this bar line is
+    /// one both shapes share: every bar line of the song's own shape is one (bar `k` is waltz
+    /// bar `2k`, the first of a pair, where the 4/4 downbeat lands); a waltz bar line is one
+    /// only if it's the first of a pair. Otherwise the bar stays in the waltz, as a waltz bar.
     fn commit(&mut self) {
-        let Some(slot) = self.slot(self.next_bar) else { return };
-        let (harmony, tuning) = self.current_filters();
+        let Some(slot) = self.next_slot() else { return };
+        let (mut harmony, tuning) = self.current_filters();
+        let sp = *self.spans.back().expect("a span");
+        let mut replan = false;
+        if slot.song_bar == 0 && slot.loop_start != sp.start {
+            // A new loop pass.
+            let len = self.shape_of(sp.waltz).len;
+            self.push_span(Span { start: slot.start, entry: 0, end: slot.start + len, pass: slot.pass, first_bar: slot.index, ..sp });
+            self.next_song_bar = 0;
+        }
+        let cur = *self.spans.back().expect("a span");
+        let want_waltz = harmony == Harmony::Waltz;
+        if want_waltz != cur.waltz {
+            let b = self.next_song_bar;
+            if want_waltz || b.is_multiple_of(2) {
+                let entry = if want_waltz { 2 * b } else { b / 2 };
+                let to = self.shape_of(want_waltz);
+                let end = slot.start + to.len - to.bar_starts[entry];
+                // The span in progress ends at this bar line.
+                self.spans.back_mut().expect("a span").end = slot.start;
+                self.push_span(Span { waltz: want_waltz, start: slot.start, entry, end, pass: slot.pass, first_bar: slot.index });
+                self.next_song_bar = entry;
+                replan = true;
+            } else {
+                // The second bar of a waltz pair: finish the pair.
+                harmony = Harmony::Waltz;
+            }
+        }
+        let slot = self.next_slot().expect("a bar to commit");
+        let waltz = self.spans.back().expect("a span").waltz;
+        if self.config.self_directed {
+            self.direct(director::Events::default());
+        }
         let intensity = (0.5 + self.energy).clamp(0.0, 1.0);
         self.energy *= ENERGY_DECAY;
+        let shape = match (&self.waltz, waltz) {
+            (Some(w), true) => w,
+            _ => &self.shape,
+        };
         let arrangement = self.arrangements[harmony_index(harmony)].as_ref().expect("checked");
         let ctx = Ctx {
             bar: slot,
-            shape: &self.shape,
+            shape,
             arrangement,
-            chart: self.chart.as_ref(),
+            chart: self.charts[waltz as usize].as_ref(),
             tuning,
             intensity,
             dynamics: self.freedom.dynamics,
@@ -411,7 +548,7 @@ impl Engine {
         };
         self.scratch.clear();
         for m in &mut self.musicians {
-            if !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
+            if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
                 m.plan(&ctx);
             }
             m.commit_next_bar(&ctx, &mut self.scratch);
@@ -427,32 +564,98 @@ impl Engine {
         }
         self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events });
         self.next_bar += 1;
+        self.next_song_bar += 1;
+    }
+
+    fn push_span(&mut self, s: Span) {
+        if self.spans.len() == self.spans.capacity() {
+            self.spans.pop_front();
+        }
+        self.spans.push_back(s);
+    }
+
+    /// Play time for the self-directed director: the engine's clock.
+    fn play_secs(&self) -> f32 {
+        (self.t as f64 / self.shape.sample_rate as f64) as f32
+    }
+
+    /// [`EngineConfig::self_directed`]: run the director on what just happened.
+    fn direct(&mut self, ev: director::Events) {
+        if let Some((f, _)) = self.band.step(self.play_secs(), ev) {
+            self.filters = f;
+        }
     }
 
     fn apply(&mut self, input: Input) {
-        match input {
-            Input::Toot => self.energy += ENERGY_TOOT,
-            Input::Nugget => self.energy += ENERGY_NUGGET,
-            Input::Checkpoint => self.energy += ENERGY_CHECKPOINT,
-            Input::Death => self.energy += ENERGY_DEATH,
-            Input::LevelStart | Input::Restart => self.energy = 0.0,
+        let ev = |f: fn(&mut director::Events)| {
+            let mut e = director::Events::default();
+            f(&mut e);
+            e
+        };
+        let happened = match input {
+            Input::Toot => {
+                self.energy += ENERGY_TOOT;
+                Some(ev(|e| e.toots = 1))
+            }
+            Input::Nugget => {
+                self.energy += ENERGY_NUGGET;
+                Some(ev(|e| e.nuggets = 1))
+            }
+            Input::Checkpoint => {
+                self.energy += ENERGY_CHECKPOINT;
+                Some(ev(|e| e.checkpoints = 1))
+            }
+            Input::Death => {
+                self.energy += ENERGY_DEATH;
+                Some(ev(|e| e.deaths = 1))
+            }
+            Input::WaltzStep => {
+                self.energy += ENERGY_WALTZ_STEP;
+                Some(ev(|e| e.waltz_steps = 1))
+            }
+            Input::Jump { on_ground: true } => Some(ev(|e| e.ground_jumps = 1)),
+            Input::LevelStart | Input::Restart => {
+                self.energy = 0.0;
+                if self.config.self_directed {
+                    self.filters = self.band.start(self.play_secs()).0;
+                }
+                None
+            }
             Input::SetStats(s) => {
                 self.stats = s;
                 if self.config.self_directed {
                     self.filters = director::choose_filters(&s).0;
                 }
+                None
             }
-            Input::SetFilters(f) => self.filters = f,
-            Input::ForceHarmony(h) => self.forced_harmony = h,
-            Input::ForceTuning(t) => self.forced_tuning = t,
+            Input::SetFilters(f) => {
+                self.filters = f;
+                None
+            }
+            Input::ForceHarmony(h) => {
+                self.forced_harmony = h;
+                None
+            }
+            Input::ForceTuning(t) => {
+                self.forced_tuning = t;
+                None
+            }
             Input::SetFreedom { lead, comp, bass, drums, dynamics } => {
                 let c = |x: f32| if x.is_finite() { x.clamp(0.0, 1.0) } else { 0.0 };
                 self.freedom = Freedom { lead: c(lead), comp: c(comp), bass: c(bass), drums: c(drums), dynamics: c(dynamics) };
                 for (m, f) in self.musicians.iter_mut().zip([lead, comp, bass, drums]) {
                     m.set_freedom(c(f));
                 }
+                None
             }
-            Input::Jump { .. } | Input::Land { .. } | Input::WaltzStep => {}
+            Input::Jump { on_ground: false } | Input::Land { .. } => None,
+        };
+        if let Some(e) = happened
+            && self.config.self_directed
+        {
+            // A toot in the air isn't a ground jump; the director counts both.
+            self.direct(e);
+            self.stats = self.band.stats;
         }
         self.energy = self.energy.clamp(-0.5, 0.5);
         for m in &mut self.musicians {
@@ -462,33 +665,34 @@ impl Engine {
 
     /// Where the playhead is.
     pub fn position(&self) -> Position {
-        let sh = &self.shape;
-        let ps = self.pass_start(self.t);
-        let s = (self.t - ps).min(sh.len.saturating_sub(1));
-        let pass = if sh.looping { self.t / sh.len } else { 0 };
-        let song_bar = sh.bar_at(s);
-        let beat = (s - sh.bar_starts[song_bar]) as f64 / sh.samples_per_beat;
+        let sp = self.span_at(self.t);
+        let sh = self.shape_of(sp.waltz);
+        let entry = sh.bar_starts[sp.entry];
+        let s = (self.t.saturating_sub(sp.start) + entry).min(sh.len.saturating_sub(1));
+        let song_bar = sh.bar_at(s).max(sp.entry);
+        let beat = s.saturating_sub(sh.bar_starts[song_bar]) as f64 / sh.samples_per_beat;
         Position {
             sample: self.t,
-            pass,
-            bar: pass * sh.bars as u64 + song_bar as u64,
+            pass: sp.pass,
+            bar: sp.first_bar + (song_bar - sp.entry) as u64,
             song_bar,
             beat,
             song_beat: song_bar as f64 * sh.bar_beats + beat,
         }
     }
 
-    /// Song position and beat phase at the playhead.
+    /// Song position and beat phase at the playhead (in the waltz: its 3/4 bars and beats).
     pub fn beat_clock(&self) -> BeatClock {
         let p = self.position();
+        let sh = self.playing_shape();
         BeatClock {
             position: p,
-            bpm: self.shape.bpm,
-            beats_per_bar: self.shape.bar_beats,
-            loop_beats: if self.shape.looping { self.shape.beats } else { 0.0 },
+            bpm: sh.bpm,
+            beats_per_bar: sh.bar_beats,
+            loop_beats: if sh.looping { sh.beats } else { 0.0 },
             beat_index: p.beat.floor() as u32,
             phase: p.beat - p.beat.floor(),
-            sample_rate: self.shape.sample_rate,
+            sample_rate: sh.sample_rate,
         }
     }
 
@@ -511,7 +715,7 @@ impl Engine {
         s.position = p;
         s.harmony = h;
         s.tuning = t;
-        s.medley_phrase = (t == Tuning::Medley).then(|| self.medley.tuning_at(p.song_beat));
+        s.medley_phrase = (t == Tuning::Medley).then(|| self.medley.tuning_at(self.playing_shape().canon(p.song_beat)));
         s.filters = self.filters;
         s.forced_harmony = self.forced_harmony;
         s.forced_tuning = self.forced_tuning;
@@ -532,7 +736,7 @@ impl Engine {
 
     /// A one-shot that has played out.
     pub fn finished(&self) -> bool {
-        !self.shape.looping && self.slot(self.next_bar).is_none() && self.t >= self.shape.len && self.bank.idle()
+        !self.shape.looping && self.next_slot().is_none() && self.t >= self.spans.back().expect("a span").end && self.bank.idle()
     }
 }
 

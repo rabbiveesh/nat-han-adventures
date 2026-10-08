@@ -82,14 +82,22 @@ impl Ctx<'_> {
         if self.dynamics == 0.0 { 1.0 } else { 1.0 + self.dynamics * (self.intensity - 0.5) * 0.8 }
     }
 
+    /// Absolute sample of song beat `beat` (of this bar's shape and loop pass), placed from the
+    /// bar line (a pass entered mid-song at a meter switch starts at that bar line).
+    #[inline]
+    pub fn at(&self, beat: f64) -> u64 {
+        let line = self.shape.bar_starts[self.bar.song_bar];
+        (self.bar.start + self.shape.at(beat)).saturating_sub(line)
+    }
+
     /// A committed event for written event `idx` of channel `ch`.
     fn event(&self, ch: usize, idx: usize, e: &Event, sound: Sound) -> NoteEvent {
         let ls = self.bar.loop_start;
         NoteEvent {
             ch: ch as u8,
             bar: self.bar.index,
-            start: ls + self.shape.at(e.start),
-            end: ls + self.shape.at(e.start + e.dur),
+            start: self.at(e.start),
+            end: self.at(e.start + e.dur),
             sound,
             volume: e.volume,
             duty: e.duty,
@@ -97,6 +105,8 @@ impl Ctx<'_> {
             slur_out: false,
             gain: self.gain(),
             beat: e.start,
+            phrase_beat: self.shape.canon(e.start),
+            waltz: self.shape.waltz,
             loop_start: ls,
             salt: tuning::salt(self.shape.song_hash, ch, idx, 0),
             tuning: self.tuning,
@@ -395,7 +405,7 @@ impl Musician for Lead {
                 && n > 0
                 && ctx.chance(Role::Lead, k - from) < (0.25 + 0.5 * ornament as f64)
             {
-                let g = ctx.bar.loop_start + ctx.shape.at(e.beat + GRACE);
+                let g = ctx.at(e.beat + GRACE);
                 let grace = NoteEvent { sound: Sound::Note(n - 1), end: g, salt: e.salt ^ 0x67_7261_6365, ..e };
                 let main = NoteEvent { start: g, tie: true, ..e };
                 out[k] = grace;
@@ -457,7 +467,7 @@ impl Musician for Bass {
             _ => None,
         });
         let bb = ctx.shape.bar_beats;
-        let last_beat = ctx.bar.loop_start + ctx.shape.at(ctx.bar.song_bar as f64 * bb + bb - 1.0);
+        let last_beat = ctx.at(ctx.bar.song_bar as f64 * bb + bb - 1.0);
         if let (Some(t), Some(last)) = (target, out[from..].last_mut())
             && last.start >= last_beat
             && matches!(last.sound, Sound::Note(_))
@@ -506,12 +516,12 @@ impl Musician for Drums {
         if intent.fill {
             // A snare roll over the last two beats, crescendo, kick on the last 16th.
             let bb = ctx.shape.bar_beats;
-            let roll_from = ctx.bar.loop_start + ctx.shape.at(ctx.bar.song_bar as f64 * bb + bb - 2.0);
+            let roll_from = ctx.at(ctx.bar.song_bar as f64 * bb + bb - 2.0);
             out.truncate(from + out[from..].iter().take_while(|e| e.start < roll_from).count());
             for k in 0..8 {
                 let beat = ctx.bar.song_bar as f64 * bb + bb - 2.0 + k as f64 * 0.25;
-                let start = ctx.bar.loop_start + ctx.shape.at(beat);
-                let end = ctx.bar.loop_start + ctx.shape.at(beat + 0.25);
+                let start = ctx.at(beat);
+                let end = ctx.at(beat + 0.25);
                 let drum = if k == 7 { Drum::Kick } else { Drum::Snare };
                 let volume = (template.volume as i32 - 3 + k * 3 / 4).clamp(1, 15) as u8;
                 out.push(NoteEvent { sound: Sound::Drum(drum), start, end, beat, volume, tie: false, ..template });

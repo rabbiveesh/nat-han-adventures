@@ -41,6 +41,7 @@ fn fill_doesnt_allocate() {
     for stem in ["sweet_georgia_brown", "muskrat_ramble", "shave_and_a_haircut"] {
         let file = library::load(stem).unwrap();
         let mut e = Engine::new(&file, 32_000).unwrap();
+        // (Every harmony, the waltz and its meter switches included.)
         e.post(Input::SetFreedom { lead: 0.7, comp: 0.7, bass: 0.7, drums: 0.7, dynamics: 0.7 });
         let mut buf = vec![Frame::ZERO; 512];
         let mut state = e.state();
@@ -54,7 +55,7 @@ fn fill_doesnt_allocate() {
             if k % 100 == 0 {
                 e.post(Input::Toot);
                 e.post(Input::Death);
-                e.post(Input::SetFilters(Filters { harmony: Harmony::ALL[k / 100 % 4], just_intonation: k % 200 == 0 }));
+                e.post(Input::SetFilters(Filters { harmony: Harmony::ALL[k / 100 % 5], just_intonation: k % 200 == 0 }));
             }
             e.fill(&mut buf);
             e.state_into(&mut state);

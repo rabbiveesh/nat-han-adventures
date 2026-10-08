@@ -226,6 +226,9 @@ pub struct Events {
     pub nuggets: u32,
     pub deaths: u32,
     pub checkpoints: u32,
+    /// Jumps in threes spotted elsewhere (an editor's "waltz step" button): each counts as one
+    /// completed, on top of those [`Band`] spots in `ground_jumps`.
+    pub waltz_steps: u32,
 }
 
 /// The band's memory of a level: the stats, the rolling window, the jump-in-threes watch and
@@ -238,6 +241,8 @@ pub struct Band {
     pub steps: ThreeStep,
     /// The summoned mode being held, and until when (play time).
     pub hold: Option<(Harmony, f32)>,
+    /// Jumps in threes completed this level (the music hears each as a waltz step).
+    pub steps_taken: u32,
     level_start: f32,
     next_check: f32,
 }
@@ -267,10 +272,11 @@ impl Band {
     /// One frame's events at play time `now`; returns a decision if one is due.
     pub fn step(&mut self, now: f32, ev: Events) -> Option<(Filters, &'static str)> {
         // Ground jumps: a jump in threes is a waltz step (a death starts the count afresh).
-        let mut waltzes = 0;
+        let mut waltzes = ev.waltz_steps;
         for _ in 0..ev.ground_jumps {
             waltzes += self.steps.jump(now) as u32;
         }
+        self.steps_taken += waltzes;
         if ev.deaths > 0 {
             self.steps.reset();
         }
@@ -475,12 +481,12 @@ mod tests {
 
     // --- The band's holds (Band) ---
 
-    const TOOT: Events = Events { toots: 1, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 0 };
-    const HOP: Events = Events { toots: 0, ground_jumps: 1, nuggets: 0, deaths: 0, checkpoints: 0 };
-    const NUGGET: Events = Events { toots: 0, ground_jumps: 0, nuggets: 1, deaths: 0, checkpoints: 0 };
-    const DEATH: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 1, checkpoints: 0 };
-    const CHECKPOINT: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 1 };
-    const NOTHING: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 0 };
+    const TOOT: Events = Events { toots: 1, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 0, waltz_steps: 0 };
+    const HOP: Events = Events { toots: 0, ground_jumps: 1, nuggets: 0, deaths: 0, checkpoints: 0, waltz_steps: 0 };
+    const NUGGET: Events = Events { toots: 0, ground_jumps: 0, nuggets: 1, deaths: 0, checkpoints: 0, waltz_steps: 0 };
+    const DEATH: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 1, checkpoints: 0, waltz_steps: 0 };
+    const CHECKPOINT: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 1, waltz_steps: 0 };
+    const NOTHING: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 0, waltz_steps: 0 };
 
     /// A band 5 toots into a level (t = 1..=5): Giant Steps just summoned.
     fn giant_steps() -> Band {
