@@ -116,8 +116,13 @@ fn director(ed: &mut Editor, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.y = 3.0;
         let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::hover());
         ui.painter().text(r.left_center(), egui::Align2::LEFT_CENTER, "DIRECTOR", mono(11.0), TEXT_FAINT);
-        ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, format!("next check {:.1}s", ed.game.next_check_in()), mono(11.0), TEXT_FAINT);
-        let title = if !reason.is_empty() { reason.to_string() } else if filters == Filters::default() { "PLAYING IT STRAIGHT".into() } else { filters.label() };
+        ui.painter().text(r.right_center(), egui::Align2::RIGHT_CENTER, if ed.player.playing { format!("next check {:.1}s", ed.game.next_check_in()) } else { "play time stopped".into() }, mono(11.0), TEXT_FAINT);
+        let title = match ed.dials.force_harmony {
+            Some(h) if h != filters.harmony => format!("FORCED: {}", if h == Harmony::Original { "AS WRITTEN" } else { h.label() }),
+            _ if !reason.is_empty() => reason.to_string(),
+            _ if filters == Filters::default() => "PLAYING IT STRAIGHT".into(),
+            _ => filters.label(),
+        };
         ui.label(egui::RichText::new(title).strong().color(GOLD).size(14.0));
         let sounding = st.harmony;
         let at = match (ed.player.playing, landing) {

@@ -280,7 +280,11 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
     if let Some(r) = follow_row {
         // Keep the playhead a third of the way down.
         area = area.vertical_scroll_offset((r as f32 * ROW - view_h / 3.0).max(0.0));
+    } else if ed.tracker.scrolled != Some(ed.tracker.row) {
+        // The cursor moved: bring it into view, a third of the way down.
+        area = area.vertical_scroll_offset((ed.tracker.row as f32 * ROW - view_h / 3.0).max(0.0));
     }
+    ed.tracker.scrolled = Some(ed.tracker.row);
     let mut clicked: Option<(usize, usize)> = None;
     area.show_rows(ui, ROW, rows, |ui, range| {
         for row in range {
@@ -290,7 +294,7 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
             let p = ui.painter_at(rect);
             let in_bar = row % rpb;
             let bar_row = in_bar == 0;
-            let beat_row = in_bar % 4 == 0;
+            let beat_row = in_bar.is_multiple_of(4);
             let playing = playhead_row == Some(row);
             let bg = if playing {
                 PLAYHEAD_ROW
@@ -351,6 +355,8 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
     if let Some((row, ch)) = clicked {
         ed.tracker.row = row;
         ed.tracker.ch = ch;
+        // Clicked where it's seen: no need to scroll.
+        ed.tracker.scrolled = Some(row);
     }
 }
 

@@ -49,11 +49,13 @@ pub struct TrackerUi {
     pub step: usize,
     pub follow: bool,
     pub show_played: bool,
+    /// The cursor row last scrolled to (a moved cursor brings the view along).
+    pub scrolled: Option<usize>,
 }
 
 impl Default for TrackerUi {
     fn default() -> Self {
-        TrackerUi { row: 0, ch: 0, rec: false, octave: 4, len: 2, step: 2, follow: true, show_played: false }
+        TrackerUi { row: 0, ch: 0, rec: false, octave: 4, len: 2, step: 2, follow: true, show_played: false, scrolled: None }
     }
 }
 
@@ -506,6 +508,26 @@ mod tests {
         e.level[3] = 6;
         e.remix();
         assert_eq!(e.dials.mix, [0.0, 1.0, 1.0, 0.5]);
+    }
+
+    /// The loop selection plays bars 5-6 over and over.
+    #[test]
+    fn the_selection_loops() {
+        let mut e = Editor::new(repo_root(), Some("sweet_georgia_brown"), AudioOutput::Headless);
+        e.selection = (4, 6);
+        e.loop_on = true;
+        e.play_from(4);
+        let mut seen = Vec::new();
+        for k in 1..=60 * 6 {
+            e.update(k as f64 / 60.0, 1.0 / 60.0);
+            if let Some(b) = e.playhead() {
+                seen.push((b / 4.0).floor() as usize);
+            }
+        }
+        assert_eq!(e.player.offset, 4);
+        assert!(seen.iter().all(|b| (4..6).contains(b)), "{:?}", &seen[..10]);
+        assert!(seen.contains(&4) && seen.contains(&5));
+        assert!(e.player.published.clock.position.pass >= 1, "it looped");
     }
 
     /// Play, edit, and the edit is swapped into the running engine at the next bar line.

@@ -11,8 +11,10 @@ use crate::app::Editor;
 use crate::theme::*;
 use crate::views::tracker::line;
 
-/// The cheat sheet as the panel shows it: (section, [(syntax, meaning, text to insert)]).
-pub fn cheat_items() -> Vec<(&'static str, Vec<(&'static str, &'static str, String)>)> {
+/// A cheat-sheet section as the panel shows it: (section, [(syntax, meaning, text to insert)]).
+pub type CheatSection = (&'static str, Vec<(&'static str, &'static str, String)>);
+
+pub fn cheat_items() -> Vec<CheatSection> {
     syntax::CHEAT_SHEET
         .iter()
         .map(|(section, rows)| (*section, rows.iter().map(|(s, m)| (*s, *m, insertion(s))).collect()))

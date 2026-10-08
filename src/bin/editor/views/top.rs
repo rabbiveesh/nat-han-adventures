@@ -111,7 +111,7 @@ fn icon_button(ui: &mut egui::Ui, icon: Icon, on: bool, accent: egui::Color32) -
     let (rect, resp) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::click());
     let p = ui.painter_at(rect);
     let (fill, fg, stroke) = match icon {
-        Icon::Play => (if on { HILITE } else { GOLD }, if on { GOLD } else { BG }, if on { GOLD } else { GOLD }),
+        Icon::Play => (if on { HILITE } else { GOLD }, if on { GOLD } else { BG }, GOLD),
         Icon::Loop if on => (RAISED, accent, accent),
         _ => (RAISED, TEXT, LINE),
     };

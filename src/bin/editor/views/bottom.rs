@@ -50,12 +50,12 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
     }
     let sel_resp = ui.interact(Rect::from_min_max(pos2(x_of(first as f64), num_row.top()), num_row.max), ui.id().with("sel"), Sense::click_and_drag());
     let bar_at = |x: f32| (first as f64 + ((x - rect.left() - LABEL_W) / col).floor() as f64).clamp(0.0, bars.saturating_sub(1) as f64) as usize;
-    if sel_resp.drag_started() || sel_resp.clicked() {
-        if let Some(pos) = sel_resp.interact_pointer_pos() {
-            let b = bar_at(pos.x);
-            ed.selection = (b, b + 1);
-            ui.memory_mut(|m| m.data.insert_temp(ui.id().with("anchor"), b));
-        }
+    if (sel_resp.drag_started() || sel_resp.clicked())
+        && let Some(pos) = sel_resp.interact_pointer_pos()
+    {
+        let b = bar_at(pos.x);
+        ed.selection = (b, b + 1);
+        ui.memory_mut(|m| m.data.insert_temp(ui.id().with("anchor"), b));
     }
     if sel_resp.dragged()
         && let Some(pos) = sel_resp.interact_pointer_pos()

@@ -170,8 +170,10 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
         for b in b0..b0 + nb {
             let x = x_of(lane.left(), b as f64 * bb);
             p.line_segment([pos2(x, lane.top()), pos2(x, lane.bottom())], Stroke::new(1.0, LINE));
-            let w = written_chart.get(b).map_or("", |s| s.as_str());
-            let pl = played_chart.get(b).map_or("", |s| s.as_str());
+            // `%` spelled out: the chord it repeats.
+            let resolve = |chart: &[String]| chart[..=b.min(chart.len().saturating_sub(1))].iter().rev().find(|s| *s != "%").cloned().unwrap_or_default();
+            let (w, pl) = if b < written_chart.len() { (resolve(&written_chart), resolve(&played_chart)) } else { (String::new(), String::new()) };
+            let (w, pl) = (w.as_str(), pl.as_str());
             let (text, color) = if !pl.is_empty() && pl != w { (format!("{w} → {pl}"), GOLD) } else { (w.to_string(), TEXT) };
             let font = mono(12.0);
             let clip = Rect::from_min_max(pos2(x, lane.top()), pos2(x_of(lane.left(), (b + 1) as f64 * bb), lane.bottom()));
@@ -295,15 +297,15 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 r.expand(1.0).contains(pos).then(|| (i, pos.x > r.right() - 6.0))
             })
         };
-        if let Some(pos) = resp.hover_pos() {
-            if pos.x > grid.left() {
-                let icon = match hit(pos) {
-                    Some((_, true)) => CursorIcon::ResizeHorizontal,
-                    Some(_) => CursorIcon::Grab,
-                    None => CursorIcon::Crosshair,
-                };
-                ui.ctx().set_cursor_icon(icon);
-            }
+        if let Some(pos) = resp.hover_pos()
+            && pos.x > grid.left()
+        {
+            let icon = match hit(pos) {
+                Some((_, true)) => CursorIcon::ResizeHorizontal,
+                Some(_) => CursorIcon::Grab,
+                None => CursorIcon::Crosshair,
+            };
+            ui.ctx().set_cursor_icon(icon);
         }
         if resp.drag_started()
             && let Some(pos) = resp.interact_pointer_pos()

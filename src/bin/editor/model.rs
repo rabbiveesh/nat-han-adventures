@@ -668,8 +668,8 @@ mod tests {
                 doc.canonicalize(ch).unwrap_or_else(|e| panic!("{stem} ch{ch}: {e}"));
             }
             let canon = doc.text.clone();
-            for ch in 0..4 {
-                assert_eq!(doc.part(ch).unwrap().notes, before[ch].notes, "{stem} channel {ch}");
+            for (ch, b) in before.iter().enumerate() {
+                assert_eq!(doc.part(ch).unwrap().notes, b.notes, "{stem} channel {ch}");
             }
             for ch in 0..4 {
                 doc.canonicalize(ch).unwrap();

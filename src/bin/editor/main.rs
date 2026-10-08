@@ -12,7 +12,7 @@
 //! Options (for scripts and screenshots):
 //! `--song <stem>`, `--view tracker|piano|text`, `--play`, `--from-bar <n>`, `--toots <n>`
 //! (press TOOT n times at the start), `--force <harmony>`, `--auto <chaos 0..1>`,
-//! `--rec`, `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
+//! `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
 //! `--check` (no window: load and reformat every song, then quit). `NATHAN_AUDIO=headless`
 //! renders without a sound card.
 
@@ -44,6 +44,7 @@ struct Args {
     force: Option<Filters>,
     auto: Option<f32>,
     rec: bool,
+    as_played: bool,
     size: (u32, u32),
     screenshot: Option<PathBuf>,
     wait: f32,
@@ -66,6 +67,7 @@ fn args() -> Result<Args, String> {
             "--force" => a.force = Some(Filters::parse(&val()?).ok_or("--force coltrane|quartal|melodic|waltz|original[+ji]")?),
             "--auto" => a.auto = Some(val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
             "--rec" => a.rec = true,
+            "--as-played" => a.as_played = true,
             "--size" => {
                 let v = val()?;
                 let (w, h) = v.split_once('x').ok_or("--size WxH")?;
@@ -139,6 +141,7 @@ fn main() {
         ed.auto.chaos = c;
     }
     ed.tracker.rec = a.rec;
+    ed.tracker.show_played = a.as_played;
     for (f, w) in &a.replace {
         let t = ed.doc.text.replacen(f.as_str(), w, 1);
         ed.set_text(t);
