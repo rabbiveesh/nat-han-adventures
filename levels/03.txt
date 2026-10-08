@@ -8,6 +8,8 @@ hint@5,7 stain: Too wide to jump! Splat mid-spikes: your stain's a step!
 say@28,21: Ride the ducks, Nat. They don't bite. Much.
 hint@61,20 gap: Big gap! Grab nuggets fast, band fires up. Then RUN!
 say@101,21: Fun fact: the U-bend traps water so smells stay down.
+gate: stain 5,7 23,7
+gate: gap 67,20 79,20
 ---
 ######################################################################################################################################################
 ######################################################################################################################################################

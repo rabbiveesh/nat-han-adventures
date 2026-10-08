@@ -6,6 +6,7 @@ say@54,12: Fresh roll! Two-ply. We're livin' large, Nat.
 hint@32,12 toot: Jump, then jump AGAIN in midair. That's a toot!
 hint@52,12 giant: Big wall! Toot 5 times: the band plays Giant Steps!
 hint@96,12 oneway: Thin shelves? Jump up through 'em, land on top!
+gate: giant 55,6 61,12
 ---
 ............................................................................................................................................
 ............................................................................................................................................

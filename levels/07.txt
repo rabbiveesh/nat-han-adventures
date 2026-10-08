@@ -8,6 +8,7 @@ hint@40,10 waltz: Hop-hop-hop, even beats: the band waltzes! GO after ONE!
 say@44,10: Tunnel ahead. Those cans are touchy. Mind the pssht!
 say@5,25: Halfway! I'd stay and chat, but... the smell. You know.
 say@57,43: Count the puffs: pssht... wait... GO! Easy peasy.
+gate: waltz 3,10 24,10
 ---
 ##..####################......................................##
 ##..####################......................................##

@@ -1430,7 +1430,7 @@ impl Default for Physics {
 /// Stain pit search: the fewest splats (beam search, at most [`MAX_PIT_DEATHS`]) that let
 /// normal jumps past `pit`. Returns the stains, the take-off cell and the first cell past it.
 fn cross_pit(map: &Map, phys: &Physics, g: &Graph, pit: &Pit) -> Option<(Vec<Cell>, Cell, Cell)> {
-    cross_dying(map, phys.human(Mode::Normal), g, &|d| pit.contains(d), MAX_PIT_DEATHS)
+    cross_dying(map, phys.human(Mode::Normal), g, &|c| g.reached(c), &|_| true, &|d| pit.contains(d), MAX_PIT_DEATHS)
 }
 
 /// The fewest splats in cells `pit` contains (spikes: stains; liquid: rafts) that let `arcs`
@@ -1440,6 +1440,8 @@ fn cross_dying(
     map: &Map,
     arcs: &Arcs,
     g: &Graph,
+    known: &dyn Fn(Cell) -> bool,
+    past: &dyn Fn(Cell) -> bool,
     pit: &dyn Fn(Cell) -> bool,
     max_deaths: u32,
 ) -> Option<(Vec<Cell>, Cell, Cell)> {
@@ -1456,6 +1458,7 @@ fn cross_dying(
         .iter()
         .filter(|(d, _)| pit.contains(**d))
         .flat_map(|(d, (_, froms))| froms.iter().map(move |f| (*d, *f)))
+        .filter(|&(_, f)| known(f))
         .collect();
     if start.is_empty() {
         return None;
@@ -1518,7 +1521,7 @@ fn cross_dying(
                     for s in &arcs.strategies {
                         let Some(x0) = take_off(&m, &arcs.env, from, s) else { continue };
                         if let Outcome::Land(l) = simulate(&m, &arcs.env, from, s, x0, &mut buf)
-                            && !g.reached(l)
+                            && !known(l)
                             && reached.insert(l)
                         {
                             queue.push(l);
@@ -1532,20 +1535,20 @@ fn cross_dying(
                     if !visited.insert(cell) {
                         continue;
                     }
-                    if !tops.contains(&cell) {
+                    if !tops.contains(&cell) && past(cell) {
                         crossed = Some((cell, cell));
                         break;
                     }
                     for dd in [-1, 1] {
                         let n = (cell.0 + dd, cell.1);
-                        if m.standable(n) && !g.reached(n) && reached.insert(n) {
+                        if m.standable(n) && !known(n) && reached.insert(n) {
                             queue.push(n);
                         }
                     }
                     for s in &arcs.strategies {
                         let Some(x0) = take_off(&m, &arcs.env, cell, s) else { continue };
                         match simulate(&m, &arcs.env, cell, s, x0, &mut buf) {
-                            Outcome::Land(l) if !g.reached(l) && reached.insert(l) => queue.push(l),
+                            Outcome::Land(l) if !known(l) && reached.insert(l) => queue.push(l),
                             Outcome::Died(Some(dc)) if pit.contains(dc) && !stains.contains(&dc) => {
                                 open.push((dc, cell))
                             }
@@ -1968,10 +1971,14 @@ fn nat_rafts(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
     let Some(walk) = walk else { return Vec::new() };
     let mut errs = Vec::new();
     for mode in [Mode::Normal, Mode::FiredUp] {
-        let arcs = phys.ideal(mode);
-        let trip = crate::game::tuning::RESPAWN_DELAY + walk as f32 * TILE / arcs.env.vx;
+        // Short hops under the ceiling spikes: the human jumps have them (the ideal set is
+        // full-height jumps only); the walk back is timed at full speed.
+        let arcs = phys.human(mode);
+        let trip = crate::game::tuning::RESPAWN_DELAY + walk as f32 * TILE / Env::new(mode, true).vx;
         let contains = |d: Cell| pool.contains(d);
-        if let Some((rafts, _, _)) = cross_dying(map, arcs, g, &contains, MAX_NAT_RAFTS) {
+        let known = |cell: Cell| g.before(cell, i);
+        let past = |cell: Cell| c.new.contains(&cell);
+        if let Some((rafts, _, _)) = cross_dying(map, arcs, g, &known, &past, &contains, MAX_NAT_RAFTS) {
             let k = rafts.len() as f32;
             if k * trip < RAFT_LIFE_FLOOR {
                 errs.push(format!(

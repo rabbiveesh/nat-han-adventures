@@ -104,7 +104,7 @@ pub const HINT_RADIUS: f32 = 2.5 * TILE;
 pub const MAX_LINE: usize = 60;
 pub const LEVEL_COUNT: usize = 10;
 /// Han stays this many columns away from the band's gates (see "Gate marks").
-pub const HAN_BERTH: i32 = 12;
+pub const HAN_BERTH: i32 = 14;
 /// ...and this many rows above/below them.
 pub const HAN_BERTH_ROWS: i32 = 10;
 
