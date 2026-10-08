@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <title>Nat Han Adventures</title>
     <link data-trunk rel="rust" data-cargo-no-default-features data-cargo-profile-release="wasm-release" data-wasm-opt="z" />
     <script>
@@ -28,6 +28,36 @@
         font: bold 20px/1.6 ui-monospace, monospace; letter-spacing: 2px;
       }
       #start small { display: block; color: #b39a7a; font-size: 14px; font-weight: normal; }
+
+      /* Touch controls: phones only (see `isPhone` below). They press the game's normal keys. */
+      body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+      #touch { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+      body.touch #touch { display: block; }
+      .pad {
+        position: absolute; pointer-events: auto; touch-action: none;
+        border: 2px solid rgba(255, 199, 46, 0.55); background: rgba(26, 18, 12, 0.35);
+        color: rgba(255, 238, 200, 0.85); font: bold 16px ui-monospace, monospace;
+        display: grid; place-items: center; border-radius: 16px;
+      }
+      .pad.down { background: rgba(255, 199, 46, 0.35); }
+      #dpad { left: max(16px, env(safe-area-inset-left)); bottom: 20px; width: 168px; height: 112px;
+        grid-template-columns: 1fr 1fr; font-size: 28px; }
+      #dpad span { display: grid; place-items: center; height: 100%; }
+      #dpad .mark { opacity: 0.35; }
+      #jump { right: max(20px, env(safe-area-inset-right)); bottom: 28px; width: 96px; height: 96px; border-radius: 50%; font-size: 15px; }
+      #pause { right: max(16px, env(safe-area-inset-right)); top: 14px; width: 48px; height: 36px; border-radius: 10px; }
+      #ok { right: calc(max(16px, env(safe-area-inset-right)) + 60px); top: 14px; width: 56px; height: 36px; border-radius: 10px; }
+      #updown { left: max(16px, env(safe-area-inset-left)); top: 14px; width: 104px; height: 36px; border-radius: 10px;
+        grid-template-columns: 1fr 1fr; }
+
+      /* Phones held upright: nudge toward landscape (dismissable). */
+      #rotate { display: none; position: fixed; inset: 0; z-index: 20; background: #1a120c; color: #ffc72e;
+        place-items: center; text-align: center; font: bold 18px/1.6 ui-monospace, monospace; padding: 24px; }
+      #rotate small { display: block; color: #b39a7a; font-weight: normal; font-size: 14px; margin-top: 12px; }
+      #rotate .phone { width: 44px; height: 76px; border: 4px solid #ffc72e; border-radius: 10px; margin: 0 auto 20px;
+        animation: tilt 2.2s ease-in-out infinite; }
+      @keyframes tilt { 0%, 30% { transform: rotate(0deg); } 60%, 100% { transform: rotate(-90deg); } }
+      @media (orientation: portrait) { body.touch:not(.portrait-ok) #rotate { display: grid; } }
     </style>
   </head>
   <body>
@@ -35,7 +65,21 @@
     <div id="start">
       <div>
         <span id="start-msg">loading&hellip;</span>
-        <small>arrows to move &middot; space to jump (twice to toot) &middot; esc to pause</small>
+        <small id="start-help">arrows to move &middot; space to jump (twice to toot) &middot; esc to pause</small>
+      </div>
+    </div>
+    <div id="touch" aria-hidden="true">
+      <div class="pad" id="dpad"><span>&#9664;</span><span>&#9654;</span></div>
+      <div class="pad" id="updown"><span data-key="ArrowUp">&#9650;</span><span data-key="ArrowDown">&#9660;</span></div>
+      <div class="pad" id="ok" data-key="Enter">OK</div>
+      <div class="pad" id="pause" data-key="Escape">II</div>
+      <div class="pad" id="jump" data-key="Space">JUMP</div>
+    </div>
+    <div id="rotate" role="dialog" aria-label="Rotate your phone">
+      <div>
+        <div class="phone"></div>
+        turn your phone sideways
+        <small>Nat needs room to run. <u id="portrait-ok">play upright anyway</u></small>
       </div>
     </div>
     <script>
@@ -58,6 +102,75 @@
       start.addEventListener("pointerdown", go);
       window.addEventListener("keydown", go);
       canvas.addEventListener("pointerdown", () => canvas.focus());
+
+      // Touch controls: each button presses the game's ordinary key on the canvas (winit reads
+      // keydown/keyup there), so menus and gameplay work unchanged. Multi-touch via pointer
+      // events; the d-pad follows the finger, so sliding from left to right switches keys.
+      // Phones only: a touch-only device (no mouse/trackpad at all, can't hover) with a small
+      // screen. Touchscreen laptops have a fine pointer, so they keep the keyboard UI.
+      const isPhone =
+        matchMedia("(pointer: coarse)").matches &&
+        !matchMedia("(any-pointer: fine)").matches &&
+        matchMedia("(hover: none)").matches &&
+        Math.min(screen.width, screen.height) <= 600;
+      const touchy = isPhone;
+      if (touchy) {
+        document.body.classList.add("touch");
+        document.getElementById("start-help").textContent =
+          "tap to start \u00b7 hold sideways \u00b7 JUMP twice to toot";
+      }
+      document.getElementById("portrait-ok").addEventListener("pointerdown", (e) => {
+        e.stopPropagation();
+        document.body.classList.add("portrait-ok");
+      });
+      const CODES = { ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight", ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
+        Space: " ", Enter: "Enter", Escape: "Escape" };
+      const held = new Map(); // code -> number of pointers holding it
+      function key(type, code) {
+        canvas.dispatchEvent(new KeyboardEvent(type, { key: CODES[code], code, bubbles: true, cancelable: true }));
+      }
+      function press(code) { const n = held.get(code) || 0; held.set(code, n + 1); if (n === 0) key("keydown", code); }
+      function release(code) { const n = held.get(code) || 0; if (n <= 1) { held.delete(code); if (n === 1) key("keyup", code); } else held.set(code, n - 1); }
+      // A button that holds one key while touched.
+      function button(el, code) {
+        const active = new Set();
+        el.addEventListener("pointerdown", (e) => {
+          e.preventDefault(); el.setPointerCapture(e.pointerId); active.add(e.pointerId);
+          el.classList.add("down"); canvas.focus(); press(code);
+        });
+        const up = (e) => {
+          if (!active.delete(e.pointerId)) return;
+          if (active.size === 0) el.classList.remove("down");
+          release(code);
+        };
+        for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ev, up);
+      }
+      for (const el of document.querySelectorAll("#touch [data-key]")) button(el, el.dataset.key);
+      // The d-pad: left or right depending on which half the finger is over.
+      const dpad = document.getElementById("dpad");
+      const dir = new Map(); // pointerId -> code
+      function aim(e) {
+        const r = dpad.getBoundingClientRect();
+        const code = e.clientX < r.left + r.width / 2 ? "ArrowLeft" : "ArrowRight";
+        const prev = dir.get(e.pointerId);
+        if (prev === code) return;
+        if (prev) release(prev);
+        dir.set(e.pointerId, code); press(code);
+        dpad.classList.add("down");
+      }
+      dpad.addEventListener("pointerdown", (e) => { e.preventDefault(); dpad.setPointerCapture(e.pointerId); canvas.focus(); aim(e); });
+      dpad.addEventListener("pointermove", (e) => { if (dir.has(e.pointerId)) aim(e); });
+      for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) {
+        dpad.addEventListener(ev, (e) => {
+          const code = dir.get(e.pointerId);
+          if (!code) return;
+          dir.delete(e.pointerId); release(code);
+          if (dir.size === 0) dpad.classList.remove("down");
+        });
+      }
+      // Never leave a key stuck if the page loses focus mid-touch.
+      window.addEventListener("blur", () => { for (const code of [...held.keys()]) { held.set(code, 1); release(code); } dir.clear(); });
+      document.addEventListener("contextmenu", (e) => { if (touchy) e.preventDefault(); });
     </script>
   </body>
 </html>
