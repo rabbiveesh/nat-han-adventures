@@ -9,26 +9,31 @@
 //! Entertainer), `world3` (Muskrat Ramble), `scale` (C major up and down, then a ii–V–I, five
 //! times: one phrase each, so `scale_medley` plays it in every medley tuning), and tuning in
 //! `equal ji alpha bp tet7 harmonic drunk medley` (see [`audio::tuning`]; `medley` is what the
-//! laughing band plays). Songs play their original harmony, one loop each.
+//! laughing band plays). Songs play their original harmony, one loop each, rendered by the live
+//! engine run offline.
 
 use std::path::Path;
 
-use nat_han_adventures::audio::{Filters, Music, Song, songs, synth, tuning::Tuning};
+use nat_han_adventures::audio::{
+    Filters, Music,
+    live::{SongFile, library},
+    synth,
+    tuning::Tuning,
+};
 
-fn scale_demo() -> Song {
-    Song {
-        title: "Scale + ii-V-I (tuning demo)",
-        bpm: 120.0,
-        swing: 0.0,
-        looping: false,
-        // One 4-bar phrase (= one medley phrase, `tuning::MEDLEY_PHRASE_BARS`), five times.
-        pulse1: "v12 @2 [o4 c8 d8 e8 f8 g8 a8 b8 > c8 | o5 c8 < b8 a8 g8 f8 e8 d8 c8 | o5 c2 o4 b2 | o4 b1 |]5",
-        pulse2: "v9 @1 [r1 | r1 | o4 f2 f2 | o4 e1 |]5",
-        triangle: "[r1 | r1 | o2 d2 g2 | o2 c1 |]5",
-        noise: "",
-        key: 0,
-        chords: "",
-    }
+fn scale_demo() -> SongFile {
+    // One 4-bar phrase (= one medley phrase, `tuning::MEDLEY_PHRASE_BARS`), five times.
+    SongFile::from_mml("Scale + ii-V-I (tuning demo)", 120.0, 0.0, false, 0, "", [
+        "v12 @2 [o4 c8 d8 e8 f8 g8 a8 b8 > c8 | o5 c8 < b8 a8 g8 f8 e8 d8 c8 | o5 c2 o4 b2 | o4 b1 |]5",
+        "v9 @1 [r1 | r1 | o4 f2 f2 | o4 e1 |]5",
+        "[r1 | r1 | o2 d2 g2 | o2 c1 |]5",
+        "",
+    ])
+    .expect("the scale demo parses")
+}
+
+fn song(m: Music) -> SongFile {
+    library::song(m).expect("song file").1.clone()
 }
 
 fn main() {
@@ -39,9 +44,9 @@ fn main() {
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir).expect("create output dir");
     let pieces = [
-        ("title", songs::song(Music::Title)),
-        ("world1", songs::song(Music::World(1))),
-        ("world3", songs::song(Music::World(3))),
+        ("title", song(Music::Title)),
+        ("world1", song(Music::World(1))),
+        ("world3", song(Music::World(3))),
         ("scale", scale_demo()),
     ];
     for (name, song) in &pieces {

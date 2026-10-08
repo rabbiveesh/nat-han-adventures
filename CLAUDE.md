@@ -28,7 +28,13 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/level.rs` the ASCII level format (documented at the top of the file) and parser.
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
-- `src/audio/` MML parser, NES-style synth, songs, sfx, playback via bevy_kira_audio.
+- `src/audio/` MML parser, NES-style synth blocks, sfx, the director, and the Bevy plugin
+  (`audio::plugin`: music + sfx on one kira manager; `AudioOutput::Headless` for tests).
+- `src/audio/live/` the real-time music engine (game-free): the game's music, generated a few
+  ms ahead of the speaker so the band follows play (filters land on the next bar line; the
+  waltz switches meter at a shared bar line). Songs are `music/*.song`. Offline renders
+  (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
+  engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 
 ## Look

@@ -311,6 +311,7 @@ mod tests {
             title: "",
             filters: Filters { harmony: Harmony::Waltz, just_intonation: false },
             reason: crate::audio::director::REASON_WALTZ,
+            tuning_now: None,
         };
         assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JAZZ WALTZ".to_string()));
     }

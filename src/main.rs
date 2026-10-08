@@ -17,7 +17,6 @@ fn main() {
             })
             // Chunky pixels: never blur our 16x16 sprites.
             .set(ImagePlugin::default_nearest()),
-        bevy_kira_audio::AudioPlugin,
         nat_han_adventures::gameplay,
         nat_han_adventures::presentation,
     ))

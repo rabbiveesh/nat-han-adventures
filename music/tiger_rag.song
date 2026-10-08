@@ -1,0 +1,55 @@
+; Tiger Rag (Original Dixieland Jass Band, 1917)
+; Converted from src/audio/songs.rs. Each line ends with its bar numbers.
+
+[song]
+title = Tiger Rag (Original Dixieland Jass Band, 1917)
+bpm = 192
+swing = 0.28
+key = Bb
+loop = yes
+meter = 4/4
+
+[chords]
+| Bb6 | % | F7 | % | F7 | % | Bb6 | Bb6 F7 |                 ; 1-8
+| Bb6 | % | F7 | % | F7 | % | Bb6 | Bb7 |                    ; 9-16
+| Eb6 | % | Edim7 | % | Bb/F | G7 | C7 | F7 |                ; 17-24
+| Bb6 | % | F7 | % | F7 | % | Bb6 | Bb6 F7 |                 ; 25-32
+
+[pulse1]
+v12 @1 o5 d8 c+8 d8 f8 r8 d8 r4 | o5 b-8 a8 g8 f8 d8 c8 o4 b-4 | o5 c4. o4 a4. f4 | o4 a4 o5 c4 e-4 r4 | ; 1-4
+o5 c8 o4 b8 o5 c8 e-8 r8 c8 r4 | o5 a8 g+8 a8 g8 f8 e-8 c8 o4 a8 | o4 b-8 o5 c8 d8 f8 r8 d8 o4 b-4 | o5 b-4 r4 r4 o4 f8 a8 | ; 5-8
+o5 d8 c+8 d8 f8 r8 d8 r4 | o5 b-8 a8 g8 f8 d8 c8 o4 b-4 | o5 c4. o4 a4. f4 | o4 a4 o5 c4 e-4 r4 | ; 9-12
+o5 c8 o4 b8 o5 c8 e-8 r8 c8 r4 | o5 a8 g+8 a8 g8 f8 e-8 c8 o4 a8 | o4 b-8 o5 c8 d8 f8 r8 d8 o4 b-4 | o5 b-8 a-8 g8 f8 d8 o4 b-8 o5 c8 d8 | ; 13-16
+o5 e-4. g8 r8 b-4. | o5 b-8 a8 b-8 g8 e-8 d8 e-4 | o5 e4. g8 r8 b-4. | o5 b-8 a8 b-8 g8 e8 d+8 e4 | ; 17-20
+o5 f4. d8 r8 o4 b-4. | o4 b8 o5 d8 f8 g8 r8 f8 d4 | o5 e8 g8 b-8 g8 e8 c8 d8 e8 | o5 f4 e-4 c4 o4 a4 | ; 21-24
+o5 d8 c+8 d8 f8 r8 d8 r4 | o5 b-8 a8 g8 f8 d8 c8 o4 b-4 | o5 c4. o4 a4. f4 | o4 a4 o5 c4 e-4 r4 | ; 25-28
+o5 c8 o4 b8 o5 c8 e-8 r8 c8 r4 | o5 a8 g+8 a8 g8 f8 e-8 c8 o4 a8 | o4 b-8 o5 c8 d8 f8 r8 d8 o4 b-4 | o5 b-4 r4 r4 o4 f8 a8 | ; 29-32
+
+[pulse2]
+v7 @2 o4 r4 d8 r8 r4 f8 r8 | o4 r4 d8 r8 r4 f8 r8 | o4 a4. f4. c4 | o4 r2 a8 a8 f8 r8 | ; 1-4
+o4 r4 e-8 r8 r4 a8 r8 | o4 r4 e-8 r8 r4 a8 r8 | o4 r4 d8 r8 r4 f8 r8 | o4 r4 d8 r8 r4 f8 r8 | ; 5-8
+o4 r4 d8 r8 r4 f8 r8 | o4 r4 d8 r8 r4 f8 r8 | o4 a4. f4. c4 | o4 r2 a8 a8 f8 r8 | ; 9-12
+o4 r4 e-8 r8 r4 a8 r8 | o4 r4 e-8 r8 r4 a8 r8 | o4 r4 d8 r8 r4 f8 r8 | o4 r4 d8 r8 r4 a-8 r8 | ; 13-16
+o4 r4 g8 r8 r4 b-8 r8 | o4 r4 g8 r8 r4 b-8 r8 | o4 r4 e8 r8 r4 b-8 r8 | o4 r4 e8 r8 r4 b-8 r8 | ; 17-20
+o4 r4 d8 r8 r4 f8 r8 | o4 r4 f8 r8 r4 b8 r8 | o4 r4 e8 r8 r4 b-8 r8 | o4 r4 e-8 r8 r4 a8 r8 | ; 21-24
+o4 r4 d8 r8 r4 f8 r8 | o4 r4 d8 r8 r4 f8 r8 | o4 a4. f4. c4 | o4 r2 a8 a8 f8 r8 | ; 25-28
+o4 r4 e-8 r8 r4 a8 r8 | o4 r4 e-8 r8 r4 a8 r8 | o4 r4 d8 r8 r4 f8 r8 | o4 r4 d8 r8 r4 f8 r8 | ; 29-32
+
+[triangle]
+o1 b-4 o2 d4 f4 d4 | o1 b-4 o2 c4 d4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 a4 | ; 1-4
+o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 b4 | o1 b-4 o2 d4 f4 d4 | o1 b-4 o2 c4 d4 o1 a4 | ; 5-8
+o1 b-4 o2 d4 f4 d4 | o1 b-4 o2 c4 d4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 a4 | ; 9-12
+o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 b4 | o1 b-4 o2 d4 f4 d4 | o1 b-4 o2 d4 f4 e4 | ; 13-16
+o2 e-4 g4 b-4 g4 | o2 e-4 g4 b-4 f4 | o2 e4 g4 b-4 g4 | o2 e4 g4 e4 f+4 | ; 17-20
+o2 f4 d4 o1 b-4 o2 f+4 | o2 g4 b4 d4 d-4 | o2 c4 e4 g4 e4 | o2 f4 a4 c4 o1 b4 | ; 21-24
+o1 b-4 o2 d4 f4 d4 | o1 b-4 o2 c4 d4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 a4 | ; 25-28
+o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 b4 | o1 b-4 o2 d4 f4 d4 | o1 b-4 o2 c4 d4 o1 a4 | ; 29-32
+
+[noise]
+v9 H8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k4. s4. s4 | r2 s8 s8 s8 r8 | ; 1-4
+[k8 h8 s8 h8 k8 h8 s8 h8 |]3 k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 |         ; 5-8
+H8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k4. s4. s4 | r2 s8 s8 s8 r8 | ; 9-12
+[k8 h8 s8 h8 k8 h8 s8 h8 |]3 k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 |         ; 13-16
+H8 h8 s8 h8 k8 h8 s8 h8 | [k8 h8 s8 h8 k8 h8 s8 h8 |]6 k8 s8 s8 s8 s16 s16 s8 k8 s8 | ; 17-24
+H8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k4. s4. s4 | r2 s8 s8 s8 r8 | ; 25-28
+[k8 h8 s8 h8 k8 h8 s8 h8 |]3 k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 |         ; 29-32

@@ -1,5 +1,6 @@
 //! Render every song (through every filter) and sound effect to WAV files, for listening
-//! outside the game.
+//! outside the game. The music is the live engine run offline ([`synth::render_song_with`]):
+//! exactly what the game plays at that filter, one loop.
 //!
 //! ```sh
 //! cargo run --release --example render_audio -- out/                # everything
@@ -15,7 +16,7 @@
 
 use std::{path::Path, time::Instant};
 
-use nat_han_adventures::audio::{self, Filters, Harmony, Music, Sfx, Song, sfx, songs, synth};
+use nat_han_adventures::audio::{self, Filters, Harmony, Music, Sfx, live::library, sfx, synth};
 
 fn main() {
     let mut args = std::env::args().skip(1);
@@ -30,16 +31,8 @@ fn main() {
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir).expect("create output dir");
 
-    let mut songs: Vec<(String, Song)> = Music::ALL
-        .into_iter()
-        .map(|m| {
-            let name = match m {
-                Music::World(w) => format!("world{w}"),
-                other => format!("{other:?}").to_lowercase(),
-            };
-            (name, songs::song(m))
-        })
-        .collect();
+    let mut songs: Vec<(String, library::SongFile)> =
+        Music::ALL.into_iter().map(|m| (m.slug(), library::song(m).expect("song file").1.clone())).collect();
     songs.push(("demo".into(), audio::demo::demo_song()));
 
     let mut total_ms = 0.0;
@@ -49,7 +42,7 @@ fn main() {
             continue;
         }
         for harmony in Harmony::ALL {
-            if harmony != Harmony::Original && song.chords.trim().is_empty() {
+            if harmony != Harmony::Original && song.chart.is_none() {
                 continue;
             }
             for just_intonation in [false, true] {

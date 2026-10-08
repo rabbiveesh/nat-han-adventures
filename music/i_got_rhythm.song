@@ -1,0 +1,57 @@
+; I Got Rhythm (George & Ira Gershwin, 1930)
+; Converted from src/audio/songs.rs. Each line ends with its bar numbers.
+
+[song]
+title = I Got Rhythm (George & Ira Gershwin, 1930)
+bpm = 192
+swing = 0.3
+key = Bb
+loop = yes
+meter = 4/4
+
+[chords]
+| Bb6 | Eb6 | Bb/F | F7 | Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 | ; 1-8
+| Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 F7 | Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 | ; 9-16
+| Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 | D7 | % | G7 | % |      ; 17-24
+| C7 | % | F7 | % | Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 |    ; 25-32
+| Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 |                        ; 33-36
+
+[pulse1]
+v12 @1 o5 b-4. f8 b-4 o6 d4 | o6 e-4. d8 c4 o5 b-4 | o5 b-8 b-8 b-8 r8 f8 f8 f8 r8 | o5 c2 o4 a4 r4 | ; 1-4
+o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 5-8
+o4 f4 g4 b-4 o5 c4& | c4 r4 e-4 g-4 | o5 f4 d4 c4 o4 a4 | o4 b-2 r2 |    ; 9-12
+o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 13-16
+o4 f4 g4 b-4 o5 c4& | c4 r4 e-4 g-4 | o5 f4 d4 c4 o4 a4 | o4 b-2 r2 |    ; 17-20
+o5 f+4. f+8 r8 e8 d4 | o5 c4 o4 a4 f+4 r4 | o5 b4. b8 r8 a8 g4 | o5 f4 d4 o4 b4 r4 | ; 21-24
+o5 e4. e8 r8 d8 c4 | o4 b-4 g4 e4 r4 | o5 a4. a8 r8 g8 f4 | o5 e-4 c4 o4 a4 r4 | ; 25-28
+o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 29-32
+o4 f4 g4 b-4 o5 c4& | c4 r4 e-4 g-4 | o5 f4 d4 c4 o4 a4 | o4 b-4 o5 d4 f4 b-4 | ; 33-36
+
+[pulse2]
+v7 @2 o5 d4. o4 b-8 o5 d4 f4 | o5 g4. f8 e-4 d4 | o5 f8 f8 f8 r8 d8 d8 d8 r8 | o4 a2 f4 r4 | ; 1-4
+o4 r4 d8 r8 r4 f8 r8 | o4 r4 e-8 f8 g8 a8 r4 | o4 r4 d8 r8 r4 f8 r8 | o4 r4 g8 f8 e-8 c8 r4 | ; 5-8
+o4 r4 a-8 r8 r4 a-8 r8 | o4 r4 g8 r8 r4 g-8 r8 | o4 r4 d8 r8 r4 e-8 r8 | o4 r4 f8 g8 b-8 o5 d8 r4 | ; 9-12
+o4 r4 d8 r8 r4 f8 r8 | o4 r4 e-8 f8 g8 a8 r4 | o4 r4 d8 r8 r4 f8 r8 | o4 r4 g8 f8 e-8 c8 r4 | ; 13-16
+o4 r4 a-8 r8 r4 a-8 r8 | o4 r4 g8 r8 r4 g-8 r8 | o4 r4 d8 r8 r4 e-8 r8 | o4 r4 f8 g8 b-8 o5 d8 r4 | ; 17-20
+o4 f+4. f+8 r2 | o4 r4 o5 c8 r8 r4 c8 r8 | o4 f4. f8 r2 | o4 r4 b8 r8 r4 b8 r8 | ; 21-24
+o4 e4. e8 r2 | o4 r4 b-8 r8 r4 b-8 r8 | o4 e-4. e-8 r2 | o4 r4 a8 r8 r4 a8 r8 | ; 25-28
+o4 r4 d8 r8 r4 f8 r8 | o4 r4 e-8 f8 g8 a8 r4 | o4 r4 d8 r8 r4 f8 r8 | o4 r4 g8 f8 e-8 c8 r4 | ; 29-32
+o4 r4 a-8 r8 r4 a-8 r8 | o4 r4 g8 r8 r4 g-8 r8 | o4 r4 d8 r8 r4 e-8 r8 | o4 r4 f8 g8 b-8 o5 d8 r4 | ; 33-36
+
+[triangle]
+o1 b-4 o2 d4 f4 d4 | o2 e-4 g4 b-4 g4 | o2 f4 d4 o1 b-4 o2 d4 | o2 f4 a4 c4 o1 b4 | ; 1-4
+o1 b-4 o2 d4 g4 d4 | o2 c4 e-4 f4 o1 a4 | o1 b-4 o2 d4 g4 d4 | o2 c4 e-4 f4 o1 a4 | ; 5-8
+o2 f4 a-4 b-4 d4 | o2 e-4 g4 g-4 c4 | o1 b-4 o2 d4 f4 c4 | o1 b-4 o2 d4 c4 o1 a4 | ; 9-12
+o1 b-4 o2 d4 g4 d4 | o2 c4 e-4 f4 o1 a4 | o1 b-4 o2 d4 g4 d4 | o2 c4 e-4 f4 o1 a4 | ; 13-16
+o2 f4 a-4 b-4 d4 | o2 e-4 g4 g-4 c4 | o1 b-4 o2 d4 f4 c4 | o1 b-4 o2 d4 f4 e-4 | ; 17-20
+o2 d4 f+4 a4 f+4 | o2 d4 f+4 a4 a-4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f4 e4 d4 | ; 21-24
+o2 c4 e4 g4 e4 | o2 c4 e4 g4 e4 | o2 f4 a4 o3 c4 o2 a4 | o2 f4 e-4 c4 o1 b4 | ; 25-28
+o1 b-4 o2 d4 g4 d4 | o2 c4 e-4 f4 o1 a4 | o1 b-4 o2 d4 g4 d4 | o2 c4 e-4 f4 o1 a4 | ; 29-32
+o2 f4 a-4 b-4 d4 | o2 e-4 g4 g-4 c4 | o1 b-4 o2 d4 f4 c4 | o1 b-4 o2 d4 f4 o1 a4 | ; 33-36
+
+[noise]
+v9 H4 k4 k4 k4 | k4 k4 k4 k4 | s8 s8 s8 r8 s8 s8 s8 r8 | k4 s8 s8 s16 s16 s16 s16 s4 | ; 1-4
+H4 s8 h8 h4 s8 h8 | [k4 s8 h8 h4 s8 h8 |]6 k8 s8 s8 s8 s16 s16 s8 k8 s8 | ; 5-12
+H4 s8 h8 h4 s8 h8 | [k4 s8 h8 h4 s8 h8 |]6 k8 s8 s8 s8 s16 s16 s8 k8 s8 | ; 13-20
+[H4 s8 h8 H4 s8 h8 |]7 k8 s8 s8 s8 s16 s16 s8 k8 s8 |                    ; 21-28
+H4 s8 h8 h4 s8 h8 | [k4 s8 h8 h4 s8 h8 |]6 k8 s8 s8 s8 s16 s16 s8 k8 s8 | ; 29-36

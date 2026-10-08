@@ -1,0 +1,28 @@
+; The Entertainer (Scott Joplin, 1902)
+; Converted from src/audio/songs.rs. Each line ends with its bar numbers.
+
+[song]
+title = The Entertainer (Scott Joplin, 1902)
+bpm = 132
+swing = 0.2
+key = C
+loop = yes
+meter = 4/4
+
+[chords]
+| C | % | G7 | C | C | C D7 | G D7 | G7 |                    ; 1-8
+| C | % | G7 | C C7 | Fmaj7 | F#dim7 | C/G G7 | C |          ; 9-16
+| C | % | G7 | C | C | C D7 | G D7 | G7 |                    ; 17-24
+| C | % | G7 | C C7 | Fmaj7 | F#dim7 | C/G G7 | C |          ; 25-32
+
+[pulse1]
+v12 @2 [o4 e8 o5 c4 o4 e8 o5 c4 o4 e8 o5 c8& | c2 c8 d8 d+8 e8 | o5 c8 d8 e4 o4 b8 o5 d4 c8& | c4 r4 r4 o4 d8 d+8 | o4 e8 o5 c4 o4 e8 o5 c4 o4 e8 o5 c8& | c4. o4 a8 g8 f+8 a8 o5 c8 | o5 e4 d8 c8 o4 a8 o5 d4.& | d4 r4 r4 o4 d8 d+8 | o4 e8 o5 c4 o4 e8 o5 c4 o4 e8 o5 c8& | c2 c8 d8 d+8 e8 | o5 c8 d8 e4 o4 b8 o5 d4 c8& | c4 r8 c8 d8 e8 c8 d8 | o5 e4 c8 d8 c8 e8 c8 d8 | o5 e4 c8 d8 c8 e8 c8 d8 | o5 e4 o4 b8 o5 d4 c4. | o5 c4 o4 g4 e4 d8 d+8 | ]2 | ; 1-32
+
+[pulse2]
+v7 @0 [o4 r4 e8 r8 r4 g8 r8 | o4 r4 e8 r8 r4 g8 r8 | o4 r4 f8 r8 r4 b8 r8 | o4 r4 e8 r8 r4 g8 r8 | o4 r4 e8 r8 r4 g8 r8 | o4 r4 e8 r8 r4 f+8 r8 | o4 r4 b8 r8 r4 o5 c8 r8 | o4 r4 b8 r8 r4 f8 r8 | o4 r4 e8 r8 r4 g8 r8 | o4 r4 e8 r8 r4 g8 r8 | o4 r4 f8 r8 r4 b8 r8 | o4 r4 e8 r8 r4 b-8 r8 | o4 r4 a8 r8 r4 o5 c8 r8 | o4 r4 a8 r8 r4 o5 e-8 r8 | o4 r4 e8 r8 r4 f8 r8 | o4 r4 e8 r8 r4 o3 b8 o4 c8 | ]2 | ; 1-32
+
+[triangle]
+[o2 c4 g4 e4 g4 | o2 c4 e4 f4 f+4 | o2 g4 d4 f4 g4 | o2 c4 g4 e4 g4 | o2 c4 g4 e4 g4 | o2 c4 e4 d4 f+4 | o2 g4 b4 d4 f+4 | o2 g4 f4 e4 d4 | o2 c4 g4 e4 g4 | o2 c4 e4 f4 f+4 | o2 g4 d4 f4 g4 | o2 c4 e4 g4 e4 | o2 f4 c4 a4 c4 | o2 f+4 a4 o3 c4 o2 a4 | o2 g4 e4 g4 d4 | o2 c4 g4 e4 g4 | ]2 | ; 1-32
+
+[noise]
+v8 [[k8 h8 s8 h8 k8 h8 s8 h8 |]7 k8 s8 s8 s8 s16 s16 s8 k8 s8 |]4        ; 1-32
