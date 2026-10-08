@@ -205,7 +205,7 @@ impl PhrasePlan {
         let end = b + bars;
         let target = if end == shape.bars {
             Target::LoopEnd
-        } else if end % 8 == 0 {
+        } else if end.is_multiple_of(8) {
             Target::SectionEnd
         } else {
             Target::Cadence
@@ -513,7 +513,7 @@ impl Musician for Drums {
                 let start = ctx.bar.loop_start + ctx.shape.at(beat);
                 let end = ctx.bar.loop_start + ctx.shape.at(beat + 0.25);
                 let drum = if k == 7 { Drum::Kick } else { Drum::Snare };
-                let volume = (template.volume as i32 - 3 + k as i32 * 3 / 4).clamp(1, 15) as u8;
+                let volume = (template.volume as i32 - 3 + k * 3 / 4).clamp(1, 15) as u8;
                 out.push(NoteEvent { sound: Sound::Drum(drum), start, end, beat, volume, tie: false, ..template });
             }
         }
