@@ -327,6 +327,7 @@ mod tests {
             filters: Filters { harmony: Harmony::Waltz, just_intonation: false },
             reason: crate::audio::director::REASON_WALTZ,
             tuning_now: None,
+            feel_now: "",
         };
         assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JAZZ WALTZ".to_string()));
     }
@@ -356,7 +357,8 @@ fn spawn_band_readout(commands: &mut Commands, f: &UiFont) {
         .with_child((BandReadout, label(f, "", 8.0, CREAM), TextLayout::justify(Justify::Right)));
 }
 
-/// The two readout lines for what's sounding.
+/// The readout lines for what's sounding: the harmony, the tuning, and the band's feel while
+/// it's in one.
 pub fn band_readout_text(now: &crate::audio::NowPlaying) -> String {
     use crate::audio::{Harmony, tuning::Tuning};
     let harmony = match now.filters.harmony {
@@ -368,7 +370,7 @@ pub fn band_readout_text(now: &crate::audio::NowPlaying) -> String {
         (None, true) => tuning_name(Tuning::Medley),
         (None, false) => "EQUAL TEMPERAMENT",
     };
-    format!("{harmony}\n{tuning}")
+    if now.feel_now.is_empty() { format!("{harmony}\n{tuning}") } else { format!("{harmony}\n{tuning}\n{}", now.feel_now) }
 }
 
 fn tuning_name(t: crate::audio::tuning::Tuning) -> &'static str {
@@ -411,5 +413,7 @@ mod readout_tests {
         assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\nDRUNK MEDLEY");
         now.tuning_now = Some(Tuning::Tet7);
         assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\n7-TET");
+        now.feel_now = "BOSSA NOVA";
+        assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\n7-TET\nBOSSA NOVA");
     }
 }

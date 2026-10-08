@@ -18,7 +18,10 @@
 //! - [`musician`]: the band behind the [`musician::Musician`] trait: plans, commits, freedom,
 //!   and each player's ornaments (`musician/lead.rs`, `comp.rs`, `bass.rs`, `drums.rs`).
 //! - [`band`]: the band's shared plan for each bar ([`band::BandPlan`]: hits, the band's own
-//!   reharmonization, trading fours, fills, the game's flourishes), so the four line up.
+//!   reharmonization, trading fours, fills, the game's flourishes, the feel), so the four line
+//!   up.
+//! - [`feel`]: the grooves the band switches to on its own at high freedom (bossa nova, samba,
+//!   rock, funk): when ([`feel::auto`]), how each player realizes one, their instruments.
 //! - [`ornament`]: the vocabulary ([`ornament::Orn`]) and its harmony helpers (chord-scales,
 //!   voicings, enclosures, digital patterns, planing, substitutions); no allocation.
 //! - [`instrument`]: FamiTracker-style instruments (`[instruments]`, `@i`): macros per 60 Hz
@@ -74,14 +77,14 @@
 //! release build with everything on (Coltrane + medley + every musician at freedom 1), 200-900×
 //! real time (`tests/live.rs` holds it to 100×).
 //!
-//! # Extension points: feels
-//! A *feel* (bossa, samba, rock, funk) is meant to slot in as a band-wide choice in
-//! [`band::BandPlan`] (its `feel` field, decided per section like trading fours, from the
-//! dials), realized by each player as a rhythm transform of its bar (the comp's
-//! Charleston / Freddie Green and the bass's walking / two-feel are the pattern to follow), with
-//! its instruments picked from the channel palettes ([`musician::Ctx::palette`],
-//! [`musician::Ctx::alternate`]; a song can list a feel's instruments in its palettes). The
-//! musicians only ever see one bar at a time, so nothing else changes.
+//! # Feels
+//! A *feel* ([`feel`]: bossa, samba, rock, funk) is a band-wide choice in [`band::BandPlan`]
+//! (`feel`, decided per section like trading fours, from the dials: none below 0.4 freedom, so
+//! freedom 0 is untouched), realized by each player as a rhythm transform of its bar (like the
+//! comp's Charleston or the bass's walking), on the feel's instruments (a song's
+//! `bossa.pulse1 = ...` palettes, else a shared built-in set, [`feel::equip`]). Music only:
+//! no physics, no director; the HUD's band readout names it while it lasts. No feels in the
+//! waltz.
 
 pub mod arrange;
 pub mod band;

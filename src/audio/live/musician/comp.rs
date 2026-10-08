@@ -307,11 +307,12 @@ impl Comp {
         };
         match feel {
             Feel::Bossa => {
-                let pat = feel::BOSSA_COMP[!feel::first_of_pair(ctx.bar.index, ctx.band.feel_since) as usize];
-                for (j, &b) in pat.iter().enumerate() {
-                    let next = pat.get(j + 1).copied().unwrap_or(bb);
+                // The batida (half-time in a fast tune: relaxed), soft.
+                let (pat, n) = feel::two_bar(feel::BOSSA_COMP, ctx.bar.index, ctx.band.feel_since, feel::fast(ctx.shape.bpm));
+                for (j, &b) in pat[..n].iter().enumerate() {
+                    let next = if j + 1 < n { pat[j + 1] } else { bb };
                     let Some(h) = harm(b) else { continue };
-                    add(&mut self.dst, b, (next - b).min(1.0) * 0.9, feel::voicing(&h.chord, feel, center, alt), -1, None);
+                    add(&mut self.dst, b, (next - b).min(1.5) * 0.9, feel::voicing(&h.chord, feel, center, alt), -2, None);
                 }
                 Orn::BossaComp
             }
@@ -319,7 +320,8 @@ impl Comp {
                 for &k in &feel::PARTIDO_ALTO {
                     let b = k as f64 * 0.25;
                     let Some(h) = harm(b) else { continue };
-                    add(&mut self.dst, b, 0.22, ornament::voice(&h.chord, center, 0), if k % 4 == 0 { 1 } else { 0 }, None);
+                    let dv = if k % 4 == 0 { 0 } else { -1 } - feel::fast(ctx.shape.bpm) as i32;
+                    add(&mut self.dst, b, 0.22, ornament::voice(&h.chord, center, 0), dv, None);
                 }
                 Orn::PartidoAlto
             }
@@ -350,15 +352,13 @@ impl Comp {
                 Orn::PowerChords
             }
             Feel::Funk => {
-                let pat = feel::FUNK_CLAV[feel::pattern(ctx.seed ^ 0xC1A7, ctx.bar.index, feel::FUNK_CLAV.len())];
-                for &k in pat {
+                // The vamp's few short stabs, the same colour all through the feel.
+                let (vamp, side) = feel::vamp(ctx.seed, ctx.bar.index, ctx.band.feel_since);
+                let sharp9 = feel::pick(ctx.seed, 1, ctx.band.feel_since, 3) > 0;
+                for &k in vamp.clav[side] {
                     let b = k as f64 * 0.25;
                     let Some(h) = ctx.harm_at(b) else { continue };
-                    let mut e_dv = if k % 2 == 1 { 1 } else { 0 };
-                    if k % 4 == 0 {
-                        e_dv -= 1;
-                    }
-                    add(&mut self.dst, b, 0.15, feel::voicing(&h.chord, feel, center, alt), e_dv, None);
+                    add(&mut self.dst, b, 0.12, feel::voicing(&h.chord, feel, center, sharp9), 0, None);
                 }
                 for e in &mut self.dst {
                     e.duty = 0;

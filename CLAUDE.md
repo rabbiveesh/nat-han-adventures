@@ -45,8 +45,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   waltz switches meter at a shared bar line). Songs are `music/*.song` (with FamiTracker-style
   `[instruments]`: macros, kits, palettes; `@i name` in the MML). The musicians ornament by
   their freedom dial (`musician/`, `ornament.rs`; the bar's shared `band.rs` plan keeps hits,
-  reharms, trades and flourishes in step); `cargo run --release --example ornaments` renders
-  listening WAVs with a log of what fired per bar. Offline renders
+  reharms, trades, flourishes and the feel in step); at high freedom the band picks feels on
+  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz);
+  `cargo run --release --example ornaments` renders listening WAVs with a log of what fired
+  per bar (`-- <dir> feels`: the feels). Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator

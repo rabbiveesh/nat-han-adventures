@@ -82,6 +82,7 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
             ("snare noise=short period=5 decay=3 tone=185 body=2", "snare: NES noise mode and period 0..15, rattle decay, tone Hz and its decay"),
             ("hat decay=1 | ohat decay=5 | crash period=1 noise=long", "hats and crash: decay (frames), NES noise period 0..15, noise mode"),
             ("pulse1 = default brass pluck", "a channel's palette: what its musician may switch to (`default` = built-in)"),
+            ("bossa.pulse1 = clarinet flute", "a feel's palette (bossa samba rock funk): what the band plays it on; unlisted = built-ins"),
         ],
     ),
     (

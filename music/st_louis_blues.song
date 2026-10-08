@@ -29,6 +29,9 @@ pulse1 = default harp bone
 pulse2 = default organ pad
 triangle = default thump
 noise = default brushes
+; The feels' instruments (a feel and channel not listed plays the built-in set):
+rock.pulse1 = harp
+bossa.pulse2 = pad
 
 [pulse1]
 v12 @2 o4 r8 g8 a8 b-8 b4 b4 | o4 b-4 a8 g8 e8 g8 r4 | o4 g2. r4 | o4 r2 b8 o5 d8 f8 g8 | ; 1-4

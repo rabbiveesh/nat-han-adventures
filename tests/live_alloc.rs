@@ -7,7 +7,7 @@ use std::cell::Cell;
 use kira::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony,
-    live::{Engine, Input, library},
+    live::{Engine, Input, feel::Feel, library},
 };
 
 struct Counting;
@@ -57,6 +57,8 @@ fn fill_doesnt_allocate() {
                 e.post(Input::Death);
                 e.post(Input::Checkpoint);
                 e.post(Input::SetFilters(Filters { harmony: Harmony::ALL[k / 100 % 5], just_intonation: k % 200 == 0 }));
+                // The feels too (the band's own choices at these freedoms, and forced ones).
+                e.post(Input::ForceFeel([None, Some(Feel::Bossa), Some(Feel::Samba), Some(Feel::Rock), Some(Feel::Funk)][k / 300 % 5]));
             }
             e.fill(&mut buf);
             e.state_into(&mut state);

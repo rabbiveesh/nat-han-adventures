@@ -38,12 +38,14 @@
 //! the dynamics dial up, musicians scale their volume with it and the drums accent the
 //! downbeat.
 //!
-//! # Extension points (feels)
-//! A feel (bossa, rock, ...) is a per-phrase choice like the comp's pattern or the bass's
-//! walking: roll it in [`Player::roll`] (or, for the whole band at once, in
-//! [`BandPlan::decide`]'s `feel`), realize it in each player's commit as a rhythm transform of
-//! the bar, and pick its instruments from the palette ([`Ctx::palette`]) the way
-//! [`BarIntent::switch`] does. Nothing else needs to change: commits only ever see one bar.
+//! # Feels
+//! The band's feel ([`super::feel`], [`BandPlan::feel`], decided for the whole band at once in
+//! [`BandPlan::decide`]) is realized in each player's commit as a rhythm transform of the bar
+//! (each player's `feel_*` pattern), on the feel's instrument ([`Ctx::feel_inst`], from the
+//! feel's palette; a phrase's [`BarIntent::switch`] picks another entry of it). Every feel is
+//! straight: [`Ctx::swing8`] stops swinging, so the ornaments go straight too, and the lead
+//! un-swings its line ([`Ctx::straighten`]). A forced feel plays at freedom 0 too (plainly:
+//! nothing else is rolled); the band's own never does.
 
 mod bass;
 mod comp;

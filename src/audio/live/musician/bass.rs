@@ -257,20 +257,25 @@ impl Bass {
         match ctx.feel() {
             Feel::Bossa => {
                 // Root on 1, the fifth on 3 (a new chord's root if it changed), the next bar's
-                // root on the "and" of 4, tied over into it.
+                // root on the "and" of 4, tied over into it. Half-time in a fast tune: the root
+                // rings through the bar unless the chord changes, the anticipation every other
+                // bar (or into a new chord).
+                let half = feel::fast(ctx.shape.bpm);
                 let h0 = harm(0.0);
+                let same = bb >= 4.0 && harm(2.0).chord == h0.chord;
                 let root = nearest_pc(h0.chord.bass_pc(), prev, LO, HI - 7) as i32;
-                let mut first = note(0.0, 1.5, root, vol(-1));
+                let mut first = note(0.0, if half && same { 3.4 } else { 1.5 }, root, vol(-2));
                 first.tie = anticipated == Some(root as u8) && ctx.band.sub_at(0.0).is_none();
                 push(&mut self.dst, first);
                 let mut p = root;
-                if bb >= 4.0 {
+                if bb >= 4.0 && !(half && same) {
                     let h2 = harm(2.0);
                     let n = if h2.chord == h0.chord { nearest_pc((h0.chord.root + 7) % 12, root, LO, HI) as i32 } else { nearest_pc(h2.chord.bass_pc(), root, LO, HI) as i32 };
-                    push(&mut self.dst, note(2.0, 1.4, n, vol(-1)));
+                    push(&mut self.dst, note(2.0, 1.4, n, vol(-2)));
                     p = n;
                 }
-                if let Some(nh) = ctx.plain_harm_at(bb) {
+                let second = !feel::first_of_pair(ctx.bar.index, ctx.band.feel_since);
+                if let Some(nh) = ctx.plain_harm_at(bb).filter(|nh| !half || second || nh.chord != harm(bb - 0.5).chord) {
                     let n = nearest_pc(nh.chord.bass_pc(), p, LO, HI - 7);
                     push(&mut self.dst, note(bb - 0.5, 0.5, n as i32, vol(-2)));
                     self.anticipated = Some((ctx.bar.index + 1, n));
@@ -310,26 +315,28 @@ impl Bass {
                 Orn::Pumping
             }
             Feel::Funk => {
-                // On the kick: the root low (slapped), octaves popped between; dead notes (a
-                // muted blip) on the 16ths before some of them.
-                let kicks = feel::FUNK_KICKS[feel::pattern(ctx.seed, ctx.bar.index, feel::FUNK_KICKS.len())];
-                let dead = ctx.extra(Extra::Dead);
-                let mut r = ctx.rng(Role::Bass, 41);
-                for (j, &k) in kicks.iter().enumerate() {
+                // The vamp, locked to the kick: the one long and hard, short roots on the
+                // kick's other hits, an octave pop, one dead note (a muted blip) leading in.
+                let (vamp, side) = feel::vamp(ctx.seed, ctx.bar.index, ctx.band.feel_since);
+                let kicks = vamp.kick[side];
+                let root_at = |b: f64| nearest_pc(harm(b).chord.bass_pc(), 36, LO, LO + 11) as i32;
+                for &k in kicks {
                     let b = k as f64 * 0.25;
                     if b >= bb - 1e-9 {
                         continue;
                     }
-                    let root = nearest_pc(harm(b).chord.bass_pc(), 36, LO, LO + 11) as i32;
-                    if k > 0 && !kicks.contains(&(k - 1)) && r.chance(0.6) {
-                        push(&mut self.dst, NoteEvent { inst: dead, ..note(b - 0.25, 0.08, root, vol(-2)) });
+                    let (d, dv) = if k == 0 { (0.7, 2) } else { (0.25, 0) };
+                    push(&mut self.dst, note(b, d, root_at(b), vol(dv)));
+                }
+                if let Some(k) = vamp.pop[side] {
+                    let b = k as f64 * 0.25;
+                    if b < bb - 1e-9 {
+                        push(&mut self.dst, note(b, 0.15, root_at(b) + 12, vol(0)));
                     }
-                    let (n, d) = match j {
-                        0 => (root, 0.45),
-                        j if j % 2 == 1 => (root + 12, 0.2),
-                        _ => (root, 0.3),
-                    };
-                    push(&mut self.dst, note(b, d, n, vol(1)));
+                }
+                if let Some(&k) = kicks.iter().find(|&&k| k > 1) {
+                    let b = (k - 1) as f64 * 0.25;
+                    push(&mut self.dst, NoteEvent { inst: ctx.extra(Extra::Dead), ..note(b, 0.08, root_at(b), vol(-3)) });
                 }
                 Orn::Slap
             }

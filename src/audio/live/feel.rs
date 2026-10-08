@@ -223,21 +223,60 @@ pub fn decide(input: &BandInput) -> Call {
 
 /// The 3-2 bossa clave, beats from the bar line: the first bar of a pair, and the second.
 pub const BOSSA_CLAVE: [&[f64]; 2] = [&[0.0, 1.5, 3.0], &[1.0, 2.5]];
-/// The bossa kick (and the bass's two-feel under it): 1, the "and" of 2, 3, the "and" of 4.
-pub const BOSSA_KICK: [f64; 4] = [0.0, 1.5, 2.0, 3.5];
+/// The bossa kick: 1 and 3 (a pair's first bar: 1, the "and" of 2, 3).
+pub const BOSSA_KICK: [&[f64]; 2] = [&[0.0, 1.5, 2.0], &[0.0, 2.0]];
 /// João Gilberto's batida (the guitar's chords; the thumb is the bass), a two-bar pattern.
 pub const BOSSA_COMP: [&[f64]; 2] = [&[0.0, 1.0, 2.5, 3.5], &[0.5, 2.0, 3.0]];
-/// The tamborim's teleco-teco, 16ths of the bar.
+/// The tamborim's teleco-teco, 16ths of the bar; at a fast tempo ([`fast`]) thinned out.
 pub const SAMBA_TAMBORIM: [u8; 7] = [0, 2, 5, 7, 9, 12, 14];
+pub const SAMBA_TAMBORIM_FAST: [u8; 4] = [0, 5, 9, 14];
 /// The partido-alto (the cavaquinho's chords), 16ths of the bar.
 pub const PARTIDO_ALTO: [u8; 6] = [1, 4, 6, 8, 11, 14];
-/// The funk kick patterns (the bass locks to them), 16ths of the bar.
-pub const FUNK_KICKS: [&[u8]; 3] = [&[0, 3, 6, 10, 11], &[0, 7, 10, 13], &[0, 2, 6, 9, 12]];
-/// The funk snare: the backbeat (16ths 4 and 12) and its ghosts.
+/// The funk vamps: two-bar riffs (16ths of each bar), one per feel (fixed while it lasts, so
+/// it grooves): the kick, which the bass doubles (the one long and hard, rests between), the
+/// clav's few stabs, the ghost note (the second bar only) and the bass's octave pop.
+pub struct Vamp {
+    pub kick: [&'static [u8]; 2],
+    pub clav: [&'static [u8]; 2],
+    pub ghost: u8,
+    pub pop: [Option<u8>; 2],
+}
+
+pub const FUNK_VAMPS: [Vamp; 3] = [
+    Vamp { kick: [&[0, 10], &[0, 7, 10]], clav: [&[6, 14], &[3, 6, 11]], ghost: 9, pop: [Some(14), None] },
+    Vamp { kick: [&[0, 6], &[0, 3, 10]], clav: [&[3, 11], &[6, 14]], ghost: 7, pop: [Some(10), Some(14)] },
+    Vamp { kick: [&[0, 3, 8], &[0, 10]], clav: [&[6, 12], &[2, 6, 14]], ghost: 15, pop: [None, Some(7)] },
+];
+/// The funk snare's backbeat (16ths 4 and 12).
 pub const FUNK_BACKBEAT: [u8; 2] = [4, 12];
-pub const FUNK_GHOSTS: [u8; 5] = [2, 7, 9, 14, 15];
-/// The clav's 16th syncopations.
-pub const FUNK_CLAV: [&[u8]; 3] = [&[1, 3, 6, 9, 11, 14], &[2, 3, 7, 10, 12, 15], &[0, 3, 6, 8, 11, 13]];
+
+/// The funk vamp for a feel that started at bar `since`, and which of its two bars `bar` is.
+pub fn vamp(seed: u64, bar: u64, since: u64) -> (&'static Vamp, usize) {
+    (&FUNK_VAMPS[pattern(seed, since, FUNK_VAMPS.len())], !first_of_pair(bar, since) as usize)
+}
+
+/// A fast tune (bossa goes half-time, the samba thins out, so they stay relaxed).
+pub fn fast(bpm: f32) -> bool {
+    bpm >= 160.0
+}
+
+/// The hits of a two-bar pattern (`pat`, beats of each bar) in bar `bar` of a feel that started
+/// at `since`; `half`: half-time, the pattern spread over four bars (twice as slow).
+pub fn two_bar(pat: [&[f64]; 2], bar: u64, since: u64, half: bool) -> ([f64; 8], usize) {
+    let mut out = [0.0; 8];
+    let mut n = 0;
+    let j = bar - since.min(bar);
+    let (which, from) = if half { (((j / 2) % 2) as usize, (j % 2) as f64 * 4.0) } else { ((j % 2) as usize, 0.0) };
+    let k = if half { 2.0 } else { 1.0 };
+    for &b in pat[which] {
+        let x = b * k - from;
+        if (0.0..4.0 - 1e-9).contains(&x) && n < 8 {
+            out[n] = x;
+            n += 1;
+        }
+    }
+    (out, n)
+}
 
 /// Which pattern of a list bar `bar` plays (the same for every player: they lock together).
 pub fn pattern(seed: u64, bar: u64, n: usize) -> usize {

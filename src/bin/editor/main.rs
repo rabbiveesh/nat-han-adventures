@@ -11,7 +11,8 @@
 //!
 //! Options (for scripts and screenshots):
 //! `--song <stem>`, `--view tracker|piano|text`, `--play`, `--from-bar <n>`, `--toots <n>`
-//! (press TOOT n times at the start), `--force <harmony>`, `--auto <chaos 0..1>`,
+//! (press TOOT n times at the start), `--force <harmony>`, `--feel swing|bossa|samba|rock|funk`
+//! (force the band's feel), `--auto <chaos 0..1>`,
 //! `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
 //! `--check` (no window: load and reformat every song, then quit). `NATHAN_AUDIO=headless`
 //! renders without a sound card.
@@ -30,6 +31,7 @@ use bevy::prelude::*;
 use bevy::render::view::screenshot::{Screenshot, save_to_disk};
 use bevy::window::WindowResolution;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
+use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::{AudioOutput, Filters};
 
 use app::{Editor, View, repo_root};
@@ -42,6 +44,7 @@ struct Args {
     from_bar: usize,
     toots: u32,
     force: Option<Filters>,
+    feel: Option<Feel>,
     auto: Option<f32>,
     rec: bool,
     as_played: bool,
@@ -65,6 +68,7 @@ fn args() -> Result<Args, String> {
             "--from-bar" => a.from_bar = val()?.parse::<usize>().map_err(|e| e.to_string())?.saturating_sub(1),
             "--toots" => a.toots = val()?.parse().map_err(|e: std::num::ParseIntError| e.to_string())?,
             "--force" => a.force = Some(Filters::parse(&val()?).ok_or("--force coltrane|quartal|melodic|waltz|original[+ji]")?),
+            "--feel" => a.feel = Some(Feel::parse(&val()?).ok_or("--feel swing|bossa|samba|rock|funk")?),
             "--auto" => a.auto = Some(val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
             "--rec" => a.rec = true,
             "--as-played" => a.as_played = true,
@@ -136,6 +140,7 @@ fn main() {
             ed.dials.force_tuning = Some(nat_han_adventures::audio::tuning::Tuning::Medley);
         }
     }
+    ed.dials.force_feel = a.feel;
     if let Some(c) = a.auto {
         ed.auto.on = true;
         ed.auto.chaos = c;
