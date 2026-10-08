@@ -6,7 +6,7 @@
 timing = { max-threads = 1 }
 
 [[profile.default.overrides]]
-filter = 'test(/budget|real_time|renders_fast|renders_through_every_filter|waltzes_cleanly|within_budget|timing|_timings/)'
+filter = 'test(/budget|real_time|renders_fast|renders_through_every_filter|renders_cleanly|waltzes_cleanly|within_budget|timing|_timings/)'
 test-group = 'timing'
 
 [profile.ci]
