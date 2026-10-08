@@ -183,15 +183,18 @@ pub(super) fn check_hazards(
     flies: Query<&Pos, (With<Fly>, Without<Player>)>,
     sprays: Query<(&Spray, &Transform)>,
     mut run: ResMut<LevelRun>,
+    assists: Res<super::Assists>,
     mut died: MessageWriter<PlayerDied>,
     mut says: MessageWriter<HanSays>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
-    let min = pos.0 - body.half + FORGIVE;
-    let max = pos.0 + body.half - FORGIVE;
+    // The adaptive assist forgives hazards a little more (never the pit).
+    let extra = assists.extra_forgiveness();
+    let min = pos.0 - body.half + FORGIVE + extra;
+    let max = pos.0 + body.half - FORGIVE - extra;
 
-    let mut dead = max.y < 0.0; // Fell into the pit.
+    let mut dead = max.y + extra < 0.0; // Fell into the pit.
 
     // Deadly tiles. The one nearest Nat's middle takes the stain.
     let (xs, ys) = cells(min, max);
@@ -255,6 +258,7 @@ pub(super) fn respawn(
     time: Res<Time>,
     active: Res<ActiveLevel>,
     run: Res<LevelRun>,
+    hidden: Res<super::adaptive::HiddenRespawn>,
     mut at_risk: ResMut<super::pickups::NuggetsAtRisk>,
     mut player: Query<
         (Entity, &mut Dead, &mut Pos, &mut PrevPos, &mut Body, &mut PlayerControl),
@@ -276,6 +280,7 @@ pub(super) fn respawn(
         .and_then(|i| level.checkpoints().nth(i))
         .map_or(level.start, |c| (c.col, c.row));
     let at = super::lifecycle::stand_pos(level, col, row);
+    let at = hidden.respawn_at(run.checkpoint, run.time).unwrap_or(at);
     pos.0 = at;
     prev.0 = at;
     *body = Body::player();

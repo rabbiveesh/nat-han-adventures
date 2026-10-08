@@ -37,3 +37,20 @@ impl Default for Assists {
         }
     }
 }
+
+impl Assists {
+    /// Coyote time (s): never below [`super::tuning::COYOTE_TIME`].
+    pub fn coyote_time(&self) -> f32 {
+        super::tuning::COYOTE_TIME * self.coyote_mult.max(1.0)
+    }
+
+    /// Jump buffer (s): never below [`super::tuning::JUMP_BUFFER`].
+    pub fn jump_buffer(&self) -> f32 {
+        super::tuning::JUMP_BUFFER * self.jump_buffer_mult.max(1.0)
+    }
+
+    /// Extra hazard-hitbox forgiveness (px per side), never negative.
+    pub fn extra_forgiveness(&self) -> f32 {
+        if self.hitbox_forgiveness_px.is_finite() { self.hitbox_forgiveness_px.max(0.0) } else { 0.0 }
+    }
+}
