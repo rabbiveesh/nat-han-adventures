@@ -43,15 +43,16 @@
 //! (`crate::audio::tuning::Medley`), always a bit drunk on top. The audio plugin writes the
 //! phrase sounding into [`Groove::phrase`] (the same pick as `NowPlaying::tuning_now`) and the
 //! drunk pitch wobble into [`Groove::sway`] every frame, and each phrase nudges the physics a
-//! little ([`Groove::nudge`], named on the HUD's groove badge):
+//! little ([`Groove::nudge`]; the HUD's groove badge says what it does, the band readout
+//! gives its nickname):
 //!
-//! | phrase | badge | nudge |
-//! |---|---|---|
-//! | just intonation | SOBER FOR A SEC | no bounce, no sway, the camera stops giggling |
-//! | harmonic series | OVERTONES! | the toot is up to ×11/8 ([`Groove::toot_speed`]) |
-//! | 7-TET | SEASICK | slippery landings ([`SEASICK_DECEL`]), the camera rolls |
-//! | Carlos alpha | MELTING | Nat shrinks to [`MELTING_SIZE`], jumps ×[`MELTING_JUMP`] |
-//! | Bohlen–Pierce | ALIEN | gravity pulses in threes ([`Groove::gravity_now`]) |
+//! | phrase | nickname | badge | nudge |
+//! |---|---|---|---|
+//! | just intonation | SOBER FOR A SEC | NO BOUNCE | no bounce, no sway, the camera stops giggling |
+//! | harmonic series | OVERTONES! | BIG TOOTS | the toot is up to ×11/8 ([`Groove::toot_speed`]) |
+//! | 7-TET | SEASICK | SLIPPERY LANDINGS | slippery landings ([`SEASICK_DECEL`]), the camera rolls |
+//! | Carlos alpha | MELTING | TINY JUMPS | Nat shrinks to [`MELTING_SIZE`], jumps ×[`MELTING_JUMP`] |
+//! | Bohlen–Pierce | ALIEN | HEAVY BEATS | gravity pulses in threes ([`Groove::gravity_now`]) |
 //! | (all but just) | | run speed staggers down to ×(1 − [`DRUNK_SWAY`]) with the pitch wobble |
 //!
 //! Small, and never unfair: none of them opens a band gate or closes a way through.
@@ -283,14 +284,7 @@ impl Groove {
         if !self.bounce {
             return None;
         }
-        Some(match self.phrase? {
-            Tuning::Just => Nudge::Sober,
-            Tuning::Harmonic => Nudge::Overtones,
-            Tuning::Tet7 => Nudge::Seasick,
-            Tuning::CarlosAlpha => Nudge::Melting,
-            Tuning::BohlenPierce => Nudge::Alien,
-            Tuning::Equal | Tuning::Drunk | Tuning::Medley => return None,
-        })
+        Nudge::of(self.phrase?)
     }
 
     /// Landings bounce: the laughing band, unless it's sobered up for a phrase.
@@ -410,7 +404,30 @@ pub enum Nudge {
 }
 
 impl Nudge {
-    /// The HUD's groove badge.
+    /// The nudge of a medley phrase's tuning.
+    pub fn of(phrase: Tuning) -> Option<Nudge> {
+        Some(match phrase {
+            Tuning::Just => Nudge::Sober,
+            Tuning::Harmonic => Nudge::Overtones,
+            Tuning::Tet7 => Nudge::Seasick,
+            Tuning::CarlosAlpha => Nudge::Melting,
+            Tuning::BohlenPierce => Nudge::Alien,
+            Tuning::Equal | Tuning::Drunk | Tuning::Medley => return None,
+        })
+    }
+
+    /// What it does, in plain words (the HUD's groove badge).
+    pub fn physics(self) -> &'static str {
+        match self {
+            Nudge::Sober => "NO BOUNCE",
+            Nudge::Overtones => "BIG TOOTS",
+            Nudge::Seasick => "SLIPPERY LANDINGS",
+            Nudge::Melting => "TINY JUMPS",
+            Nudge::Alien => "HEAVY BEATS",
+        }
+    }
+
+    /// Its nickname (the HUD's band readout).
     pub fn label(self) -> &'static str {
         match self {
             Nudge::Sober => "SOBER FOR A SEC",

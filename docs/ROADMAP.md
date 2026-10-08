@@ -24,8 +24,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   | Nervous (melodic minor) | 3+ deaths (grip is a level-long layer) | slow-mo; **sweaty grip** on grease | grease chutes |
   | Laughing band (tuning medley) | 2+ deaths since checkpoint; wears off 1 death / 10 s | bouncy landings, a nudge per phrase (below) | — |
   A summon resets progress toward every other summon; summons hold 20 s with keep-alive.
-  The laughing band's medley nudges the physics phrase by phrase (`Groove::nudge`, named on the
-  groove badge): Just = sober (no bounce, no sway, "SOBER FOR A SEC"); Harmonic = toot up to
+  The laughing band's medley nudges the physics phrase by phrase (`Groove::nudge`; nickname in
+  the band readout, what it does on the groove badge): Just = sober (no bounce, no sway, "SOBER FOR A SEC"); Harmonic = toot up to
   ×11/8, never past a perfectly timed toot's apex ("OVERTONES!"); 7-TET = slippery landings +
   camera roll ("SEASICK"); Carlos alpha = Nat drawn at 85%, jumps ×0.95 ("MELTING");
   Bohlen–Pierce = gravity ×1.05 pulses on every third beat ("ALIEN"); and run speed staggers down
@@ -74,6 +74,8 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
 - It's a loving prank on the brother (Nathan): Nat + Han. Cartoonish, never genuinely gross.
 - Music: public domain only (published ≤ 1930). Melody follows reharms. Feels are music-only.
 - Assists only ever loosen things above the floor the validator proves solvable.
+- No music theory on screen: the HUD's groove badge says what the physics does (LOW GRAVITY,
+  SLIPPERY LANDINGS), the band readout gives the band's mood by nickname (GIANT STEPS!, SEASICK).
 - Seeds stay adaptive; last seed is remembered.
 - Every mechanic is taught by Han (hint spots) before its first use; the validator enforces it.
 - Builds at full parallelism under `nice -n 15`; tests with `cargo nextest run`; push to `main`
