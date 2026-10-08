@@ -30,6 +30,7 @@
       #start small { display: block; color: #b39a7a; font-size: 14px; font-weight: normal; }
 
       /* Touch controls: phones only (see `isPhone` below; `?touch=1` / `?touch=0` overrides).
+         The small buttons sit just under the HUD row (nuggets / level / timer).
          The left side is an invisible floating stick (thumb down anywhere, slide left/right);
          the right side is one big jump zone. Labels fade once you've started playing. */
       body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -37,8 +38,8 @@
         font: bold 13px ui-monospace, monospace; color: rgba(255, 238, 200, 0.7); }
       body.touch #touch { display: block; }
       .zone { position: absolute; pointer-events: auto; touch-action: none; }
-      #stick-zone { left: 0; top: 64px; bottom: 0; width: 45%; }
-      #jump-zone { right: 0; top: 64px; bottom: 0; width: 45%; }
+      #stick-zone { left: 0; top: 96px; bottom: 0; width: 45%; }
+      #jump-zone { right: 0; top: 96px; bottom: 0; width: 45%; }
       .hint { position: absolute; bottom: 18px; padding: 6px 10px; border-radius: 10px;
         border: 2px dashed rgba(255, 199, 46, 0.4); transition: opacity 1.2s; }
       #stick-zone .hint { left: 18px; } #jump-zone .hint { right: 18px; }
@@ -47,7 +48,7 @@
         border: 2px solid rgba(255, 199, 46, 0.6); display: none; pointer-events: none; z-index: 6; }
       #ring::after { content: ""; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
         margin: -11px; border-radius: 50%; background: rgba(255, 199, 46, 0.55); transform: translateX(var(--dx, 0px)); }
-      .btn { position: absolute; pointer-events: auto; touch-action: none; top: 12px; height: 36px; min-width: 44px;
+      .btn { position: absolute; pointer-events: auto; touch-action: none; top: 46px; height: 36px; min-width: 44px;
         display: grid; place-items: center; padding: 0 8px; box-sizing: border-box; border-radius: 10px;
         border: 2px solid rgba(255, 199, 46, 0.45); background: rgba(26, 18, 12, 0.35); }
       .btn.down { background: rgba(255, 199, 46, 0.35); }

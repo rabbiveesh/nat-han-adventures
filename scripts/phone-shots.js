@@ -1,4 +1,4 @@
-// Phone-sized landscape run of the live game with touch emulation; screenshots to argv[2].
+// Phone-sized landscape run of the game with touch emulation (see scripts/phone-shots).
 const puppeteer = require(process.env.PPTR);
 const out = process.argv[2];
 const url = process.argv[3] || "https://rabbiveesh.github.io/nat-han-adventures/?touch=1";
@@ -21,8 +21,10 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await shot("0-start");
   const t = page.touchscreen;
   await t.tap(422, 195); await sleep(2500); await shot("1-title");
-  await t.tap(560, 30); await sleep(1500); await shot("2-select");   // OK
-  await t.tap(560, 30); await sleep(3500); await shot("3-level");    // OK -> level 1
+  // Tap the real OK button wherever it is laid out.
+  const ok = await page.$eval("#ok", (el) => { const r = el.getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; });
+  await t.tap(ok[0], ok[1]); await sleep(1500); await shot("2-select");   // OK
+  await t.tap(ok[0], ok[1]); await sleep(3500); await shot("3-level");    // OK -> level 1
   // Floating stick: thumb down low-left, slide right, hold.
   await t.touchStart(110, 330); await sleep(100); await t.touchMove(150, 332); await sleep(1200);
   await shot("4-running");
