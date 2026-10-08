@@ -1,11 +1,12 @@
 //! Hand-rolled player physics: tile AABB collision (X then Y) against the level grid, one-way
 //! tiles and moving platforms; coyote time, jump buffering, variable jump height, the toot.
-//! The music's [`Groove`] scales gravity and run speed, and can make landings bounce.
+//! The music's [`Groove`] scales gravity and run speed, can make landings bounce, and in the
+//! waltz boosts a ground jump on ONE (which spends the toot).
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
-use super::groove::{BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED};
+use super::groove::{BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
@@ -111,6 +112,7 @@ fn player_step(
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), Without<Player>>,
     mut jumped: MessageWriter<Jumped>,
     mut landed: MessageWriter<Landed>,
+    mut on_one: MessageWriter<JumpedOnOne>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
@@ -150,6 +152,12 @@ fn player_step(
     }
     if ctl.buffer > 0.0 && ctl.coyote > 0.0 {
         body.vel.y = JUMP_SPEED;
+        if groove.on_the_one() {
+            // A waltz step on ONE: higher, golden, and it spends the toot.
+            body.vel.y *= WALTZ_ONE_BOOST;
+            ctl.has_toot = false;
+            on_one.write(JumpedOnOne { pos: pos.0 });
+        }
         ctl.buffer = 0.0;
         ctl.coyote = 0.0;
         ctl.cut_armed = true;

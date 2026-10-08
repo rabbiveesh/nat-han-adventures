@@ -1,6 +1,7 @@
 //! In-level HUD: nuggets, level name, timer, splats; the "LEVEL N" intro card; checkpoint toast;
 //! the band toast when the music changes style to match how you play, and a badge naming the
-//! physics mode the music is putting you in (Giant Steps, fired up, ...).
+//! physics mode the music is putting you in (Giant Steps, fired up, waltz with its 1-2-3
+//! beat dots, ...).
 
 use bevy::prelude::*;
 
@@ -91,6 +92,10 @@ struct GrooveBadge;
 #[derive(Component)]
 struct GrooveBadgeText;
 
+/// The waltz's beat indicator in the badge ("1..", ".2.", "..3").
+#[derive(Component)]
+struct GrooveBadgeBeat;
+
 fn spawn_groove_badge(commands: &mut Commands, f: &UiFont, sprites: Option<&Sprites>) {
     commands
         .spawn((
@@ -114,13 +119,27 @@ fn spawn_groove_badge(commands: &mut Commands, f: &UiFont, sprites: Option<&Spri
         .with_children(|b| {
             b.spawn(icon(sprites, SpriteId::Note, 6.0, 7.0));
             b.spawn((label(f, "", 8.0, GOLD), GrooveBadgeText));
+            b.spawn((label(f, "", 8.0, CREAM), GrooveBadgeBeat));
         });
+}
+
+/// The waltz beat indicator for a groove: the beat's number among dots ("1..", ".2.", "..3"),
+/// "" when not waltzing.
+pub fn waltz_beat_dots(g: &Groove) -> String {
+    if !g.waltz() {
+        return String::new();
+    }
+    let n = g.clock.beats_per_bar.max(1);
+    (0..n).map(|k| if k == g.clock.beat { char::from(b'1' + k) } else { '.' }).collect()
 }
 
 /// The badge's text for a groove ("" for normal physics). Several knobs can be on at once
 /// (a harmony + the laughing band's bounce).
 pub fn groove_badge(g: &Groove) -> String {
     let mut parts = Vec::new();
+    if g.waltz() {
+        parts.push("WALTZ");
+    }
     if g.giant_steps() {
         parts.push("GIANT STEPS");
     }
@@ -139,8 +158,15 @@ pub fn groove_badge(g: &Groove) -> String {
 fn update_groove_badge(
     groove: Option<Res<Groove>>,
     mut badge: Query<&mut Visibility, With<GrooveBadge>>,
-    mut text: Query<&mut Text, With<GrooveBadgeText>>,
+    mut text: Query<&mut Text, (With<GrooveBadgeText>, Without<GrooveBadgeBeat>)>,
+    mut beat: Query<&mut Text, (With<GrooveBadgeBeat>, Without<GrooveBadgeText>)>,
 ) {
+    let dots = groove.as_ref().map_or_else(String::new, |g| waltz_beat_dots(g));
+    for mut t in &mut beat {
+        if t.0 != dots {
+            t.0 = dots.clone();
+        }
+    }
     let s = groove.map_or_else(String::new, |g| groove_badge(&g));
     let vis = if s.is_empty() { Visibility::Hidden } else { Visibility::Inherited };
     for mut v in &mut badge {
@@ -261,5 +287,31 @@ fn band_lines(now: &NowPlaying) -> (String, String) {
         ("THE BAND IS FEELING IT".into(), label)
     } else {
         (now.reason.to_string(), label)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::{Filters, Harmony, Music};
+    use crate::game::BeatClock;
+
+    #[test]
+    fn the_waltz_badge_counts_the_beat() {
+        let w = Groove::of(Harmony::Waltz);
+        assert_eq!(groove_badge(&w), "WALTZ");
+        let laughing = Groove::new(Filters { harmony: Harmony::Waltz, just_intonation: true });
+        assert_eq!(groove_badge(&laughing), "WALTZ + BOUNCY");
+        let dots: Vec<String> =
+            [0.2, 1.5, 2.9, 3.1].iter().map(|&b| waltz_beat_dots(&w.at(BeatClock::at(b, 0.5, 3)))).collect();
+        assert_eq!(dots, ["1..", ".2.", "..3", "1.."]);
+        assert_eq!(waltz_beat_dots(&Groove::default()), "");
+        let now = NowPlaying {
+            music: Music::World(4),
+            title: "",
+            filters: Filters { harmony: Harmony::Waltz, just_intonation: false },
+            reason: crate::audio::director::REASON_WALTZ,
+        };
+        assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JAZZ WALTZ".to_string()));
     }
 }

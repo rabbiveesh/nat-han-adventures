@@ -176,16 +176,19 @@ impl Slot {
     }
 }
 
-/// A parsed chart: chords in time order, contiguous from beat 0 to `bars * 4`.
+/// A parsed chart: chords in time order, contiguous from beat 0 to `bars * meter`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Chart {
     pub slots: Vec<Slot>,
     pub bars: usize,
+    /// Beats per bar: 4 for every written chart; 3 for the waltz version
+    /// ([`super::waltz::warp_chart`]).
+    pub meter: u32,
 }
 
 impl Chart {
     pub fn beats(&self) -> f64 {
-        self.bars as f64 * 4.0
+        self.bars as f64 * self.meter as f64
     }
 
     /// Consecutive identical chords merged into one longer slot.
@@ -211,12 +214,13 @@ impl Chart {
     /// Bars whose chords don't fall on 1-, 2- or 4-beat splits are written with durations.
     pub fn to_text(&self) -> String {
         let mut bars = vec![Vec::new(); self.bars];
+        let m = self.meter as f64;
         for s in &self.slots {
             // A slot may span several bars: write it in each.
             let mut t = s.start;
             while t < s.end() - 1e-9 {
-                let bar = (t / 4.0).floor() as usize;
-                let bar_end = (bar as f64 + 1.0) * 4.0;
+                let bar = (t / m).floor() as usize;
+                let bar_end = (bar as f64 + 1.0) * m;
                 let d = s.end().min(bar_end) - t;
                 if let Some(b) = bars.get_mut(bar) {
                     b.push((s.chord.to_string(), d));
@@ -227,7 +231,7 @@ impl Chart {
         bars.iter()
             .map(|b| {
                 b.iter()
-                    .map(|(c, d)| if b.len() == 1 || (b.len() == 2 && *d == 2.0) || b.len() == 4 {
+                    .map(|(c, d)| if b.len() == 1 || (b.len() == 2 && *d == m / 2.0) || b.len() == 4 && m == 4.0 {
                         c.clone()
                     } else {
                         format!("{c}:{d}")
@@ -330,7 +334,7 @@ pub fn parse(src: &str) -> Result<Chart, ChartError> {
         }
         bars += 1;
     }
-    Ok(Chart { slots, bars })
+    Ok(Chart { slots, bars, meter: 4 })
 }
 
 #[cfg(test)]

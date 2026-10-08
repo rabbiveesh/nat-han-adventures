@@ -5,9 +5,10 @@
 //! cargo run --release --example render_audio -- out/                # everything
 //! cargo run --release --example render_audio -- out/ 2              # loop each song twice (hear the seam)
 //! cargo run --release --example render_audio -- out/ 1 coltrane+ji  # only these filters
+//! cargo run --release --example render_audio -- out/ 1 waltz title,world3  # the jazz waltz, two songs
 //! ```
 //!
-//! Files: `music_<song>[_<harmony>][_ji].wav`, e.g. `music_world3_coltrane.wav`,
+//! Files: `music_<song>[_<harmony>][_ji].wav`, e.g. `music_world3_coltrane.wav`, `music_title_waltz.wav`,
 //! `music_title_quartal_ji.wav`, `music_title_ji.wav` (as written, the laughing band's medley tuning), plus
 //! `music_demo_*` for the built-in ii-V-I exercise ([`audio::demo`]). Songs without a chord
 //! chart only get the original harmony.
@@ -19,11 +20,13 @@ use nat_han_adventures::audio::{self, Filters, Harmony, Music, Sfx, Song, sfx, s
 fn main() {
     let mut args = std::env::args().skip(1);
     let dir = args.next().unwrap_or_else(|| {
-        eprintln!("usage: render_audio <out-dir> [loops] [filters, e.g. coltrane+ji]");
+        eprintln!("usage: render_audio <out-dir> [loops] [filters, e.g. coltrane+ji or waltz] [songs, e.g. title,world3]");
         std::process::exit(2);
     });
     let loops: usize = args.next().map_or(1, |s| s.parse().expect("loops must be a number"));
-    let only: Option<Filters> = args.next().map(|s| Filters::parse(&s).expect("filters like quartal, melodic+ji"));
+    let only: Option<Filters> =
+        args.next().map(|s| Filters::parse(&s).expect("filters like quartal, melodic+ji, waltz"));
+    let only_songs: Option<Vec<String>> = args.next().map(|s| s.split(',').map(|x| x.trim().to_lowercase()).collect());
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir).expect("create output dir");
 
@@ -42,6 +45,9 @@ fn main() {
     let mut total_ms = 0.0;
     let mut worst_ms = 0.0f64;
     for (name, song) in &songs {
+        if only_songs.as_ref().is_some_and(|o| !o.contains(name)) {
+            continue;
+        }
         for harmony in Harmony::ALL {
             if harmony != Harmony::Original && song.chords.trim().is_empty() {
                 continue;

@@ -12,7 +12,16 @@
 //!   so it must have a flat, hazard-free runway of [`RUNWAY`] tiles before it;
 //! - a **long gap** (11 tiles) needs the fired-up band (quartal: faster running), summoned by
 //!   grabbing 4 nuggets quickly, so it must have a nugget line right before it (no checkpoint in
-//!   between: nuggets since the checkpoint come back after a splat) and a flat run-up.
+//!   between: nuggets since the checkpoint come back after a splat) and a flat run-up;
+//! - a **waltz row** needs the waltzing band, summoned by 3 evenly spaced ground jumps, so it
+//!   must have a flat, hazard-free runway of [`WALTZ_RUNWAY`] tiles before it. It's a run of at
+//!   least [`WALTZ_ROW_MIN`] *adjacent* spray cans (with gaps you could wait between the jets)
+//!   under a one-way grating you walk on, with a low ceiling so nobody jumps over the jets
+//!   (they're deadly here, whatever the timing). Running through is checked by simulating the
+//!   jets as time-varying hazards ([`dash_through`]) with the game's own clocks: impossible at
+//!   any phase with the normal shared timing (1.0 s on / 1.5 s off) at the top speed of every
+//!   other mode (fired up included), possible in the waltz (on for the big ONE's beat, 2.5 s
+//!   off) at a human 90% of top speed.
 //!
 //! Reachability starts with normal physics (with a human margin); from every reached cell that
 //! has a runway / nugget line it also tries that mode's jumps ("crossings"), and carries on with
@@ -23,12 +32,13 @@
 //! cells marked (add `LEVEL_ONLY=3` for just level 3):
 //! `+` standable & reachable, `,` passed through by some safe arc, `X` unreachable nugget,
 //! `!` unreachable checkpoint/goal, `@` moving platform (start), `-` its path,
-//! `W` take-off of a Giant Steps crossing, `R` take-off of a fired-up crossing.
+//! `W` take-off of a Giant Steps crossing, `R` take-off of a fired-up crossing, `Z` the start of
+//! a waltz row's dash.
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use nat_han_adventures::audio::Harmony;
-use nat_han_adventures::game::{Groove, tuning::*};
+use nat_han_adventures::audio::{Harmony, waltz::WALTZ_BPM};
+use nat_han_adventures::game::{BeatClock, FORGIVE, Groove, SPRAY_WIDTH, WALTZ_ONE_BOOST, spray_on, tuning::*};
 use nat_han_adventures::level::*;
 
 /// Name, world and the gates the level must use.
@@ -39,9 +49,9 @@ const PLAN: [(&str, u8, &[Mode]); LEVEL_COUNT] = [
     ("Pipe Maze", 2, &[Mode::GiantSteps]),
     ("Main Sewer", 3, &[Mode::FiredUp]),
     ("Rat Kingdom", 3, &[Mode::GiantSteps]),
-    ("Septic Tank", 4, &[]),
-    ("Porta-Potty Festival", 4, &[Mode::GiantSteps]),
-    ("Treatment Plant", 5, &[Mode::FiredUp]),
+    ("Septic Tank", 4, &[Mode::Waltz]),
+    ("Porta-Potty Festival", 4, &[Mode::GiantSteps, Mode::Waltz]),
+    ("Treatment Plant", 5, &[Mode::FiredUp, Mode::Waltz]),
     ("The Golden Throne", 5, &[Mode::GiantSteps]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).
@@ -63,6 +73,10 @@ const NUGGET_LINE_REACH: i32 = 30;
 const DETOUR_NUGGETS: usize = 3;
 /// Rows above a runway tile that must be free of hazards (a toot goes ~5 tiles up).
 const RUNWAY_HEADROOM: i32 = 5;
+/// Flat, hazard-free tiles to jump in threes on before a waltz row.
+const WALTZ_RUNWAY: usize = 6;
+/// Adjacent spray cans that make a waltz row.
+const WALTZ_ROW_MIN: usize = 4;
 
 const HALF_W: f32 = PLAYER_SIZE.0 / 2.0;
 const HALF_H: f32 = PLAYER_SIZE.1 / 2.0;
@@ -77,9 +91,10 @@ enum Mode {
     Normal,
     GiantSteps,
     FiredUp,
+    Waltz,
 }
 
-const MODES: [Mode; 3] = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp];
+const MODES: [Mode; 4] = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp, Mode::Waltz];
 
 impl Mode {
     fn groove(self) -> Groove {
@@ -87,6 +102,7 @@ impl Mode {
             Mode::Normal => Harmony::Original,
             Mode::GiantSteps => Harmony::Coltrane,
             Mode::FiredUp => Harmony::Quartal,
+            Mode::Waltz => Harmony::Waltz,
         })
     }
 
@@ -95,7 +111,24 @@ impl Mode {
             Mode::Normal => "jump",
             Mode::GiantSteps => "giant wall",
             Mode::FiredUp => "long gap",
+            Mode::Waltz => "waltz row",
         }
+    }
+
+    /// Is the spray jet firing at time `t` (s since the music / level clock started)?
+    fn jets_on(self, t: f32) -> bool {
+        let g = self.groove();
+        if g.waltz() {
+            let beat = 60.0 / WALTZ_BPM as f64;
+            g.at(BeatClock::at(t as f64 / beat, beat, 3)).waltz_spray_on()
+        } else {
+            spray_on(0, t)
+        }
+    }
+
+    /// How long the jets' pattern takes to repeat.
+    fn jets_period(self) -> f32 {
+        if self == Mode::Waltz { 2.0 * 3.0 * 60.0 / WALTZ_BPM } else { nat_han_adventures::game::SPRAY_CYCLE }
     }
 }
 
@@ -109,6 +142,9 @@ struct Env {
     vx: f32,
     /// How far (px) the 12px box dares to hang over a ledge before taking off.
     overhang: f32,
+    /// Ground jump speed multiplier of a jump without a toot (the waltz's jump on ONE, which
+    /// spends the toot; the waltz's off-beat jumps are [`Mode::Normal`]'s).
+    boost: f32,
 }
 
 impl Env {
@@ -122,6 +158,7 @@ impl Env {
             air_accel: AIR_ACCEL * g.speed_scale,
             vx: RUN_SPEED * g.speed_scale * if ideal { 1.0 } else { 0.9 },
             overhang: if ideal { PLAYER_SIZE.0 - 0.5 } else { 8.0 },
+            boost: if mode == Mode::Waltz { WALTZ_ONE_BOOST } else { 1.0 },
         }
     }
 }
@@ -135,6 +172,29 @@ struct Map<'a> {
     virt: HashSet<Cell>,
     flies: Vec<(f32, f32)>,
     sprays: HashSet<Cell>,
+    /// Runs of adjacent spray cans (waltz rows), and their jet cells: deadly to arcs (passing
+    /// them is [`dash_through`]'s business).
+    waltz_rows: Vec<WaltzRow>,
+    jets: HashSet<Cell>,
+}
+
+/// A run of adjacent spray cans `c0..=c1` sitting in row `row`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct WaltzRow {
+    row: i32,
+    c0: i32,
+    c1: i32,
+}
+
+impl WaltzRow {
+    fn cans(&self) -> usize {
+        (self.c1 - self.c0 + 1) as usize
+    }
+
+    /// The row the player stands in on the grating above the cans.
+    fn walk_row(&self) -> i32 {
+        self.row - 2
+    }
 }
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -160,6 +220,7 @@ impl<'a> Map<'a> {
         }
         let mut flies = Vec::new();
         let mut sprays = HashSet::new();
+        let mut cans: Vec<Cell> = Vec::new();
         for t in &level.things {
             match t.kind {
                 ThingKind::Fly => flies.push((t.col as f32 * TILE + 8.0, t.row as f32 * TILE + 8.0)),
@@ -167,11 +228,25 @@ impl<'a> Map<'a> {
                     for k in 0..=3 {
                         sprays.insert((t.col as i32, t.row as i32 - k));
                     }
+                    cans.push((t.col as i32, t.row as i32));
                 }
                 _ => {}
             }
         }
-        Map { level, w: level.width as i32, h: level.height as i32, virt, flies, sprays }
+        cans.sort_by_key(|&(c, r)| (r, c));
+        let mut waltz_rows: Vec<WaltzRow> = Vec::new();
+        for (c, r) in cans {
+            match waltz_rows.last_mut() {
+                Some(w) if w.row == r && w.c1 + 1 == c => w.c1 = c,
+                _ => waltz_rows.push(WaltzRow { row: r, c0: c, c1: c }),
+            }
+        }
+        waltz_rows.retain(|w| w.cans() >= WALTZ_ROW_MIN);
+        let jets = waltz_rows
+            .iter()
+            .flat_map(|w| (w.c0..=w.c1).flat_map(move |c| (1..=3).map(move |k| (c, w.row - k))))
+            .collect();
+        Map { level, w: level.width as i32, h: level.height as i32, virt, flies, sprays, waltz_rows, jets }
     }
 
     fn tile(&self, c: i32, r: i32) -> Tile {
@@ -208,6 +283,7 @@ impl<'a> Map<'a> {
                     Tile::SpikesDown => y0 < ty + TILE / 2.0,
                     _ => false,
                 };
+                let hit = hit || self.jets.contains(&(c, r));
                 if hit && x1 > tx && x0 < tx + TILE {
                     return true;
                 }
@@ -350,7 +426,8 @@ fn simulate(map: &Map, env: &Env, (c, r): Cell, s: &Strategy, touched: &mut Vec<
         return None;
     }
     let mut vx = s.vx0 * env.vx;
-    let mut vy = if s.jump { -JUMP_SPEED } else { 0.0 };
+    let boost = if s.toot.is_none() { env.boost } else { 1.0 };
+    let mut vy = if s.jump { -JUMP_SPEED * boost } else { 0.0 };
     let mut cut = !s.jump;
     let mut tooted = false;
     let mut t = 0.0;
@@ -507,6 +584,95 @@ fn explore(map: &Map, seeds: Vec<Cell>, origin: Option<usize>, g: &mut Graph) ->
     added
 }
 
+/// Can a player running at `vx` px/s get past `n` adjacent spray jets that fire when
+/// `mode.jets_on(t)`? Simulated like the game: 60 Hz steps, the jets updated before the player
+/// moves, the hit test after, with the game's forgiving hitbox. The player waits just outside
+/// the jets for the best moment (every start phase is tried) and enters at full speed.
+fn dash_through(n: usize, vx: f32, mode: Mode) -> bool {
+    const STEP: f32 = 1.0 / 60.0;
+    // The player's center is in danger within this distance of a jet's center.
+    let reach = HALF_W - FORGIVE + SPRAY_WIDTH / 2.0;
+    let zone = TILE * (n - 1) as f32 + 2.0 * reach;
+    let period = mode.jets_period();
+    let starts = (period / STEP).round() as usize;
+    (0..starts).any(|k| {
+        let t0 = k as f32 * STEP;
+        let mut x = 0.0;
+        let mut i = 0;
+        loop {
+            i += 1;
+            x += vx * STEP;
+            if x >= zone {
+                return true;
+            }
+            if mode.jets_on(t0 + i as f32 * STEP) {
+                return false;
+            }
+        }
+    })
+}
+
+/// Problems with a waltz row's timing: it must stop every other mode cold and let the waltz
+/// through.
+fn waltz_row_timing(w: &WaltzRow) -> Vec<String> {
+    let mut errs = Vec::new();
+    for mode in [Mode::Normal, Mode::GiantSteps, Mode::FiredUp] {
+        let vx = Env::new(mode, true).vx;
+        if dash_through(w.cans(), vx, mode) {
+            errs.push(format!(
+                "waltz row at col {}..={} row {} ({} cans) can be run through with {mode:?} physics and normal spray timing",
+                w.c0,
+                w.c1,
+                w.row,
+                w.cans()
+            ));
+        }
+    }
+    if !dash_through(w.cans(), Env::new(Mode::Waltz, false).vx, Mode::Waltz) {
+        errs.push(format!(
+            "waltz row at col {}..={} row {} ({} cans) is too long to dash through even in the waltz",
+            w.c0,
+            w.c1,
+            w.row,
+            w.cans()
+        ));
+    }
+    errs
+}
+
+/// Is there a ceiling at most 2 tiles above the grating all along the row (so nobody can
+/// jump clear of the jets, which reach 2 tiles above it)?
+fn low_ceiling(map: &Map, w: &WaltzRow) -> bool {
+    let r = w.walk_row();
+    (w.c0..=w.c1).all(|c| (1..=2).any(|k| map.tile(c, r - k) == Tile::Solid))
+}
+
+/// The waltz dash along row `w` from the approach cell `from`, heading `dir`: the landing cell
+/// on the far side, if the corridor is walkable (grating all along) and `from` has a runway to
+/// jump in threes on.
+fn waltz_dash(map: &Map, w: &WaltzRow, from: Cell, dir: i32) -> Option<Cell> {
+    let r = w.walk_row();
+    let (start, end) = if dir > 0 { (w.c0 - 1, w.c1 + 1) } else { (w.c1 + 1, w.c0 - 1) };
+    if from != (start, r) {
+        return None;
+    }
+    // The runway: calm, flat floor behind the approach, with room to hop.
+    let run = map.flat_run(from);
+    let behind: Vec<&Cell> = run.iter().filter(|c| (c.0 - from.0) * dir <= 0).collect();
+    let roomy = behind.iter().filter(|c| (1..=2).all(|k| map.tile(c.0, c.1 - k) != Tile::Solid)).count();
+    if roomy < WALTZ_RUNWAY {
+        return None;
+    }
+    if !low_ceiling(map, w) {
+        return None;
+    }
+    // The corridor: a floor under every step, nothing solid or otherwise deadly in the way.
+    let walkable = (w.c0..=w.c1).all(|c| {
+        map.floor(c, r + 1) != Floor::None && map.tile(c, r) != Tile::Solid && !map.tile(c, r).is_deadly()
+    });
+    (walkable && map.standable((end, r))).then_some((end, r))
+}
+
 /// A jump that needs a mode: from `from` (on its runway / after its nugget line) to `to`.
 struct Crossing {
     mode: Mode,
@@ -522,6 +688,8 @@ fn ready(map: &Map, g: &Graph, mode: Mode, cell: Cell, dir: i32) -> bool {
         Mode::Normal => true,
         // Room to toot 5 times.
         Mode::GiantSteps => map.flat_run(cell).len() >= RUNWAY,
+        // Waltz rows are dashed, not jumped (see `waltz_dash`).
+        Mode::Waltz => false,
         Mode::FiredUp => {
             if dir == 0 {
                 return false;
@@ -592,6 +760,18 @@ fn reach(map: &Map, start: Cell) -> (Graph, Vec<Crossing>) {
                         && !g.edges.contains_key(&land)
                     {
                         found.push((mode, cell, land, buf.clone()));
+                    }
+                }
+            }
+        }
+        for &cell in &todo {
+            for w in &map.waltz_rows {
+                for dir in [-1, 1] {
+                    if let Some(land) = waltz_dash(map, w, cell, dir)
+                        && !g.edges.contains_key(&land)
+                    {
+                        let touched = (w.c0..=w.c1).map(|c| (c, w.walk_row())).collect();
+                        found.push((Mode::Waltz, cell, land, touched));
                     }
                 }
             }
@@ -730,7 +910,11 @@ fn dump(level: &Level, map: &Map, g: &Graph, crossings: &[Crossing]) -> String {
         }
     }
     for x in crossings {
-        rows[x.from.1 as usize][x.from.0 as usize] = if x.mode == Mode::GiantSteps { 'W' } else { 'R' };
+        rows[x.from.1 as usize][x.from.0 as usize] = match x.mode {
+            Mode::GiantSteps => 'W',
+            Mode::Waltz => 'Z',
+            _ => 'R',
+        };
     }
     for t in &level.things {
         let ok = g.touched.contains(&(t.col as i32, t.row as i32));
@@ -825,6 +1009,15 @@ fn check(idx: usize, level: &Level, allow_dump: bool) -> Report {
     let (sx, sy) = (start.0 as f32 * TILE + 8.0, start.1 as f32 * TILE + 8.0);
     if map.in_fly_zone(sx - 48.0, sy - 48.0, sx + 48.0, sy + 48.0) {
         errs.push("fly swarm next to the start".into());
+    }
+    for w in &map.waltz_rows {
+        errs.extend(waltz_row_timing(w));
+        if !low_ceiling(&map, w) {
+            errs.push(format!(
+                "waltz row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the grating) all along",
+                w.c0, w.c1, w.row
+            ));
+        }
     }
     for p in &level.platforms {
         let (c0, c1) = (p.col as f32 + p.dx.min(0.0), (p.col + p.width - 1) as f32 + p.dx.max(0.0));
@@ -1066,4 +1259,73 @@ fn validator_catches_broken_levels() {
     spiked[row] = chars.into_iter().collect();
     let spiked = spiked.join("\n") + "\n";
     assert!(errs_of(&spiked).iter().any(|e| e.contains("goal")), "a giant wall needs a runway");
+}
+
+/// The waltz row gate: the numbers, and the validator telling good rows from bad ones.
+#[test]
+fn validator_knows_waltz_rows() {
+    // The numbers (see `dash_through`): a row of n adjacent cans is a danger zone of 16n px.
+    // Normal timing leaves 1.5 s to cross it; the waltz 2.5 s (on for the big ONE's beat).
+    let row = |n: usize| WaltzRow { row: 11, c0: 20, c1: 20 + n as i32 - 1 };
+    for n in [4, 10, 13] {
+        assert!(dash_through(n, RUN_SPEED, Mode::Normal), "{n} cans: time enough at normal timing");
+    }
+    assert!(!dash_through(15, RUN_SPEED, Mode::Normal), "15 cans: 240px take 1.6s > 1.5s");
+    assert!(dash_through(18, RUN_SPEED * 1.35, Mode::FiredUp), "fired up outruns 18 (288px in 1.42s)");
+    assert!(!dash_through(20, RUN_SPEED * 1.35, Mode::FiredUp), "but not 20 (320px in 1.58s)");
+    assert!(dash_through(21, RUN_SPEED * 0.9, Mode::Waltz), "the waltz's 2.5s carries a human 21 cans");
+    assert!(!dash_through(22, RUN_SPEED * 0.9, Mode::Waltz));
+    assert!(!dash_through(20, RUN_SPEED * 0.65, Mode::GiantSteps));
+    assert!(waltz_row_timing(&row(20)).is_empty(), "{:?}", waltz_row_timing(&row(20)));
+    assert!(waltz_row_timing(&row(12)).iter().any(|e| e.contains("Normal")));
+    assert!(waltz_row_timing(&row(18)).iter().any(|e| e.contains("FiredUp")));
+    assert!(waltz_row_timing(&row(25)).iter().any(|e| e.contains("too long")));
+
+    // A tunnel: 20 cans under a grating, a low ceiling (a wall to the sky above it), a runway.
+    let level = |cans: usize, ceiling: bool, runway_spikes: bool| {
+        let (c0, c1) = (20, 20 + cans - 1);
+        let w = 60;
+        let mut rows: Vec<Vec<char>> = vec![vec!['.'; w]; 14];
+        for r in 0..=7 {
+            for c in c0..=c1 {
+                rows[r][c] = if ceiling || r < 6 { '#' } else { '.' };
+            }
+        }
+        for c in 0..w {
+            rows[10][c] = if (c0..=c1).contains(&c) { '=' } else { '#' };
+            rows[11][c] = if (c0..=c1).contains(&c) { 'S' } else { '#' };
+            rows[12][c] = '#';
+            rows[13][c] = '#';
+        }
+        rows[9][2] = 'P';
+        rows[9][8] = 'C';
+        rows[9][w - 2] = 'G';
+        if runway_spikes {
+            // A spike strip right before the row: no room to jump in threes.
+            for c in 15..20 {
+                rows[10][c] = '^';
+            }
+            rows[10][14] = '#';
+        }
+        let mut s = String::from("name: Bathroom Floor\nworld: 1\nintro: hi\nsay: hey\n---\n");
+        for r in &rows {
+            s.extend(r.iter());
+            s.push('\n');
+        }
+        let mut l = Level::parse(&s).unwrap();
+        for c in 3..18 {
+            l.things.push(Thing { kind: ThingKind::Nugget, col: c, row: 9 });
+        }
+        check(0, &l, false)
+    };
+    let good = level(20, true, false);
+    assert!(good.errs.is_empty(), "{:?}", good.errs);
+    assert_eq!(good.gates.iter().map(|g| g.0).collect::<Vec<_>>(), [Mode::Waltz]);
+    assert!(good.gated_goal, "the only way to the goal is the dash");
+    let short = level(12, true, false);
+    assert!(short.errs.iter().any(|e| e.contains("run through with Normal")), "{:?}", short.errs);
+    let open = level(20, false, false);
+    assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
+    let cramped = level(20, true, true);
+    assert!(cramped.errs.iter().any(|e| e.contains("goal")), "no runway, no waltz: {:?}", cramped.errs);
 }

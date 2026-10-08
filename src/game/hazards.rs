@@ -1,13 +1,12 @@
 //! Things that splat you: spikes, liquid, flies, spray jets, the bottomless pit. And respawning.
 
-use std::f32::consts::TAU;
-
 use bevy::prelude::*;
 
 use super::han::{self, DEATH_LINES, HanTrail};
 use super::physics::{Body, Dead, Finished, PlayerControl, cells, tile_at};
 use super::{
-    ActiveLevel, Fly, GameSet, Han, LevelEntity, LevelRun, Nugget, Player, Pos, PrevPos, SimClock, Spray, tuning,
+    ActiveLevel, Fly, GameSet, Groove, Han, LevelEntity, LevelRun, Nugget, Player, Pos, PrevPos, SimClock, Spray,
+    groove::fly_angle, tuning,
 };
 use crate::events::{HanSays, PlayerDied, PlayerRespawned};
 use crate::level::{TILE, Tile};
@@ -35,7 +34,8 @@ pub const SPRAY_WIDTH: f32 = 8.0;
 
 /// Is the jet of the spray in column `col` firing at sim time `t`?
 /// All cans share one clock (levels design spray rows as a rhythm to run through together);
-/// `col` is kept so per-can phases can come back without touching callers.
+/// `col` is kept so per-can phases can come back without touching callers. While the band
+/// waltzes the cans follow the music instead ([`Groove::waltz_spray_on`]).
 pub fn spray_on(_col: usize, t: f32) -> bool {
     // Off first, so nothing is firing the moment a level (re)starts.
     t.rem_euclid(SPRAY_CYCLE) >= SPRAY_CYCLE - SPRAY_ON
@@ -43,14 +43,14 @@ pub fn spray_on(_col: usize, t: f32) -> bool {
 
 fn move_flies(clock: Res<SimClock>, mut flies: Query<(&Fly, &mut Pos)>) {
     for (fly, mut pos) in &mut flies {
-        let a = TAU * (clock.time / FLY_PERIOD + fly.phase);
+        let a = fly_angle(clock.fly_turns, fly.phase);
         pos.0 = fly.center + FLY_RADIUS * Vec2::new(a.cos(), a.sin());
     }
 }
 
-fn update_sprays(clock: Res<SimClock>, mut sprays: Query<&mut Spray>) {
+fn update_sprays(clock: Res<SimClock>, groove: Res<Groove>, mut sprays: Query<&mut Spray>) {
     for mut spray in &mut sprays {
-        let on = spray_on(spray.col, clock.time);
+        let on = if groove.waltz() { groove.waltz_spray_on() } else { spray_on(spray.col, clock.time) };
         if spray.on != on {
             spray.on = on;
         }

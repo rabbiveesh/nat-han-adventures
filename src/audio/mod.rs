@@ -8,7 +8,8 @@
 //! - [`sfx`]: sound effects (toot, splat, nugget, flush, ...).
 //! - [`chart`]: chord charts ([`Song::chords`]); [`theory`]: just intonation, Coltrane changes,
 //!   melodic-minor and quartal harmony; [`accomp`]: generated comping + bass for the
-//!   reharmonizing [`Filters`]; [`director`]: picks the filters from how the player is doing;
+//!   reharmonizing [`Filters`]; [`waltz`]: the song re-cut into 3/4 (a time warp);
+//!   [`director`]: picks the filters from how the player is doing;
 //!   [`demo`]: a ii-V-I exercise for hearing the filters.
 //!
 //! # MML dialect
@@ -56,11 +57,17 @@
 //! player is doing (after a death, on reaching a checkpoint; back to plain on level start).
 //! A new decision doesn't restart the song: the new version is rendered incrementally (a few
 //! ms per frame, see [`synth::RenderJob`]) and swapped in at the next bar line, at the same song
-//! position, with a short crossfade — the band changing its mind on the fly. Only the playing
+//! position, with a short crossfade — the band changing its mind on the fly. The waltz is
+//! longer (3/4 bars, its own tempo: see [`Meter`]): a switch into or out of it maps the song
+//! position through the time warp ([`waltz::warp`]) and waits for a bar line both versions
+//! share (every 4/4 bar line is one, as the 1st of a pair of waltz bars). Only the playing
 //! render and the one being prepared are kept in memory. [`NowPlaying`] says what's on;
 //! [`MusicStarted`] / [`MusicChanged`] fire when a track starts / switches filters.
 //!
-//! Dev override (native only): `NATHAN_MUSIC=coltrane|quartal|melodic|original[+ji]` (or just
+//! Every frame the playing version's clock (bar, beat, phase) goes into [`Groove`], so the
+//! world can dance to it (the waltz).
+//!
+//! Dev override (native only): `NATHAN_MUSIC=coltrane|quartal|melodic|waltz|original[+ji]` (or just
 //! `ji`, the laughing band's [`tuning::Tuning::Medley`]) forces the filters of every looping song.
 
 pub mod accomp;
@@ -74,6 +81,7 @@ pub mod songs;
 pub mod synth;
 pub mod theory;
 pub mod tuning;
+pub mod waltz;
 
 use std::time::Duration;
 
@@ -86,12 +94,11 @@ use rand::Rng;
 
 use crate::{
     events::{CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied},
-    game::{Groove, LevelRun, RestartLevel},
+    game::{BeatClock, Groove, LevelRun, RestartLevel},
     level::Levels,
     state::{AppState, CurrentLevel, PlayState},
 };
 
-use director::PlayStats;
 
 /// Music volume (dB). Sfx play at 0 dB on their own channel.
 const MUSIC_DB: f32 = -4.0;
@@ -131,7 +138,7 @@ pub fn plugin(app: &mut App) {
         .add_systems(Startup, setup)
         .add_systems(
             Update,
-            (follow_state, direct, prepare_switch, switch, duck_on_pause, play_sfx, babble).chain(),
+            (follow_state, direct, prepare_switch, switch, beat_clock, duck_on_pause, play_sfx, babble).chain(),
         );
 }
 
@@ -155,7 +162,7 @@ fn music_override() -> Option<Filters> {
         let v = std::env::var("NATHAN_MUSIC").ok()?;
         let f = Filters::parse(&v);
         if f.is_none() {
-            warn!("NATHAN_MUSIC={v:?} not understood (try coltrane, quartal, melodic, original, +ji)");
+            warn!("NATHAN_MUSIC={v:?} not understood (try coltrane, quartal, melodic, waltz, original, +ji)");
         }
         f
     }
@@ -278,8 +285,16 @@ struct Current {
     _source: Option<Handle<AudioSource>>,
     /// Real time (s) at which song position 0 was (or would have been) playing.
     origin: f64,
-    /// Loop length (s); 0 for one-shots.
+    /// Loop length (s) of the version playing; 0 for one-shots.
     len_secs: f64,
+    /// The song's length in 4/4 beats (every version's position maps to these).
+    beats: f64,
+}
+
+impl Current {
+    fn meter(&self) -> Meter {
+        Meter::of(&self.song, self.filters)
+    }
 }
 
 struct Pending {
@@ -287,8 +302,11 @@ struct Pending {
     reason: &'static str,
     job: Option<synth::RenderJob>,
     ready: Option<Handle<AudioSource>>,
-    /// Real time of the switch, and the song position (a bar line) it lands on.
+    /// Real time of the switch, and the song position (a bar line of the new version) it
+    /// lands on.
     at: Option<(f64, f64)>,
+    /// Loop length (s) of the new version.
+    len_secs: f64,
 }
 
 impl MusicPlayer {
@@ -382,22 +400,24 @@ fn follow_state(
         job.map(|r| sources.add(to_source(r)))
     };
     let now = time.elapsed_secs_f64();
-    let len_secs = if song.looping { song_secs(&song) } else { 0.0 };
+    let beats = song_beats(&song);
+    let len_secs = if song.looping { Meter::of(&song, filters).loop_secs(beats) } else { 0.0 };
     let instance = match &handle {
         Some(h) => channel.play(h.clone()).with_volume(MUSIC_DB).fade_in(AudioTween::linear(fade_in)).handle(),
         // Unplayable song: remember it anyway so we don't retry every frame.
         None => Handle::default(),
     };
-    player.current = Some(Current { music: want, song: song.clone(), filters, instance, _source: handle, origin: now, len_secs });
+    player.current =
+        Some(Current { music: want, song: song.clone(), filters, instance, _source: handle, origin: now, len_secs, beats });
     let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
     *now_playing = NowPlaying { music: want, title: song.title, filters, reason };
     set_groove(groove.as_deref_mut(), filters);
     started.write(MusicStarted(now_playing.clone()));
 }
 
-/// Length of one loop of a song, in seconds (the longest track).
-fn song_secs(song: &Song) -> f64 {
-    let beats = [
+/// Length of one loop of a song, in 4/4 beats (the longest track).
+fn song_beats(song: &Song) -> f64 {
+    [
         (song.pulse1, mml::Channel::Melodic),
         (song.pulse2, mml::Channel::Melodic),
         (song.triangle, mml::Channel::Melodic),
@@ -406,26 +426,86 @@ fn song_secs(song: &Song) -> f64 {
     .iter()
     .filter_map(|(src, ch)| mml::parse(src, *ch).ok())
     .map(|t| t.length)
-    .fold(0.0, f64::max);
-    // The renderer rounds to whole samples.
-    (beats * synth::SAMPLE_RATE as f64 * 60.0 / song.bpm as f64).round() / synth::SAMPLE_RATE as f64
+    .fold(0.0, f64::max)
+}
+
+/// How a version of a song lays it out in time: 4/4 at the song's tempo, or the waltz (3/4 at
+/// [`waltz::WALTZ_BPM`], through the [`waltz::warp`]). Positions convert through the song's
+/// 4/4 ("canonical") beats.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Meter {
+    pub beats_per_bar: u32,
+    pub bpm: f64,
+    pub waltz: bool,
+}
+
+impl Meter {
+    pub fn of(song: &Song, filters: Filters) -> Meter {
+        if filters.harmony == Harmony::Waltz {
+            Meter { beats_per_bar: waltz::WALTZ_METER, bpm: waltz::WALTZ_BPM as f64, waltz: true }
+        } else {
+            Meter { beats_per_bar: 4, bpm: song.bpm as f64, waltz: false }
+        }
+    }
+
+    pub fn beat_secs(&self) -> f64 {
+        60.0 / self.bpm
+    }
+
+    /// This version's beat position of 4/4 beat `canon`.
+    pub fn beats(&self, canon: f64) -> f64 {
+        if self.waltz { waltz::warp(canon) } else { canon }
+    }
+
+    /// Song position (s) in this version of 4/4 beat `canon`.
+    pub fn secs(&self, canon: f64) -> f64 {
+        self.beats(canon) * self.beat_secs()
+    }
+
+    /// Loop length (s) of a song `canon` 4/4 beats long, rounded to whole samples like the
+    /// renderer.
+    pub fn loop_secs(&self, canon: f64) -> f64 {
+        let sr = synth::SAMPLE_RATE as f64;
+        (self.secs(canon) * sr).round() / sr
+    }
+
+    /// The 4/4 beat at song position `secs` of this version.
+    pub fn canon(&self, secs: f64) -> f64 {
+        let b = secs / self.beat_secs();
+        if self.waltz { waltz::unwarp(b) } else { b }
+    }
+
+    /// 4/4 beats between the bar lines two versions share: every 4/4 bar line is a bar line
+    /// of both (in the waltz, the first of a pair of 3/4 bars); between two waltzes, every
+    /// waltz bar line.
+    pub fn shared_bar(&self, other: &Meter) -> f64 {
+        if self.waltz && other.waltz { 2.0 } else { 4.0 }
+    }
+}
+
+/// When to switch from version `from` (at song position `pos`, seconds) to version `to` of a
+/// song `beats` 4/4 beats long: at the next bar line both share, at least `margin` seconds
+/// ahead. Returns (seconds from now, the position in `to` it lands on, within its loop of
+/// `len_to` seconds): the same point of the tune, a bar line of the new version.
+pub fn switch_point(from: Meter, to: Meter, beats: f64, pos: f64, margin: f64, len_to: f64) -> (f64, f64) {
+    let step = from.shared_bar(&to);
+    let c = from.canon(pos + margin);
+    let next = (c / step - 1e-9).ceil() * step;
+    let wait = from.secs(next) - pos;
+    let at = if next >= beats - 1e-9 { 0.0 } else { to.secs(next) };
+    (wait, at.rem_euclid(len_to.max(1e-9)))
 }
 
 /// The director's bookkeeping between frames.
 #[derive(Resource, Debug, Default)]
 pub struct Director {
-    /// Level-long counters (the rolling-window fields are filled in at each decision).
-    pub stats: PlayStats,
-    /// What happened in the last [`director::MUSIC_CHECK_SECS`] of play.
-    pub window: director::Window,
-    /// [`LevelRun::time`] when the level started, and of the next periodic check.
-    level_start: f32,
-    next_check: f32,
+    /// The band's memory of this level: stats, rolling window, the held summon.
+    pub band: director::Band,
     was_playing: bool,
 }
 
-/// Track play stats and make decisions at level start, death, checkpoints and every
-/// [`director::MUSIC_CHECK_SECS`] of play.
+/// Feed the director what happened this frame; it decides at level start, death, checkpoints,
+/// summons and every [`director::MUSIC_CHECK_SECS`] of play.
 #[allow(clippy::too_many_arguments)]
 fn direct(
     state: Res<State<AppState>>,
@@ -441,42 +521,31 @@ fn direct(
 ) {
     let playing = *state.get() == AppState::Playing;
     let restarted = restart.read().count() > 0;
-    let toots = jumped.read().filter(|j| j.double).count() as u32;
-    let got = nuggets.read().count() as u32;
-    let deaths = died.read().count() as u32;
-    let cps = checkpoints.read().count();
+    let mut ev = director::Events::default();
+    for j in jumped.read() {
+        if j.double {
+            ev.toots += 1;
+        } else {
+            ev.ground_jumps += 1;
+        }
+    }
+    ev.nuggets = nuggets.read().count() as u32;
+    ev.deaths = died.read().count() as u32;
+    ev.checkpoints = checkpoints.read().count() as u32;
     // Play time (pause excluded): the director's clock.
     let now = run.as_ref().map_or(0.0, |r| r.time);
     let d = &mut *director;
     let mut decision = None;
-    // Stats as they stood before this frame's events (to see whether they summon a mode).
-    let mut before = d.stats;
-    if toots + got > 0 {
-        d.window.fill(&mut before, now, d.level_start);
-    }
     if playing && (!d.was_playing || restarted) {
         // Level start: everything resets, the band plays it straight.
-        d.stats = PlayStats::default();
-        d.window = director::Window::default();
-        d.level_start = now;
-        d.next_check = now + director::MUSIC_CHECK_SECS;
-        decision = Some((Filters::default(), ""));
+        decision = Some(d.band.start(now));
     }
     d.was_playing = playing;
     if !playing {
         return;
     }
-    d.window.record(now, toots, got, deaths);
-    d.stats.level_deaths += deaths;
-    d.stats.checkpoint_deaths += deaths;
-    d.window.fill(&mut d.stats, now, d.level_start);
-    let summoned = toots + got > 0 && director::summoned(&before, &d.stats);
-    if deaths > 0 || cps > 0 || now >= d.next_check || summoned {
-        decision = Some(director::choose_filters(&d.stats));
-        d.next_check = now + director::MUSIC_CHECK_SECS;
-        if cps > 0 {
-            d.stats.checkpoint_deaths = 0;
-        }
+    if let Some(decided) = d.band.step(now, ev) {
+        decision = Some(decided);
     }
     if let Some((filters, reason)) = decision {
         let decided = match overrides.0 {
@@ -515,6 +584,7 @@ fn prepare_switch(
                     job: Some(job),
                     ready: None,
                     at: None,
+                    len_secs: Meter::of(&cur.song, filters).loop_secs(cur.beats),
                 });
             }
         }
@@ -530,9 +600,9 @@ fn prepare_switch(
     if p.at.is_none() {
         let now = time.elapsed_secs_f64();
         let pos = position(cur, now, &instances);
-        let bar = 4.0 * 60.0 / cur.song.bpm as f64;
-        let next = ((pos + SWITCH_MARGIN) / bar).ceil() * bar;
-        p.at = Some((now + (next - pos), next.rem_euclid(cur.len_secs)));
+        let to = Meter::of(&cur.song, p.filters);
+        let (wait, at) = switch_point(cur.meter(), to, cur.beats, pos, SWITCH_MARGIN, p.len_secs);
+        p.at = Some((now + wait, at));
     }
 }
 
@@ -569,6 +639,7 @@ fn switch(
         old.stop(AudioTween::new(SWITCH_FADE, AudioEasing::OutPowi(2)));
     }
     // We're a little past the bar line (frames are discrete): start that far into it.
+    cur.len_secs = p.len_secs;
     let pos = (bar_pos + (now - at)).rem_euclid(cur.len_secs);
     cur.instance = channel
         .play(source.clone())
@@ -585,14 +656,31 @@ fn switch(
     changed.write(MusicChanged { now: now_playing.clone(), at_secs: bar_pos });
 }
 
-/// The physics follow the music the moment it starts sounding.
+/// The physics follow the music the moment it starts sounding (the clock carries on: the
+/// next [`beat_clock`] sets it).
 fn set_groove(groove: Option<&mut Groove>, filters: Filters) {
     if let Some(g) = groove {
         let new = Groove::new(filters);
         if *g != new {
-            *g = new;
+            *g = Groove { clock: g.clock, ..new };
         }
     }
+}
+
+/// Tell the world where the music is: the playing version's bar, beat and phase.
+fn beat_clock(
+    time: Res<Time<Real>>,
+    player: Res<MusicPlayer>,
+    instances: Res<Assets<AudioInstance>>,
+    groove: Option<ResMut<Groove>>,
+) {
+    let (Some(cur), Some(mut groove)) = (&player.current, groove) else { return };
+    if cur.len_secs <= 0.0 {
+        return;
+    }
+    let m = cur.meter();
+    let pos = position(cur, time.elapsed_secs_f64(), &instances);
+    groove.clock = BeatClock::at(pos / m.beat_secs(), m.beat_secs(), m.beats_per_bar);
 }
 
 fn duck_on_pause(
@@ -792,10 +880,13 @@ pub enum Harmony {
     Quartal,
     /// Every chord replaced by a melodic minor sonority (altered, lydian dominant, mMaj7, ...).
     MelodicMinor,
+    /// A jazz waltz: the song re-cut into 3/4 ([`waltz`]), oom-pah-pah. Longer than the others.
+    Waltz,
 }
 
 impl Harmony {
-    pub const ALL: [Harmony; 4] = [Harmony::Original, Harmony::Coltrane, Harmony::Quartal, Harmony::MelodicMinor];
+    pub const ALL: [Harmony; 5] =
+        [Harmony::Original, Harmony::Coltrane, Harmony::Quartal, Harmony::MelodicMinor, Harmony::Waltz];
 
     /// Short upper-case label ("" for the original).
     pub fn label(self) -> &'static str {
@@ -804,6 +895,7 @@ impl Harmony {
             Harmony::Coltrane => "COLTRANE CHANGES",
             Harmony::Quartal => "QUARTAL",
             Harmony::MelodicMinor => "MELODIC MINOR",
+            Harmony::Waltz => "JAZZ WALTZ",
         }
     }
 
@@ -814,6 +906,7 @@ impl Harmony {
             Harmony::Coltrane => "coltrane",
             Harmony::Quartal => "quartal",
             Harmony::MelodicMinor => "melodic",
+            Harmony::Waltz => "waltz",
         }
     }
 }
@@ -829,7 +922,7 @@ impl Filters {
         }
     }
 
-    /// Parse `coltrane`, `quartal`, `melodic`, `original`, each optionally `+ji`, or just `ji`
+    /// Parse `coltrane`, `quartal`, `melodic`, `waltz`, `original`, each optionally `+ji`, or just `ji`
     /// (case-insensitive). `None` if not understood.
     pub fn parse(s: &str) -> Option<Filters> {
         let mut f = Filters::default();

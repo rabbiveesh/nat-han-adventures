@@ -1,12 +1,13 @@
 //! Cheap particles: short-lived tinted 2x2 sprites with velocity, gravity and fade, plus the
-//! toot puff cloud, and the trail of golden notes Nat leaves while the band plays Giant Steps.
+//! toot puff cloud, the trail of golden notes Nat leaves while the band plays Giant Steps, and
+//! the golden sparkle of a waltz jump on ONE.
 
 use bevy::prelude::*;
 
 use super::FrameAnim;
 use crate::art::{SpriteId, Sprites};
 use crate::events::{CheckpointReached, Jumped, Landed, NuggetCollected, PlayerDied};
-use crate::game::{Body, Dead, Groove, LevelEntity, Player};
+use crate::game::{Body, Dead, Groove, JumpedOnOne, LevelEntity, Player};
 use crate::state::PlayState;
 
 pub(super) fn plugin(app: &mut App) {
@@ -76,6 +77,7 @@ fn spawn_fx(
     mut died: MessageReader<PlayerDied>,
     mut nuggets: MessageReader<NuggetCollected>,
     mut checkpoints: MessageReader<CheckpointReached>,
+    mut on_one: MessageReader<JumpedOnOne>,
 ) {
     use std::f32::consts::PI;
     let mut budget = MAX_PARTICLES.saturating_sub(existing.iter().count());
@@ -125,6 +127,27 @@ fn spawn_fx(
                 size: 2.0,
             });
         }
+    }
+    for j in on_one.read() {
+        // A ring of gold around the feet, and a few glints that rise with Nat.
+        burst(&mut commands, &mut rng, j.pos + feet, Burst {
+            count: 14,
+            colors: &NOTE_COLORS,
+            speed: (40.0, 90.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 0.0,
+            life: (0.3, 0.55),
+            size: 2.0,
+        });
+        burst(&mut commands, &mut rng, j.pos, Burst {
+            count: 6,
+            colors: &[Color::srgb(1.0, 1.0, 0.75)],
+            speed: (60.0, 120.0),
+            angle: (PI * 0.35, PI * 0.65),
+            gravity: 60.0,
+            life: (0.4, 0.7),
+            size: 2.0,
+        });
     }
     for l in landed.read() {
         let n = if l.speed > 300.0 { 10 } else { 6 };

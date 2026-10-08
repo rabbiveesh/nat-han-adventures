@@ -12,6 +12,8 @@
 //!   of the home fourths voicing and the odd pad; the left hand pounds open root–fifth on 1 and
 //!   the "and of 2" (anticipating beat 3), with the occasional low tonic pedal.
 //!
+//! - Waltz ([`waltz`]): oom-pah-pah over the 3/4 chart: root on 1, chord stabs on 2 and 3.
+//!
 //! Comping is voiced in o3–o5 (MIDI 48..=84) with smooth voice leading; bass stays in o1–o3.
 //! Both tracks are exactly `chart.bars * 4` beats long and contiguous (gaps are rests), so
 //! [`super::synth::apply_swing`] treats them like hand-written MML.
@@ -85,6 +87,45 @@ pub fn generate(chart: &Chart, harmony: Harmony, key: u8, seed: u64) -> (Track, 
         _ => walking_bass(&slots, &voices, harmony, beats, &mut rng),
     };
     (comp, bass)
+}
+
+/// The jazz waltz's "oom-pah-pah" from a 3/4 chart ([`super::waltz::warp_chart`]):
+/// (pulse 2, triangle). The triangle plays the root on every ONE (the fifth on the second bar
+/// of a pair when the chord holds, a classic two-feel waltz bass); pulse 2 stabs the chord
+/// sounding on beats 2 and 3 (an arpeggio, half a beat each). Now and then the second bar of a
+/// pair lays back: one longer stab on 2. Both tracks are exactly `chart.beats()` long.
+pub fn waltz(chart: &Chart, seed: u64) -> (Track, Track) {
+    let mut rng = Rng::new(seed ^ 0x3A1F);
+    let slots = chart.merged();
+    let voices = voice(&slots, Harmony::Waltz);
+    let beats = chart.beats();
+    let meter = chart.meter as f64;
+    let bars = (beats / meter).round() as usize;
+    let (mut comp, mut bass) = (Builder::new(), Builder::new());
+    let mut prev = 36; // C2
+    let mut prev_chord = None;
+    for k in 0..bars {
+        let t = k as f64 * meter;
+        let i = slot_at(&slots, beats, t);
+        let chord = slots[i].chord;
+        let fifth = k % 2 == 1 && prev_chord == Some(chord);
+        let pc = if fifth { (chord.root + 7) % 12 } else { chord.bass_pc() };
+        let note = nearest(pc, prev, BASS_LO, BASS_HI);
+        bass.push(t, 1.0, EventKind::Note(note as u8), BASS_VOL, 0);
+        prev = note;
+        prev_chord = Some(chord);
+        let lazy = k % 2 == 1 && rng.chance(0.15) && slot_at(&slots, beats, t + 2.0) == slot_at(&slots, beats, t + 1.0);
+        if lazy {
+            let j = slot_at(&slots, beats, t + 1.0);
+            comp.push(t + 1.0, 1.5, arp(&voices[j].comp), PAD_VOL + 1, COMP_DUTY);
+        } else {
+            for b in 1..chart.meter {
+                let j = slot_at(&slots, beats, t + b as f64);
+                comp.push(t + b as f64, 0.5, arp(&voices[j].comp), COMP_VOL, COMP_DUTY);
+            }
+        }
+    }
+    (comp.finish(beats), bass.finish(beats))
 }
 
 /// What each chord slot gives the generators.
