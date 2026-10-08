@@ -26,7 +26,8 @@
 //! On the web the manager's cpal backend makes the page's one `AudioContext` at startup,
 //! through `window.AudioContext`, which `index.html` wraps to resume it on the first gesture
 //! (autoplay policy); until then nothing renders and the music starts from the top when it
-//! unlocks.
+//! unlocks. The page also reports how far ahead of the ear the browser's audio runs, so the
+//! beat clock steps back by the browser's buffering and output latency (`web_output_lead`).
 
 use bevy::prelude::*;
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
@@ -574,9 +575,13 @@ fn sync(
     }
     let filters = Filters { harmony: p.state.harmony, just_intonation: p.state.tuning == Tuning::Medley };
     // The clock as heard: the engine is `ahead_secs` ahead of the output, and time has passed
-    // since it published. Stepping back stops at the playhead's bar line, so the beat and the
-    // physics turn together when a new meter comes in.
-    let mut dt = now - player.seen.1 - p.ahead_secs;
+    // since it published (on the web, the browser says how far off the last sample it was
+    // handed is: [`web_output_lead`]). Stepping back stops at the playhead's bar line, so the
+    // beat and the physics turn together when a new meter comes in.
+    let mut dt = match web_output_lead() {
+        Some(lead) => -(lead + p.ahead_secs),
+        None => now - player.seen.1 - p.ahead_secs,
+    };
     if dt < 0.0 {
         dt = dt.max(-p.clock.position.beat * 60.0 / p.clock.bpm.max(1.0) as f64);
     }
@@ -623,6 +628,29 @@ fn sync(
             0.0
         };
     }
+}
+
+/// On the web: seconds from now until the last sample the game handed the browser reaches the
+/// ear. cpal's WebAudio host renders a whole buffer (2048 frames, ~43 ms) per callback and
+/// schedules it a buffer ahead of the context's clock, and the browser adds its own pipeline
+/// (`baseLatency`) and the device's (`outputLatency`, often tens of ms, Bluetooth far more):
+/// about 0.1 s that a native stream doesn't have. `index.html` tracks when the last scheduled
+/// buffer ends and answers `nathanAudioLead()`; the publish and that buffer's scheduling happen
+/// in the same callback on the main thread, so the lead lines up with what was published.
+/// `None` natively, or when the page doesn't know (no audio yet).
+#[cfg(target_arch = "wasm32")]
+fn web_output_lead() -> Option<f64> {
+    use wasm_bindgen::JsCast;
+    let w = web_sys::window()?;
+    let f = js_sys::Reflect::get(w.as_ref(), &"nathanAudioLead".into()).ok()?.dyn_into::<js_sys::Function>().ok()?;
+    let lead = f.call0(w.as_ref()).ok()?.as_f64()?;
+    // Never trust a wild value (a suspended context, a clock hiccup) with the physics.
+    lead.is_finite().then(|| lead.clamp(0.0, 1.0))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn web_output_lead() -> Option<f64> {
+    None
 }
 
 /// Pending Han blips: seconds until each plays.
