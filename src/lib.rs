@@ -35,6 +35,7 @@ pub fn gameplay(app: &mut App) {
         events::plugin,
         save::plugin,
         game::plugin,
+        freeplay::plugin,
     ));
 }
 
