@@ -90,6 +90,116 @@ fn every_song_renders_through_every_filter() {
     assert!(per_filtered < 2.0 * per_plain + 0.005, "filtered renders too slow: {per_filtered:.3}s vs {per_plain:.3}s");
 }
 
+/// Every real song's melody through every reharmonizing filter: same rhythm, in range, close
+/// to the written line, same contour; melodic minor in the scale, quartal free of strong avoid
+/// notes, Coltrane untouched where the chart is.
+#[test]
+fn melodies_follow_the_reharmonization() {
+    use nat_han_adventures::audio::{
+        chart, melody,
+        mml::{self, EventKind},
+        theory,
+    };
+    let mut all: Vec<(String, Song)> = Music::ALL.iter().map(|m| (format!("{m:?}"), songs::song(*m))).collect();
+    all.push(("demo".into(), demo::demo_song()));
+    let pitch = |e: &mml::Event| match e.kind {
+        EventKind::Note(n) => Some(n as i32),
+        _ => None,
+    };
+    for (name, song) in &all {
+        if song.chords.trim().is_empty() {
+            continue;
+        }
+        let c = chart::parse(song.chords).unwrap();
+        let slots = c.merged();
+        let beats = c.beats();
+        let mel = mml::parse(song.pulse1, mml::Channel::Melodic).unwrap();
+        for h in [Harmony::Coltrane, Harmony::Quartal, Harmony::MelodicMinor] {
+            let t = melody::reharmonize(&mel, &c, h);
+            assert_eq!(t, melody::reharmonize(&mel, &c, h), "{name} {h:?}: deterministic");
+            // Rhythm, dynamics and slurs untouched.
+            assert_eq!(t.events.len(), mel.events.len(), "{name} {h:?}");
+            assert_eq!(t.length, mel.length);
+            let mut notes = Vec::new();
+            for (a, b) in t.events.iter().zip(&mel.events) {
+                assert_eq!(
+                    (a.start, a.dur, a.tie, a.volume, a.duty),
+                    (b.start, b.dur, b.tie, b.volume, b.duty),
+                    "{name} {h:?}"
+                );
+                assert_eq!(pitch(a).is_some(), pitch(b).is_some(), "{name} {h:?}");
+                if let (Some(x), Some(y)) = (pitch(a), pitch(b)) {
+                    assert!((48..=95).contains(&x), "{name} {h:?}: {x} out of o3-o6");
+                    assert!((x - y).abs() <= melody::MAX_SHIFT, "{name} {h:?}: moved {y} -> {x}");
+                    notes.push((a, x, y));
+                }
+            }
+            // Contour: direction kept for (almost) every step; no interval changes wildly.
+            let mut kept = 0;
+            let mut worst = 0;
+            for w in notes.windows(2) {
+                let (d_new, d_old) = (w[1].1 - w[0].1, w[1].2 - w[0].2);
+                kept += (d_new.signum() == d_old.signum()) as usize;
+                worst = worst.max((d_new - d_old).abs());
+            }
+            let share = kept as f64 / (notes.len() - 1) as f64;
+            println!("{name} {h:?}: contour kept {:.1}%, worst interval change {worst}", share * 100.0);
+            assert!(share >= 0.9, "{name} {h:?}: contour kept only {:.0}%", share * 100.0);
+            assert!(worst <= 12, "{name} {h:?}: an interval changed by {worst}");
+            let seg = |e: &mml::Event| melody::sounding(&slots, beats, e.start, e.dur);
+            let new = match h {
+                Harmony::Coltrane => theory::coltrane(&c).merged(),
+                _ => slots.clone(),
+            };
+            let new_seg = |e: &mml::Event| melody::sounding(&new, beats, e.start, e.dur);
+            for w in notes.windows(2) {
+                // Repeated notes over one chord (old and new) stay repeated.
+                if w[0].2 == w[1].2 && seg(w[0].0) == seg(w[1].0) && new_seg(w[0].0) == new_seg(w[1].0) {
+                    assert_eq!(w[0].1, w[1].1, "{name} {h:?}: repeated note split at {}", w[1].0.start);
+                }
+            }
+            for (k, &(e, x, y)) in notes.iter().enumerate() {
+                let i = seg(e);
+                match h {
+                    Harmony::MelodicMinor => {
+                        let mm = theory::melodic_minor(&slots, i);
+                        if !mm.in_scale(x as u8) {
+                            // A written chromatic approach: a semitone straight into the next note.
+                            let next = notes.get(k + 1).expect("an approach has a target");
+                            assert!(
+                                (next.0.start - (e.start + e.dur)).abs() < 1e-6 && (next.1 - x).abs() == 1,
+                                "{name}: {x} at {} not in {mm:?} and not an approach",
+                                e.start
+                            );
+                        }
+                    }
+                    Harmony::Quartal => {
+                        let chord = slots[i].chord;
+                        let semi = (x - chord.root as i32).rem_euclid(12) as u8;
+                        if melody::strong_beat(e.start) {
+                            assert!(
+                                melody::quartal_avoid(&chord).iter().all(|(a, _)| *a != semi),
+                                "{name}: avoid note {x} on {chord} at beat {}",
+                                e.start
+                            );
+                        } else if e.dur < 1.5 {
+                            assert_eq!(x, y, "{name}: short weak-beat notes stay as written");
+                        }
+                    }
+                    _ => {
+                        // Coltrane: untouched where the chart is (bar chromatic approaches).
+                        let j = new_seg(e);
+                        let chromatic = !melody::chord_scale(&slots[i].chord).contains(y as u8);
+                        if slots[i].chord == new[j].chord && !chromatic {
+                            assert_eq!(x, y, "{name}: changed at {} where the chart wasn't", e.start);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn every_chart_parses_and_covers_its_song() {
     use nat_han_adventures::audio::{chart, mml};

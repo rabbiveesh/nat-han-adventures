@@ -7,16 +7,17 @@
 //!   chord — chromatic for Coltrane, from the scale for melodic minor — with the odd swung
 //!   8th-note octave skip). Melodic minor draws every comp and bass note from the chord's
 //!   melodic-minor scale.
-//! - Quartal: big Charleston stabs of fourths voicings, sustained pads and the odd pentatonic
-//!   run of fourths; the left hand pounds open root–fifth on 1 and the "and of 2" (anticipating
-//!   beat 3), with the occasional low tonic pedal.
+//! - Quartal (McCoy Tyner): stacks of fourths *planing* up the chord's mode as short off-beat
+//!   stabs (Dm7: E-A-D, F-B-E, G-C-F, ...) for a bar or two, alternating with Charleston stabs
+//!   of the home fourths voicing and the odd pad; the left hand pounds open root–fifth on 1 and
+//!   the "and of 2" (anticipating beat 3), with the occasional low tonic pedal.
 //!
 //! Comping is voiced in o3–o5 (MIDI 48..=84) with smooth voice leading; bass stays in o1–o3.
 //! Both tracks are exactly `chart.bars * 4` beats long and contiguous (gaps are rests), so
 //! [`super::synth::apply_swing`] treats them like hand-written MML.
 
 use super::Harmony;
-use super::chart::{Chart, Slot};
+use super::chart::{Chart, Chord, Quality, Slot};
 use super::mml::{Arp, Event, EventKind, Track};
 use super::theory::{self, MmChord};
 
@@ -248,30 +249,46 @@ fn swing_comp(slots: &[Slot], voices: &[Voice], beats: f64, rng: &mut Rng) -> Tr
     b.finish(beats)
 }
 
-/// McCoy Tyner comping: big stabs of fourths, pads, and pentatonic runs of fourths.
+/// McCoy Tyner comping. The main gesture is diatonic *planing*: a three-note stack of
+/// fourths, played as short accented stabs on the off-beat 8ths, climbing step by step up the
+/// chord's mode ([`planing_mode`]; Dm7: E-A-D, F-B-E, G-C-F, ...), for one bar or two when the
+/// chord lasts; it lands back on the home voicing at the next chord change, or crashes down an
+/// octave on its last stab. It alternates with Charleston stabs of the home voicing, plus the
+/// odd sustained pad. Chords with no planing mode, or that change mid-bar, get the Charleston.
 fn quartal_comp(slots: &[Slot], voices: &[Voice], beats: f64, rng: &mut Rng) -> Track {
     let mut b = Builder::new();
     let mut bar = 0.0;
+    let mut planed = false;
     while bar < beats - 1e-9 {
         let i = slot_at(slots, beats, bar);
+        let chord = slots[i].chord;
         let whole_bar = slots[i].end() >= bar + 4.0 - 1e-9;
+        let mode = planing_mode(&chord).filter(|_| whole_bar);
         let roll = rng.f();
-        if whole_bar && roll < 0.2 {
+        if let Some(mode) = mode.filter(|_| roll < if planed { 0.3 } else { 0.85 }) {
+            // One bar, or two when the chord holds (and the song goes on).
+            let two = slots[i].end() >= bar + 8.0 - 1e-9 && bar + 8.0 <= beats + 1e-9 && rng.chance(0.5);
+            let offbeats = if two { 7 } else { 3 };
+            let run = planing_run(&chord, mode, offbeats + 1);
+            b.push(bar, 0.5, arp(&run[0]), PLANE_VOL, PLANE_DUTY);
+            let crash = rng.chance(0.35);
+            for (k, &shape) in run.iter().enumerate().skip(1) {
+                let mut shape = shape;
+                if k == offbeats && crash && shape[0] >= COMP_LO as u8 + 12 {
+                    shape = shape.map(|n| n - 12);
+                }
+                // Off-beat 8ths (swung like hand-written ones), a rest after each.
+                let t = bar + k as f64 + 0.5;
+                b.push(t, 0.5, arp(&shape), PLANE_VOL, PLANE_DUTY);
+            }
+            bar += if two { 8.0 } else { 4.0 };
+            planed = true;
+            continue;
+        }
+        planed = false;
+        if whole_bar && roll > 0.9 {
             // Sustained pad.
             b.push(bar, 4.0, arp(&voices[i].comp), PAD_VOL, 1);
-        } else if whole_bar && roll < 0.35 {
-            // Stab, then a run down (or up) through the fourths, one 8th each.
-            b.push(bar, 1.0, arp(&voices[i].comp), COMP_VOL + 1, COMP_DUTY);
-            let mut run: Vec<u8> = voices[i].comp.clone();
-            if run.last().is_some_and(|&n| (n as i32 + 12) <= COMP_HI) {
-                run.extend(voices[i].comp.iter().map(|n| n + 12).filter(|&n| n as i32 <= COMP_HI));
-            }
-            if rng.chance(0.5) {
-                run.reverse();
-            }
-            for (k, &n) in run.iter().take(6).enumerate() {
-                b.push(bar + 1.0 + 0.5 * k as f64, 0.5, EventKind::Note(n), COMP_VOL, 1);
-            }
         } else {
             for (t, d, i) in place_hits(slots, beats, bar, &[(0.0, 1.5, false), (1.5, 0.5, false)]) {
                 if t < beats - 1e-9 {
@@ -282,6 +299,44 @@ fn quartal_comp(slots: &[Slot], voices: &[Voice], beats: f64, rng: &mut Rng) -> 
         bar += 4.0;
     }
     b.finish(beats)
+}
+
+/// Planing stabs: louder than the comping, narrow duty for bite.
+const PLANE_VOL: u8 = 9;
+const PLANE_DUTY: u8 = 1;
+
+/// The mode quartal planing climbs (semitones above the root): a mode of the major scale, so
+/// every diatonic fourth is perfect (or the one augmented). Major chords plane in lydian (no
+/// avoid 4th, like the melody), dominants in mixolydian, minor chords in dorian. `None` for
+/// chords whose colour isn't a major-scale mode (altered dominants, mMaj7, half-diminished,
+/// diminished, augmented).
+pub fn planing_mode(chord: &Chord) -> Option<[u8; 7]> {
+    match chord.quality {
+        Quality::Major | Quality::Six | Quality::Maj7 => Some([0, 2, 4, 6, 7, 9, 11]),
+        Quality::Dom7 | Quality::Dom9 | Quality::Sus4 => Some([0, 2, 4, 5, 7, 9, 10]),
+        Quality::Minor | Quality::Minor6 | Quality::Minor7 => Some([0, 2, 3, 5, 7, 9, 10]),
+        _ => None,
+    }
+}
+
+/// `n` planing shapes over `chord` in `mode`: stacks of three diatonic fourths (scale degrees
+/// k, k+3, k+6), each one scale step above the last, starting from the bottom note of the
+/// chord's home quartal voicing ([`theory::quartal`]; Dm7: E-A-D), placed so the whole climb
+/// stays inside o3–o5.
+pub fn planing_run(chord: &Chord, mode: [u8; 7], n: usize) -> Vec<[u8; 3]> {
+    let root = chord.root as i32;
+    let home = (theory::quartal(chord)[0] as i32).rem_euclid(12) as u8;
+    let start = mode.iter().position(|&m| m == home).unwrap_or(0);
+    // Scale degree d (may exceed 7) as MIDI, from octave `base` of the root.
+    let note = |base: i32, d: usize| base + root + mode[d % 7] as i32 + 12 * (d / 7) as i32;
+    let shape = |base: i32, k: usize| [0, 3, 6].map(|x| note(base, start + k + x));
+    // The lowest octave whose first shape starts at or above E3 (MIDI 52), and fits.
+    let base = (0..=8)
+        .map(|o| 12 * o)
+        .find(|&base| note(base, start) >= 52 && shape(base, n.saturating_sub(1))[2] <= COMP_HI)
+        .or_else(|| (0..=8).map(|o| 12 * o).find(|&base| note(base, start) >= COMP_LO))
+        .unwrap_or(48);
+    (0..n).map(|k| shape(base, k).map(|x| x.clamp(COMP_LO, COMP_HI) as u8)).collect()
 }
 
 /// The note with pitch class `pc` closest to `near`, within `lo..=hi`.
@@ -448,6 +503,53 @@ mod tests {
                 assert_eq!(generate(&c, h, 0, seed), (comp, bass));
             }
         }
+    }
+
+    /// Every planing shape is a stack of diatonic fourths inside the mode, each a scale step
+    /// above the last; and the quartal comping actually plays such runs.
+    #[test]
+    fn quartal_planing_climbs_the_mode_in_fourths() {
+        let mode_pcs = |c: &Chord, m: [u8; 7]| m.map(|x| (c.root + x) % 12);
+        let check_run = |c: &Chord, run: &[[u8; 3]]| {
+            let m = mode_pcs(c, planing_mode(c).unwrap());
+            for (k, shape) in run.iter().enumerate() {
+                for w in shape.windows(2) {
+                    assert!(matches!(w[1] - w[0], 5 | 6), "{c}: {shape:?} isn't fourths");
+                }
+                assert!(shape.iter().all(|n| m.contains(&(n % 12))), "{c}: {shape:?} leaves the mode");
+                assert!(shape.iter().all(|&n| (48..=84).contains(&(n as i32))), "{c}: {shape:?} out of range");
+                if k > 0 {
+                    let (a, b) = (run[k - 1][0], shape[0]);
+                    let pa = m.iter().position(|&p| p == a % 12).unwrap();
+                    assert!(b > a && m[(pa + 1) % 7] == b % 12 && b - a <= 2, "{c}: {a} -> {b} isn't a step up");
+                }
+            }
+        };
+        for name in ["Dm7", "G7", "Cmaj7", "F6", "Bb", "Am6", "D9", "Ebm", "F#7sus4"] {
+            let c = chart::parse_chord(name).unwrap();
+            let run = planing_run(&c, planing_mode(&c).unwrap(), 8);
+            check_run(&c, &run);
+        }
+        // Dm7 planes E-A-D, F-B-E, G-C-F, A-D-G.
+        let d = chart::parse_chord("Dm7").unwrap();
+        let pcs: Vec<[u8; 3]> = planing_run(&d, planing_mode(&d).unwrap(), 4).iter().map(|s| s.map(|n| n % 12)).collect();
+        assert_eq!(pcs, [[4, 9, 2], [5, 11, 4], [7, 0, 5], [9, 2, 7]]);
+
+        // In the generated comping: runs of planing stabs, climbing (except a final crash).
+        let c = chart::parse(CHART).unwrap();
+        let slots = c.merged();
+        let mut runs = 0;
+        for seed in 0..10 {
+            let (comp, _) = generate(&c, Harmony::Quartal, 0, seed);
+            let stabs: Vec<&Event> = comp.events.iter().filter(|e| e.volume == PLANE_VOL && matches!(e.kind, EventKind::Arp(_))).collect();
+            for e in &stabs {
+                let chord = slots[slot_at(&slots, c.beats(), e.start)].chord;
+                let shape: [u8; 3] = notes_of(e).try_into().unwrap();
+                check_run(&chord, &[shape]);
+            }
+            runs += stabs.iter().filter(|e| (e.start % 4.0).abs() < 1e-9).count();
+        }
+        assert!(runs >= 10, "planing should be the main gesture ({runs} runs)");
     }
 
     #[test]
