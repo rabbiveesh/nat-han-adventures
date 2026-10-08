@@ -12,17 +12,19 @@
 //! | Coltrane ("GIANT STEPS!") | 5 toots in 20s | gravity ×[`GIANT_STEPS_GRAVITY`], run ×[`GIANT_STEPS_SPEED`] | giant walls (6 tiles tall) |
 //! | quartal ("FIRED UP") | 4 quick nuggets | run ×[`FIRED_UP_SPEED`] | long gaps (11 tiles) |
 //! | melodic minor ("NERVOUS") | 3 deaths | game time ×[`NERVOUS_TIME`] (slow motion) | none: an assist |
-//! | + just intonation ("LAUGHING") | 2 deaths at one checkpoint | landings bounce | none: comedy |
+//! | + laughing band (tuning medley) | 2 deaths at one checkpoint | landings bounce | none: comedy |
 //!
 //! Giant Steps slows the run so its longer air time doesn't also clear long gaps: each gate
 //! opens in exactly one mode (`tests/levels.rs` checks it).
 //!
 //! Adding a mode (e.g. a waltz with a beat to jump on): give [`Groove`] the new knob, set it in
 //! [`Groove::new`] from the music, and read it in the physics; nothing else needs to know.
+//! [`Groove::tuning`] carries the laughing band's tuning so physics can later follow the medley
+//! phrase by phrase (the audio side would update it at each phrase line).
 
 use bevy::prelude::*;
 
-use crate::audio::{Filters, Harmony};
+use crate::audio::{Filters, Harmony, tuning::Tuning};
 
 /// Gravity multiplier under Giant Steps (jumps ~1.5x higher: a single jump ~4.8 tiles, a
 /// quick 0.1s/0.1s double-tap ~6.2 tiles, a perfect double jump ~8.3 tiles).
@@ -54,6 +56,10 @@ pub struct Groove {
     pub time_scale: f32,
     /// Landings spring Nat back up a little.
     pub bounce: bool,
+    /// The tuning the band plays in ([`Tuning::Medley`] for the laughing band). Physics don't
+    /// read it yet.
+    #[reflect(ignore)]
+    pub tuning: Tuning,
 }
 
 impl Default for Groove {
@@ -71,6 +77,7 @@ impl Groove {
             speed_scale: 1.0,
             time_scale: 1.0,
             bounce: filters.just_intonation,
+            tuning: if filters.just_intonation { Tuning::Medley } else { Tuning::Equal },
         };
         match filters.harmony {
             Harmony::Original => plain,
@@ -82,7 +89,7 @@ impl Groove {
         }
     }
 
-    /// The physics of a harmony, without just intonation.
+    /// The physics of a harmony, without the laughing band.
     pub fn of(harmony: Harmony) -> Self {
         Self::new(Filters { harmony, just_intonation: false })
     }

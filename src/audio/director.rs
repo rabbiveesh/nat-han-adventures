@@ -22,8 +22,8 @@
 //! A mode lasts until a later decision no longer finds its rule met; toots and nuggets made
 //! while it plays count, so keeping it up keeps it going.
 //!
-//! Just intonation is on when deaths since the last checkpoint ≥ [`LAUGHING_DEATHS`]
-//! ("THE BAND CAN'T STOP LAUGHING"). The "stretch" is a rolling window over the last
+//! The laughing band (the tuning medley, [`Filters::just_intonation`]) plays when deaths
+//! since the last checkpoint ≥ [`LAUGHING_DEATHS`] ("THE BAND CAN'T STOP LAUGHING"). The "stretch" is a rolling window over the last
 //! [`MUSIC_CHECK_SECS`] of play (shorter at the start of a level).
 
 use std::collections::VecDeque;
@@ -86,7 +86,7 @@ impl Window {
 }
 
 /// The filters for the stats, and why (the reason of the harmony rule if one fired, else the
-/// just-intonation reason, else "").
+/// laughing band's reason, else "").
 pub fn choose_filters(s: &PlayStats) -> (Filters, &'static str) {
     let (harmony, reason) = if s.stretch_toots >= GIANT_STEPS_TOOTS {
         (Harmony::Coltrane, REASON_GIANT_STEPS)

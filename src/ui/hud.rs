@@ -118,7 +118,7 @@ fn spawn_groove_badge(commands: &mut Commands, f: &UiFont, sprites: Option<&Spri
 }
 
 /// The badge's text for a groove ("" for normal physics). Several knobs can be on at once
-/// (a harmony + just intonation's bounce).
+/// (a harmony + the laughing band's bounce).
 pub fn groove_badge(g: &Groove) -> String {
     let mut parts = Vec::new();
     if g.giant_steps() {
