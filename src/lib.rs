@@ -13,6 +13,7 @@
 
 pub mod art;
 pub mod audio;
+pub mod debug;
 pub mod events;
 pub mod game;
 pub mod input;
@@ -36,5 +37,5 @@ pub fn gameplay(app: &mut App) {
 
 /// Everything that only matters when there's a screen and speakers.
 pub fn presentation(app: &mut App) {
-    app.add_plugins((art::plugin, game::visuals_plugin, ui::plugin, audio::plugin));
+    app.add_plugins((art::plugin, game::visuals_plugin, ui::plugin, audio::plugin, debug::plugin));
 }

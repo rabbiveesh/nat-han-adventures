@@ -154,7 +154,7 @@ fn save_progress(progress: Res<Progress>, mut last: Local<Option<String>>) {
 }
 
 #[cfg(target_arch = "wasm32")]
-mod storage {
+pub(crate) mod storage {
     const KEY: &str = "nat-han-adventures.progress";
 
     fn local_storage() -> Option<web_sys::Storage> {
@@ -172,13 +172,13 @@ mod storage {
 }
 
 #[cfg(not(target_arch = "wasm32"))]
-mod storage {
+pub(crate) mod storage {
     use std::path::PathBuf;
 
     /// `$NATHAN_SAVE` if set (e.g. a scratch file for agent/headless runs), else
     /// `$XDG_DATA_HOME/nat-han-adventures/progress.txt` (or `~/.local/share/...`, `%APPDATA%\...`),
     /// falling back to next to the executable.
-    fn path() -> PathBuf {
+    pub fn path() -> PathBuf {
         let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
         if let Some(p) = env("NATHAN_SAVE") {
             return p;
