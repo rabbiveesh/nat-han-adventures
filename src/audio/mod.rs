@@ -72,6 +72,7 @@ pub mod sfx;
 pub mod songs;
 pub mod synth;
 pub mod theory;
+pub mod tuning;
 
 use std::time::Duration;
 
