@@ -79,6 +79,8 @@ pub struct Note {
     pub duty: u8,
     /// Slurred from the note before (`c4&d4`): only right after another note.
     pub tie: bool,
+    /// Instrument (`@i`): 0 the channel's built-in, `k` the song's `k`-th.
+    pub inst: u8,
 }
 
 impl Note {
@@ -96,6 +98,8 @@ pub struct Part {
     /// The song's length in beats (every edited channel is written this long).
     pub length: f64,
     pub bar_beats: f64,
+    /// The song's instrument names (instrument `k` is `inst_names[k - 1]`), to write `@i`.
+    pub inst_names: Vec<String>,
 }
 
 /// Parser defaults (`o4`, `v12`, `@2`).
@@ -114,7 +118,9 @@ impl Part {
 
     /// Channel `ch` of a parsed song.
     pub fn of(song: &SongFile, ch: usize) -> Part {
-        Self::from_track(ch, &song.tracks[ch], song.beats(), song.bar_beats())
+        let mut p = Self::from_track(ch, &song.tracks[ch], song.beats(), song.bar_beats());
+        p.inst_names = song.instruments.names.clone();
+        p
     }
 
     pub fn from_track(ch: usize, track: &Track, length: f64, bar_beats: f64) -> Part {
@@ -131,10 +137,10 @@ impl Part {
                 };
                 // Duty only means something on the pulse channels.
                 let duty = if pulse { e.duty } else { DEFAULT_DUTY };
-                Some(Note { start: e.start, dur: e.dur, sound, volume: e.volume, duty, tie: e.tie && ch < 3 })
+                Some(Note { start: e.start, dur: e.dur, sound, volume: e.volume, duty, tie: e.tie && ch < 3, inst: e.inst })
             })
             .collect();
-        let mut p = Part { ch, notes, length, bar_beats };
+        let mut p = Part { ch, notes, length, bar_beats, inst_names: Vec::new() };
         p.normalize();
         p
     }
@@ -244,6 +250,16 @@ impl Part {
         }
     }
 
+    /// The name `@i` writes for instrument `k`.
+    pub fn inst_name(&self, k: u8) -> &str {
+        if k == 0 { "default" } else { self.inst_names.get(k as usize - 1).map_or("default", String::as_str) }
+    }
+
+    /// The instrument in force at beat `t` (the last note's at or before it).
+    pub fn inst_at(&self, t: f64) -> u8 {
+        self.notes.iter().rev().find(|n| n.start <= t + EPS).map_or(0, |n| n.inst)
+    }
+
     /// The channel as MML: one bar per `|`, four bars a line (each ending with its bar numbers),
     /// explicit lengths, the octave at the start of every bar, notes across a bar line tied.
     /// Always whole bars, `length` long.
@@ -252,7 +268,7 @@ impl Part {
         let bars = self.bars();
         let pulse = self.ch < 2;
         let mut out: Vec<Vec<String>> = vec![Vec::new(); bars];
-        let (mut octave, mut volume, mut duty) = (DEFAULT_OCTAVE, DEFAULT_VOLUME, DEFAULT_DUTY);
+        let (mut octave, mut volume, mut duty, mut inst) = (DEFAULT_OCTAVE, DEFAULT_VOLUME, DEFAULT_DUTY, 0u8);
         // Where the last sounding token is (to put a `&` after it).
         let mut last: Option<(usize, usize)> = None;
         if let Some(first) = self.notes.first() {
@@ -292,6 +308,10 @@ impl Part {
                     if pulse && n.duty != duty {
                         out[b].push(format!("@{}", n.duty));
                         duty = n.duty;
+                    }
+                    if n.inst != inst {
+                        out[b].push(format!("@i {}", self.inst_name(n.inst)));
+                        inst = n.inst;
                     }
                 }
                 let seg_end = n.end().min(t1);
@@ -491,6 +511,89 @@ pub fn splice_section(text: &str, name: &str, body: &str) -> String {
     t
 }
 
+/// One line of the `[instruments]` section.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InstLine {
+    /// The text's 0-based line.
+    pub line: usize,
+    /// The instrument's name, or the channel's (a palette).
+    pub name: String,
+    /// `name : <def>` (or `channel = <def>`), and any `; comment` after it.
+    pub def: String,
+    pub comment: String,
+    pub palette: bool,
+}
+
+/// The lines of the `[instruments]` section.
+pub fn instrument_lines(text: &str) -> Vec<InstLine> {
+    let Some(sec) = sections(text).into_iter().find(|s| s.name == "instruments") else { return Vec::new() };
+    text.lines()
+        .enumerate()
+        .skip(sec.body.0)
+        .take(sec.body.1 - sec.body.0)
+        .filter_map(|(i, raw)| {
+            let (code, comment) = raw.split_once(';').map_or((raw, ""), |(a, c)| (a, c));
+            let (sep, palette) = match (code.find(':'), code.find('=')) {
+                (Some(c), e) if e.is_none_or(|e| c < e) => (c, false),
+                (_, Some(e)) => (e, true),
+                _ => return None,
+            };
+            Some(InstLine {
+                line: i,
+                name: code[..sep].trim().to_string(),
+                def: code[sep + 1..].trim().to_string(),
+                comment: comment.trim().to_string(),
+                palette,
+            })
+        })
+        .collect()
+}
+
+/// The text with instrument `name` defined as `def` (its line replaced, comment kept; or a
+/// new line, the section made if missing).
+pub fn set_instrument(text: &str, name: &str, def: &str) -> String {
+    set_inst_line(text, name, &format!("{name} : {def}"), false)
+}
+
+/// The text with channel `ch`'s palette set to `names` (the line removed if empty).
+pub fn set_palette(text: &str, ch: &str, names: &[String]) -> String {
+    set_inst_line(text, ch, &if names.is_empty() { String::new() } else { format!("{ch} = {}", names.join(" ")) }, true)
+}
+
+fn set_inst_line(text: &str, name: &str, new: &str, palette: bool) -> String {
+    let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
+    if let Some(l) = instrument_lines(text).into_iter().find(|l| l.name == name && l.palette == palette) {
+        if new.is_empty() {
+            lines.remove(l.line);
+        } else {
+            lines[l.line] = if l.comment.is_empty() { new.to_string() } else { format!("{new:<48} ; {}", l.comment) };
+        }
+    } else if !new.is_empty() {
+        let secs = sections(text);
+        match secs.iter().find(|s| s.name == "instruments") {
+            Some(sec) => {
+                // After the section's last non-empty line.
+                let mut at = sec.body.1;
+                while at > sec.body.0 && lines.get(at - 1).is_some_and(|l| l.trim().is_empty()) {
+                    at -= 1;
+                }
+                // Instruments before the palettes.
+                if !palette && let Some(first) = instrument_lines(text).into_iter().find(|l| l.palette) {
+                    at = first.line;
+                }
+                lines.insert(at, new.to_string());
+            }
+            None => {
+                let at = secs.iter().find(|s| CHANNELS.iter().any(|(c, _)| *c == s.name)).map_or(lines.len(), |s| s.header);
+                lines.splice(at..at, ["[instruments]".to_string(), new.to_string(), String::new()]);
+            }
+        }
+    }
+    let mut t = lines.join("\n");
+    t.push('\n');
+    t
+}
+
 /// A song being edited.
 #[derive(Debug, Clone)]
 pub struct SongDoc {
@@ -660,6 +763,30 @@ mod tests {
 
     /// Every song in `music/`: the formatter writes each channel so it plays exactly the same
     /// notes, and its output is a fixed point.
+    /// The instruments tab edits the `[instruments]` lines in place.
+    #[test]
+    fn instrument_lines_are_edited_in_place() {
+        let text = library::text("tiger_rag").unwrap();
+        let lines = instrument_lines(text);
+        let brass = lines.iter().find(|l| l.name == "brass").unwrap();
+        assert!(!brass.palette && brass.def.starts_with("vol") && brass.comment.contains("trumpet"));
+        assert!(lines.iter().any(|l| l.palette && l.name == "pulse1"));
+        let t = set_instrument(text, "brass", "vol 15 10 | duty 1");
+        let s = SongFile::parse(&t).unwrap();
+        let k = s.instruments.index("brass").unwrap();
+        assert!(matches!(s.instruments.defs[k as usize - 1], nat_han_adventures::audio::live::instrument::Def::Tone(t) if t.vol.unwrap().steps() == [15, 10]));
+        assert!(t.contains("; a trumpet"), "the comment stays");
+        let t = set_instrument(&t, "kazoo", "vol 9 | duty 3");
+        let t = set_palette(&t, "pulse2", &["default".into(), "kazoo".into()]);
+        let s = SongFile::parse(&t).unwrap();
+        assert_eq!(s.instruments.palette(1), [0, s.instruments.index("kazoo").unwrap()]);
+        // A song without the section gets one, before its channels.
+        let mini = "[song]\ntitle = m\nbpm = 120\n[pulse1]\nc1 |\n";
+        let t = set_instrument(mini, "a", "vol 3");
+        assert!(t.find("[instruments]").unwrap() < t.find("[pulse1]").unwrap(), "{t}");
+        assert_eq!(SongFile::parse(&t).unwrap().instruments.names, ["a"]);
+    }
+
     #[test]
     fn every_song_round_trips_through_the_formatter() {
         for (stem, text) in library::FILES {
@@ -742,7 +869,7 @@ mod tests {
             let sound = if part.drums() { Sound::Drum(DRUMS[rnd(4) as usize]) } else { Sound::Note(40 + rnd(40) as u8) };
             let r = match rnd(4) {
                 0 => doc.edit(ch, |p| {
-                    p.insert(Note { start: rnd(steps) as f64 * STEP, dur: (1 + rnd(24)) as f64 * STEP, sound, volume: 10, duty: 1, tie: false });
+                    p.insert(Note { start: rnd(steps) as f64 * STEP, dur: (1 + rnd(24)) as f64 * STEP, sound, volume: 10, duty: 1, tie: false, inst: 0 });
                 }),
                 1 if !part.notes.is_empty() => {
                     let i = rnd(part.notes.len() as u64) as usize;
@@ -777,7 +904,7 @@ mod tests {
     fn notes_across_bar_lines_are_tied() {
         let mut doc = tiny();
         doc.edit(0, |p| {
-            p.insert(Note { start: 3.0, dur: 2.0, sound: Sound::Note(67), volume: 12, duty: 2, tie: false });
+            p.insert(Note { start: 3.0, dur: 2.0, sound: Sound::Note(67), volume: 12, duty: 2, tie: false, inst: 0 });
         })
         .unwrap();
         assert!(doc.text.contains("o4 c4 d4 e4 g4& | o4 g4 r2."), "{}", doc.text);

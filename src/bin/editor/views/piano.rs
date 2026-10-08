@@ -19,7 +19,8 @@ const VEL_H: f32 = 64.0;
 /// Draw a note at `step`, `len` steps long.
 pub fn draw(doc: &mut SongDoc, ch: usize, step: usize, sound: Sound, len: usize, volume: u8) -> Result<(), String> {
     doc.edit(ch, |p| {
-        p.insert(Note { start: step as f64 * STEP, dur: len.max(1) as f64 * STEP, sound, volume, duty: duty_at(p, step), tie: false });
+        let inst = p.inst_at(step as f64 * STEP);
+        p.insert(Note { start: step as f64 * STEP, dur: len.max(1) as f64 * STEP, sound, volume, duty: duty_at(p, step), tie: false, inst });
     })
 }
 
@@ -327,7 +328,7 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
             let preview = match d {
                 Drag::Draw { step, sound_pitch } => {
                     let len = if s > step { s + 1 - step } else { new_len };
-                    Some((Note { start: step as f64 * STEP, dur: len as f64 * STEP, sound: sound_of(ch, sound_pitch as u8), volume: 12, duty: 2, tie: false }, Action::Draw(step, sound_pitch as u8, len)))
+                    Some((Note { start: step as f64 * STEP, dur: len as f64 * STEP, sound: sound_of(ch, sound_pitch as u8), volume: 12, duty: 2, tie: false, inst: 0 }, Action::Draw(step, sound_pitch as u8, len)))
                 }
                 Drag::Move { index, grab, pitch } => part.notes.get(index).map(|n| {
                     let start = ((s as f64 * STEP - grab) / STEP).round().max(0.0) * STEP;

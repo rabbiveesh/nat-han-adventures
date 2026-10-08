@@ -172,6 +172,13 @@ impl Player {
         }
     }
 
+    /// Play a rendered sound (an instrument preview) over the music.
+    pub fn play_rendered(&mut self, r: synth::Rendered) {
+        if let Some(m) = self.manager.as_mut() {
+            let _ = m.play(to_static(r).volume(Decibels(MUSIC_DB)));
+        }
+    }
+
     pub fn play_sfx(&mut self, s: Sfx) {
         if !self.sfx_on {
             return;

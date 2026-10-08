@@ -15,7 +15,8 @@ const NUM_W: f32 = 44.0;
 pub fn enter(doc: &mut SongDoc, ch: usize, row: usize, sound: Sound, len: usize, volume: u8) -> Result<(), String> {
     let duty = doc.part(ch).and_then(|p| p.notes.iter().rev().find(|n| n.start <= row as f64 * STEP).map(|n| n.duty)).unwrap_or(2);
     doc.edit(ch, |p| {
-        p.insert(Note { start: row as f64 * STEP, dur: len.max(1) as f64 * STEP, sound, volume, duty, tie: false });
+        let inst = p.inst_at(row as f64 * STEP);
+        p.insert(Note { start: row as f64 * STEP, dur: len.max(1) as f64 * STEP, sound, volume, duty, tie: false, inst });
     })
 }
 
@@ -51,6 +52,8 @@ fn sound_name(s: &Sound) -> String {
 /// What a cell shows.
 struct Cell {
     note: String,
+    /// The instrument, where it changes (hex, `00` = default).
+    ins: String,
     vol: String,
     fx: String,
     /// Note, note-off, sustain, empty.
@@ -77,14 +80,16 @@ fn cell(part: &Part, row: usize) -> Cell {
         } else {
             "···".into()
         };
-        return Cell { note: sound_name(&n.sound), vol: format!("{:X}", n.volume), fx, kind: 0 };
+        let prev_inst = if i > 0 { part.notes[i - 1].inst } else { 0 };
+        let ins = if n.inst != prev_inst || (i == 0 && n.inst != 0) { format!("{:02X}", n.inst) } else { "··".into() };
+        return Cell { note: sound_name(&n.sound), ins, vol: format!("{:X}", n.volume), fx, kind: 0 };
     }
     let ended = part.notes.iter().any(|n| (n.end() - a).abs() < EPS) && !part.drums();
     if ended && part.at(a).is_none() {
-        return Cell { note: "OFF".into(), vol: "·".into(), fx: "···".into(), kind: 1 };
+        return Cell { note: "OFF".into(), ins: "··".into(), vol: "·".into(), fx: "···".into(), kind: 1 };
     }
     let kind = if part.at(a).is_some() && !part.drums() { 2 } else { 3 };
-    Cell { note: "···".into(), vol: "·".into(), fx: "···".into(), kind }
+    Cell { note: "···".into(), ins: "··".into(), vol: "·".into(), fx: "···".into(), kind }
 }
 
 /// The tracker's piano keyboard: key → semitone above the cursor octave's C.
@@ -262,8 +267,8 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
         p.rect_filled(Rect::from_min_size(pos2(x + 10.0, hdr.top() + 9.0), vec2(10.0, 10.0)), 2.0, CHANNEL[ch]);
         let name = p.text(pos2(x + 28.0, hdr.top() + 14.0), Align2::LEFT_CENTER, CHANNEL_NAME[ch], mono(12.0), TEXT);
         p.text(pos2(name.right() + 8.0, hdr.top() + 14.0), Align2::LEFT_CENTER, ROLE[ch], mono(12.0), TEXT_FAINT);
-        for (k, l) in ["note", "vol", "fx"].iter().enumerate() {
-            p.text(pos2(x + 10.0 + [0.0, 48.0, 80.0][k], hdr.top() + 30.0), Align2::LEFT_CENTER, *l, mono(11.0), TEXT_FAINT);
+        for (k, l) in ["note", "ins", "vol", "fx"].iter().enumerate() {
+            p.text(pos2(x + 10.0 + [0.0, 46.0, 72.0, 98.0][k], hdr.top() + 30.0), Align2::LEFT_CENTER, *l, mono(11.0), TEXT_FAINT);
         }
         if ch == ed.tracker.ch {
             p.line_segment([pos2(x + 1.0, hdr.bottom() - 1.0), pos2(x + col_w, hdr.bottom() - 1.0)], Stroke::new(2.0, CHANNEL[ch]));
@@ -333,10 +338,12 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                     1 => (TEXT_FAINT, TEXT_GHOST, TEXT_GHOST),
                     _ => (TEXT_GHOST, TEXT_GHOST, TEXT_GHOST),
                 };
+                let ic = if c.ins == "··" { TEXT_GHOST } else { GOLD };
                 let font = mono(12.0);
                 p.text(pos2(x + 10.0, rect.center().y), Align2::LEFT_CENTER, &c.note, font.clone(), nc);
-                p.text(pos2(x + 58.0, rect.center().y), Align2::LEFT_CENTER, &c.vol, font.clone(), vc);
-                p.text(pos2(x + 90.0, rect.center().y), Align2::LEFT_CENTER, &c.fx, font, fc);
+                p.text(pos2(x + 56.0, rect.center().y), Align2::LEFT_CENTER, &c.ins, font.clone(), ic);
+                p.text(pos2(x + 84.0, rect.center().y), Align2::LEFT_CENTER, &c.vol, font.clone(), vc);
+                p.text(pos2(x + 108.0, rect.center().y), Align2::LEFT_CENTER, &c.fx, font, fc);
             }
             if resp.clicked()
                 && let Some(pos) = resp.interact_pointer_pos()
@@ -370,7 +377,7 @@ fn part_tooltip(parts: &[Part], row: usize, ch: i32) -> Option<String> {
         Sound::Note(x) => note_name(x),
         Sound::Drum(d) => format!("{d:?}"),
     };
-    Some(format!("{what} · {} beats · v{}{}", fmt_beats(n.dur), n.volume, if n.tie { " · slurred" } else { "" }))
+    Some(format!("{what} · {} beats · v{} · @i {}{}", fmt_beats(n.dur), n.volume, part.inst_name(n.inst), if n.tie { " · slurred" } else { "" }))
 }
 
 fn fmt_beats(b: f64) -> String {
@@ -479,6 +486,17 @@ mod tests {
         assert_eq!(cell(&p, 4).note, "OFF");
         assert_eq!(cell(&p, 8).note, "C-4");
         assert_eq!(cell(&p, 9).kind, 2, "sustain");
+    }
+
+    /// The instrument column shows where the instrument changes.
+    #[test]
+    fn cells_show_instrument_changes() {
+        let doc = SongDoc::new("t", "[song]\ntitle = t\nbpm = 120\n[instruments]\nb : vol 9\n[pulse1]\no4 c4 @i b d4 e4 @i default f4 |\n");
+        let p = doc.part(0).unwrap();
+        let ins: Vec<String> = [0, 4, 8, 12].iter().map(|&r| cell(&p, r).ins).collect();
+        assert_eq!(ins, ["··", "01", "··", "00"]);
+        // And it writes back.
+        assert!(p.to_mml().contains("@i b") && p.to_mml().contains("@i default"), "{}", p.to_mml());
     }
 }
 

@@ -17,6 +17,7 @@ pub enum View {
     Tracker,
     Piano,
     Text,
+    Instruments,
 }
 
 impl View {
@@ -25,6 +26,7 @@ impl View {
             "tracker" => Some(View::Tracker),
             "piano" | "piano-roll" => Some(View::Piano),
             "text" => Some(View::Text),
+            "instruments" | "inst" => Some(View::Instruments),
             _ => None,
         }
     }
@@ -101,6 +103,24 @@ pub struct TextUi {
     pub focus: bool,
 }
 
+/// The instruments tab.
+#[derive(Debug, Clone)]
+pub struct InstUi {
+    /// The instrument selected (by name).
+    pub selected: Option<String>,
+    /// The preview's channel and octave.
+    pub ch: usize,
+    pub octave: i32,
+    /// The definition being typed (it's written to the song when it parses).
+    pub draft: Option<(String, String)>,
+}
+
+impl Default for InstUi {
+    fn default() -> Self {
+        InstUi { selected: None, ch: 0, octave: 4, draft: None }
+    }
+}
+
 /// The "as played" parts and charts, cached per song revision and harmony.
 pub struct PlayedCache {
     pub revision: u64,
@@ -126,6 +146,9 @@ pub struct Editor {
     pub tracker: TrackerUi,
     pub piano: PianoUi,
     pub text: TextUi,
+    pub inst: InstUi,
+    /// Audition: play channel `.0` on instrument `.1` (a try-out, not written to the song).
+    pub audition: Option<(usize, String)>,
     /// Loop the bars `selection` (a half-open range).
     pub loop_on: bool,
     pub selection: (usize, usize),
@@ -202,6 +225,8 @@ impl Editor {
             tracker: TrackerUi::default(),
             piano: PianoUi::default(),
             text: TextUi { cheat: true, ..TextUi::default() },
+            inst: InstUi::default(),
+            audition: None,
             loop_on: false,
             selection: (0, 2),
             status: None,
@@ -264,12 +289,59 @@ impl Editor {
     /// The song the engine plays (the loop selection cut out, if on) and its offset in bars.
     fn engine_song(&self) -> Option<(SongFile, usize)> {
         let s = self.song()?;
+        let auditioned;
+        let s = match &self.audition {
+            Some((ch, name)) => {
+                let mut t = s.clone();
+                t.sources[*ch] = format!("@i {name} {}", t.sources[*ch]);
+                auditioned = SongFile::parse(&t.to_text()).unwrap_or_else(|_| s.clone());
+                &auditioned
+            }
+            None => s,
+        };
         if self.loop_on {
             let (a, b) = self.selection;
             let a = a.min(s.bars().saturating_sub(1));
             Some((excerpt(s, a, b.max(a + 1)), a))
         } else {
             Some((s.clone(), 0))
+        }
+    }
+
+    /// Audition instrument `name` on channel `ch` in the song (again: stop auditioning).
+    pub fn audition(&mut self, ch: usize, name: &str) {
+        let same = self.audition.as_ref().is_some_and(|(c, n)| *c == ch && n == name);
+        self.audition = (!same).then(|| (ch, name.to_string()));
+        if self.player.playing {
+            if let Some((song, offset)) = self.engine_song() {
+                self.player.swap(song, offset);
+            }
+        } else if !same {
+            let bar = self.cursor_bar();
+            self.play_from(bar);
+        }
+    }
+
+    /// Play a few notes (or a groove, for a kit) on instrument `name`, alone.
+    pub fn preview(&mut self, name: &str) {
+        let Some(song) = self.song() else { return };
+        let kit = song.instruments.index(name).is_some_and(|k| song.instruments.is_kit(k));
+        let ch = if kit { 3 } else { self.inst.ch.min(2) };
+        let o = (self.inst.octave - if ch == 2 { 2 } else { 0 }).clamp(1, 6);
+        let body = if kit {
+            format!("@i {name} v12 k4 h8 h8 s4 h8 H8 | k8 k8 s8 s16 s16 x2 |")
+        } else {
+            format!("@i {name} v12 o{o} c4 e4 g4 > c4 | < c8 e8 g8 > c8 c2 | < {{c e g}}1 |")
+        };
+        let text = format!(
+            "[song]\ntitle = preview\nbpm = {}\nloop = no\n[instruments]\n{}\n[{}]\n{body}\n",
+            song.bpm,
+            song.instruments_src,
+            CHANNELS[ch].0
+        );
+        match SongFile::parse(&text).map_err(|e| e.to_string()).and_then(|s| nat_han_adventures::audio::synth::render_song(&s)) {
+            Ok(r) => self.player.play_rendered(r),
+            Err(e) => self.complain(format!("preview: {e}")),
         }
     }
 
@@ -303,7 +375,7 @@ impl Editor {
     /// The bar the current view's cursor is in.
     pub fn cursor_bar(&self) -> usize {
         match self.view {
-            View::Tracker => self.tracker.row / self.rows_per_bar().max(1),
+            View::Tracker | View::Instruments => self.tracker.row / self.rows_per_bar().max(1),
             View::Piano => self.piano.first_bar,
             View::Text => self.text_cursor_beat().map_or(0, |b| (b / self.bar_beats()).floor() as usize),
         }
@@ -508,6 +580,24 @@ mod tests {
         e.level[3] = 6;
         e.remix();
         assert_eq!(e.dials.mix, [0.0, 1.0, 1.0, 0.5]);
+    }
+
+    /// The instruments tab's try-out plays the song with a channel switched, without writing
+    /// it; the preview renders.
+    #[test]
+    fn auditions_switch_a_channel_without_writing() {
+        let mut e = Editor::new(repo_root(), Some("tiger_rag"), AudioOutput::Headless);
+        let before = e.doc.text.clone();
+        e.audition(0, "brass");
+        let (song, _) = e.engine_song().unwrap();
+        let k = song.instruments.index("brass").unwrap();
+        assert!(song.tracks[0].events.iter().all(|ev| ev.inst == k));
+        assert_eq!(e.doc.text, before);
+        e.audition(0, "brass");
+        assert!(e.audition.is_none());
+        e.preview("brass");
+        e.preview("brushes");
+        assert!(e.status.as_ref().is_none_or(|s| !s.1), "{:?}", e.status);
     }
 
     /// The loop selection plays bars 5-6 over and over.
