@@ -2,6 +2,8 @@
 name = "nat-han-adventures"
 version = "0.1.0"
 edition = "2024"
+# `cargo run` is the game; the music editor is `cargo run --bin editor`.
+default-run = "nat-han-adventures"
 
 [dependencies]
 # bevy_audio is off: our chiptune synth plays straight through kira (one manager: the live
@@ -13,13 +15,24 @@ rtrb = "0.4"
 leafwing-input-manager = "0.21"
 rand = "0.9"
 bevy_brp_extras = { version = "0.22", optional = true }
+# The music editor's GUI (native only, see the `editor` feature).
+bevy_egui = { version = "0.40", optional = true, default-features = false, features = ["render", "default_fonts", "manage_clipboard"] }
 
 [features]
 default = ["dev"]
-# Fast iteration: dynamically link bevy. Disable for release builds (`--no-default-features`).
-dev = ["bevy/dynamic_linking", "brp"]
+# Fast iteration: dynamically link bevy (and build the music editor). Disable for release
+# builds (`--no-default-features`).
+dev = ["bevy/dynamic_linking", "brp", "editor"]
 # Bevy Remote Protocol (+ extras: screenshots, key input) so tools/agents can drive the game.
 brp = ["dep:bevy_brp_extras", "bevy/png"]
+# The native music editor (`src/bin/editor`, `cargo run --bin editor`): egui on the game's
+# Bevy. The game binary never links it; the web build (`--no-default-features`) never builds it.
+editor = ["dep:bevy_egui", "bevy/png"]
+
+[[bin]]
+name = "editor"
+path = "src/bin/editor/main.rs"
+required-features = ["editor"]
 
 # Optimise deps even in dev; our own crate stays fast to compile.
 [profile.dev]

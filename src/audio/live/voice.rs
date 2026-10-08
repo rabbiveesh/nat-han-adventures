@@ -432,6 +432,21 @@ impl VoiceBank {
         }
     }
 
+    /// Scale channel `ch`'s output by `gain` (0 mutes; 1 is as written), from the next sample.
+    pub fn set_channel_gain(&mut self, ch: usize, gain: f32) {
+        let g = if gain.is_finite() { gain.clamp(0.0, 4.0) } else { 0.0 };
+        let (l, r) = match ch {
+            0 => pan(PULSE1_PAN, PULSE_GAIN),
+            1 => pan(PULSE2_PAN, PULSE_GAIN),
+            2 => pan(0.0, TRIANGLE_GAIN),
+            _ => pan(0.0, NOISE_GAIN),
+        };
+        match ch {
+            0..=2 => self.tones[ch].gain = (l * g, r * g),
+            _ => self.drums.gain = (l * g, r * g),
+        }
+    }
+
     /// Committed events not started yet.
     pub fn pending(&self) -> impl Iterator<Item = &NoteEvent> {
         self.tones.iter().flat_map(|v| v.queue.iter()).chain(self.drums.queue.iter())

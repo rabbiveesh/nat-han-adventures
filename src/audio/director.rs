@@ -264,6 +264,11 @@ impl Band {
         (Filters::default(), "")
     }
 
+    /// Play time of the next periodic check.
+    pub fn next_check(&self) -> f32 {
+        self.next_check
+    }
+
     /// The summon held at `now`, if any.
     pub fn held(&self, now: f32) -> Option<Harmony> {
         self.hold.filter(|&(_, until)| now < until).map(|(h, _)| h)
