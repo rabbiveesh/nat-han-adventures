@@ -12,6 +12,8 @@ pub fn plugin(app: &mut App) {
         .add_message::<LevelCompleted>()
         .add_message::<HanSays>()
         .add_message::<PlaySfx>()
+        .add_message::<LevelStarted>()
+        .add_message::<BandFreedom>()
         .add_message::<crate::audio::MusicStarted>()
         .add_message::<crate::audio::MusicChanged>();
 }
@@ -72,3 +74,23 @@ pub struct HanSays {
 /// Play a one-shot sound effect (menus etc.; gameplay sounds are driven by the messages above).
 #[derive(Message, Debug, Clone, Copy)]
 pub struct PlaySfx(pub crate::audio::Sfx);
+
+/// A level was (re)loaded: entered from a menu or the previous level (`restart: false`), or
+/// restarted from scratch (`restart: true`).
+#[derive(Message, Debug, Clone, Copy)]
+pub struct LevelStarted {
+    pub level: usize,
+    pub restart: bool,
+}
+
+/// How freely the band should play (each musician's freedom and the dynamics, 0..1), decided
+/// by the adaptive engine from how the player is doing (`game::adaptive`). The audio plugin
+/// passes it to the live engine.
+#[derive(Message, Debug, Clone, Copy, PartialEq)]
+pub struct BandFreedom {
+    pub lead: f32,
+    pub comp: f32,
+    pub bass: f32,
+    pub drums: f32,
+    pub dynamics: f32,
+}

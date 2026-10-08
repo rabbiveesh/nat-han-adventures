@@ -578,4 +578,22 @@ mod plugin {
         }
         assert!(app.world().resource::<SfxCount>().0 >= before + 4);
     }
+
+    /// The adaptive engine's band freedom reaches the engine: at level start and on decisions
+    /// (here a death beyond the level's expectation: calmer, sparser).
+    #[test]
+    fn the_band_freedom_is_posted_on_decisions() {
+        let mut app = app();
+        assert_eq!(app.world().resource::<LivePlayer>().freedom(), None);
+        app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        go(&mut app, AppState::Playing);
+        app.update();
+        let start = app.world().resource::<LivePlayer>().freedom().expect("posted at level start");
+        for _ in 0..4 {
+            app.world_mut().write_message(nat_han_adventures::events::PlayerDied { pos: Vec2::ZERO });
+            app.update();
+        }
+        let after = app.world().resource::<LivePlayer>().freedom().unwrap();
+        assert!(after.lead < start.lead && after.dynamics <= start.dynamics, "{start:?} → {after:?}");
+    }
 }

@@ -38,6 +38,7 @@ fn enter_level(
     mut says: MessageWriter<HanSays>,
 ) {
     let level = load(&mut commands, &levels, current.0, &old);
+    commands.write_message(crate::events::LevelStarted { level: current.0, restart: false });
     if !level.intro.is_empty() {
         says.write(HanSays { text: level.intro.clone() });
     }
@@ -77,6 +78,7 @@ fn restart_level(
     }
     let index = active.map_or(current.0, |a| a.index);
     load(&mut commands, &levels, index, &old);
+    commands.write_message(crate::events::LevelStarted { level: index, restart: true });
 }
 
 /// Despawn whatever is loaded and spawn level `index` fresh, resetting the run.

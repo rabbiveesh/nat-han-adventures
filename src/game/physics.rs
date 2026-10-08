@@ -354,6 +354,7 @@ fn player_step(
     time: Res<Time>,
     active: Res<ActiveLevel>,
     groove: Res<Groove>,
+    assists: Res<super::Assists>,
     input: Single<&ActionState<Action>>,
     mut player: Query<
         (&mut Pos, &mut Body, &mut PlayerControl),
@@ -397,7 +398,7 @@ fn player_step(
         ctl.has_toot = true;
         ctl.weak_toot = false;
     } else if body.on_ground || ctl.bouncing {
-        ctl.coyote = COYOTE_TIME;
+        ctl.coyote = assists.coyote_time();
         ctl.has_toot = true;
         ctl.weak_toot = false;
     } else {
@@ -405,7 +406,7 @@ fn player_step(
     }
     let pressed = input.just_pressed(&Action::Jump);
     if pressed {
-        ctl.buffer = JUMP_BUFFER;
+        ctl.buffer = assists.jump_buffer();
     } else {
         ctl.buffer -= dt;
     }
