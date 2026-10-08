@@ -3,8 +3,9 @@
 //!
 //! - [`templates`]: one hand-shaped room per [`crate::adapt::Skill`] (jump gauntlets, flies and
 //!   sprays, moving platforms, a giant wall, a long gap, a waltz row, a stain pit, a grease
-//!   chute) with parameters scaled by the band; [`templates::TEMPLATES`] is the registry new
-//!   kinds of rooms go in.
+//!   chute) with parameters scaled by the band, each opening on rolling ground (humps and
+//!   dips) and the gauntlets climbing up to 7 tiles; [`templates::TEMPLATES`] is the registry
+//!   new kinds of rooms go in.
 //! - [`canvas`]: the column builder rooms are drawn with, in the ordinary level format, framed
 //!   by entry and exit pipes.
 //! - [`generate`]: a plan becomes a room: seeded dice draw it, the level validator

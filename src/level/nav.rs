@@ -207,6 +207,22 @@ impl Nav {
         out
     }
 
+    /// Where move `m` from `cell` lands if Han takes off at `x` already running at `vx` (px/s)
+    /// instead of from a standstill at its take-off point: a rolling take-off, so he needn't
+    /// stop before every jump. Ground jumps only.
+    pub fn lands_rolling(&mut self, map: &Map, cell: Cell, m: &HanMove, x: f32, vx: f32) -> Option<Cell> {
+        if !m.jump {
+            return None;
+        }
+        let mut f = flight(map, &self.env, cell, m)?;
+        f.x0 = x;
+        f.vx0 = vx;
+        match fly_timed(map, &self.env, &f, &mut self.buf).0 {
+            Outcome::Land(to) => Some(to),
+            _ => None,
+        }
+    }
+
     /// Simulate every node's edges (what a full build at load would cost). Returns the nodes.
     pub fn build_all(&mut self, map: &Map) -> usize {
         let mut n = 0;
