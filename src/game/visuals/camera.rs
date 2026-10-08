@@ -7,13 +7,16 @@ use bevy::prelude::*;
 use super::VisualSet;
 use crate::art::{SpriteId, Sprites};
 use crate::game::{ActiveLevel, Groove, LevelEntity, Player, PlayerControl};
+use crate::level::{TILE, Tile};
+use crate::touch::TouchMode;
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, spawn_camera).add_systems(
         PostUpdate,
         (
             follow_player,
-            spawn_backdrop.run_if(resource_exists::<Sprites>.and_then(resource_exists_and_changed::<ActiveLevel>)),
+            (spawn_backdrop, spawn_margins)
+                .run_if(resource_exists::<Sprites>.and_then(resource_exists_and_changed::<ActiveLevel>)),
             scroll_backdrop,
         )
             .chain()
@@ -25,6 +28,13 @@ pub(super) fn plugin(app: &mut App) {
 pub const VIEW_HEIGHT: f32 = 216.0;
 /// How far ahead (px) of the player the camera looks in the facing direction.
 const LOOK_AHEAD: f32 = 32.0;
+/// Touch mode: how far (px) the camera may show past the level's left/right edges and below its
+/// floor, so Nat isn't pinned into a bottom corner under a thumb; and how much higher Nat sits.
+const TOUCH_MARGIN: Vec2 = Vec2::new(6.0 * TILE, 3.0 * TILE);
+const TOUCH_LIFT: f32 = 14.0;
+/// Decorative ground drawn past the level's edges (walls left/right, earth under solid floor).
+const MARGIN_COLS: i32 = 7;
+const MARGIN_ROWS: i32 = 4;
 /// Backdrop scroll speed relative to the camera.
 const PARALLAX: f32 = 0.3;
 /// Backdrop art is 256x144; drawn at this scale to fill the 216px view.
@@ -64,6 +74,7 @@ fn spawn_camera(mut commands: Commands) {
 fn follow_player(
     time: Res<Time>,
     groove: Option<Res<Groove>>,
+    touch: Option<Res<TouchMode>>,
     active: Option<Res<ActiveLevel>>,
     player: Query<(&Transform, &PlayerControl, Ref<Player>), Without<GameCamera>>,
     mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
@@ -79,17 +90,25 @@ fn follow_player(
     let k = |rate: f32| if snap { 1.0 } else { 1.0 - (-dt * rate).exp() };
 
     gc.look += (ctl.facing * LOOK_AHEAD - gc.look) * k(2.5);
-    let target = ptf.translation.truncate() + Vec2::new(gc.look, 16.0);
+    let touch = touch.is_some_and(|t| t.0);
+    let lift = if touch { 16.0 + TOUCH_LIFT } else { 16.0 };
+    let target = ptf.translation.truncate() + Vec2::new(gc.look, lift);
     let mut p = tf.translation.truncate() - gc.wobble;
     p.x += (target.x - p.x) * k(6.0);
     p.y += (target.y - p.y) * k(4.0);
 
     let size = active.level.size_px();
-    let clamp = |v: f32, half: f32, size: f32| {
-        if size <= half * 2.0 { size / 2.0 } else { v.clamp(half, size - half) }
+    let clamp = |v: f32, half: f32, size: f32, margin: f32| {
+        if size + 2.0 * margin <= half * 2.0 { size / 2.0 } else { v.clamp(half - margin, size - half + margin) }
     };
-    p.x = clamp(p.x, half.x, size.x);
-    p.y = clamp(p.y, half.y, size.y);
+    let margin = if touch { TOUCH_MARGIN } else { Vec2::ZERO };
+    p.x = clamp(p.x, half.x, size.x, margin.x);
+    // (Only below the floor: the top keeps its edge.)
+    p.y = if size.y + margin.y <= half.y * 2.0 {
+        size.y / 2.0
+    } else {
+        p.y.clamp(half.y - margin.y, size.y - half.y)
+    };
     let bouncy = groove.is_some_and(|g| g.bounce);
     gc.giggle = (gc.giggle + if bouncy { dt } else { -dt }).clamp(0.0, 1.0);
     let t = time.elapsed_secs() * std::f32::consts::TAU * WOBBLE_HZ;
@@ -128,5 +147,37 @@ fn scroll_backdrop(
     for (b, mut tf) in &mut q {
         tf.translation.x = first + b.0 as f32 * w;
         tf.translation.y = c.y;
+    }
+}
+
+/// Ground past the level's edges, so a camera allowed past them (touch mode) never shows a
+/// void: solid walls left and right (as the physics treats them) and earth under solid floor
+/// columns (pits stay open).
+fn spawn_margins(mut commands: Commands, sprites: Res<Sprites>, active: Res<ActiveLevel>) {
+    let level = &active.level;
+    let (w, h) = (level.width as i32, level.height as i32);
+    let fill = sprites.get(SpriteId::GroundFill(level.world));
+    let mut put = |col: i32, row: i32| {
+        let x = col as f32 * TILE + TILE / 2.0;
+        let y = (h - 1 - row) as f32 * TILE + TILE / 2.0;
+        commands.spawn((
+            Name::new("MarginTile"),
+            LevelEntity,
+            Sprite::from_image(fill.clone()),
+            Transform::from_xyz(x, y, -1.0),
+        ));
+    };
+    for row in 0..h + MARGIN_ROWS {
+        for k in 1..=MARGIN_COLS {
+            put(-k, row);
+            put(w - 1 + k, row);
+        }
+    }
+    for col in 0..w {
+        if level.tile(col, h - 1) == Tile::Solid {
+            for row in h..h + MARGIN_ROWS {
+                put(col, row);
+            }
+        }
     }
 }

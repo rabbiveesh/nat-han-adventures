@@ -21,6 +21,7 @@ pub mod input;
 pub mod level;
 pub mod save;
 pub mod state;
+pub mod touch;
 pub mod ui;
 
 use bevy::prelude::*;
@@ -38,5 +39,5 @@ pub fn gameplay(app: &mut App) {
 
 /// Everything that only matters when there's a screen and speakers.
 pub fn presentation(app: &mut App) {
-    app.add_plugins((art::plugin, game::visuals_plugin, ui::plugin, audio::plugin, debug::plugin));
+    app.add_plugins((art::plugin, game::visuals_plugin, ui::plugin, audio::plugin, debug::plugin, touch::plugin));
 }

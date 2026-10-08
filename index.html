@@ -29,26 +29,32 @@
       }
       #start small { display: block; color: #b39a7a; font-size: 14px; font-weight: normal; }
 
-      /* Touch controls: phones only (see `isPhone` below). They press the game's normal keys. */
+      /* Touch controls: phones only (see `isPhone` below; `?touch=1` / `?touch=0` overrides).
+         The left side is an invisible floating stick (thumb down anywhere, slide left/right);
+         the right side is one big jump zone. Labels fade once you've started playing. */
       body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-      #touch { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+      #touch { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5;
+        font: bold 13px ui-monospace, monospace; color: rgba(255, 238, 200, 0.7); }
       body.touch #touch { display: block; }
-      .pad {
-        position: absolute; pointer-events: auto; touch-action: none;
-        border: 2px solid rgba(255, 199, 46, 0.55); background: rgba(26, 18, 12, 0.35);
-        color: rgba(255, 238, 200, 0.85); font: bold 16px ui-monospace, monospace;
-        display: grid; place-items: center; border-radius: 16px;
-      }
-      .pad.down { background: rgba(255, 199, 46, 0.35); }
-      #dpad { left: max(16px, env(safe-area-inset-left)); bottom: 20px; width: 168px; height: 112px;
-        grid-template-columns: 1fr 1fr; font-size: 28px; }
-      #dpad span { display: grid; place-items: center; height: 100%; }
-      #dpad .mark { opacity: 0.35; }
-      #jump { right: max(20px, env(safe-area-inset-right)); bottom: 28px; width: 96px; height: 96px; border-radius: 50%; font-size: 15px; }
-      #pause { right: max(16px, env(safe-area-inset-right)); top: 14px; width: 48px; height: 36px; border-radius: 10px; }
-      #ok { right: calc(max(16px, env(safe-area-inset-right)) + 60px); top: 14px; width: 56px; height: 36px; border-radius: 10px; }
-      #updown { left: max(16px, env(safe-area-inset-left)); top: 14px; width: 104px; height: 36px; border-radius: 10px;
-        grid-template-columns: 1fr 1fr; }
+      .zone { position: absolute; pointer-events: auto; touch-action: none; }
+      #stick-zone { left: 0; top: 64px; bottom: 0; width: 45%; }
+      #jump-zone { right: 0; top: 64px; bottom: 0; width: 45%; }
+      .hint { position: absolute; bottom: 18px; padding: 6px 10px; border-radius: 10px;
+        border: 2px dashed rgba(255, 199, 46, 0.4); transition: opacity 1.2s; }
+      #stick-zone .hint { left: 18px; } #jump-zone .hint { right: 18px; }
+      body.played .hint { opacity: 0; }
+      #ring { position: fixed; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
+        border: 2px solid rgba(255, 199, 46, 0.6); display: none; pointer-events: none; z-index: 6; }
+      #ring::after { content: ""; position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+        margin: -11px; border-radius: 50%; background: rgba(255, 199, 46, 0.55); transform: translateX(var(--dx, 0px)); }
+      .btn { position: absolute; pointer-events: auto; touch-action: none; top: 12px; height: 36px; min-width: 44px;
+        display: grid; place-items: center; padding: 0 8px; box-sizing: border-box; border-radius: 10px;
+        border: 2px solid rgba(255, 199, 46, 0.45); background: rgba(26, 18, 12, 0.35); }
+      .btn.down { background: rgba(255, 199, 46, 0.35); }
+      #pause { right: max(12px, env(safe-area-inset-right)); }
+      #ok { right: calc(max(12px, env(safe-area-inset-right)) + 56px); }
+      #up { left: max(12px, env(safe-area-inset-left)); }
+      #down { left: calc(max(12px, env(safe-area-inset-left)) + 56px); }
 
       /* Phones held upright: nudge toward landscape (dismissable). */
       #rotate { display: none; position: fixed; inset: 0; z-index: 20; background: #1a120c; color: #ffc72e;
@@ -69,12 +75,14 @@
       </div>
     </div>
     <div id="touch" aria-hidden="true">
-      <div class="pad" id="dpad"><span>&#9664;</span><span>&#9654;</span></div>
-      <div class="pad" id="updown"><span data-key="ArrowUp">&#9650;</span><span data-key="ArrowDown">&#9660;</span></div>
-      <div class="pad" id="ok" data-key="Enter">OK</div>
-      <div class="pad" id="pause" data-key="Escape">II</div>
-      <div class="pad" id="jump" data-key="Space">JUMP</div>
+      <div class="zone" id="stick-zone"><span class="hint">&#9664; slide &#9654;</span></div>
+      <div class="zone" id="jump-zone" data-key="Space"><span class="hint">tap: JUMP &middot; again: TOOT</span></div>
+      <div class="btn" id="up" data-key="ArrowUp">&#9650;</div>
+      <div class="btn" id="down" data-key="ArrowDown">&#9660;</div>
+      <div class="btn" id="ok" data-key="Enter">OK</div>
+      <div class="btn" id="pause" data-key="Escape">II</div>
     </div>
+    <div id="ring"></div>
     <div id="rotate" role="dialog" aria-label="Rotate your phone">
       <div>
         <div class="phone"></div>
@@ -108,12 +116,14 @@
       // events; the d-pad follows the finger, so sliding from left to right switches keys.
       // Phones only: a touch-only device (no mouse/trackpad at all, can't hover) with a small
       // screen. Touchscreen laptops have a fine pointer, so they keep the keyboard UI.
+      // `?touch=1` / `?touch=0` in the URL forces it either way (testing).
+      const forced = new URLSearchParams(location.search).get("touch");
       const isPhone =
         matchMedia("(pointer: coarse)").matches &&
         !matchMedia("(any-pointer: fine)").matches &&
         matchMedia("(hover: none)").matches &&
         Math.min(screen.width, screen.height) <= 600;
-      const touchy = isPhone;
+      const touchy = forced === null ? isPhone : forced === "1";
       if (touchy) {
         document.body.classList.add("touch");
         document.getElementById("start-help").textContent =
@@ -131,12 +141,14 @@
       }
       function press(code) { const n = held.get(code) || 0; held.set(code, n + 1); if (n === 0) key("keydown", code); }
       function release(code) { const n = held.get(code) || 0; if (n <= 1) { held.delete(code); if (n === 1) key("keyup", code); } else held.set(code, n - 1); }
-      // A button that holds one key while touched.
+      let fadeTimer = null;
+      function played() { if (!fadeTimer) fadeTimer = setTimeout(() => document.body.classList.add("played"), 6000); }
+      // Anything that holds one key while touched (the jump zone, the small top buttons).
       function button(el, code) {
         const active = new Set();
         el.addEventListener("pointerdown", (e) => {
           e.preventDefault(); el.setPointerCapture(e.pointerId); active.add(e.pointerId);
-          el.classList.add("down"); canvas.focus(); press(code);
+          el.classList.add("down"); canvas.focus(); press(code); played();
         });
         const up = (e) => {
           if (!active.delete(e.pointerId)) return;
@@ -146,30 +158,38 @@
         for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ev, up);
       }
       for (const el of document.querySelectorAll("#touch [data-key]")) button(el, el.dataset.key);
-      // The d-pad: left or right depending on which half the finger is over.
-      const dpad = document.getElementById("dpad");
-      const dir = new Map(); // pointerId -> code
+      // The floating stick: thumb down anywhere on the left; sliding past a small dead zone from
+      // where it landed holds left or right. The origin follows a thumb that drifts far.
+      const zone = document.getElementById("stick-zone");
+      const ring = document.getElementById("ring");
+      const DEAD = 10, MAX = 28;
+      const sticks = new Map(); // pointerId -> { x0, y0, code }
       function aim(e) {
-        const r = dpad.getBoundingClientRect();
-        const code = e.clientX < r.left + r.width / 2 ? "ArrowLeft" : "ArrowRight";
-        const prev = dir.get(e.pointerId);
-        if (prev === code) return;
-        if (prev) release(prev);
-        dir.set(e.pointerId, code); press(code);
-        dpad.classList.add("down");
+        const st = sticks.get(e.pointerId);
+        let dx = e.clientX - st.x0;
+        if (Math.abs(dx) > MAX) { st.x0 = e.clientX - Math.sign(dx) * MAX; dx = Math.sign(dx) * MAX; }
+        const code = dx > DEAD ? "ArrowRight" : dx < -DEAD ? "ArrowLeft" : null;
+        if (code !== st.code) { if (st.code) release(st.code); if (code) press(code); st.code = code; }
+        ring.style.left = st.x0 + "px"; ring.style.top = st.y0 + "px";
+        ring.style.setProperty("--dx", dx + "px");
       }
-      dpad.addEventListener("pointerdown", (e) => { e.preventDefault(); dpad.setPointerCapture(e.pointerId); canvas.focus(); aim(e); });
-      dpad.addEventListener("pointermove", (e) => { if (dir.has(e.pointerId)) aim(e); });
+      zone.addEventListener("pointerdown", (e) => {
+        e.preventDefault(); zone.setPointerCapture(e.pointerId); canvas.focus(); played();
+        sticks.set(e.pointerId, { x0: e.clientX, y0: e.clientY, code: null });
+        ring.style.display = "block"; aim(e);
+      });
+      zone.addEventListener("pointermove", (e) => { if (sticks.has(e.pointerId)) aim(e); });
       for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) {
-        dpad.addEventListener(ev, (e) => {
-          const code = dir.get(e.pointerId);
-          if (!code) return;
-          dir.delete(e.pointerId); release(code);
-          if (dir.size === 0) dpad.classList.remove("down");
+        zone.addEventListener(ev, (e) => {
+          const st = sticks.get(e.pointerId);
+          if (!st) return;
+          sticks.delete(e.pointerId);
+          if (st.code) release(st.code);
+          if (sticks.size === 0) ring.style.display = "none";
         });
       }
       // Never leave a key stuck if the page loses focus mid-touch.
-      window.addEventListener("blur", () => { for (const code of [...held.keys()]) { held.set(code, 1); release(code); } dir.clear(); });
+      window.addEventListener("blur", () => { for (const code of [...held.keys()]) { held.set(code, 1); release(code); } sticks.clear(); ring.style.display = "none"; });
       document.addEventListener("contextmenu", (e) => { if (touchy) e.preventDefault(); });
     </script>
   </body>
