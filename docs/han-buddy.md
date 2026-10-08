@@ -70,7 +70,7 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 | Quartal (fired up) | can't keep up: wheezes, falls behind, parachutes in |
 | Waltz | moves only on the beat (a little step per beat) |
 | Nervous | clings close behind Nat, trembles |
-| Laughing band | rolls along laughing, bouncier |
+| Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase) |
 
 ## Level design (gates the validator must prove are exclusive)
 - **Buddy ledges** (need the plunger boost): marked with **red plunger-handle notches and Han's

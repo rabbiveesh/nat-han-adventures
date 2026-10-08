@@ -78,7 +78,7 @@ use super::buddy::{Chasm, HAN_CATCH_RISE, HAN_CHASM_CATCH_RISE, HanPhys, chain_c
 use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    BOOST_SPEED, BeatClock, CAN_WIDTH, FORGIVE, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
+    ALIEN_PULSE, BOOST_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
     WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
@@ -1537,6 +1537,27 @@ impl Physics {
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
         let Physics { boost, boost_ideal, weak_ideal, .. } = Physics::new();
         Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
+    }
+
+    /// The physics of the laughing band's phrases that take something away, each with its
+    /// human jumps at their worst all flight long: melting (ground jumps ×[`MELTING_JUMP`])
+    /// and alien (gravity ×(1 + [`ALIEN_PULSE`])). The drunk sway's slowest,
+    /// ×(1 − [`DRUNK_SWAY`]) of top speed, is still above the human margin's 90%, and the rest
+    /// never reach past normal physics (`crate::game::groove`). Every level must stay beatable
+    /// in each (`tests/levels.rs`).
+    pub fn laughing() -> [(&'static str, Physics); 2] {
+        const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
+        let with = |nudge: &dyn Fn(Env) -> Env| {
+            let Physics { human, no_toot, boost, ideal, boost_ideal, weak_ideal } = Physics::new();
+            let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
+            let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
+            let boost = Arcs::boost(nudge(boost.env), boost.strategies);
+            Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
+        };
+        [
+            ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
+            ("alien", with(&|e| Env { gravity: e.gravity * (1.0 + ALIEN_PULSE), ..e })),
+        ]
     }
 
     /// The same physics with the weak boost (Han in a band zone) launching at `speed` (px/s)
