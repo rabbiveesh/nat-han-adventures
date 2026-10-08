@@ -366,6 +366,55 @@ pub fn giant_emblem() -> Vec<Pixels> {
     vec![grid(EMBLEM, MARK_PAL)]
 }
 
+/// Waltz row trim, on the underside of the tunnel's low ceiling: a gold staff hanging from
+/// it, one quarter note a tile (one beat), so the row reads like a giant wall's trim
+/// (overlay, 16 x 16).
+pub fn waltz_trim() -> Vec<Pixels> {
+    const TRIM: &[&str] = &[
+        "................",
+        "................",
+        "................",
+        "................",
+        "................",
+        "gggggggggggggggg",
+        "..........k.....",
+        "gggggggggggkgggg",
+        "..........k.....",
+        "gggggggggkkkgggg",
+        "........kkkk....",
+        "gggggggGkkkggggg",
+        "................",
+        "................",
+        "................",
+        "................",
+    ];
+    vec![grid(TRIM, MARK_PAL)]
+}
+
+/// The waltz emblem at each end of a waltz row: a gold 3/4 time signature on a dark plaque
+/// (16 x 16).
+pub fn waltz_emblem() -> Vec<Pixels> {
+    const EMBLEM: &[&str] = &[
+        "..kkkkkkkkkkkk..",
+        ".kGGGGGGGGGGGGk.",
+        "kGGGGGggggGGGGGk",
+        "kGGGGGGGGgGGGGGk",
+        "kGGGGGGgggGGGGGk",
+        "kGGGGGGGGgGGGGGk",
+        "kGGGGGggggGGGGGk",
+        "kGGGGGGGGGGGGGGk",
+        "kGGGGGGGgGGGGGGk",
+        "kGGGGGGggGGGGGGk",
+        "kGGGGGgGgGGGGGGk",
+        "kGGGGggggggGGGGk",
+        "kGGGGGGGgGGGGGGk",
+        "kGGGGGGGgGGGGGGk",
+        ".kGGGGGGGGGGGGk.",
+        "..kkkkkkkkkkkk..",
+    ];
+    vec![grid(EMBLEM, MARK_PAL)]
+}
+
 /// Buddy ledge face: red plunger-handle notches (overlay, 16 x 16).
 pub fn ledge_notches() -> Vec<Pixels> {
     const NOTCH: &[&str] = &[

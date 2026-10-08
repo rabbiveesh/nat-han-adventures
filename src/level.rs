@@ -78,7 +78,8 @@
 //! - **Chain-jump chasms** (`chain`) have no overuse limit: Han boosts you as often as it takes
 //!   while you're in the mark's columns ([`Level::in_chasm`]).
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
-//!   emblem, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
+//!   emblem, waltz rows the same gold staff under their low ceiling (a quarter note a beat)
+//!   and a 3/4 emblem at each end, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
 //!   "PLUMBERS ONLY" sign at their start.
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
