@@ -137,14 +137,19 @@ fn tile_sprite(
 
 fn nugget_sprite(
     add: On<Add, Nugget>,
-    q: Query<&Transform>,
+    q: Query<(&Transform, Has<crate::game::GhostNugget>)>,
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
     let Some(sprites) = sprites else { return };
-    let offset = q.get(add.entity).map_or(0.0, |t| t.translation.x * 0.011);
+    let (offset, ghost) = q.get(add.entity).map_or((0.0, false), |(t, g)| (t.translation.x * 0.011, g));
+    let mut s = sprite(&sprites, SpriteId::Nugget);
+    if ghost {
+        // Already counted: faded.
+        s.color = Color::srgba(1.0, 1.0, 1.0, 0.4);
+    }
     commands.entity(add.entity).insert((
-        sprite(&sprites, SpriteId::Nugget),
+        s,
         FrameAnim { id: SpriteId::Nugget, fps: 8.0, offset },
     ));
 }

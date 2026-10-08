@@ -171,6 +171,12 @@ pub struct MovingPlatform {
 #[reflect(Component)]
 pub struct Nugget;
 
+/// A nugget that came back after a death: picking it up again still fires up the band
+/// ([`crate::events::NuggetCollected`]) but doesn't count toward the level total twice.
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct GhostNugget;
+
 /// Toilet-paper-holder checkpoint number `index` (level order). `active` once touched.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]

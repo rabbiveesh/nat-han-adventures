@@ -851,7 +851,8 @@ const NUGGETS_THEN_SPIKES: &str = "name: Nugget run
 ";
 
 /// Nuggets picked up since the last checkpoint come back after a splat (so a nugget line that
-/// fires up the band for a long gap is there for the next try); earlier ones stay collected.
+/// fires up the band for a long gap is there for the next try), as ghosts: picking them up
+/// again fires the band up but each nugget only counts once toward the total.
 #[test]
 fn nuggets_since_the_checkpoint_come_back_after_a_splat() {
     let mut app = app(NUGGETS_THEN_SPIKES);
@@ -866,11 +867,14 @@ fn nuggets_since_the_checkpoint_come_back_after_a_splat() {
     assert_eq!(run(&app).nuggets, 4);
     step(&mut app, tuning::RESPAWN_DELAY + 0.1);
     assert_eq!(counted::<PlayerRespawned>(&app), 1);
-    assert_eq!(run(&app).nuggets, 2);
-    assert_eq!(app.world_mut().query::<&Nugget>().iter(app.world()).count(), 2);
+    assert_eq!(run(&app).nuggets, 4, "the count keeps what was collected");
+    let ghosts = app.world_mut().query_filtered::<(), (With<Nugget>, With<nat_han_adventures::game::GhostNugget>)>().iter(app.world()).count();
+    assert_eq!(ghosts, 2);
+    let collected_before = counted::<NuggetCollected>(&app);
     hold(&mut app, RIGHT);
     step(&mut app, 0.5);
-    assert_eq!(run(&app).nuggets, 4);
+    assert_eq!(run(&app).nuggets, 4, "ghosts don't count twice");
+    assert_eq!(counted::<NuggetCollected>(&app), collected_before + 2, "ghosts still fire up the band");
 }
 
 /// Hopping in place (no sideways movement) never pulls Han on top of the player.

@@ -136,7 +136,7 @@ pub(super) fn respawn(
     mut commands: Commands,
     time: Res<Time>,
     active: Res<ActiveLevel>,
-    mut run: ResMut<LevelRun>,
+    run: Res<LevelRun>,
     mut at_risk: ResMut<super::pickups::NuggetsAtRisk>,
     mut player: Query<
         (Entity, &mut Dead, &mut Pos, &mut PrevPos, &mut Body, &mut PlayerControl),
@@ -164,10 +164,16 @@ pub(super) fn respawn(
     *ctl = PlayerControl::default();
     commands.entity(entity).remove::<Dead>();
     respawned.write(PlayerRespawned { pos: at });
-    // Nuggets grabbed since the checkpoint come back (and come off the count).
+    // Nuggets grabbed since the checkpoint come back as ghosts: they fire up the band again,
+    // but each nugget only ever counts once toward the total.
     for c in at_risk.0.drain(..) {
-        run.nuggets = run.nuggets.saturating_sub(1);
-        commands.spawn((Name::new("Nugget"), LevelEntity, Nugget, Transform::from_translation(c.extend(2.0))));
+        commands.spawn((
+            Name::new("Nugget"),
+            LevelEntity,
+            super::GhostNugget,
+            Nugget,
+            Transform::from_translation(c.extend(2.0)),
+        ));
     }
 
     for (mut gpos, mut gprev, mut trail) in &mut han_q {

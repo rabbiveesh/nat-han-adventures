@@ -49,18 +49,20 @@ type Alive = (With<Player>, Without<Dead>, Without<Finished>);
 fn collect_nuggets(
     mut commands: Commands,
     player: Query<(&Pos, &Body), Alive>,
-    nuggets: Query<(Entity, &Transform), With<Nugget>>,
+    nuggets: Query<(Entity, &Transform, Has<super::GhostNugget>), With<Nugget>>,
     mut run: ResMut<LevelRun>,
     mut at_risk: ResMut<NuggetsAtRisk>,
     mut collected: MessageWriter<NuggetCollected>,
 ) {
     let Ok((pos, body)) = player.single() else { return };
     let h = Vec2::splat(NUGGET_BOX / 2.0);
-    for (e, tf) in &nuggets {
+    for (e, tf, ghost) in &nuggets {
         let c = tf.translation.truncate();
         if overlap(pos.0, body.half, c - h, c + h) {
             commands.entity(e).despawn();
-            run.nuggets += 1;
+            if !ghost {
+                run.nuggets += 1;
+            }
             at_risk.0.push(c);
             collected.write(NuggetCollected { pos: c });
         }
