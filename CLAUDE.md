@@ -41,6 +41,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   waltz switches meter at a shared bar line). Songs are `music/*.song`. Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
+- `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator
+  (seeded dice + `validate::check_room` with a lean jump set, re-roll on failure), rooms stitched
+  pipe-to-pipe into one growing level, the adaptive engine picks each next room.
+  `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
 - `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 
 ## Look
