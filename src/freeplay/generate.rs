@@ -105,12 +105,25 @@ pub struct RoomPlan {
 
 impl RoomPlan {
     /// The plan for `request` as room `index` of the run with `seed`: picks the template (by
-    /// seed, among the skill's) and the dressing. `seen` says whether the run already had a room
-    /// of this skill (the first one gets Han's hint).
-    pub fn new(seed: u32, index: u32, request: RoomRequest, world: u8, seen: bool, calibrating: bool) -> RoomPlan {
+    /// seed, among the skill's unlocked with `unlocked_levels` story levels playable) and the
+    /// dressing. `seen` says whether the run already had a room of this skill (the first one
+    /// gets Han's hint).
+    pub fn new(
+        seed: u32,
+        index: u32,
+        request: RoomRequest,
+        world: u8,
+        seen: bool,
+        calibrating: bool,
+        unlocked_levels: usize,
+    ) -> RoomPlan {
         let mut d = Dice::new(stream(seed, PICK_STREAM, index as u64));
-        let choices: Vec<usize> =
-            TEMPLATES.iter().enumerate().filter(|(_, t)| t.skill == request.skill).map(|(i, _)| i).collect();
+        let choices: Vec<usize> = TEMPLATES
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.skill == request.skill && t.unlocked(unlocked_levels))
+            .map(|(i, _)| i)
+            .collect();
         let template = if choices.is_empty() { 0 } else { d.pick(&choices) };
         let line = if calibrating {
             CALIBRATION_LINES[(index as usize).min(CALIBRATION_LINES.len() - 1)]

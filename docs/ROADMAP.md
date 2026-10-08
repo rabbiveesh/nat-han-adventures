@@ -32,7 +32,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
-- **Free play** (`src/freeplay/`): procedural rooms from 8 templates, validated as they're
+- **Free play** (`src/freeplay/`): procedural rooms from 12 templates (Han's four gates among them, one `Buddy` skill), validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
 - **Tooling**: level validator library (`src/level/validate.rs`), formal checks (tier 1 in every
   test run, tier 2 `scripts/check-deep` + non-blocking CI), music editor (`cargo run --bin
@@ -52,8 +52,6 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
   pitch wobble. Read the phrase tuning from `NowPlaying.tuning_now`; small, never unfair.
 - **Web beat-clock latency**: add the browser's output latency to the beat clock (the world's beat
   runs a few tens of ms ahead of the ear on web).
-- **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
-  templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
 - **Free-play validation in a Web Worker** (optional): removes the ~20–60 ms per-room hitch on web.
 - **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
   (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending

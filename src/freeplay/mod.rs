@@ -3,7 +3,8 @@
 //!
 //! - [`templates`]: one hand-shaped room per [`crate::adapt::Skill`] (jump gauntlets, flies and
 //!   sprays, moving platforms, a giant wall, a long gap, a waltz row, a stain pit, a grease
-//!   chute) with parameters scaled by the band; [`templates::TEMPLATES`] is the registry new
+//!   chute, and Han's gates: a buddy ledge, a buddy raft pool, a shield row, a chain chasm)
+//!   with parameters scaled by the band; [`templates::TEMPLATES`] is the registry new
 //!   kinds of rooms go in.
 //! - [`canvas`]: the column builder rooms are drawn with, in the ordinary level format, framed
 //!   by entry and exit pipes.

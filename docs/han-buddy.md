@@ -78,8 +78,11 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
 - **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Chain-jump chasms**: crossable only by chaining boosts and toots (no overuse limit inside).
-- Free play gets all of these as rooms; the adaptive engine tracks a **Buddy** skill (and chain
-  chasms) like any other.
+- Free play gets all of these as rooms (`src/freeplay/templates.rs`: buddy ledge, buddy raft
+  pool, shield row, chain chasm), served once the story level that teaches each is unlocked;
+  the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
+  width from the room's ends, so a neighbouring room's band gate never weakens Han there.
+  `tests/han_campaign.rs` plays them with the real Han too.
 
 ## As built
 Code: `src/game/han/` (brain, hazards), `src/level/buddy.rs` (Han's per-mode physics, his

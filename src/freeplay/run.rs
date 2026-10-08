@@ -110,6 +110,8 @@ pub struct FreePlayRun {
     /// The goal was reached.
     pub finished: bool,
     pub unlocked: Vec<Skill>,
+    /// Story levels playable when the run started (which templates it may serve).
+    pub unlocked_levels: usize,
     pub stats: RoomStats,
     /// Every adaptive event posted, in order (tests, the debug dump).
     pub events: Vec<AdaptEvent>,
@@ -158,7 +160,8 @@ impl FreePlayRun {
     fn plan(&self, profile: &crate::adapt::PlayerProfile, index: usize) -> RoomPlan {
         let mut d = Dice::new(stream(self.seed, CHOOSE_STREAM, index as u64));
         let request = next_room(profile, &self.unlocked, d.rng());
-        RoomPlan::new(self.seed, index as u32, request, self.world, self.seen(request.skill), profile.calibrating())
+        let seen = self.seen(request.skill);
+        RoomPlan::new(self.seed, index as u32, request, self.world, seen, profile.calibrating(), self.unlocked_levels)
     }
 }
 
@@ -196,6 +199,7 @@ pub fn begin(seed: u32, endless: bool, profile: &mut crate::adapt::PlayerProfile
         cleared: 0,
         finished: false,
         unlocked: unlocked.clone(),
+        unlocked_levels,
         stats: RoomStats::default(),
         events: Vec::new(),
         room_id_base: mix(seed as u64 ^ (profile.rooms_played as u64) << 32) & !0xFFFF,

@@ -96,7 +96,7 @@ pub const PLAYERS: [SyntheticPlayer; 6] = [
     SyntheticPlayer {
         name: "uneven",
         about: "great at jumping, bad at waltz",
-        ability: [8.5, 5.5, 5.5, 5.5, 5.5, 1.5, 5.5, 5.5],
+        ability: [8.5, 5.5, 5.5, 5.5, 5.5, 1.5, 5.5, 5.5, 5.5],
         slope: 0.8,
         learn: 0.0,
         careless: 0.03,
@@ -157,9 +157,11 @@ pub struct SimRun {
 }
 
 /// When each skill unlocks (room index), like the game's progression would: the first three
-/// from the start, then one every [`UNLOCK_EVERY`] rooms.
+/// from the start, then one every [`UNLOCK_EVERY`] rooms; Han's gates with the long gap (the
+/// story teaches both in level 3).
 pub const UNLOCK_EVERY: usize = 15;
 pub fn unlock_room(skill: Skill) -> usize {
+    let skill = if skill == Skill::Buddy { Skill::FiredUp } else { skill };
     skill.index().saturating_sub(2) * UNLOCK_EVERY
 }
 

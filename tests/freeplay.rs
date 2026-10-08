@@ -24,7 +24,7 @@ const BANDS: [u8; 3] = [1, 5, 10];
 
 fn plan(template: usize, band: u8, seed: u32, hint: bool) -> RoomPlan {
     let request = RoomRequest { skill: TEMPLATES[template].skill, band, assists: AssistLevers::NONE };
-    RoomPlan { template, hint, ..RoomPlan::new(seed, 3, request, 1 + (seed % 5) as u8, false, false) }
+    RoomPlan { template, hint, ..RoomPlan::new(seed, 3, request, 1 + (seed % 5) as u8, false, false, 10) }
 }
 
 #[test]
@@ -187,6 +187,20 @@ fn seeds_round_trip() {
 fn unlocks_follow_the_story() {
     assert_eq!(unlocked_skills(1), vec![Skill::Precision, Skill::HazardTiming, Skill::MovingPlatforms, Skill::GiantSteps]);
     assert_eq!(unlocked_skills(10).len(), Skill::COUNT);
+    // Han's gates share a skill: each is served once its own story level is unlocked.
+    assert!(!unlocked_skills(2).contains(&Skill::Buddy));
+    assert!(unlocked_skills(3).contains(&Skill::Buddy));
+    let request = RoomRequest { skill: Skill::Buddy, band: 5, assists: AssistLevers::NONE };
+    let served = |levels: usize| -> Vec<&str> {
+        let mut names: Vec<&str> =
+            (0..200).map(|seed| RoomPlan::new(seed, 0, request, 1, false, false, levels).template().name).collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+    assert_eq!(served(3), ["buddy ledge"]);
+    assert_eq!(served(5), ["buddy ledge", "buddy raft pool"]);
+    assert_eq!(served(10), ["buddy ledge", "buddy raft pool", "chain chasm", "shield row"]);
 }
 
 // ─── A headless run ──────────────────────────────────────────────────────────
