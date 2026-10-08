@@ -39,6 +39,14 @@ hazards and the level validator), alongside the adaptive-engine wiring.
   (stand still facing a sewage pool → he wades in), the player can use him to **make a raft**
   ("I'm fine! I'm a professional!"). Bottomless drains (under the long quartal gaps) leave no
   raft, so this can't bridge those.
+- **Han's raft is bigger and longer-lived** than Nat's (≈3 tiles, ≈30 s vs Nat's 1 tile, 12 s).
+  **Buddy raft puzzles**: a long sewage pool with **spikes on the ceiling** (no jumping across)
+  and too wide to stain-bridge alone — your own rafts sink before you can walk back from the
+  respawn for the next one; Han's raft is the answer. The validator needs a time model for
+  these (respawn → walk-back time vs raft lifetime).
+- **Raft lifetimes slide with the adaptive assist dial** (up to ~2×) but **never below a floor**
+  (Nat 12 s, Han 30 s). **Solvability is always computed with the floors**, so assists only
+  loosen things that are already provably solvable.
 - **Overuse**: stomping him a lot in a row → he complains ("My back! I'm union, Nat!") and, past a
   limit, needs a short breather (cooldown). The limit/cooldown **slides with the adaptive assist
   dial**. **Carve-out: no overuse limit inside chain-jump chasms** (zones you can only cross by
