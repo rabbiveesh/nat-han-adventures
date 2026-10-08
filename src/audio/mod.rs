@@ -74,6 +74,7 @@ pub mod accomp;
 pub mod chart;
 pub mod demo;
 pub mod director;
+pub mod live;
 pub mod melody;
 pub mod mml;
 pub mod sfx;

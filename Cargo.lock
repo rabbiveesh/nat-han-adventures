@@ -3625,9 +3625,11 @@ dependencies = [
  "getrandom 0.3.4",
  "hound",
  "js-sys",
+ "kira",
  "leafwing-input-manager",
  "png",
  "rand 0.9.5",
+ "rtrb",
  "wasm-bindgen",
  "web-sys",
 ]

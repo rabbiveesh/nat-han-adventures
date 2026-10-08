@@ -1,0 +1,25 @@
+; Shave and a Haircut (Charles Hale, 1899)
+; Converted from src/audio/songs.rs. Each line ends with its bar numbers.
+
+[song]
+title = Shave and a Haircut (Charles Hale, 1899)
+bpm = 140
+swing = 0.25
+key = C
+loop = no
+meter = 4/4
+
+[chords]
+| C % F C/E | G7 % C % |                                     ; 1-2
+
+[pulse1]
+v13 @1 o5 c4 o4 g8 g8 a4 g4 | o4 r4 b4 o5 c2 |                           ; 1-2
+
+[pulse2]
+v8 @2 o4 e4 e8 e8 f4 e4 | o4 r4 f4 e2 |                                  ; 1-2
+
+[triangle]
+o2 c4 r4 f4 e4 | o2 r4 o1 g4 o2 c2 |                                     ; 1-2
+
+[noise]
+v10 k4 s8 s8 k4 s4 | r4 s4 H2 |                                          ; 1-2

@@ -26,5 +26,10 @@ fn main() {
     #[cfg(feature = "brp")]
     app.add_plugins(bevy_brp_extras::BrpExtrasPlugin);
 
+    // A/B the live music engine: `NATHAN_LIVE_MUSIC=1 cargo run` (native only).
+    if nat_han_adventures::audio::live::enabled() {
+        app.add_plugins(nat_han_adventures::audio::live::plugin);
+    }
+
     app.run();
 }
