@@ -29,6 +29,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
 - `src/audio/` MML parser, NES-style synth, songs, sfx, playback via bevy_kira_audio.
+- `src/audio/live/` the real-time music engine (game-free core + Bevy plugin), not yet the
+  default: `NATHAN_LIVE_MUSIC=1 cargo run` to A/B it. Its songs are `music/*.song` (kept in
+  sync with `songs.rs` by `tests/live.rs`; regenerate with `cargo run --example convert_songs`).
 - `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 
 ## Look

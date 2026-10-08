@@ -126,22 +126,29 @@ pub struct BeatClock {
 }
 
 impl BeatClock {
-    /// The clock `secs` later at the same tempo (to extrapolate between audio callbacks).
+    /// The clock `secs` later (or earlier, if negative) at the same tempo: to extrapolate
+    /// between audio callbacks, or to step back to what's being heard. Never before the start.
     pub fn advanced(&self, secs: f64) -> BeatClock {
         let mut c = *self;
         let mut sb = self.position.song_beat + secs * self.bpm as f64 / 60.0;
-        let mut bar = self.position.bar as f64 - self.position.song_bar as f64;
-        if self.loop_beats > 0.0 && sb >= self.loop_beats {
+        let mut first_bar = self.position.bar as f64 - self.position.song_bar as f64;
+        let bars_per_loop = (self.loop_beats / self.beats_per_bar).round();
+        if self.loop_beats > 0.0 {
             let passes = (sb / self.loop_beats).floor();
+            if first_bar + passes * bars_per_loop < 0.0 {
+                return BeatClock { position: Position::default(), beat_index: 0, phase: 0.0, ..*self };
+            }
             sb -= passes * self.loop_beats;
-            bar += passes * (self.loop_beats / self.beats_per_bar).round();
+            first_bar += passes * bars_per_loop;
+            c.position.pass = (first_bar / bars_per_loop.max(1.0)).round() as u64;
         }
+        let sb = sb.max(0.0);
         let song_bar = (sb / self.beats_per_bar + 1e-9).floor();
         c.position.song_beat = sb;
         c.position.song_bar = song_bar as usize;
-        c.position.bar = (bar + song_bar) as u64;
-        c.position.beat = sb - song_bar * self.beats_per_bar;
-        c.position.sample = self.position.sample + (secs * self.sample_rate as f64).round() as u64;
+        c.position.bar = (first_bar + song_bar) as u64;
+        c.position.beat = (sb - song_bar * self.beats_per_bar).max(0.0);
+        c.position.sample = (self.position.sample as i64 + (secs * self.sample_rate as f64).round() as i64).max(0) as u64;
         c.beat_index = c.position.beat.floor() as u32;
         c.phase = c.position.beat - c.position.beat.floor();
         c
@@ -317,9 +324,12 @@ impl Engine {
             self.apply(i);
         }
         let mut pos = 0;
-        while pos < out.len() {
+        loop {
             while self.commit_point().is_some_and(|c| c <= self.t) {
                 self.commit();
+            }
+            if pos == out.len() {
+                break;
             }
             let mut n = (out.len() - pos).min(MAX_SEGMENT) as u64;
             if let Some(c) = self.commit_point() {
