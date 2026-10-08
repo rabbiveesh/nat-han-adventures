@@ -336,7 +336,7 @@ mod tests {
             han_hint: false,
             extra_nuggets_before_quartal: 2,
         };
-        RoomPlan::new(4242, index, RoomRequest { skill, band, assists }, 3, index > 0, index == 0)
+        RoomPlan::new(4242, index, RoomRequest { skill, band, assists }, 3, index > 0, index == 0, 10)
     }
 
     #[test]

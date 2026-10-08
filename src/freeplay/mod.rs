@@ -1,9 +1,10 @@
 //! FREE PLAY: a run of procedurally generated rooms that adapts to the player, endless or
 //! [`run::FIXED_ROOMS`] long, from a 6-digit seed anyone can type in again.
 //!
-//! - [`templates`]: one hand-shaped room per [`crate::adapt::Skill`] (jump gauntlets, flies and
-//!   sprays, moving platforms, a giant wall, a long gap, a waltz row, a stain pit, a grease
-//!   chute) with parameters scaled by the band, each opening on rolling ground (humps and
+//! - [`templates`]: hand-shaped rooms per [`crate::adapt::Skill`] (jump gauntlets, shelf climbs,
+//!   flies and sprays, moving platforms, a giant wall, a long gap, a waltz row, a stain pit, a
+//!   grease chute, and Han's gates: a buddy ledge, a buddy raft pool, a shield row, a chain chasm)
+//!   with parameters scaled by the band, the band's rooms opening on rolling ground (humps and
 //!   dips) and the gauntlets climbing up to 7 tiles; [`templates::TEMPLATES`] is the registry
 //!   new kinds of rooms go in.
 //! - [`canvas`]: the column builder rooms are drawn with, in the ordinary level format, framed
@@ -13,7 +14,8 @@
 //!   start to end, the teaching rule, the deaths it needs), and a failure re-rolls.
 //! - [`offload`]: on web, rooms are validated in a Web Worker (the `roomgen` wasm) so the game
 //!   never hitches; elsewhere, or if the worker fails, on the task pool as before.
-//! - [`course`]: rooms stitched pipe to pipe into one growing level.
+//! - [`course`]: rooms stitched pipe to pipe into one growing level, as tall as a climb, every
+//!   room on its floor.
 //! - [`run`]: the run in the game: the adaptive engine picks each next room
 //!   ([`crate::adapt::next_room`]) as Nat enters the one before it, rooms are generated an
 //!   attempt at a time off the main thread and streamed in a few columns per frame, rooms far

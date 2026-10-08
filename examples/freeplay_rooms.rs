@@ -62,5 +62,5 @@ fn main() {
 
 fn plan(ti: usize, band: u8, seed: u32) -> RoomPlan {
     let request = RoomRequest { skill: TEMPLATES[ti].skill, band, assists: AssistLevers::NONE };
-    RoomPlan { template: ti, hint: true, ..RoomPlan::new(seed, 5, request, 2, false, false) }
+    RoomPlan { template: ti, hint: true, ..RoomPlan::new(seed, 5, request, 2, false, false, 10) }
 }

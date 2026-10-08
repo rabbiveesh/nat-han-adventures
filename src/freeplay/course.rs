@@ -7,14 +7,22 @@
 //! *cap*: two solid tiles that plug the end of the last exit pipe until the next room replaces
 //! them. The goal flag waits out in the empty sky at the far end until the last room of the
 //! run is stitched (fixed-length runs; an endless run that fills the grid ends there too).
+//!
+//! The grid is as tall as the tallest room ([`COURSE_H`]) and every room sits on its bottom,
+//! so all the pipes line up; above a shorter room is solid ground, as the top of any level's
+//! grid is a ceiling (`Level::tile` above row 0), so a room's validation still holds stitched.
 
-use super::canvas::{CHECKPOINT_COL, ENTRY, H, PIPE_ROOF, STAND};
+use super::canvas::{CHECKPOINT_COL, CLIMB_H, ENTRY, H, PIPE_ROOF, STAND};
 use crate::level::{Level, Thing, ThingKind, Tile};
 
 /// Columns per room the grid allows for.
 pub const COLS_PER_ROOM: usize = 160;
 /// Rooms an endless run's grid holds (it ends with a goal flag if they're ever all played).
 pub const ENDLESS_ROOMS: usize = 99;
+/// Rows in the course grid, and the rows of its pipes' standing row and roof.
+pub const COURSE_H: usize = CLIMB_H;
+pub const COURSE_STAND: usize = COURSE_H - (H - STAND);
+pub const COURSE_PIPE_ROOF: usize = COURSE_H - (H - PIPE_ROOF);
 
 /// Where a stitched room sits in the course.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,10 +69,10 @@ impl Course {
             hints: Vec::new(),
             deaths: None,
             width,
-            height: H,
-            tiles: vec![Tile::Empty; width * H],
-            start: (1, STAND),
-            goal: (width - 2, STAND),
+            height: COURSE_H,
+            tiles: vec![Tile::Empty; width * COURSE_H],
+            start: (1, COURSE_STAND),
+            goal: (width - 2, COURSE_STAND),
             things: Vec::new(),
             platforms: Vec::new(),
             gates: Vec::new(),
@@ -80,46 +88,54 @@ impl Course {
     /// Stitch `room` in after the last one; `last` puts the goal flag in its exit pipe.
     /// Returns where it went, and the cap cells it replaced (to redraw).
     pub fn add(&mut self, level: &mut Level, room: &Level, last: bool) -> (Placed, Vec<(usize, usize)>) {
-        assert_eq!(room.height, H, "rooms are {H} tall");
+        assert!((H..=COURSE_H).contains(&room.height), "rooms are {H} to {COURSE_H} tall");
+        // Rows down from the room's grid to the course's.
+        let dr = COURSE_H - room.height;
         let col0 = self.frontier;
         let w = level.width;
         let mut uncapped = Vec::new();
         if let Some(cap) = self.cap.take() {
-            uncapped.extend((PIPE_ROOF + 1..=STAND).map(|r| (cap, r)));
+            uncapped.extend(Course::pipe_rows().map(|r| (cap, r)));
         }
-        for r in 0..H {
+        for r in 0..COURSE_H {
             for c in 0..room.width {
-                level.tiles[r * w + col0 + c] = room.tile(c as i32, r as i32);
+                level.tiles[r * w + col0 + c] = if r < dr { Tile::Solid } else { room.tile(c as i32, (r - dr) as i32) };
             }
         }
         let checkpoint = level.checkpoints().count();
         // Left to right, so checkpoint numbers grow along the course (the game keeps the
         // highest one touched).
-        let mut things: Vec<Thing> = room.things.iter().map(|t| Thing { col: t.col + col0, ..*t }).collect();
+        let mut things: Vec<Thing> = room.things.iter().map(|t| Thing { col: t.col + col0, row: t.row + dr, ..*t }).collect();
         things.sort_by_key(|t| (t.col, t.row));
         level.things.extend(things);
         for p in &room.platforms {
-            level.platforms.push(crate::level::MovingPlatformDef { col: p.col + col0, ..p.clone() });
+            level.platforms.push(crate::level::MovingPlatformDef { col: p.col + col0, row: p.row + dr, ..p.clone() });
         }
         for s in &room.hints {
-            level.hints.push(crate::level::Spot { col: s.col + col0, ..s.clone() });
+            level.hints.push(crate::level::Spot { col: s.col + col0, row: s.row + dr, ..s.clone() });
         }
         for s in &room.say_at {
-            level.say_at.push(crate::level::Spot { col: s.col + col0, ..s.clone() });
+            level.say_at.push(crate::level::Spot { col: s.col + col0, row: s.row + dr, ..s.clone() });
         }
         // Gate marks (Han's boost is weak around the band's gates; no overuse limit in chasms).
         for g in &room.gates {
-            level.gates.push(crate::level::GateMark { c0: g.c0 + col0 as i32, c1: g.c1 + col0 as i32, ..*g });
+            level.gates.push(crate::level::GateMark {
+                c0: g.c0 + col0 as i32,
+                c1: g.c1 + col0 as i32,
+                r0: g.r0 + dr as i32,
+                r1: g.r1 + dr as i32,
+                ..*g
+            });
         }
         if self.rooms.is_empty() {
-            level.start = (room.start.0 + col0, room.start.1);
+            level.start = (room.start.0 + col0, room.start.1 + dr);
         }
         self.frontier = col0 + room.width;
         if last {
-            level.goal = (room.goal.0 + col0, room.goal.1);
+            level.goal = (room.goal.0 + col0, room.goal.1 + dr);
         } else {
             let cap = self.frontier;
-            for r in PIPE_ROOF + 1..=STAND {
+            for r in Course::pipe_rows() {
                 level.tiles[r * w + cap] = Tile::Solid;
             }
             self.cap = Some(cap);
@@ -135,11 +151,16 @@ impl Course {
         let Some(p) = self.rooms.get(k) else { return Vec::new() };
         let col = p.col0;
         let w = level.width;
-        let cells: Vec<(usize, usize)> = (PIPE_ROOF + 1..=STAND).map(|r| (col, r)).collect();
+        let cells: Vec<(usize, usize)> = Course::pipe_rows().map(|r| (col, r)).collect();
         for &(c, r) in &cells {
             level.tiles[r * w + c] = Tile::Solid;
         }
         cells
+    }
+
+    /// The rows of a pipe's headroom (what a cap or a seal fills).
+    pub fn pipe_rows() -> std::ops::RangeInclusive<usize> {
+        COURSE_PIPE_ROOF + 1..=COURSE_STAND
     }
 
     /// Which room column `col` is in.
