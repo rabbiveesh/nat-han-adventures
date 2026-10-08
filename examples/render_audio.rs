@@ -8,7 +8,7 @@
 //! ```
 //!
 //! Files: `music_<song>[_<harmony>][_ji].wav`, e.g. `music_world3_coltrane.wav`,
-//! `music_title_quartal_ji.wav`, `music_title_ji.wav` (as written, just intonation), plus
+//! `music_title_quartal_ji.wav`, `music_title_ji.wav` (as written, the laughing band's medley tuning), plus
 //! `music_demo_*` for the built-in ii-V-I exercise ([`audio::demo`]). Songs without a chord
 //! chart only get the original harmony.
 

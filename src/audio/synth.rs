@@ -18,7 +18,7 @@ use bevy::platform::time::Instant;
 use bevy_kira_audio::prelude::Frame;
 
 use super::mml::{self, Arp, Channel, Drum, Event, EventKind, Track};
-use super::tuning::{self, Tuning};
+use super::tuning::{self, Medley, Tuning, Wobble};
 use super::{Filters, Harmony, Song, accomp, chart, melody};
 
 /// Output sample rate. 32 kHz keeps memory and render time down (a 60s song is ~15 MB of
@@ -106,7 +106,7 @@ pub fn render_song_with(song: &Song, filters: Filters, seed: u64) -> Result<Rend
 }
 
 /// Render a song through `filters` in an alternative [`Tuning`] (which replaces
-/// `filters.just_intonation`; [`Tuning::Just`] is the same retuning).
+/// `filters.just_intonation`; [`Tuning::Medley`] is the same retuning).
 pub fn render_song_tuned(song: &Song, filters: Filters, tuning: Tuning) -> Result<Rendered, String> {
     let mut job = RenderJob::new_tuned(song, filters, 0, tuning)?;
     while !job.step(Duration::MAX) {}
@@ -128,10 +128,11 @@ pub struct RenderJob {
     /// Indices of the audible drum hits in `tracks[3]`.
     hits: Vec<usize>,
     tuning: Tuning,
-    key: u8,
+    /// The per-phrase tunings when `tuning` is [`Tuning::Medley`].
+    medley: Option<Medley>,
     /// Per-channel anchor tonic (MIDI) for the non-octave tunings, see [`tuning::anchor_tonic`].
     anchors: [u8; 3],
-    /// [`tuning::hash_str`] of the title, for [`Tuning::Drunk`].
+    /// [`tuning::hash_str`] of the title, for [`Tuning::Drunk`] / [`Tuning::Medley`].
     song_hash: u64,
     stage: Stage,
     /// Next event (or drum hit) of the current channel.
@@ -152,8 +153,9 @@ enum Stage {
 const MASTER_CHUNK: usize = 16_384;
 
 impl RenderJob {
+    /// The laughing band ([`Filters::just_intonation`]) plays in [`Tuning::Medley`].
     pub fn new(song: &Song, filters: Filters, seed: u64) -> Result<Self, String> {
-        let tuning = if filters.just_intonation { Tuning::Just } else { Tuning::Equal };
+        let tuning = if filters.just_intonation { Tuning::Medley } else { Tuning::Equal };
         Self::new_tuned(song, filters, seed, tuning)
     }
 
@@ -210,6 +212,9 @@ impl RenderJob {
         });
         let len = timing.at(beats);
         let tail = (TAIL * SR) as usize;
+        let song_hash = tuning::hash_str(song.title);
+        let medley = (tuning == Tuning::Medley)
+            .then(|| Medley::new(song_hash, beats, song.looping.then_some(len as f64 / SR as f64)));
         Ok(RenderJob {
             looping: song.looping,
             timing,
@@ -218,9 +223,9 @@ impl RenderJob {
             tracks,
             hits,
             tuning,
-            key: song.key % 12,
+            medley,
             anchors,
-            song_hash: tuning::hash_str(song.title),
+            song_hash,
             stage: Stage::Channel(0),
             cursor: 0,
             phase: 0.0,
@@ -309,9 +314,23 @@ impl RenderJob {
                 1 => (pan(PULSE2_PAN, PULSE_GAIN), Voice::Pulse { vibrato: false }),
                 _ => (pan(0.0, TRIANGLE_GAIN), Voice::Triangle),
             };
-            let anchor = if self.tuning == Tuning::Just { self.key } else { self.anchors[ch] };
+            // Pitches are fixed at the note-on: a Medley note keeps the tuning of the phrase it
+            // starts in, and arpeggio tone `j` is salted `salt + j`.
+            let anchor = self.anchors[ch];
             let salt = tuning::salt(self.song_hash, ch, i, 0);
-            let tone = Tone { e, notes, slur_out, gain, voice, tuning: self.tuning, anchor, salt };
+            let mut hz = [0.0; Arp::MAX];
+            for (j, (h, &note)) in hz.iter_mut().zip(notes).enumerate() {
+                let salt = salt.wrapping_add(j as u64);
+                *h = match &self.medley {
+                    Some(m) => m.hz(note, anchor, e.start, salt),
+                    None => self.tuning.hz(note, anchor, salt),
+                };
+            }
+            let wobble = match &self.medley {
+                Some(m) => Some(m.wobble()),
+                None => self.tuning.wobble_shape(),
+            };
+            let tone = Tone { e, notes, slur_out, gain, voice, hz, wobble };
             tone.render(&mut self.out, &self.timing, &mut self.phase);
             return true;
         }
@@ -368,11 +387,9 @@ struct Tone<'a> {
     slur_out: bool,
     gain: (f32, f32),
     voice: Voice,
-    tuning: Tuning,
-    /// MIDI note on the tonic, see [`Tuning::hz`].
-    anchor: u8,
-    /// The note-on's salt; arpeggio tone `j` uses `salt + j`.
-    salt: u64,
+    /// Frequency of each of `notes`, already tuned.
+    hz: [f64; Arp::MAX],
+    wobble: Option<Wobble>,
 }
 
 impl Tone<'_> {
@@ -386,11 +403,11 @@ impl Tone<'_> {
         let (gl, gr) = self.gain;
         let edges = Edges::new(e, self.slur_out, n);
         let mut dts = [0.0f32; Arp::MAX];
-        for (j, (dt, &note)) in dts.iter_mut().zip(self.notes).enumerate() {
-            *dt = (self.tuning.hz(note, self.anchor, self.salt.wrapping_add(j as u64)) / SR as f64) as f32;
+        for (dt, &hz) in dts.iter_mut().zip(&self.hz[..self.notes.len()]) {
+            *dt = (hz / SR as f64) as f32;
         }
-        let wobble = |i: usize| self.tuning.wobble((s0 + i) as f64 / SR as f64) as f32;
-        let wobbles = self.tuning.wobbles();
+        let wobble = |i: usize| self.wobble.map_or(1.0, |w| w.at((s0 + i) as f64 / SR as f64)) as f32;
+        let wobbles = self.wobble.is_some();
         let k = self.notes.len();
         let step = ((ARP_STEP * SR) as usize).max(1);
         let amp = e.volume as f32 / 15.0;
@@ -807,11 +824,11 @@ mod tests {
 
     #[test]
     fn just_intonation_retunes_rendered_notes() {
-        // E4 in C, justly tuned: 5/4 above an equal-tempered C4.
+        // E4 in C, justly tuned: 5/4 above an equal-tempered C4. (The laughing band filter plays
+        // the medley now; JI can still be forced.)
         let mut s = song(120.0, 0.0, true, "e1", "", "");
         s.key = 0;
-        let ji = Filters { just_intonation: true, ..Filters::default() };
-        let f = freq(&left(&render_song_with(&s, ji, 0).unwrap())[3200..60000]);
+        let f = freq(&left(&render_song_tuned(&s, Filters::default(), Tuning::Just).unwrap())[3200..60000]);
         assert!((f - 261.626 * 1.25).abs() < 0.5, "{f}");
         let f = freq(&left(&render_song(&s).unwrap())[3200..60000]);
         assert!((f - 329.63).abs() < 0.5, "{f}");
@@ -839,6 +856,51 @@ mod tests {
                 assert!(a.left.to_bits() == b.left.to_bits() && a.right.to_bits() == b.right.to_bits(), "{h:?} frame {i}");
             }
         }
+    }
+
+    #[test]
+    fn incremental_medley_render_matches_one_shot() {
+        // A real song, many phrases long, through the laughing band's medley (+ a reharm).
+        let s = crate::audio::songs::song(crate::audio::Music::World(3));
+        for f in [Filters { just_intonation: true, ..Filters::default() }, Filters { harmony: Harmony::Coltrane, just_intonation: true }] {
+            let one = render_song_with(&s, f, 3).unwrap();
+            let mut job = RenderJob::new(&s, f, 3).unwrap();
+            assert_eq!(job.tuning, Tuning::Medley);
+            assert!(job.medley.as_ref().unwrap().phrases() >= 2);
+            while !job.step(Duration::ZERO) {}
+            let inc = job.into_rendered().unwrap();
+            assert_eq!(one.frames.len(), inc.frames.len());
+            for (i, (a, b)) in one.frames.iter().zip(&inc.frames).enumerate() {
+                assert!(a.left.to_bits() == b.left.to_bits() && a.right.to_bits() == b.right.to_bits(), "{f:?} frame {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn medley_notes_follow_their_phrase() {
+        // One long note per phrase on pulse 2 (no vibrato), 6 phrases: each is measured
+        // against its phrase's tuning (± the medley's drunk detune and wobble).
+        let mut s = song(240.0, 0.0, true, "", "", "");
+        s.pulse2 = "v12 @2 [o4 e1 e1 e1 e1]6";
+        s.key = 0;
+        let job = RenderJob::new_tuned(&s, Filters::default(), 0, Tuning::Medley).unwrap();
+        let m = job.medley.clone().unwrap();
+        assert_eq!(m.phrases(), 6);
+        let anchor = job.anchors[1];
+        let r = render_song_tuned(&s, Filters::default(), Tuning::Medley).unwrap();
+        let x: Vec<f32> = r.frames.iter().map(|f| f.left).collect();
+        let bar = (4.0 * 60.0 / 240.0 * SR) as usize;
+        let mut heard = std::collections::HashSet::new();
+        for k in 0..6 {
+            // The phrase's first note.
+            let t = m.tuning(k);
+            heard.insert(t);
+            let want = t.hz(64, anchor, 0);
+            let f = freq(&x[k * 4 * bar + 400..k * 4 * bar + bar - 400]) as f64;
+            let off = 1200.0 * (f / want).log2();
+            assert!(off.abs() < tuning::MEDLEY_DRUNK_CENTS + tuning::MEDLEY_WOBBLE_CENTS + 2.0, "phrase {k} {t:?}: {f} vs {want}");
+        }
+        assert_eq!(heard.len(), 5, "every tuning in the first five phrases");
     }
 
     #[test]
