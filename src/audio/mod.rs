@@ -84,7 +84,7 @@ use rand::Rng;
 
 use crate::{
     events::{CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied},
-    game::{LevelRun, RestartLevel},
+    game::{Groove, LevelRun, RestartLevel},
     level::Levels,
     state::{AppState, CurrentLevel, PlayState},
 };
@@ -339,6 +339,7 @@ fn follow_state(
     overrides: Res<MusicOverride>,
     mut player: ResMut<MusicPlayer>,
     mut now_playing: ResMut<NowPlaying>,
+    mut groove: Option<ResMut<Groove>>,
     mut started: MessageWriter<MusicStarted>,
     mut sources: ResMut<Assets<AudioSource>>,
     mut instances: ResMut<Assets<AudioInstance>>,
@@ -388,6 +389,7 @@ fn follow_state(
     player.current = Some(Current { music: want, song: song.clone(), filters, instance, _source: handle, origin: now, len_secs });
     let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
     *now_playing = NowPlaying { music: want, title: song.title, filters, reason };
+    set_groove(groove.as_deref_mut(), filters);
     started.write(MusicStarted(now_playing.clone()));
 }
 
@@ -445,6 +447,11 @@ fn direct(
     let now = run.as_ref().map_or(0.0, |r| r.time);
     let d = &mut *director;
     let mut decision = None;
+    // Stats as they stood before this frame's events (to see whether they summon a mode).
+    let mut before = d.stats;
+    if toots + got > 0 {
+        d.window.fill(&mut before, now, d.level_start);
+    }
     if playing && (!d.was_playing || restarted) {
         // Level start: everything resets, the band plays it straight.
         d.stats = PlayStats::default();
@@ -460,8 +467,9 @@ fn direct(
     d.window.record(now, toots, got, deaths);
     d.stats.level_deaths += deaths;
     d.stats.checkpoint_deaths += deaths;
-    if deaths > 0 || cps > 0 || now >= d.next_check {
-        d.window.fill(&mut d.stats, now, d.level_start);
+    d.window.fill(&mut d.stats, now, d.level_start);
+    let summoned = toots + got > 0 && director::summoned(&before, &d.stats);
+    if deaths > 0 || cps > 0 || now >= d.next_check || summoned {
         decision = Some(director::choose_filters(&d.stats));
         d.next_check = now + director::MUSIC_CHECK_SECS;
         if cps > 0 {
@@ -541,6 +549,7 @@ fn switch(
     time: Res<Time<Real>>,
     mut player: ResMut<MusicPlayer>,
     mut now_playing: ResMut<NowPlaying>,
+    mut groove: Option<ResMut<Groove>>,
     mut changed: MessageWriter<MusicChanged>,
     mut instances: ResMut<Assets<AudioInstance>>,
     channel: Res<AudioChannel<MusicChannel>>,
@@ -570,7 +579,18 @@ fn switch(
     cur.origin = now - pos;
     *now_playing = NowPlaying { music: cur.music, title: cur.song.title, filters: p.filters, reason: p.reason };
     player.ducked = None;
+    set_groove(groove.as_deref_mut(), p.filters);
     changed.write(MusicChanged { now: now_playing.clone(), at_secs: bar_pos });
+}
+
+/// The physics follow the music the moment it starts sounding.
+fn set_groove(groove: Option<&mut Groove>, filters: Filters) {
+    if let Some(g) = groove {
+        let new = Groove::new(filters);
+        if *g != new {
+            *g = new;
+        }
+    }
 }
 
 fn duck_on_pause(

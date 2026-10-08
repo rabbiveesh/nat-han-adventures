@@ -7,9 +7,10 @@ use std::time::Duration;
 use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
     events::*,
+    audio::{Filters, Harmony},
     game::{
-        Body, Checkpoint, Dead, HAN_DELAY_STEPS, Han, LevelRun, MovingPlatform, Nugget, Player,
-        Pos, SimClock, tuning,
+        Body, Checkpoint, Dead, FIRED_UP_SPEED, GIANT_STEPS_SPEED, Groove, HAN_DELAY_STEPS, Han, LevelRun,
+        MovingPlatform, NERVOUS_TIME, Nugget, Player, Pos, SimClock, tuning,
     },
     level::{Level, Levels, TILE},
     state::{AppState, PlayState},
@@ -646,24 +647,230 @@ fn han_stops_behind_a_standing_player() {
     assert!(p.x - g.x < 5.0 * TILE, "han at {g}, player at {p}: shouldn't lag far behind");
 }
 
-/// A quick double-tap (0.1s press, 0.1s gap, releasing in between) still gets the
-/// feet over a 5-tile wall, even though releasing cuts the first jump short.
-#[test]
-fn quick_double_tap_clears_five_tiles() {
-    let mut app = app(FLAT);
+fn set_groove(app: &mut App, harmony: Harmony, just_intonation: bool) {
+    app.world_mut().insert_resource(Groove::new(Filters { harmony, just_intonation }));
+}
+
+/// Feet height reached by a quick double-tap: 0.1s press, 0.1s gap (releasing cuts the first
+/// jump short), then hold the toot.
+fn quick_double_tap(app: &mut App) -> f32 {
     let floor = standing(TILE);
+    hold(app, JUMP);
+    step(app, 0.1);
+    release(app, JUMP);
+    step(app, 0.1);
+    hold(app, JUMP);
+    let mut top = 0.0f32;
+    for _ in 0..120 {
+        app.update();
+        top = top.max(player_pos(app).y - floor);
+    }
+    assert_eq!(counted::<Jumped>(app), 2, "ground jump + toot");
+    top
+}
+
+/// Highest a double jump gets with the best toot timing (hold the first jump, toot at frame k).
+fn best_double_jump(groove: Harmony) -> (f32, usize) {
+    (8..50)
+        .map(|k| {
+            let mut app = app(FLAT);
+            set_groove(&mut app, groove, false);
+            let h = max_height_while(&mut app, 2.0, |app, i| match i {
+                0 => hold(app, JUMP),
+                i if i == k => release(app, JUMP),
+                i if i == k + 1 => hold(app, JUMP),
+                _ => {}
+            });
+            (h, k)
+        })
+        .fold((0.0, 0), |a, b| if b.0 > a.0 { b } else { a })
+}
+
+/// Normal physics: even a perfectly timed double jump falls short of a 6-tile "giant wall"
+/// (it needs Giant Steps); a 5-tile wall is just possible.
+#[test]
+fn no_double_jump_clears_six_tiles_normally() {
+    let (h, k) = best_double_jump(Harmony::Original);
+    println!("best normal double jump: {h:.1}px (toot at frame {k})");
+    assert!(h > 5.0 * TILE, "best double jump {h}px can't even do 5 tiles");
+    assert!(h < 6.0 * TILE - 4.0, "best double jump {h}px (toot at frame {k}) clears a giant wall");
+    let mut app = app(FLAT);
+    let top = quick_double_tap(&mut app);
+    println!("normal quick double-tap: {top:.1}px");
+    assert!(top < 5.0 * TILE, "quick double-tap {top}px");
+}
+
+/// Giant Steps (the band plays Coltrane changes): weaker gravity, higher jumps. A single
+/// jump reaches ~4.8 tiles and even a quick double-tap gets the feet over a 6-tile wall.
+#[test]
+fn giant_steps_jumps_higher() {
+    let mut app = app(FLAT);
+    set_groove(&mut app, Harmony::Coltrane, false);
+    hold(&mut app, JUMP);
+    let h = max_height_while(&mut app, 1.5, |_, _| {});
+    println!("giant steps single jump: {h:.1}px = {:.2} tiles", h / TILE);
+    assert!((4.4 * TILE..5.0 * TILE).contains(&h), "giant steps jump height {h}");
+
+    let mut app = self::app(FLAT);
+    set_groove(&mut app, Harmony::Coltrane, false);
+    let top = quick_double_tap(&mut app);
+    println!("giant steps quick double-tap: {top:.1}px");
+    assert!(top > 6.0 * TILE + 2.0, "feet rose only {top}px");
+    let (best, _) = best_double_jump(Harmony::Coltrane);
+    println!("giant steps best double jump: {best:.1}px");
+    assert!(best > 7.0 * TILE);
+}
+
+/// Top running speed after a second of holding Right.
+fn top_speed(harmony: Harmony) -> f32 {
+    let mut app = app(FLAT);
+    set_groove(&mut app, harmony, false);
+    hold(&mut app, RIGHT);
+    step(&mut app, 1.0);
+    body(&mut app).vel.x
+}
+
+/// Fired up (quartal): faster running, same jump height. Giant Steps runs slower so its long
+/// air time doesn't also clear long gaps.
+#[test]
+fn run_speed_per_mode() {
+    assert_eq!(top_speed(Harmony::Original), tuning::RUN_SPEED);
+    assert_eq!(top_speed(Harmony::Quartal), tuning::RUN_SPEED * FIRED_UP_SPEED);
+    assert_eq!(top_speed(Harmony::Coltrane), tuning::RUN_SPEED * GIANT_STEPS_SPEED);
+    assert_eq!(top_speed(Harmony::MelodicMinor), tuning::RUN_SPEED);
+
+    let mut app = app(FLAT);
+    set_groove(&mut app, Harmony::Quartal, false);
+    hold(&mut app, JUMP);
+    let h = max_height_while(&mut app, 1.0, |_, _| {});
+    assert!((3.0 * TILE..3.6 * TILE).contains(&h), "quartal jump height {h}");
+}
+
+/// The nervous band (melodic minor): the game runs in slow motion (the music doesn't).
+#[test]
+fn nervous_band_slows_time() {
+    let mut app = app(FLAT);
+    set_groove(&mut app, Harmony::MelodicMinor, false);
+    app.update();
+    let before = app.world().resource::<SimClock>().steps;
+    step(&mut app, 1.0);
+    let steps = app.world().resource::<SimClock>().steps - before;
+    let want = (60.0 * NERVOUS_TIME).round() as u64;
+    assert!(steps.abs_diff(want) <= 1, "{steps} steps in 1s real time");
+    // Back to normal speed with the normal groove.
+    set_groove(&mut app, Harmony::Original, false);
+    app.update();
+    let before = app.world().resource::<SimClock>().steps;
+    step(&mut app, 1.0);
+    assert!((app.world().resource::<SimClock>().steps - before).abs_diff(60) <= 1);
+}
+
+/// The laughing band (just intonation): landings spring Nat back up ~1 tile, lower each time,
+/// without using up a jump; jumping out of a bounce is a full ground jump.
+#[test]
+fn laughing_band_bounces() {
+    let mut app = app(FLAT);
+    set_groove(&mut app, Harmony::Original, true);
     hold(&mut app, JUMP);
     step(&mut app, 0.1);
     release(&mut app, JUMP);
-    step(&mut app, 0.1);
-    hold(&mut app, JUMP);
-    let mut top = 0.0f32;
-    for _ in 0..90 {
+    // Wait for the landing.
+    let mut frames = 0;
+    while counted::<Landed>(&app) == 0 {
         app.update();
-        top = top.max(player_pos(&mut app).y - floor);
+        frames += 1;
+        assert!(frames < 120);
     }
-    assert_eq!(counted::<Jumped>(&app), 2, "ground jump + toot");
-    assert!(top > 5.0 * TILE + 2.0, "feet rose only {top}px");
+    // Bounces back up.
+    let h = max_height_while(&mut app, 0.6, |_, _| {});
+    println!("bounce height {h:.1}px");
+    assert!((0.5 * TILE..1.3 * TILE).contains(&h), "bounce height {h}");
+    assert_eq!(counted::<Jumped>(&app), 1, "the bounce isn't a jump");
+    // Settles down eventually.
+    step(&mut app, 2.0);
+    assert!(body(&mut app).on_ground);
+    let landings = counted::<Landed>(&app);
+    assert!(landings >= 2, "landings: {landings}");
+
+    // Jumping out of a bounce: a ground jump, the toot still in hand.
+    hold(&mut app, JUMP);
+    step(&mut app, 0.6);
+    release(&mut app, JUMP);
+    while counted::<Landed>(&app) == landings {
+        app.update();
+    }
+    app.update();
+    assert!(!body(&mut app).on_ground, "bouncing");
+    hold(&mut app, JUMP);
+    app.update();
+    assert!(body(&mut app).vel.y > tuning::JUMP_SPEED * 0.9, "a full ground jump");
+    release(&mut app, JUMP);
+    app.update();
+    hold(&mut app, JUMP);
+    app.update();
+    assert_eq!(counted::<Jumped>(&app), 4, "jump out of the bounce + a toot");
+    assert!(body(&mut app).vel.y > tuning::DOUBLE_JUMP_SPEED * 0.9);
+
+    // Normal groove: no bounce.
+    let mut app = self::app(FLAT);
+    hold(&mut app, JUMP);
+    step(&mut app, 0.1);
+    release(&mut app, JUMP);
+    step(&mut app, 1.0);
+    assert!(body(&mut app).on_ground);
+    assert_eq!(counted::<Landed>(&app), 1);
+}
+
+/// The groove is the music's business, but a fresh level (or a restart) always starts normal.
+#[test]
+fn groove_resets_on_restart_and_level_start() {
+    let mut app = app(FLAT);
+    assert_eq!(*app.world().resource::<Groove>(), Groove::default());
+    set_groove(&mut app, Harmony::Coltrane, true);
+    hold(&mut app, KeyCode::KeyR);
+    app.update();
+    release(&mut app, KeyCode::KeyR);
+    app.update();
+    assert_eq!(*app.world().resource::<Groove>(), Groove::default());
+
+    set_groove(&mut app, Harmony::Quartal, false);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Title);
+    app.update();
+    assert_eq!(*app.world().resource::<Groove>(), Groove::default(), "leaving the level");
+    set_groove(&mut app, Harmony::MelodicMinor, false);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
+    app.update();
+    assert_eq!(*app.world().resource::<Groove>(), Groove::default(), "entering the level");
+}
+
+const NUGGETS_THEN_SPIKES: &str = "name: Nugget run
+---
+..............................
+.P..o.o.C.o.o..^..........G...
+##############################
+";
+
+/// Nuggets picked up since the last checkpoint come back after a splat (so a nugget line that
+/// fires up the band for a long gap is there for the next try); earlier ones stay collected.
+#[test]
+fn nuggets_since_the_checkpoint_come_back_after_a_splat() {
+    let mut app = app(NUGGETS_THEN_SPIKES);
+    hold(&mut app, RIGHT);
+    for _ in 0..240 {
+        app.update();
+        if counted::<PlayerDied>(&app) > 0 {
+            break;
+        }
+    }
+    release(&mut app, RIGHT);
+    assert_eq!(run(&app).nuggets, 4);
+    step(&mut app, tuning::RESPAWN_DELAY + 0.1);
+    assert_eq!(counted::<PlayerRespawned>(&app), 1);
+    assert_eq!(run(&app).nuggets, 2);
+    assert_eq!(app.world_mut().query::<&Nugget>().iter(app.world()).count(), 2);
+    hold(&mut app, RIGHT);
+    step(&mut app, 0.5);
+    assert_eq!(run(&app).nuggets, 4);
 }
 
 /// Hopping in place (no sideways movement) never pulls Han on top of the player.

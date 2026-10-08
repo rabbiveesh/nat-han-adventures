@@ -9,7 +9,7 @@ use crate::level::TILE;
 use crate::state::AppState;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(
+    app.init_resource::<NuggetsAtRisk>().add_systems(
         FixedUpdate,
         (collect_nuggets, touch_checkpoints, touch_goal)
             .chain()
@@ -35,6 +35,11 @@ pub const CHECKPOINT_QUIPS: &[&str] = &[
     "Smells... fine here. Let's keep movin'.",
 ];
 
+/// Nuggets picked up since the last checkpoint (where they were). Dying puts them back, so a
+/// nugget line that fires up the band for a long gap is there again after a failed try.
+#[derive(Resource, Debug, Clone, Default)]
+pub struct NuggetsAtRisk(pub Vec<Vec2>);
+
 fn overlap(a: Vec2, ah: Vec2, min: Vec2, max: Vec2) -> bool {
     a.x - ah.x < max.x && a.x + ah.x > min.x && a.y - ah.y < max.y && a.y + ah.y > min.y
 }
@@ -46,6 +51,7 @@ fn collect_nuggets(
     player: Query<(&Pos, &Body), Alive>,
     nuggets: Query<(Entity, &Transform), With<Nugget>>,
     mut run: ResMut<LevelRun>,
+    mut at_risk: ResMut<NuggetsAtRisk>,
     mut collected: MessageWriter<NuggetCollected>,
 ) {
     let Ok((pos, body)) = player.single() else { return };
@@ -55,6 +61,7 @@ fn collect_nuggets(
         if overlap(pos.0, body.half, c - h, c + h) {
             commands.entity(e).despawn();
             run.nuggets += 1;
+            at_risk.0.push(c);
             collected.write(NuggetCollected { pos: c });
         }
     }
@@ -65,6 +72,7 @@ fn touch_checkpoints(
     player: Query<(&Pos, &Body), Alive>,
     mut checkpoints: Query<(&mut Checkpoint, &Transform)>,
     mut run: ResMut<LevelRun>,
+    mut at_risk: ResMut<NuggetsAtRisk>,
     mut reached: MessageWriter<CheckpointReached>,
     mut says: MessageWriter<HanSays>,
 ) {
@@ -80,6 +88,7 @@ fn touch_checkpoints(
             continue;
         }
         cp.active = true;
+        at_risk.0.clear();
         // Later checkpoints win; touching an earlier one after a later one doesn't send you back.
         if run.checkpoint.is_none_or(|c| c < cp.index) {
             run.checkpoint = Some(cp.index);

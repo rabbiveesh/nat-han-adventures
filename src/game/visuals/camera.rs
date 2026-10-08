@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use super::VisualSet;
 use crate::art::{SpriteId, Sprites};
-use crate::game::{ActiveLevel, LevelEntity, Player, PlayerControl};
+use crate::game::{ActiveLevel, Groove, LevelEntity, Player, PlayerControl};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, spawn_camera).add_systems(
@@ -35,7 +35,15 @@ const BACKDROP_COPIES: usize = 4;
 #[derive(Component, Debug, Default)]
 pub struct GameCamera {
     pub look: f32,
+    /// The laughing band's wobble offset currently applied (kept out of the smoothing).
+    pub wobble: Vec2,
+    /// Wobble strength 0..1 (eases in and out with the bouncy groove).
+    pub giggle: f32,
 }
+
+/// Laughing-band camera wobble: amplitude (px) and frequency (Hz).
+const WOBBLE_PX: f32 = 1.5;
+const WOBBLE_HZ: f32 = 2.3;
 
 #[derive(Component)]
 struct Backdrop(usize);
@@ -52,8 +60,10 @@ fn spawn_camera(mut commands: Commands) {
     ));
 }
 
+#[allow(clippy::type_complexity)]
 fn follow_player(
     time: Res<Time>,
+    groove: Option<Res<Groove>>,
     active: Option<Res<ActiveLevel>>,
     player: Query<(&Transform, &PlayerControl, Ref<Player>), Without<GameCamera>>,
     mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
@@ -70,7 +80,7 @@ fn follow_player(
 
     gc.look += (ctl.facing * LOOK_AHEAD - gc.look) * k(2.5);
     let target = ptf.translation.truncate() + Vec2::new(gc.look, 16.0);
-    let mut p = tf.translation.truncate();
+    let mut p = tf.translation.truncate() - gc.wobble;
     p.x += (target.x - p.x) * k(6.0);
     p.y += (target.y - p.y) * k(4.0);
 
@@ -80,8 +90,12 @@ fn follow_player(
     };
     p.x = clamp(p.x, half.x, size.x);
     p.y = clamp(p.y, half.y, size.y);
-    tf.translation.x = p.x;
-    tf.translation.y = p.y;
+    let bouncy = groove.is_some_and(|g| g.bounce);
+    gc.giggle = (gc.giggle + if bouncy { dt } else { -dt }).clamp(0.0, 1.0);
+    let t = time.elapsed_secs() * std::f32::consts::TAU * WOBBLE_HZ;
+    gc.wobble = gc.giggle * WOBBLE_PX * Vec2::new((t * 0.5).sin(), t.sin());
+    tf.translation.x = p.x + gc.wobble.x;
+    tf.translation.y = p.y + gc.wobble.y;
 }
 
 fn spawn_backdrop(mut commands: Commands, sprites: Res<Sprites>, active: Res<ActiveLevel>) {

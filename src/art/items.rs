@@ -501,6 +501,21 @@ pub fn particle() -> Vec<Pixels> {
     vec![p]
 }
 
+const NOTE_PAL: Palette = &[('w', hex(0xffffff))];
+const NOTE: &[&str] = &[
+    "..ww..",
+    "..w.w.",
+    "..w..w",
+    "..w...",
+    ".ww...",
+    "www...",
+    ".w....",
+];
+
+pub fn note() -> Vec<Pixels> {
+    vec![grid(NOTE, NOTE_PAL)]
+}
+
 /// Pale green cloud puffs: grow, then thin out (dithered) and fade.
 pub fn toot_puff() -> Vec<Pixels> {
     let light = hex(0xeaffd0);
@@ -547,6 +562,7 @@ pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
         ("SPARKLE", SPARKLE.to_vec(), GOLD_PAL),
         ("ICON_NUGGET", ICON_NUGGET.to_vec(), GOLD_PAL),
         ("ICON_LOCK", ICON_LOCK.to_vec(), LOCK_PAL),
+        ("NOTE", NOTE.to_vec(), NOTE_PAL),
         ("TP_TOP", TP_TOP.to_vec(), TP_PAL),
         ("SPARKLE_Y", SPARKLE_Y.to_vec(), TP_PAL),
         ("TP_OFF", TP_OFF.to_vec(), TP_PAL),

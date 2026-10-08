@@ -1,12 +1,13 @@
 //! In-level HUD: nuggets, level name, timer, splats; the "LEVEL N" intro card; checkpoint toast;
-//! and the band toast when the music changes style to match how you play.
+//! the band toast when the music changes style to match how you play, and a badge naming the
+//! physics mode the music is putting you in (Giant Steps, fired up, ...).
 
 use bevy::prelude::*;
 
 use super::{palette::*, *};
 use crate::audio::{MusicChanged, NowPlaying};
 use crate::events::CheckpointReached;
-use crate::game::LevelRun;
+use crate::game::{Groove, LevelRun};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel};
 
@@ -19,7 +20,7 @@ const INTRO_SECS: f32 = 1.6;
 pub fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::Playing), (spawn_hud, spawn_intro)).add_systems(
         Update,
-        (update_hud, tick_intro, checkpoint_toast, band_toast).run_if(in_state(AppState::Playing)),
+        (update_hud, update_groove_badge, tick_intro, checkpoint_toast, band_toast).run_if(in_state(AppState::Playing)),
     );
 }
 
@@ -80,6 +81,76 @@ fn spawn_hud(
                 c.spawn((label(f, "", 8.0, DIM_CREAM), HudText::Splats));
             });
         });
+    spawn_groove_badge(&mut commands, f, sprites.as_deref());
+}
+
+/// Small persistent badge, top left under the nugget count: the mode the music has the physics in.
+#[derive(Component)]
+struct GrooveBadge;
+
+#[derive(Component)]
+struct GrooveBadgeText;
+
+fn spawn_groove_badge(commands: &mut Commands, f: &UiFont, sprites: Option<&Sprites>) {
+    commands
+        .spawn((
+            Name::new("GrooveBadge"),
+            GrooveBadge,
+            DespawnOnExit(AppState::Playing),
+            Visibility::Hidden,
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(22.0),
+                left: px(8.0),
+                padding: UiRect::axes(px(4.0), px(3.0)),
+                column_gap: px(4.0),
+                align_items: AlignItems::Center,
+                border: UiRect::all(px(1.0)),
+                ..default()
+            },
+            BackgroundColor(PANEL),
+            BorderColor::all(DARK_GOLD),
+        ))
+        .with_children(|b| {
+            b.spawn(icon(sprites, SpriteId::Note, 6.0, 7.0));
+            b.spawn((label(f, "", 8.0, GOLD), GrooveBadgeText));
+        });
+}
+
+/// The badge's text for a groove ("" for normal physics). Several knobs can be on at once
+/// (a harmony + just intonation's bounce).
+pub fn groove_badge(g: &Groove) -> String {
+    let mut parts = Vec::new();
+    if g.giant_steps() {
+        parts.push("GIANT STEPS");
+    }
+    if g.speed_scale > 1.0 {
+        parts.push("FIRED UP");
+    }
+    if g.time_scale < 1.0 {
+        parts.push("SLOW-MO");
+    }
+    if g.bounce {
+        parts.push("BOUNCY");
+    }
+    parts.join(" + ")
+}
+
+fn update_groove_badge(
+    groove: Option<Res<Groove>>,
+    mut badge: Query<&mut Visibility, With<GrooveBadge>>,
+    mut text: Query<&mut Text, With<GrooveBadgeText>>,
+) {
+    let s = groove.map_or_else(String::new, |g| groove_badge(&g));
+    let vis = if s.is_empty() { Visibility::Hidden } else { Visibility::Inherited };
+    for mut v in &mut badge {
+        v.set_if_neq(vis);
+    }
+    for mut t in &mut text {
+        if !s.is_empty() && t.0 != s {
+            t.0 = s.clone();
+        }
+    }
 }
 
 fn update_hud(

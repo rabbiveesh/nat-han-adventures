@@ -1,10 +1,12 @@
 //! Hand-rolled player physics: tile AABB collision (X then Y) against the level grid, one-way
 //! tiles and moving platforms; coyote time, jump buffering, variable jump height, the toot.
+//! The music's [`Groove`] scales gravity and run speed, and can make landings bounce.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
-use super::{ActiveLevel, GameSet, MovingPlatform, Player, Pos, PrevPos, tuning::*};
+use super::groove::{BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED};
+use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
 use crate::level::{Level, TILE, Tile};
@@ -56,11 +58,13 @@ pub struct PlayerControl {
     pub has_toot: bool,
     /// Releasing jump will cut the rise.
     pub cut_armed: bool,
+    /// In the air from a laughing-band landing bounce: still counts as grounded for jumping.
+    pub bouncing: bool,
 }
 
 impl Default for PlayerControl {
     fn default() -> Self {
-        Self { facing: 1.0, coyote: 0.0, buffer: 0.0, has_toot: true, cut_armed: false }
+        Self { facing: 1.0, coyote: 0.0, buffer: 0.0, has_toot: true, cut_armed: false, bouncing: false }
     }
 }
 
@@ -98,6 +102,7 @@ pub(super) fn tile_at(level: &Level, i: i32, j: i32) -> Tile {
 fn player_step(
     time: Res<Time>,
     active: Res<ActiveLevel>,
+    groove: Res<Groove>,
     input: Single<&ActionState<Action>>,
     mut player: Query<
         (&mut Pos, &mut Body, &mut PlayerControl),
@@ -119,18 +124,19 @@ fn player_step(
     if axis != 0.0 {
         ctl.facing = axis;
     }
-    let target = axis * RUN_SPEED;
-    let accel = if !body.on_ground {
-        AIR_ACCEL
-    } else if axis == 0.0 || axis * body.vel.x < 0.0 {
-        GROUND_DECEL
-    } else {
-        GROUND_ACCEL
-    };
+    let target = axis * RUN_SPEED * groove.speed_scale;
+    let accel = groove.speed_scale
+        * if !body.on_ground {
+            AIR_ACCEL
+        } else if axis == 0.0 || axis * body.vel.x < 0.0 {
+            GROUND_DECEL
+        } else {
+            GROUND_ACCEL
+        };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
 
     // --- Jumping.
-    if body.on_ground {
+    if body.on_ground || ctl.bouncing {
         ctl.coyote = COYOTE_TIME;
         ctl.has_toot = true;
     } else {
@@ -147,6 +153,7 @@ fn player_step(
         ctl.buffer = 0.0;
         ctl.coyote = 0.0;
         ctl.cut_armed = true;
+        ctl.bouncing = false;
         body.on_ground = false;
         body.riding = None;
         jumped.write(Jumped { pos: pos.0, double: false });
@@ -166,7 +173,7 @@ fn player_step(
     }
 
     // --- Gravity.
-    body.vel.y = (body.vel.y - GRAVITY * dt).max(-MAX_FALL);
+    body.vel.y = (body.vel.y - GRAVITY * groove.gravity_scale * dt).max(-MAX_FALL * groove.fall_scale());
 
     // --- Carried by the platform we stood on.
     let carry = body
@@ -256,6 +263,14 @@ fn player_step(
             landed.write(Landed { pos: pos.0, speed: fall_speed });
         }
         ctl.has_toot = true;
+        ctl.bouncing = false;
+        // The laughing band: spring back up a little (lower each time, until it dies out).
+        if groove.bounce && !was_on_ground && fall_speed > BOUNCE_MIN_SPEED {
+            body.vel.y = (fall_speed * BOUNCE_RESTITUTION).min(BOUNCE_SPEED);
+            ctl.bouncing = true;
+            ground = false;
+            riding = None;
+        }
     }
     body.on_ground = ground;
     body.riding = riding;

@@ -2,16 +2,25 @@
 //!
 //! Decisions happen only at a level start (always plain), after a death (decided as the player
 //! dies, so the new version renders during the respawn delay and switches in afterwards), on
-//! reaching a checkpoint, and every [`MUSIC_CHECK_SECS`] of play (pause excluded) since the last
-//! decision. Everything else (title, level select, the jingle, victory) is plain. A decision
-//! that comes out the same as what's playing changes nothing.
+//! reaching a checkpoint, every [`MUSIC_CHECK_SECS`] of play (pause excluded) since the last
+//! decision, and the moment the player *summons* a mode (see [`summoned`]). Everything else
+//! (title, level select, the jingle, victory) is plain. A decision that comes out the same as
+//! what's playing changes nothing.
+//!
+//! The music also bends the physics (`crate::game::Groove`), and levels have gates that need a
+//! mode: giant walls need Giant Steps, long gaps a fired-up band. So the two summonable rules
+//! come first (a player with many deaths must still be able to summon them), and switch in at
+//! the next bar line rather than at the next check.
 //!
 //! Rules ([`choose_filters`]), harmony first match wins:
-//! 1. level deaths ≥ [`NERVOUS_DEATHS`] → melodic minor, "THE BAND IS NERVOUS";
-//! 2. toots (double jumps) in the stretch ≥ [`GIANT_STEPS_TOOTS`] → Coltrane, "GIANT STEPS!";
-//! 3. nuggets in the stretch ≥ [`FIRED_UP_NUGGETS`] at ≥ 1 per [`FIRED_UP_SECS_PER_NUGGET`]s →
+//! 1. toots (double jumps) in the stretch ≥ [`GIANT_STEPS_TOOTS`] → Coltrane, "GIANT STEPS!";
+//! 2. nuggets in the stretch ≥ [`FIRED_UP_NUGGETS`] at ≥ 1 per [`FIRED_UP_SECS_PER_NUGGET`]s →
 //!    quartal, "THE BAND IS FIRED UP";
+//! 3. level deaths ≥ [`NERVOUS_DEATHS`] → melodic minor, "THE BAND IS NERVOUS";
 //! 4. otherwise as written.
+//!
+//! A mode lasts until a later decision no longer finds its rule met; toots and nuggets made
+//! while it plays count, so keeping it up keeps it going.
 //!
 //! Just intonation is on when deaths since the last checkpoint ≥ [`LAUGHING_DEATHS`]
 //! ("THE BAND CAN'T STOP LAUGHING"). The "stretch" is a rolling window over the last
@@ -79,20 +88,32 @@ impl Window {
 /// The filters for the stats, and why (the reason of the harmony rule if one fired, else the
 /// just-intonation reason, else "").
 pub fn choose_filters(s: &PlayStats) -> (Filters, &'static str) {
-    let (harmony, reason) = if s.level_deaths >= NERVOUS_DEATHS {
-        (Harmony::MelodicMinor, REASON_NERVOUS)
-    } else if s.stretch_toots >= GIANT_STEPS_TOOTS {
+    let (harmony, reason) = if s.stretch_toots >= GIANT_STEPS_TOOTS {
         (Harmony::Coltrane, REASON_GIANT_STEPS)
     } else if s.stretch_nuggets >= FIRED_UP_NUGGETS
         && s.stretch_secs <= s.stretch_nuggets as f32 * FIRED_UP_SECS_PER_NUGGET
     {
         (Harmony::Quartal, REASON_FIRED_UP)
+    } else if s.level_deaths >= NERVOUS_DEATHS {
+        (Harmony::MelodicMinor, REASON_NERVOUS)
     } else {
         (Harmony::Original, "")
     };
     let just_intonation = s.checkpoint_deaths >= LAUGHING_DEATHS;
     let reason = if reason.is_empty() && just_intonation { REASON_LAUGHING } else { reason };
     (Filters { harmony, just_intonation }, reason)
+}
+
+/// Harmonies the player calls up on purpose (levels have gates that need them).
+pub fn summonable(h: Harmony) -> bool {
+    matches!(h, Harmony::Coltrane | Harmony::Quartal)
+}
+
+/// Did what just happened (stats `before` → `after` it) summon a mode? Then the director
+/// decides right away instead of at the next check.
+pub fn summoned(before: &PlayStats, after: &PlayStats) -> bool {
+    let h = choose_filters(after).0.harmony;
+    summonable(h) && choose_filters(before).0.harmony != h
 }
 
 #[cfg(test)]
@@ -115,7 +136,9 @@ mod tests {
         use Harmony::*;
         let cases: &[(PlayStats, Harmony, bool, &str)] = &[
             (st(0, 0, 0, 0, 10.0), Original, false, ""),
-            (st(3, 0, 9, 9, 1.0), MelodicMinor, false, REASON_NERVOUS),
+            (st(3, 0, 9, 9, 1.0), Coltrane, false, REASON_GIANT_STEPS),
+            (st(5, 0, 0, 4, 10.0), Quartal, false, REASON_FIRED_UP),
+            (st(3, 0, 4, 3, 10.0), MelodicMinor, false, REASON_NERVOUS),
             (st(2, 0, 5, 9, 1.0), Coltrane, false, REASON_GIANT_STEPS),
             (st(0, 0, 4, 9, 1.0), Quartal, false, REASON_FIRED_UP),
             (st(0, 0, 0, 4, 20.0), Quartal, false, REASON_FIRED_UP),
@@ -125,6 +148,7 @@ mod tests {
             (st(2, 2, 0, 0, 30.0), Original, true, REASON_LAUGHING),
             (st(1, 1, 0, 0, 30.0), Original, false, ""),
             (st(3, 2, 0, 0, 30.0), MelodicMinor, true, REASON_NERVOUS),
+            (st(9, 2, 5, 0, 30.0), Coltrane, true, REASON_GIANT_STEPS),
             (st(2, 2, 6, 0, 30.0), Coltrane, true, REASON_GIANT_STEPS),
         ];
         for (s, h, ji, why) in cases {
@@ -151,5 +175,21 @@ mod tests {
         assert_eq!((s.stretch_toots, s.stretch_nuggets, s.stretch_secs), (3, 2, 20.0));
         w.fill(&mut s, 40.0, 0.0);
         assert_eq!((s.stretch_toots, s.stretch_nuggets), (0, 0));
+    }
+
+    #[test]
+    fn summoning() {
+        // The 5th toot summons Giant Steps, even for a nervous band; the 6th doesn't again.
+        assert!(summoned(&st(4, 0, 4, 0, 20.0), &st(4, 0, 5, 0, 20.0)));
+        assert!(!summoned(&st(0, 0, 3, 0, 20.0), &st(0, 0, 4, 0, 20.0)));
+        assert!(!summoned(&st(0, 0, 5, 0, 20.0), &st(0, 0, 6, 0, 20.0)));
+        // The 4th quick nugget fires the band up; slow nuggets don't.
+        assert!(summoned(&st(0, 0, 0, 3, 12.0), &st(0, 0, 0, 4, 12.0)));
+        assert!(!summoned(&st(0, 0, 0, 3, 20.0), &st(0, 0, 0, 3, 20.0)));
+        assert!(!summoned(&st(0, 0, 0, 3, 20.5), &st(0, 0, 0, 4, 20.5)));
+        // Toots while fired up summon Giant Steps over it.
+        assert!(summoned(&st(0, 0, 4, 6, 10.0), &st(0, 0, 5, 6, 10.0)));
+        // Deaths alone never summon (they decide anyway).
+        assert!(!summoned(&st(2, 0, 0, 0, 10.0), &st(3, 0, 0, 0, 10.0)));
     }
 }

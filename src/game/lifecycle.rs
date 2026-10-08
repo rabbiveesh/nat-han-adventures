@@ -6,7 +6,7 @@ use leafwing_input_manager::prelude::*;
 use super::han::{HanAnim, HanMotion, HanTrail};
 use super::physics::{Body, PlayerControl};
 use super::{
-    ActiveLevel, Checkpoint, Fly, GameSet, Goal, Han, LevelEntity, LevelRun, LevelTile,
+    ActiveLevel, Checkpoint, Fly, GameSet, Goal, Groove, Han, LevelEntity, LevelRun, LevelTile,
     MovingPlatform, Nugget, Player, Pos, PrevPos, RestartLevel, SimClock, Spray, tuning,
 };
 use crate::events::HanSays;
@@ -48,6 +48,7 @@ fn unload_level(mut commands: Commands, old: Query<Entity, With<LevelEntity>>) {
         commands.entity(e).despawn();
     }
     commands.remove_resource::<ActiveLevel>();
+    commands.insert_resource(Groove::default());
 }
 
 /// R restarts, Esc/Backspace pauses.
@@ -96,6 +97,10 @@ fn load(
         ..default()
     });
     commands.insert_resource(SimClock::default());
+    commands.insert_resource(super::pickups::NuggetsAtRisk::default());
+    // The band starts every level playing it straight (the audio plugin switches back at the
+    // next bar line); physics don't wait for it.
+    commands.insert_resource(Groove::default());
     commands.insert_resource(ActiveLevel { index, level: level.clone() });
     spawn_level(commands, &level);
     level

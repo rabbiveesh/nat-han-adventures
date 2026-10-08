@@ -64,6 +64,8 @@ pub enum SpriteId {
     Backdrop(u8),
     /// Small square particle (white; tint it). 2x2.
     Particle,
+    /// Eighth-note particle (white; tint it) for the Giant Steps jump trail and badge. 6x7.
+    Note,
     /// Green "toot" cloud puff for the double jump, frames grow and fade. 16x16.
     TootPuff,
     /// UI icons: nugget 8x8, lock 8x8.
@@ -99,7 +101,7 @@ impl SpriteId {
         let mut v = vec![
             PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, Fly, SprayCan,
-            SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, TootPuff, IconNugget,
+            SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock,
         ];
         for w in tiles::WORLDS {
@@ -116,6 +118,7 @@ impl SpriteId {
             Throne => (32, 32),
             Fly | IconNugget | IconLock => (8, 8),
             Particle => (2, 2),
+            Note => (6, 7),
             Backdrop(_) => (backdrops::W as u32, backdrops::H as u32),
             _ => (16, 16),
         }
@@ -155,6 +158,7 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         OneWay(w) => tiles::one_way(w),
         Backdrop(w) => backdrops::backdrop(w),
         Particle => items::particle(),
+        Note => items::note(),
         TootPuff => items::toot_puff(),
         IconNugget => items::icon_nugget(),
         IconLock => items::icon_lock(),

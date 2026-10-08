@@ -1,18 +1,18 @@
 //! Cheap particles: short-lived tinted 2x2 sprites with velocity, gravity and fade, plus the
-//! toot puff cloud.
+//! toot puff cloud, and the trail of golden notes Nat leaves while the band plays Giant Steps.
 
 use bevy::prelude::*;
 
 use super::FrameAnim;
 use crate::art::{SpriteId, Sprites};
 use crate::events::{CheckpointReached, Jumped, Landed, NuggetCollected, PlayerDied};
-use crate::game::LevelEntity;
+use crate::game::{Body, Dead, Groove, LevelEntity, Player};
 use crate::state::PlayState;
 
 pub(super) fn plugin(app: &mut App) {
-    app.init_resource::<Rng>().add_systems(
+    app.init_resource::<Rng>().init_resource::<NoteTrail>().add_systems(
         Update,
-        (spawn_fx.run_if(resource_exists::<Sprites>), update_particles)
+        (spawn_fx.run_if(resource_exists::<Sprites>), note_trail.run_if(resource_exists::<Sprites>), update_particles)
             .chain()
             .run_if(not(in_state(PlayState::Paused))),
     );
@@ -171,6 +171,46 @@ fn spawn_fx(
             size: 4.0,
         });
     }
+}
+
+/// Seconds between trail notes while airborne in Giant Steps.
+const NOTE_EVERY: f32 = 0.07;
+const NOTE_COLORS: [Color; 3] = [Color::srgb(1.0, 0.85, 0.2), Color::srgb(1.0, 0.95, 0.55), Color::srgb(0.95, 0.65, 0.1)];
+
+/// Time until the next trail note.
+#[derive(Resource, Default)]
+struct NoteTrail(f32);
+
+/// Giant Steps: Nat's jumps leave a trail of little golden eighth notes that drift up and fade.
+fn note_trail(
+    mut commands: Commands,
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    groove: Option<Res<Groove>>,
+    mut trail: ResMut<NoteTrail>,
+    mut rng: ResMut<Rng>,
+    player: Query<(&Transform, &Body), (With<Player>, Without<Dead>)>,
+    existing: Query<(), With<Particle>>,
+) {
+    let airborne = player.single().ok().filter(|(_, b)| !b.on_ground);
+    let (Some((tf, _)), true) = (airborne, groove.is_some_and(|g| g.giant_steps())) else {
+        trail.0 = 0.0;
+        return;
+    };
+    trail.0 -= time.delta_secs();
+    if trail.0 > 0.0 || existing.iter().count() >= MAX_PARTICLES {
+        return;
+    }
+    trail.0 = NOTE_EVERY;
+    let at = tf.translation.truncate() + Vec2::new(rng.range(-5.0, 5.0), rng.range(-6.0, 2.0));
+    let color = NOTE_COLORS[(rng.f() * 3.0) as usize % 3];
+    let life = rng.range(0.5, 0.8);
+    commands.spawn((
+        LevelEntity,
+        Particle { vel: Vec2::new(rng.range(-8.0, 8.0), rng.range(10.0, 25.0)), gravity: 0.0, life, max_life: life, fade: true },
+        Sprite { image: sprites.get(SpriteId::Note), color, ..default() },
+        Transform::from_translation(at.extend(6.0)),
+    ));
 }
 
 fn update_particles(

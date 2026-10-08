@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use super::han::{self, DEATH_LINES, HanTrail};
 use super::physics::{Body, Dead, Finished, PlayerControl, cells, tile_at};
 use super::{
-    ActiveLevel, Fly, GameSet, Han, LevelRun, Player, Pos, PrevPos, SimClock, Spray, tuning,
+    ActiveLevel, Fly, GameSet, Han, LevelEntity, LevelRun, Nugget, Player, Pos, PrevPos, SimClock, Spray, tuning,
 };
 use crate::events::{HanSays, PlayerDied, PlayerRespawned};
 use crate::level::{TILE, Tile};
@@ -136,7 +136,8 @@ pub(super) fn respawn(
     mut commands: Commands,
     time: Res<Time>,
     active: Res<ActiveLevel>,
-    run: Res<LevelRun>,
+    mut run: ResMut<LevelRun>,
+    mut at_risk: ResMut<super::pickups::NuggetsAtRisk>,
     mut player: Query<
         (Entity, &mut Dead, &mut Pos, &mut PrevPos, &mut Body, &mut PlayerControl),
         (With<Player>, Without<Han>),
@@ -163,6 +164,11 @@ pub(super) fn respawn(
     *ctl = PlayerControl::default();
     commands.entity(entity).remove::<Dead>();
     respawned.write(PlayerRespawned { pos: at });
+    // Nuggets grabbed since the checkpoint come back (and come off the count).
+    for c in at_risk.0.drain(..) {
+        run.nuggets = run.nuggets.saturating_sub(1);
+        commands.spawn((Name::new("Nugget"), LevelEntity, Nugget, Transform::from_translation(c.extend(2.0))));
+    }
 
     for (mut gpos, mut gprev, mut trail) in &mut han_q {
         gpos.0 = han::behind(level, at, ctl.facing);
