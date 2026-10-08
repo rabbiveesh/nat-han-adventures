@@ -35,7 +35,7 @@ pub use hazards::{
 };
 pub use platforms::platform_pos;
 pub use han::{
-    BACK_WARN_LINE, BAND_LINE, DEATH_LINES, FOLLOW_GAP, FlySpin, GRIP_LINE, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
+    BACK_WARN_LINE, BAND_LINE, DEATH_LINES, FLY_LINE, FOLLOW_GAP, FlySpin, GRIP_LINE, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
     HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, HAN_TOOTS, HanAnim, HanBrain, HanMode, HanNav, HanPhys,
     HanPose, HanRaft, LEMME_LINE, NERVOUS_GAP, NERVOUS_LINE, PARACHUTE_FALL, PRO_LINE, SprayPlug, UNION_LINE, brace_range,
     breather, go_ahead_delay, han_raft_life, intercept_range, overuse_limit,

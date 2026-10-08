@@ -24,6 +24,8 @@ pub const HAN_MARCH_SPEED: f32 = 110.0;
 pub const HAN_TOOTS: u8 = 3;
 /// Under Giant Steps Han floats even more than Nat: gravity × this on top of the band's.
 pub const HAN_GS_FLOAT: f32 = 0.8;
+/// The goalkeeper's dive: while intercepting Han runs (and steers in the air) this much faster.
+pub const HAN_DIVE: f32 = 1.4;
 /// The laughing band: Han rolls along, bouncier than Nat (bounce speed × this).
 pub const HAN_ROLL_BOUNCE: f32 = 1.3;
 
@@ -129,11 +131,12 @@ pub fn drive(
     let mut out = Drove::default();
     let speed = if input.speed > 0.0 { input.speed } else { 1.0 };
     let target = input.dir * phys.speed * speed;
-    let accel = if body.on_ground {
-        if input.dir == 0.0 || input.dir * body.vel.x < 0.0 { GROUND_DECEL } else { phys.ground_accel }
-    } else {
-        phys.air_accel
-    };
+    let accel = speed.max(1.0)
+        * if body.on_ground {
+            if input.dir == 0.0 || input.dir * body.vel.x < 0.0 { GROUND_DECEL } else { phys.ground_accel }
+        } else {
+            phys.air_accel
+        };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
     if body.on_ground {
         ctl.toots_left = HAN_TOOTS;
@@ -201,16 +204,28 @@ pub fn intercept(han: &Kin, nat: &Kin, toots_left: u8, gravity: f32, floor_ahead
     let head = han.pos.y + HALF.y;
     let feet = nat.pos.y - HALF.y;
     let above = feet - head;
-    let t = time_to_fall_to(nat, head, gravity).unwrap_or(0.0).min(1.5);
+    let t = time_to_fall_to(nat, head, gravity).unwrap_or(0.0).min(0.6);
     let x_to = nat.pos.x + nat.vel.x * t;
     let dx = x_to - han.pos.x;
     let dir = if dx.abs() > 1.5 { dx.signum() } else { 0.0 };
     let running_off = han.grounded && dir != 0.0 && !floor_ahead;
     let high = above > 2.5 * TILE && dx.abs() < 2.5 * TILE && nat.vel.y < 60.0;
     let jump = han.grounded && (running_off || high);
-    // Sinking below Nat's path: toot back up into it.
-    let toot = !han.grounded && toots_left > 0 && han.vel.y < -40.0 && above > 2.0 && above < 6.0 * TILE && dx.abs() < 3.0 * TILE;
-    HanInput { dir, speed: 1.0, jump, hold: true, toot }
+    // Stay under him: you can only land on Han coming down, so while Nat's still rising close
+    // above, cut the jump short.
+    let hold = !(nat.vel.y > 0.0 && above < 0.75 * TILE);
+    // Sinking below a falling Nat, lined up under him (now, or by the time a toot carries him
+    // up): toot back up into his feet.
+    let rel = (nat.pos.x - han.pos.x, (nat.pos.x + nat.vel.x * 0.15) - (han.pos.x + han.vel.x * 0.15));
+    let under = rel.0.abs() < 2.0 * HALF.x || rel.1.abs() < 8.0;
+    let toot = !han.grounded
+        && toots_left > 0
+        && han.vel.y < -40.0
+        && nat.vel.y < 0.0
+        && above > 8.0
+        && above < 5.0 * TILE
+        && under;
+    HanInput { dir, speed: HAN_DIVE, jump, hold, toot }
 }
 
 /// A chain-jump chasm: walk row `row`, open (bottomless) columns `c0..=c1`.

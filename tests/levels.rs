@@ -554,3 +554,4 @@ fn validator_knows_buddy_raft_pools() {
     let roomy = run(&level(60, 14, 4));
     assert!(roomy.errs.iter().any(|e| e.contains("Nat's own rafts bridge it (FiredUp)")), "{:?}", roomy.errs);
 }
+

@@ -176,11 +176,18 @@ fn floor_at(level: &Level, c: i32, r: i32) -> bool {
     t.is_solid() || t.is_one_way()
 }
 
-/// Nothing to stand on below `pos` for 5 tiles: Nat's heading for a drop (or the pit).
+/// Below `pos` (and a column on, the way Nat's drifting) there's nothing to land on but the
+/// pit, sewage or spikes: Nat's heading for a splat.
 fn doomed(level: &Level, pos: Vec2, vx: f32) -> bool {
     let (c, r) = level.cell_at(pos);
     let cols = [c, c + if vx > 20.0 { 1 } else if vx < -20.0 { -1 } else { 0 }];
-    cols.iter().all(|&cc| !(r..=r + 5).any(|rr| floor_at(level, cc, rr + 1)))
+    cols.iter().all(|&cc| {
+        let first = (r..level.height as i32).find(|&rr| {
+            let t = level.tile(cc, rr + 1);
+            floor_at(level, cc, rr + 1) || t.is_deadly()
+        });
+        first.is_none_or(|rr| level.tile(cc, rr + 1).is_deadly())
+    })
 }
 
 /// What's ahead of someone standing in `cell` facing `dir`, within [`LOOK_AHEAD`] tiles:
@@ -217,7 +224,9 @@ fn slot_cell(map: &Map, level: &Level, nat: (i32, i32), x: f32) -> Option<(i32, 
     let mut cands = Vec::new();
     for dc in [0, -side, side, -2 * side, 2 * side] {
         for dr in [0, 1, 2, -1, 3] {
-            cands.push((col + dc, nat.1 + dr));
+            if (col + dc, nat.1 + dr) != nat {
+                cands.push((col + dc, nat.1 + dr));
+            }
         }
     }
     cands.push(nat);
@@ -276,8 +285,28 @@ fn landing_ready(
             platform_pos(p, clock.platform_time + secs * groove.platform_rate())
         };
         let half_w = p.width as f32 * TILE / 2.0;
-        (at.y + TILE / 2.0 - floor_y).abs() < 6.0 && (at.x - x).abs() < half_w + 2.0
+        // The cell's middle well on it when he gets there.
+        (at.y + TILE / 2.0 - floor_y).abs() < 6.0 && (at.x - x).abs() < half_w - 4.0
     })
+}
+
+/// Where to steer to land in cell `to`: its middle, or (no floor there, a platform's path) the
+/// platform passing over it right now.
+fn landing_x(level: &Level, platforms: &[(Vec2, MovingPlatform)], to: (i32, i32), me: f32) -> f32 {
+    let x = to.0 as f32 * TILE + TILE / 2.0;
+    if floor_at(level, to.0, to.1 + 1) {
+        return x;
+    }
+    let floor_y = (level.height as i32 - 1 - to.1) as f32 * TILE;
+    platforms
+        .iter()
+        .filter(|(at, p)| (at.y + TILE / 2.0 - floor_y).abs() < 10.0 && (at.x - x).abs() < p.width as f32 * TILE)
+        .map(|(at, p)| {
+            let half = p.width as f32 * TILE / 2.0 - 6.0;
+            me.clamp(at.x - half, at.x + half)
+        })
+        .min_by(|a, b| (a - me).abs().total_cmp(&(b - me).abs()))
+        .unwrap_or(x)
 }
 
 /// Out of Nat's sight (the camera shows ~±13 tiles across, ±6.75 up and down).
@@ -542,6 +571,11 @@ pub(super) fn think(
     if brain.lost && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
+    // Nat's in the band's gate: Han hangs back.
+    if brain.goal.is_none() && !nat_dead && !level.han_allowed(feet_cell(level, nat.pos)) && brain.said & once::BAND == 0 {
+        brain.said |= once::BAND;
+        say(&mut says, BAND_LINE);
+    }
     // Fired up: he can't keep up.
     if groove.harmony == Harmony::Quartal && dx_nat.abs() > 8.0 * TILE && brain.said & once::WHEEZE == 0 {
         brain.said |= once::WHEEZE;
@@ -687,8 +721,9 @@ fn follow(
     // (but never off a ledge into a drop or the sewage).
     if !brain.lost && (brain.path.is_empty() && brain.exec.is_none()) {
         if my_cell == goal {
-            let dx = stand(level, goal).x - me.pos.x;
-            return arrive(dx, 4.0);
+            // In the slot's cell: stand right at the slot (not on Nat).
+            let dx = if (slot_x - stand(level, goal).x).abs() < TILE { slot_x } else { stand(level, goal).x } - me.pos.x;
+            return arrive(dx, 2.0);
         }
         if !Nav::node(&Map::for_han(level), level, my_cell) || body.riding.is_some() {
             return careful(level, me, body, arrive(slot_x - me.pos.x, 4.0));
@@ -716,8 +751,13 @@ fn follow(
                 if body.riding.is_some() && !floor_at(level, edge.to.0, edge.to.1 + 1) {
                     return HanInput::default();
                 }
-                let more = brain.path.first().is_some_and(|e| e.step == Step::Walk);
                 let dx = tx - me.pos.x;
+                // More walking after this, or Nat running on ahead: keep running.
+                let more = brain.path.first().is_some_and(|e| e.step == Step::Walk)
+                    || (nat.vel.x * dx > 0.0 && nat.vel.x.abs() > 30.0);
+                if brain.path.is_empty() && nat.vel.x.abs() > 30.0 {
+                    brain.replan = 0.0;
+                }
                 return if more { HanInput { dir: dx.signum(), speed: 1.0, ..default() } } else { arrive(dx, 2.0) };
             }
             Step::Move(k) => {
@@ -738,7 +778,7 @@ fn follow(
         if dx.abs() > 1.5 || me.vel.x.abs() > 25.0 || !me.grounded {
             return arrive(dx, 1.0);
         }
-        let secs = brain.path.first().map_or(0.5, |e| e.secs);
+        let secs = brain.path.first().map_or(0.5, |e| e.air);
         if !landing_ready(level, plats, clock, groove, ex.to, secs) {
             ex.wait += dt;
             if ex.wait > 8.0 {
@@ -773,7 +813,7 @@ fn follow(
     let correcting = t > last_toot + 0.1 && t > 0.25;
     let mut dir = if t < m.release { m.dir } else { 0.0 };
     if correcting {
-        let dx = stand(level, ex.to).x - me.pos.x;
+        let dx = landing_x(level, plats, ex.to, me.pos.x) - me.pos.x;
         dir = if dx.abs() > 3.0 { dx.signum() } else { 0.0 };
     }
     HanInput {

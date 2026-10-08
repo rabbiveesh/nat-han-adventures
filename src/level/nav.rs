@@ -78,8 +78,10 @@ pub enum Step {
 pub struct Edge {
     pub to: Cell,
     pub step: Step,
-    /// Seconds it takes.
+    /// Its cost: seconds it takes, plus a little for each jump and toot.
     pub secs: f32,
+    /// Seconds in the air (jumps).
+    pub air: f32,
 }
 
 /// Where move `m` takes off in `cell` (box center x, y down), if it applies there.
@@ -182,7 +184,7 @@ impl Nav {
         for d in [-1, 1] {
             let n = (cell.0 + d, cell.1);
             if Nav::node(map, level, n) {
-                out.push(Edge { to: n, step: Step::Walk, secs: WALK_SECS });
+                out.push(Edge { to: n, step: Step::Walk, secs: WALK_SECS, air: 0.0 });
             }
         }
         for (k, m) in self.moves.iter().enumerate() {
@@ -193,10 +195,11 @@ impl Nav {
                 && level.han_allowed(to)
             {
                 let secs = t + JUMP_COST + TOOT_COST * m.toot_count() as f32;
+                let edge = Edge { to, step: Step::Move(k as u16), secs, air: t };
                 match out.iter_mut().find(|e| e.to == to) {
-                    Some(e) if e.secs > secs => *e = Edge { to, step: Step::Move(k as u16), secs },
+                    Some(e) if e.secs > secs => *e = edge,
                     Some(_) => {}
-                    None => out.push(Edge { to, step: Step::Move(k as u16), secs }),
+                    None => out.push(edge),
                 }
             }
         }
