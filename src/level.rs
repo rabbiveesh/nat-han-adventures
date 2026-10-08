@@ -7,14 +7,32 @@
 //! name: Bathroom Floor
 //! world: 1
 //! intro: Han's line when the level starts.
-//! say: Han's line at the first checkpoint.
-//! say: ...at the second checkpoint (checkpoints are numbered in reading order: top row first, left to right within a row).
+//! deaths: 0
+//! say@13,1: Han's line at the checkpoint in column 13, row 1.
+//! hint@4,1 toot: Jump, then jump AGAIN in midair. That's a toot!
 //! 1: dx=6 dy=0 period=4 kind=tp
 //! ---
 //! ....................
-//! .P......o.o....11...
+//! .P......o.o..C.11...
 //! ####===######.....G#
 //! ```
+//!
+//! Header keys (every line `key: value`; blank lines and `// comments` are skipped):
+//! - `name`, `world` (1..=5: tileset, backdrop, music), `intro` (Han's line at the start).
+//! - `say@<col>,<row>: text`: Han's line when Nat reaches the checkpoint in that cell.
+//!   (Old form, still accepted: plain `say: text` lines go, in order, to the checkpoints that
+//!   have no `say@`; checkpoints are numbered in reading order, top row first.)
+//! - `hint@<col>,<row>[ topic...]: text`: a *hint spot*. Han says the line the first time Nat
+//!   comes within [`HINT_RADIUS`] of that cell; once per level visit (dying doesn't repeat it),
+//!   and again after a restart. Optional [`Topic`] words name the mechanics it teaches; the
+//!   validator ([`validate`]) checks that every mechanic is taught by a hint before the
+//!   player first meets it.
+//! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
+//!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
+//!   adaptive engine can read it.
+//! - `N: ...` (a digit): a moving platform, see below.
+//!
+//! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
 //!
 //! Grid legend:
 //! | char | meaning |
@@ -22,6 +40,7 @@
 //! | `.` or space | empty |
 //! | `#` | solid ground |
 //! | `=` | one-way platform (jump up through it, stand on top; hold Down+Jump does nothing — no drop-through) |
+//! | `_` | grease: solid ground with a slick top. Nat can't brake or jump on it and steers weakly, unless the band is nervous (sweaty grip). See `game::physics` |
 //! | `P` | player start (exactly one). Han spawns with you |
 //! | `o` | golden nugget (the coin) |
 //! | `C` | checkpoint (toilet-paper holder) |
@@ -40,10 +59,27 @@
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is open sky, below is a bottomless pit (death).
+//!
+//! # Splat stains
+//! Death leaves a mark. Splatting on spikes (`^`/`v`) turns that spike tile into a *stain*
+//! ([`Tile::StainUp`]/[`Tile::StainDown`]): safe, and solid on top like `=`. Sinking in `~`
+//! leaves a *stain raft* floating at the surface for a while (at least `game::RAFT_LIFE_FLOOR` s), then it
+//! sinks. Stains last for the rest of the level visit (checkpoints keep them: they're
+//! progress) and are gone after a restart or a reload: they live in the loaded copy of the
+//! level (`game::ActiveLevel`) and as level entities. A *stain pit* is a spike pit too wide to
+//! jump in any mode: you cross it on the stains of your own splats. Falling out of the bottom
+//! of the level leaves nothing (so long gaps are bottomless: no raft can bridge them).
 
 use bevy::prelude::*;
 
+
+pub mod validate;
+
 pub const TILE: f32 = 16.0;
+/// Han says a hint when Nat comes this close (px) to its cell's center.
+pub const HINT_RADIUS: f32 = 2.5 * TILE;
+/// Longest line Han says (intro, checkpoint lines, hints).
+pub const MAX_LINE: usize = 60;
 pub const LEVEL_COUNT: usize = 10;
 
 /// Source of every level, in play order.
@@ -86,12 +122,110 @@ pub enum Tile {
     SpikesUp,
     SpikesDown,
     Liquid,
+    /// Solid ground with a greasy top (`_`).
+    Grease,
+    /// Floor spikes splatted over: safe, solid on top (one-way). Only made at runtime.
+    StainUp,
+    /// Ceiling spikes splatted over: safe, solid on top (one-way). Only made at runtime.
+    StainDown,
 }
 
 impl Tile {
     pub fn is_deadly(self) -> bool {
         matches!(self, Tile::SpikesUp | Tile::SpikesDown | Tile::Liquid)
     }
+
+    /// Blocks from every side (ground, grease).
+    pub fn is_solid(self) -> bool {
+        matches!(self, Tile::Solid | Tile::Grease)
+    }
+
+    /// Solid on top only: you jump up through it and stand on it (`=`, stains).
+    pub fn is_one_way(self) -> bool {
+        matches!(self, Tile::OneWay | Tile::StainUp | Tile::StainDown)
+    }
+
+    /// The stain a splat on this tile leaves, if it's spikes.
+    pub fn stained(self) -> Option<Tile> {
+        match self {
+            Tile::SpikesUp => Some(Tile::StainUp),
+            Tile::SpikesDown => Some(Tile::StainDown),
+            _ => None,
+        }
+    }
+}
+
+/// What a hint spot teaches (the words after `hint@col,row`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Reflect)]
+pub enum Topic {
+    /// The mid-air double jump (`toot`).
+    Toot,
+    /// One-way platforms `=` (`oneway`).
+    OneWay,
+    /// Moving platforms (`platform`).
+    Platform,
+    /// Fly swarms (`fly`).
+    Fly,
+    /// Spray cans (`spray`).
+    Spray,
+    /// Giant walls and Giant Steps (`giant`).
+    Giant,
+    /// Long gaps and the fired-up band (`gap`).
+    Gap,
+    /// Waltz rows and the waltzing band (`waltz`).
+    Waltz,
+    /// Stain pits: splat to build stepping stones (`stain`).
+    Stain,
+    /// Grease (`grease`).
+    Grease,
+    /// Sweaty grip: the nervous band lets Nat brake on grease (`grip`).
+    Grip,
+}
+
+impl Topic {
+    pub const ALL: [Topic; 11] = [
+        Topic::Toot,
+        Topic::OneWay,
+        Topic::Platform,
+        Topic::Fly,
+        Topic::Spray,
+        Topic::Giant,
+        Topic::Gap,
+        Topic::Waltz,
+        Topic::Stain,
+        Topic::Grease,
+        Topic::Grip,
+    ];
+
+    pub fn word(self) -> &'static str {
+        match self {
+            Topic::Toot => "toot",
+            Topic::OneWay => "oneway",
+            Topic::Platform => "platform",
+            Topic::Fly => "fly",
+            Topic::Spray => "spray",
+            Topic::Giant => "giant",
+            Topic::Gap => "gap",
+            Topic::Waltz => "waltz",
+            Topic::Stain => "stain",
+            Topic::Grease => "grease",
+            Topic::Grip => "grip",
+        }
+    }
+
+    pub fn from_word(w: &str) -> Option<Topic> {
+        Topic::ALL.into_iter().find(|t| t.word() == w)
+    }
+}
+
+/// A line of Han's tied to a grid cell (`say@` / `hint@`).
+#[derive(Debug, Clone, PartialEq, Reflect)]
+pub struct Spot {
+    pub col: usize,
+    pub row: usize,
+    pub text: String,
+    /// What it teaches (hints only).
+    pub topics: Vec<Topic>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Reflect)]
@@ -103,6 +237,8 @@ pub enum PlatformKind {
     Duck,
     /// Plunger head going up and down.
     Plunger,
+    /// A stain raft left by a splat in liquid (spawned at runtime, never in level files).
+    Raft,
 }
 
 #[derive(Debug, Clone, PartialEq, Reflect)]
@@ -144,8 +280,15 @@ pub struct Level {
     /// 1..=5: picks tileset, backdrop and music.
     pub world: u8,
     pub intro: String,
-    /// Han's line per checkpoint, in checkpoint order. Missing lines get a generic quip.
+    /// Plain `say:` lines (old form), handed out in order to checkpoints without a `say@`.
+    /// Use [`Level::checkpoint_line`].
     pub says: Vec<String>,
+    /// `say@col,row:` lines: Han's line at the checkpoint in that cell.
+    pub say_at: Vec<Spot>,
+    /// `hint@col,row:` hint spots.
+    pub hints: Vec<Spot>,
+    /// `deaths:` the deaths the design expects (`None`: not declared).
+    pub deaths: Option<u32>,
     pub width: usize,
     pub height: usize,
     /// Row-major, row 0 at the top.
@@ -196,6 +339,27 @@ impl Level {
         self.things.iter().filter(|t| t.kind == ThingKind::Checkpoint)
     }
 
+    /// Han's line for each checkpoint (in checkpoint order): its `say@` line, else the next
+    /// unused plain `say:` line, else `None` (a generic quip).
+    pub fn checkpoint_lines(&self) -> Vec<Option<&str>> {
+        let mut plain = self.says.iter();
+        self.checkpoints()
+            .map(|c| match self.say_at.iter().find(|s| (s.col, s.row) == (c.col, c.row)) {
+                Some(s) => Some(s.text.as_str()),
+                None => plain.next().map(String::as_str),
+            })
+            .collect()
+    }
+
+    /// Han's line at checkpoint number `index`, if the level has one.
+    pub fn checkpoint_line(&self, index: usize) -> Option<&str> {
+        self.checkpoint_lines().get(index).copied().flatten()
+    }
+
+    pub fn has_grease(&self) -> bool {
+        self.tiles.contains(&Tile::Grease)
+    }
+
     pub fn parse(src: &str) -> Result<Level, String> {
         let (header, grid) = src
             .split_once("\n---\n")
@@ -205,6 +369,9 @@ impl Level {
         let mut world = 1u8;
         let mut intro = String::new();
         let mut says = Vec::new();
+        let mut say_at = Vec::new();
+        let mut hints = Vec::new();
+        let mut deaths = None;
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
 
         for (n, line) in header.lines().enumerate() {
@@ -226,6 +393,30 @@ impl Level {
                 }
                 "intro" => intro = value.to_string(),
                 "say" => says.push(value.to_string()),
+                "deaths" => {
+                    deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
+                }
+                k if k.starts_with("say@") || k.starts_with("hint@") => {
+                    let (what, rest) = k.split_once('@').unwrap();
+                    let mut words = rest.split_whitespace();
+                    let at = words.next().unwrap_or("");
+                    let (c, r) = at
+                        .split_once(',')
+                        .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
+                        .ok_or_else(|| format!("expected `{what}@<col>,<row>`, got `{k}`"))?;
+                    let topics = words
+                        .map(|w| Topic::from_word(w).ok_or_else(|| format!("{what}@{at}: unknown topic `{w}`")))
+                        .collect::<Result<Vec<_>, _>>()?;
+                    if what == "say" && !topics.is_empty() {
+                        return Err(format!("say@{at}: checkpoint lines don't take topics"));
+                    }
+                    let spot = Spot { col: c, row: r, text: value.to_string(), topics };
+                    if what == "say" {
+                        say_at.push(spot);
+                    } else {
+                        hints.push(spot);
+                    }
+                }
                 d if d.len() == 1 && d.as_bytes()[0].is_ascii_digit() && d != "0" => {
                     let digit = (d.as_bytes()[0] - b'0') as usize;
                     let (mut dx, mut dy, mut period, mut phase, mut kind) =
@@ -294,6 +485,7 @@ impl Level {
                     '^' => *tile = Tile::SpikesUp,
                     'v' => *tile = Tile::SpikesDown,
                     '~' => *tile = Tile::Liquid,
+                    '_' => *tile = Tile::Grease,
                     'P' => {
                         if start.replace((col, row)).is_some() {
                             return Err("more than one `P`".into());
@@ -336,11 +528,19 @@ impl Level {
             }
         }
 
+        for s in say_at.iter().chain(&hints) {
+            if s.col >= width || s.row >= height {
+                return Err(format!("line at col {} row {} is outside the grid", s.col, s.row));
+            }
+        }
         Ok(Level {
             name: name.ok_or("missing `name:`")?,
             world,
             intro,
             says,
+            say_at,
+            hints,
+            deaths,
             width,
             height,
             tiles,
@@ -372,6 +572,21 @@ mod tests {
         assert_eq!(l.nugget_count(), 1);
         assert_eq!(l.tile_center(0, 2), Vec2::new(8.0, 8.0));
         assert_eq!(l.cell_at(Vec2::new(8.0, 8.0)), (0, 2));
+    }
+
+    #[test]
+    fn parses_spots_deaths_and_grease() {
+        let src = "name: T\ndeaths: 2\nsay: plain\nsay@4,0: at four\nhint@1,0 toot grip: hi there\n---\n.P..C.C.G\n##__#####\n";
+        let l = Level::parse(src).unwrap();
+        assert_eq!(l.deaths, Some(2));
+        assert_eq!(l.tile(2, 1), Tile::Grease);
+        assert!(Tile::Grease.is_solid());
+        assert_eq!(l.hints[0].topics, vec![Topic::Toot, Topic::Grip]);
+        assert_eq!((l.hints[0].col, l.hints[0].row), (1, 0));
+        // say@ goes to its checkpoint; the plain line to the other one.
+        assert_eq!(l.checkpoint_lines(), vec![Some("at four"), Some("plain")]);
+        assert!(Level::parse("name: T\nhint@1,0 bogus: x\n---\nPG\n##\n").is_err());
+        assert!(Level::parse("name: T\nhint@9,9: x\n---\nPG\n##\n").is_err());
     }
 
     #[test]

@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use super::VisualSet;
 use crate::art::{SpriteId, Sprites};
 use crate::game::{ActiveLevel, Groove, LevelEntity, Player, PlayerControl};
-use crate::level::{TILE, Tile};
+use crate::level::TILE;
 use crate::touch::TouchMode;
 
 pub(super) fn plugin(app: &mut App) {
@@ -174,7 +174,7 @@ fn spawn_margins(mut commands: Commands, sprites: Res<Sprites>, active: Res<Acti
         }
     }
     for col in 0..w {
-        if level.tile(col, h - 1) == Tile::Solid {
+        if level.tile(col, h - 1).is_solid() {
             for row in h..h + MARGIN_ROWS {
                 put(col, row);
             }

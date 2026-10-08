@@ -273,6 +273,31 @@ pub fn ground_top(w: u8) -> Vec<Pixels> {
     vec![p]
 }
 
+/// Grease: an oily amber layer with a sheen, dripping down over the world's ground.
+const GREASE_PAL: Palette = &[
+    ('o', hex(0x3a2a10)), // oil, dark
+    ('O', hex(0x8a6a20)), // amber
+    ('y', hex(0xe0c060)), // sheen
+    ('w', hex(0xfff4c8)), // glint
+];
+const GREASE_CAP: &[&str] = &[
+    "oooooooooooooooo",
+    "OyyOOOOwyOOOOyOO",
+    "OOOOyOOOOOOOOOOO",
+    "oOOOoOOOOoOOyOoO",
+    "o.oo.ooo.o.oo..o",
+    "o..o....o.....o.",
+    "...o..........o.",
+];
+
+/// Grease on this world's ground (a GroundTop with the grease cap over the fill).
+pub fn grease(w: u8) -> Vec<Pixels> {
+    let d = &WORLD_DATA[world_index(w)];
+    let mut p = grid(d.fill, d.pal).shade(d.fill_shade);
+    p.blit(&grid(GREASE_CAP, GREASE_PAL), 0, 0);
+    vec![p]
+}
+
 pub fn one_way(w: u8) -> Vec<Pixels> {
     let d = &WORLD_DATA[world_index(w)];
     let mut out = Pixels::new(16, 16);
@@ -369,6 +394,7 @@ pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
     let mut v: Vec<(&'static str, Vec<&'static str>, Palette)> = vec![
         ("WAVE", WAVE.to_vec(), LIQUID_CHARS),
         ("BODY", BODY.to_vec(), LIQUID_CHARS),
+        ("GREASE_CAP", GREASE_CAP.to_vec(), GREASE_PAL),
     ];
     for d in &WORLD_DATA {
         v.push(("fill", d.fill.to_vec(), d.pal));

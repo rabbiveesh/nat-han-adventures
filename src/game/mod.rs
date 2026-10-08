@@ -23,11 +23,14 @@ mod visuals;
 pub use groove::{
     BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, BeatClock, FIRED_UP_SPEED, GIANT_STEPS_GRAVITY,
     GIANT_STEPS_SPEED, Groove, JumpedOnOne, NERVOUS_TIME, OneJumps, WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
-    WALTZ_ONE_LINE_EVERY, WALTZ_ONE_WINDOW, WALTZ_SPRAY_BARS,
+    WALTZ_ONE_LINE_EVERY, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW, WALTZ_SPRAY_BARS,
 };
-pub use hazards::{FLY_PERIOD, FORGIVE, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, spray_on};
+pub use hazards::{
+    FLY_PERIOD, FORGIVE, RAFT_LIFE_FLOOR, RAFT_SINK, RAFT_SINK_DEPTH, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, RaftLife, raft_sink,
+    spray_on,
+};
 pub use platforms::platform_pos;
-pub use han::{DEATH_LINES, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail};
+pub use han::{DEATH_LINES, GRIP_LINE, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail, NERVOUS_LINE};
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{Body, Dead, PlayerControl};
 pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
@@ -214,6 +217,34 @@ pub struct Fly {
 pub struct Spray {
     pub col: usize,
     pub on: bool,
+}
+
+/// A splat stain on what were spikes at (col, row) (the grid in [`ActiveLevel`] already says
+/// [`Tile::StainUp`](crate::level::Tile)/`StainDown`; this entity is for drawing it).
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct Stain {
+    pub col: usize,
+    pub row: usize,
+    pub tile: crate::level::Tile,
+}
+
+/// A stain raft (with a one-tile [`MovingPlatform`] that stays put): floats [`RaftLife::secs`] (at least [`RAFT_LIFE_FLOOR`])
+/// seconds after the splat in liquid that made it, then sinks.
+#[derive(Component, Debug, Clone, Copy, Default, Reflect)]
+#[reflect(Component)]
+pub struct Raft {
+    pub age: f32,
+}
+
+/// A `hint@` spot: Han says `text` the first time Nat comes within
+/// [`HINT_RADIUS`](crate::level::HINT_RADIUS) of `center` (once per level visit).
+#[derive(Component, Debug, Clone, Reflect)]
+#[reflect(Component)]
+pub struct HintSpot {
+    pub center: Vec2,
+    pub text: String,
+    pub said: bool,
 }
 
 fn sync_transforms(mut q: Query<(&Pos, &mut Transform)>) {

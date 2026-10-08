@@ -8,10 +8,10 @@ use bevy::prelude::*;
 
 use super::physics::{Body, Dead};
 use super::{ActiveLevel, GameSet, Han, MovingPlatform, Player, Pos, PrevPos, tuning::*};
-use crate::level::{Level, TILE, Tile};
+use crate::level::{Level, TILE};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(FixedUpdate, follow.in_set(GameSet::Follow));
+    app.add_systems(FixedUpdate, (follow.in_set(GameSet::Follow), nervous_line.in_set(GameSet::Interact)));
 }
 
 /// Han replays the player's position this many fixed steps (at 60 Hz) late.
@@ -35,6 +35,28 @@ pub const DEATH_LINES: &[&str] = &[
     "Happens to the best of us. Mostly to you, Nat.",
     "Nat, you go AROUND the pointy stuff.",
 ];
+
+/// What Han says when the band turns nervous (3+ deaths) on a level with grease: sweaty grip.
+pub const GRIP_LINE: &str = "Band's nervous! Sweaty grip: now you can stop AND jump!";
+/// ...and on a level without grease.
+pub const NERVOUS_LINE: &str = "Band's sweatin' bullets. Slow-mo! Breathe, Nat.";
+
+/// Han's line the moment the band turns nervous.
+fn nervous_line(
+    groove: Res<super::Groove>,
+    active: Res<ActiveLevel>,
+    mut was: Local<crate::audio::Harmony>,
+    mut says: MessageWriter<crate::events::HanSays>,
+) {
+    if groove.harmony == *was {
+        return;
+    }
+    *was = groove.harmony;
+    if groove.grip() {
+        let text = if active.level.has_grease() { GRIP_LINE } else { NERVOUS_LINE };
+        says.write(crate::events::HanSays { text: text.to_string() });
+    }
+}
 
 /// The player's recent path: (position, on ground), oldest first.
 #[derive(Component, Debug, Clone, Default)]
@@ -69,7 +91,7 @@ pub struct HanAnim {
 pub fn behind(level: &Level, at: Vec2, facing: f32) -> Vec2 {
     let p = at - Vec2::new(facing * 18.0, 0.0);
     let (col, row) = level.cell_at(p);
-    if level.tile(col, row) == Tile::Solid { at } else { p }
+    if level.tile(col, row).is_solid() { at } else { p }
 }
 
 /// Half of Han's height: his feet are this far below his position (same box as the player).
@@ -88,7 +110,8 @@ fn support(level: &Level, platforms: &[(Vec2, f32)], at: Vec2, drop: f32) -> Opt
         let (col, row_feet) = level.cell_at(Vec2::new(x, feet + 0.5));
         let (_, row_reach) = level.cell_at(Vec2::new(x, reach));
         for row in row_feet..=row_reach {
-            if matches!(level.tile(col, row), Tile::Solid | Tile::OneWay) {
+            let t = level.tile(col, row);
+            if t.is_solid() || t.is_one_way() {
                 let top = level.tile_center(0, row.max(0) as usize).y + TILE / 2.0;
                 if top <= feet + 0.5 && top >= reach {
                     best = Some(best.map_or(top, |b: f32| b.max(top)));
@@ -157,7 +180,7 @@ fn follow(
         let side = if dx.abs() > 0.5 { dx.signum() } else { -ctl.facing };
         let x = ppos.0.x + side * HAN_MIN_GAP;
         let (col, row) = active.level.cell_at(Vec2::new(x, pos.0.y));
-        if active.level.tile(col, row) != Tile::Solid {
+        if !active.level.tile(col, row).is_solid() {
             pos.0.x = x;
         }
     }

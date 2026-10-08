@@ -43,6 +43,13 @@ pub enum SpriteId {
     SpikesUp,
     /// Ceiling spikes. 16x16, top half.
     SpikesDown,
+    /// Splat stain over floor / ceiling spikes (drawn on top of the spikes). 16x16.
+    StainUp,
+    StainDown,
+    /// Stain raft floating on liquid, bobbing frames. 16x16 (art in the top ~8px).
+    StainRaft,
+    /// Grease on the ground, per world. 16x16, tiles like GroundTop.
+    Grease(u8),
     /// Deadly liquid surface tile (animated ripple) and fill tile, per world tint.
     LiquidTop(u8),
     LiquidFill(u8),
@@ -100,12 +107,13 @@ impl SpriteId {
         use SpriteId::*;
         let mut v = vec![
             PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, Nugget,
-            CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, Fly, SprayCan,
+            CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
+            StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock,
         ];
         for w in tiles::WORLDS {
-            v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w)]);
+            v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
         }
         v
     }
@@ -145,6 +153,10 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         Throne => items::throne(),
         SpikesUp => items::spikes_up(),
         SpikesDown => items::spikes_down(),
+        StainUp => items::stain_up(),
+        StainDown => items::stain_down(),
+        StainRaft => items::stain_raft(),
+        Grease(w) => tiles::grease(w),
         LiquidTop(w) => tiles::liquid_top(w),
         LiquidFill(w) => tiles::liquid_fill(w),
         Fly => items::fly(),
@@ -213,6 +225,7 @@ mod tests {
                 SpriteId::LiquidTop(w),
                 SpriteId::LiquidFill(w),
                 SpriteId::Backdrop(w),
+                SpriteId::Grease(w),
             ] {
                 assert!(all.contains(&id), "{id:?} missing");
             }

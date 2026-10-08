@@ -4,9 +4,10 @@ intro: A pipe maze! I installed it myself. Then lost the map.
 1: dx=0 dy=7 period=5 kind=plunger
 2: dx=0 dy=7 period=5 kind=plunger
 3: dx=0 dy=7 period=5 kind=plunger
-say: Big wall! Toot 5 times for Giant Steps, then up!
-say: Ride the plunger up, or drop down for the easy road.
-say: Plumber's rule: if in doubt, go with the flow.
+deaths: 0
+say@158,10: Big wall! Toot 5 times for Giant Steps, then up!
+say@45,17: Ride the plunger up, or drop down for the easy road.
+say@118,17: Plumber's rule: if in doubt, go with the flow.
 ---
 ##############################################################################################################################################################################################
 #####################################################################################################################################################################.........................

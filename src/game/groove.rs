@@ -13,7 +13,7 @@
 //! | Coltrane ("GIANT STEPS!") | 5 toots in 20s | gravity ×[`GIANT_STEPS_GRAVITY`], run ×[`GIANT_STEPS_SPEED`] | giant walls (6 tiles tall) |
 //! | quartal ("FIRED UP") | 4 quick nuggets | run ×[`FIRED_UP_SPEED`] | long gaps (11 tiles) |
 //! | waltz ("THE BAND WALTZES") | 3 evenly spaced ground jumps | the world dances in 3 (below); jump on ONE ×[`WALTZ_ONE_BOOST`] | waltz rows (spray cans) |
-//! | melodic minor ("NERVOUS") | 3 deaths | game time ×[`NERVOUS_TIME`] (slow motion) | none: an assist |
+//! | melodic minor ("NERVOUS") | 3 deaths | game time ×[`NERVOUS_TIME`] (slow motion); sweaty grip: brakes and jumps on grease ([`Groove::grip`]) | grease chutes |
 //! | + laughing band (tuning medley) | 2 deaths at one checkpoint | landings bounce | none: comedy |
 //!
 //! Giant Steps slows the run so its longer air time doesn't also clear long gaps: each gate
@@ -33,9 +33,10 @@
 //! - **Flies** circle once per bar.
 //! - **Jump on ONE**: a ground jump within ±[`WALTZ_ONE_WINDOW`] s of any downbeat gets
 //!   ×[`WALTZ_ONE_BOOST`] jump speed and a golden sparkle, and every
-//!   [`WALTZ_ONE_LINE_EVERY`]rd one Han calls "ONE-two-three!". The step is a twirl: it spends
-//!   the toot (no double jump out of it), so a ONE jump never reaches higher than a normal
-//!   double jump and the giant walls stay Giant Steps' alone.
+//!   [`WALTZ_ONE_LINE_EVERY`]rd one Han calls "ONE-two-three!". The step is a twirl: its toot
+//!   is a *weak* one ([`WALTZ_ONE_TOOT_SPEED`] instead of `DOUBLE_JUMP_SPEED`), so a ONE jump
+//!   plus toot tops out at ~87 px (ONE apex 437²/2800 ≈ 68 px + 230²/2800 ≈ 19 px, with the
+//!   toot at the very apex), safely under a 6-tile (96 px) giant wall: those stay Giant Steps'.
 //!
 //! Adding a mode: give [`Groove`] the new knob, set it in [`Groove::new`] from the music, and
 //! read it in the physics; nothing else needs to know. [`Groove::tuning`] carries the laughing
@@ -64,6 +65,10 @@ pub const BOUNCE_RESTITUTION: f32 = 0.6;
 pub const BOUNCE_MIN_SPEED: f32 = 150.0;
 /// Waltz: jump speed multiplier of a ground jump on ONE (apex ~4.3 tiles instead of ~3.2).
 pub const WALTZ_ONE_BOOST: f32 = 1.15;
+/// Waltz: upward speed of the weak toot after a jump on ONE (adds ≤ ~19 px). The ONE jump's
+/// apex (×[`WALTZ_ONE_BOOST`]: 437 px/s → ~68 px) plus this stays ≤ ~87 px even with ideal
+/// timing: ≥ 9 px under a 6-tile giant wall (96 px).
+pub const WALTZ_ONE_TOOT_SPEED: f32 = 230.0;
 /// Waltz: how close (seconds, either side) to a downbeat a jump counts as on ONE.
 pub const WALTZ_ONE_WINDOW: f32 = 0.12;
 /// Waltz: every this many ONE jumps, Han calls the step.
@@ -193,6 +198,12 @@ impl Groove {
 
     pub fn waltz(&self) -> bool {
         self.harmony == Harmony::Waltz
+    }
+
+    /// Sweaty grip: the nervous band (melodic minor, the 3+ deaths mood) lets Nat brake and
+    /// jump on grease.
+    pub fn grip(&self) -> bool {
+        self.harmony == Harmony::MelodicMinor
     }
 
     /// Max fall speed multiplier.

@@ -1,5 +1,7 @@
-//! Han's speech bubble: a world-space bubble above the [`Han`] entity showing the latest
-//! [`HanSays`] line with a typewriter reveal. A newer line replaces the old one.
+//! Han's speech bubble: a world-space bubble above the [`Han`] entity showing his
+//! [`HanSays`] lines with a typewriter reveal. A newer line replaces the old one once that has
+//! been readable for [`MIN_READ`] after its reveal (lines queue meanwhile, at most
+//! [`QUEUE_MAX`]: a hint right after a checkpoint line doesn't wipe it).
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -30,6 +32,10 @@ const Z: f32 = 10.0;
 const EDGE_MARGIN: f32 = 4.0;
 /// A line said while there's no Han (e.g. the same frame his level spawns) waits this long for him.
 const WAIT_FOR_HAN: f32 = 0.5;
+/// A line stays at least this long after it's fully revealed before the next one replaces it.
+pub const MIN_READ: f32 = 1.0;
+/// Lines waiting their turn (the oldest waiting ones are dropped beyond this).
+pub const QUEUE_MAX: usize = 2;
 
 pub fn plugin(app: &mut App) {
     app.add_systems(Update, (receive, spawn_pending, typewriter).chain())
@@ -44,7 +50,7 @@ pub fn plugin(app: &mut App) {
 
 #[derive(Resource)]
 struct Pending {
-    text: String,
+    queue: std::collections::VecDeque<String>,
     wait: f32,
 }
 
@@ -112,10 +118,23 @@ fn revealed(lines: &[String], n: usize) -> String {
     out
 }
 
-fn receive(mut commands: Commands, mut reader: MessageReader<HanSays>) {
-    if let Some(msg) = reader.read().last() {
-        commands.insert_resource(Pending { text: msg.text.clone(), wait: WAIT_FOR_HAN });
+fn receive(mut commands: Commands, pending: Option<ResMut<Pending>>, mut reader: MessageReader<HanSays>) {
+    let new: Vec<String> = reader.read().map(|m| m.text.clone()).collect();
+    if new.is_empty() {
+        return;
     }
+    let mut queue = pending.map(|mut p| std::mem::take(&mut p.queue)).unwrap_or_default();
+    queue.extend(new);
+    while queue.len() > QUEUE_MAX {
+        queue.pop_front();
+    }
+    commands.insert_resource(Pending { queue, wait: WAIT_FOR_HAN });
+}
+
+/// Still reading the bubble on screen?
+fn reading(b: &SpeechBubble) -> bool {
+    let total: usize = b.lines.iter().map(|l| l.chars().count()).sum();
+    b.age < total as f32 / REVEAL_CPS + MIN_READ
 }
 
 fn spawn_pending(
@@ -123,7 +142,7 @@ fn spawn_pending(
     pending: Option<ResMut<Pending>>,
     time: Res<Time>,
     han: Query<(), With<Han>>,
-    old: Query<Entity, With<SpeechBubble>>,
+    old: Query<(Entity, &SpeechBubble)>,
     font: Option<Res<UiFont>>,
     window: Option<Single<&Window, With<PrimaryWindow>>>,
 ) {
@@ -135,11 +154,17 @@ fn spawn_pending(
         }
         return;
     }
-    commands.remove_resource::<Pending>();
-    for e in &old {
+    if old.iter().any(|(_, b)| reading(b)) {
+        return;
+    }
+    let Some(text) = pending.queue.pop_front() else {
+        commands.remove_resource::<Pending>();
+        return;
+    };
+    for (e, _) in &old {
         commands.entity(e).despawn();
     }
-    let lines = wrap(&pending.text, WRAP);
+    let lines = wrap(&text, WRAP);
     if lines.is_empty() {
         return;
     }

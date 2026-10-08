@@ -486,6 +486,65 @@ fn platform(rows: &[&str], pal: Palette) -> Vec<Pixels> {
 pub fn platform_tp() -> Vec<Pixels> {
     platform(PLATFORM_TP, TPROLL_PAL)
 }
+// ---------------------------------------------------------------- splat stains
+
+/// Nat's browns: a splat stain is a bit of Nat (cartoon mud, really).
+const STAIN_PAL: Palette = &[
+    ('k', hex(0x2b1608)), // outline
+    ('B', hex(0x6b3e1c)), // shade
+    ('b', hex(0x9a5b2a)), // brown
+    ('h', hex(0xc98a4b)), // shine
+];
+
+/// A splat over floor spikes: a flat-topped blob you can stand on, dripping between the
+/// bristles (the spike tile underneath stays drawn).
+const STAIN_UP: &[&str] = &[
+    "kkkkkkkkkkkkkkkk",
+    "khhbbbhhbbbbhhbk",
+    "kbbbbbbbbbbbbbbk",
+    "kbBbbbbbBbbbbbbk",
+    "kbbbbBbbbbbbBbbk",
+    "kBbbbbbbbbbbbbBk",
+    ".kbbBbbbbbBbbbk.",
+    ".kBbbkbbbbkbbBk.",
+    "..kbk.kbbk.kbk..",
+    "..kbk..kk..kBk..",
+    "...k........k...",
+];
+
+/// A stain raft: a brown blob bobbing on the surface (art in the top 8 rows, like platforms).
+const STAIN_RAFT: &[&str] = &[
+    "..kkkkkkkkkkkk..",
+    ".khhhbbbbbhhbbk.",
+    "kbbbbbbBbbbbbbbk",
+    "kbBbbbbbbbbBbbbk",
+    "kBbbBbbbbbbbbBbk",
+    ".kBBBBBBBBBBBBk.",
+    "..kkkkkkkkkkkk..",
+];
+
+pub fn stain_up() -> Vec<Pixels> {
+    let mut out = Pixels::new(16, 16);
+    out.blit(&grid(STAIN_UP, STAIN_PAL), 0, 0);
+    vec![out]
+}
+
+pub fn stain_down() -> Vec<Pixels> {
+    stain_up().iter().map(flip_y).collect()
+}
+
+/// Two frames: bobbing one pixel.
+pub fn stain_raft() -> Vec<Pixels> {
+    let g = grid(STAIN_RAFT, STAIN_PAL);
+    (0..2)
+        .map(|k| {
+            let mut out = Pixels::new(16, 16);
+            out.blit(&g, 0, k);
+            out
+        })
+        .collect()
+}
+
 pub fn platform_duck() -> Vec<Pixels> {
     platform(PLATFORM_DUCK, DUCK_PAL)
 }
@@ -579,6 +638,8 @@ pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
         ("PLATFORM_TP", PLATFORM_TP.to_vec(), TPROLL_PAL),
         ("PLATFORM_DUCK", PLATFORM_DUCK.to_vec(), DUCK_PAL),
         ("PLATFORM_PLUNGER", PLATFORM_PLUNGER.to_vec(), PLUNGER_PAL),
+        ("STAIN_UP", STAIN_UP.to_vec(), STAIN_PAL),
+        ("STAIN_RAFT", STAIN_RAFT.to_vec(), STAIN_PAL),
     ];
     for g in NUGGET {
         v.push(("NUGGET", g.to_vec(), GOLD_PAL));

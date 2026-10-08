@@ -1,12 +1,23 @@
 //! Hand-rolled player physics: tile AABB collision (X then Y) against the level grid, one-way
 //! tiles and moving platforms; coyote time, jump buffering, variable jump height, the toot.
 //! The music's [`Groove`] scales gravity and run speed, can make landings bounce, and in the
-//! waltz boosts a ground jump on ONE (which spends the toot).
+//! waltz boosts a ground jump on ONE (whose toot is then a weak one).
+//!
+//! # Grease
+//! Standing on grease (`_`, any grease tile under Nat's feet) Nat slips: no braking (ground
+//! decel ×[`GREASE_DECEL`], i.e. none: he keeps sliding at his speed, and pushing the other way
+//! does nothing), weak steering (ground accel ×[`GREASE_STEER`]), and no jumping off it (no
+//! ground jump, no coyote jump after sliding off, no toot from the ground, no laughing-band
+//! bounce). His feet are back to normal the moment he's in the air (a toot after sliding off a
+//! ledge works). **Sweaty grip**: while the band is nervous ([`Groove::grip`], the 3+ deaths
+//! mood) grease is just ground.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
-use super::groove::{BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST};
+use super::groove::{
+    BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
+};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
@@ -18,6 +29,10 @@ pub(super) fn plugin(app: &mut App) {
 
 /// Landing faster than this (px/s) writes [`Landed`].
 pub const LAND_EVENT_SPEED: f32 = 100.0;
+/// Ground deceleration on grease (×[`GROUND_DECEL`]): none, you keep sliding.
+pub const GREASE_DECEL: f32 = 0.0;
+/// Ground acceleration on grease (×[`GROUND_ACCEL`]): weak steering.
+pub const GREASE_STEER: f32 = 0.2;
 
 const EPS: f32 = 0.01;
 /// Slack when deciding whether feet were above a one-way surface last step.
@@ -61,12 +76,32 @@ pub struct PlayerControl {
     pub cut_armed: bool,
     /// In the air from a laughing-band landing bounce: still counts as grounded for jumping.
     pub bouncing: bool,
+    /// The toot left after a waltz jump on ONE: a weak one ([`WALTZ_ONE_TOOT_SPEED`]).
+    pub weak_toot: bool,
+    /// Standing on grease (as of the last step's landing check).
+    pub on_grease: bool,
 }
 
 impl Default for PlayerControl {
     fn default() -> Self {
-        Self { facing: 1.0, coyote: 0.0, buffer: 0.0, has_toot: true, cut_armed: false, bouncing: false }
+        Self {
+            facing: 1.0,
+            coyote: 0.0,
+            buffer: 0.0,
+            has_toot: true,
+            cut_armed: false,
+            bouncing: false,
+            weak_toot: false,
+            on_grease: false,
+        }
     }
+}
+
+/// Is any grease under the feet of a box centered at `pos` (half extents `half`)?
+pub(super) fn grease_underfoot(level: &Level, pos: Vec2, half: Vec2) -> bool {
+    let j = idx(pos.y - half.y - 0.5);
+    let (xs, _) = cells(pos - half, pos + half);
+    xs.into_iter().any(|i| tile_at(level, i, j) == Tile::Grease)
 }
 
 /// The player is splatted; respawns when `remaining` runs out. Frozen meanwhile.
@@ -127,20 +162,27 @@ fn player_step(
         ctl.facing = axis;
     }
     let target = axis * RUN_SPEED * groove.speed_scale;
+    // Slipping on grease (no sweaty grip): can't brake, steers weakly, can't jump.
+    let slipping = body.on_ground && ctl.on_grease && !groove.grip();
     let accel = groove.speed_scale
         * if !body.on_ground {
             AIR_ACCEL
         } else if axis == 0.0 || axis * body.vel.x < 0.0 {
-            GROUND_DECEL
+            GROUND_DECEL * if slipping { GREASE_DECEL } else { 1.0 }
         } else {
-            GROUND_ACCEL
+            GROUND_ACCEL * if slipping { GREASE_STEER } else { 1.0 }
         };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
 
     // --- Jumping.
-    if body.on_ground || ctl.bouncing {
+    if slipping {
+        ctl.coyote = 0.0;
+        ctl.has_toot = true;
+        ctl.weak_toot = false;
+    } else if body.on_ground || ctl.bouncing {
         ctl.coyote = COYOTE_TIME;
         ctl.has_toot = true;
+        ctl.weak_toot = false;
     } else {
         ctl.coyote -= dt;
     }
@@ -153,9 +195,9 @@ fn player_step(
     if ctl.buffer > 0.0 && ctl.coyote > 0.0 {
         body.vel.y = JUMP_SPEED;
         if groove.on_the_one() {
-            // A waltz step on ONE: higher, golden, and it spends the toot.
+            // A waltz step on ONE: higher, golden, and its toot is a weak one.
             body.vel.y *= WALTZ_ONE_BOOST;
-            ctl.has_toot = false;
+            ctl.weak_toot = true;
             on_one.write(JumpedOnOne { pos: pos.0 });
         }
         ctl.buffer = 0.0;
@@ -165,9 +207,10 @@ fn player_step(
         body.on_ground = false;
         body.riding = None;
         jumped.write(Jumped { pos: pos.0, double: false });
-    } else if pressed && ctl.has_toot {
-        body.vel.y = DOUBLE_JUMP_SPEED;
+    } else if pressed && ctl.has_toot && !slipping {
+        body.vel.y = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
         ctl.has_toot = false;
+        ctl.weak_toot = false;
         ctl.buffer = 0.0;
         ctl.cut_armed = true;
         jumped.write(Jumped { pos: pos.0, double: true });
@@ -200,7 +243,7 @@ fn player_step(
         let (xs, ys) = cells(pos.0 - half, pos.0 + half);
         for j in ys {
             for i in xs.clone() {
-                if tile_at(level, i, j) != Tile::Solid {
+                if !tile_at(level, i, j).is_solid() {
                     continue;
                 }
                 if dx > 0.0 {
@@ -226,16 +269,16 @@ fn player_step(
                 let tile = tile_at(level, i, j);
                 let top = (j + 1) as f32 * TILE;
                 match tile {
-                    Tile::Solid if dy < 0.0 => {
+                    t if t.is_solid() && dy < 0.0 => {
                         pos.0.y = pos.0.y.max(top + half.y);
                         ground = true;
                     }
-                    Tile::Solid => {
+                    t if t.is_solid() => {
                         pos.0.y = pos.0.y.min(j as f32 * TILE - half.y);
                         body.vel.y = body.vel.y.min(0.0);
                     }
-                    Tile::OneWay
-                        if body.vel.y <= 0.0
+                    t if t.is_one_way()
+                        && body.vel.y <= 0.0
                             && bottom_before - carry.y >= top - ONE_WAY_SLACK
                             && pos.0.y - half.y < top =>
                     {
@@ -265,15 +308,20 @@ fn player_step(
             }
         }
     }
+    let on_grease = ground && riding.is_none() && grease_underfoot(level, pos.0, half);
+    ctl.on_grease = on_grease;
     if ground {
         body.vel.y = 0.0;
         if !was_on_ground && fall_speed > LAND_EVENT_SPEED {
             landed.write(Landed { pos: pos.0, speed: fall_speed });
         }
         ctl.has_toot = true;
+        ctl.weak_toot = false;
         ctl.bouncing = false;
         // The laughing band: spring back up a little (lower each time, until it dies out).
-        if groove.bounce && !was_on_ground && fall_speed > BOUNCE_MIN_SPEED {
+        // Grease doesn't bounce (unless you've got grip): it would be a jump off grease.
+        let slick = on_grease && !groove.grip();
+        if groove.bounce && !slick && !was_on_ground && fall_speed > BOUNCE_MIN_SPEED {
             body.vel.y = (fall_speed * BOUNCE_RESTITUTION).min(BOUNCE_SPEED);
             ctl.bouncing = true;
             ground = false;
