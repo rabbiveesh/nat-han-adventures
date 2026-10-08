@@ -137,12 +137,15 @@ fn director(ed: &mut Editor, ui: &mut egui::Ui) {
             ed.game.holding().map(|(_, s)| format!(" (held {s:.0}s)")).unwrap_or_default()
         };
         ui.label(format!("→ {}{forced}{at}", harmony_label(harmony)));
-        let g = Groove::new(Filters { harmony, just_intonation: laughing });
+        let mut g = Groove::new(Filters { harmony, just_intonation: laughing });
+        g.phrase = if ed.player.playing { st.medley_phrase } else { None };
         let mut phys = format!("physics: gravity ×{:.2} · run ×{:.2}", g.gravity_scale, g.speed_scale);
         if g.time_scale != 1.0 {
             phys += &format!(" · time ×{:.2}", g.time_scale);
         }
-        if g.bounce {
+        if let Some(n) = g.nudge() {
+            phys += &format!(" · {}", n.label().to_lowercase());
+        } else if g.bounce {
             phys += " · bouncy";
         }
         ui.label(egui::RichText::new(phys).color(TEXT_DIM));

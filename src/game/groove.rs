@@ -14,7 +14,7 @@
 //! | quartal ("FIRED UP") | 4 quick nuggets | run ×[`FIRED_UP_SPEED`] | long gaps (11 tiles) |
 //! | waltz ("THE BAND WALTZES") | 3 evenly spaced ground jumps | the world dances in 3 (below); jump on ONE ×[`WALTZ_ONE_BOOST`] | waltz rows (spray cans) |
 //! | melodic minor ("NERVOUS") | 3 deaths | game time ×[`NERVOUS_TIME`] (slow motion); sweaty grip: brakes and jumps on grease ([`Groove::grip`]) | grease chutes |
-//! | + laughing band (tuning medley) | 2 deaths at one checkpoint | landings bounce | none: comedy |
+//! | + laughing band (tuning medley) | 2 deaths at one checkpoint | landings bounce; each phrase's tuning nudges (below) | none: comedy |
 //!
 //! Giant Steps slows the run so its longer air time doesn't also clear long gaps: each gate
 //! opens in exactly one mode (`tests/levels.rs` checks it).
@@ -38,9 +38,36 @@
 //!   plus toot tops out at ~87 px (ONE apex 437²/2800 ≈ 68 px + 230²/2800 ≈ 19 px, with the
 //!   toot at the very apex), safely under a 6-tile (96 px) giant wall: those stay Giant Steps'.
 //!
+//! # The laughing band: a nudge per phrase
+//! The laughing band plays a medley of tunings, a different one every 4-bar phrase
+//! (`crate::audio::tuning::Medley`), always a bit drunk on top. The audio plugin writes the
+//! phrase sounding into [`Groove::phrase`] (the same pick as `NowPlaying::tuning_now`) and the
+//! drunk pitch wobble into [`Groove::sway`] every frame, and each phrase nudges the physics a
+//! little ([`Groove::nudge`]; the HUD's groove badge says what it does, the band readout
+//! gives its nickname):
+//!
+//! | phrase | nickname | badge | nudge |
+//! |---|---|---|---|
+//! | just intonation | SOBER FOR A SEC | NO BOUNCE | no bounce, no sway, the camera stops giggling |
+//! | harmonic series | OVERTONES! | BIG TOOTS | the toot is up to ×11/8 ([`Groove::toot_speed`]) |
+//! | 7-TET | SEASICK | SLIPPERY LANDINGS | slippery landings ([`SEASICK_DECEL`]), the camera rolls |
+//! | Carlos alpha | MELTING | TINY JUMPS | Nat shrinks to [`MELTING_SIZE`], jumps ×[`MELTING_JUMP`] |
+//! | Bohlen–Pierce | ALIEN | HEAVY BEATS | gravity pulses in threes ([`Groove::gravity_now`]) |
+//! | (all but just) | | run speed staggers down to ×(1 − [`DRUNK_SWAY`]) with the pitch wobble |
+//!
+//! Small, and never unfair: none of them opens a band gate or closes a way through.
+//! - The harmonic toot only ever reaches the apex a perfectly timed normal toot would from
+//!   the same moment, sooner, so it lands sooner: no higher, no farther (this module's tests).
+//! - The drunk sway only slows Nat (any faster and a fired-up dash gets through a waltz row),
+//!   and its slowest is still above the validator's human margin (90% of top speed).
+//! - The melting jump and the alien gravity only take reach away (anything that adds some
+//!   opens a gate somewhere: the margins are a few px), and every level stays beatable with
+//!   each of them in force all along ([`crate::level::validate::Physics::laughing`],
+//!   `tests/levels.rs`). They're a phrase long anyway.
+//! - Grip wins over the slippery landings, as it does over the bounce.
+//!
 //! Adding a mode: give [`Groove`] the new knob, set it in [`Groove::new`] from the music, and
-//! read it in the physics; nothing else needs to know. [`Groove::tuning`] carries the laughing
-//! band's tuning so physics can later follow the medley phrase by phrase.
+//! read it in the physics; nothing else needs to know.
 
 use std::f32::consts::TAU;
 
@@ -76,6 +103,28 @@ pub const WALTZ_ONE_LINE_EVERY: u32 = 3;
 pub const WALTZ_ONE_LINE: &str = "ONE-two-three!";
 /// Waltz: spray cans fire on the big ONE, the downbeat of every this many bars.
 pub const WALTZ_SPRAY_BARS: u32 = 2;
+/// Laughing band, harmonic-series phrase ("OVERTONES!"): the toot's most, ×its own speed.
+pub const OVERTONE_TOOT: f32 = 11.0 / 8.0;
+/// Laughing band, 7-TET phrase ("SEASICK"): ground braking ×this just after a landing...
+pub const SEASICK_DECEL: f32 = 0.5;
+/// ...for this long (s).
+pub const SEASICK_SECS: f32 = 0.25;
+/// 7-TET: the camera rolls this much (radians, either way) at [`SEASICK_ROLL_HZ`].
+pub const SEASICK_ROLL: f32 = 0.026;
+pub const SEASICK_ROLL_HZ: f32 = 0.35;
+/// Laughing band, Carlos alpha phrase ("MELTING"): Nat's size (drawn)...
+pub const MELTING_SIZE: f32 = 0.85;
+/// ...and ground jump speed ×this (apex ×0.9).
+pub const MELTING_JUMP: f32 = 0.95;
+/// Laughing band, Bohlen–Pierce phrase ("ALIEN"): gravity is up to ×(1 + this) on every
+/// third beat of the phrase, easing off through the beat. (Much more, and a validated jump
+/// falls short: ×1.08 closes three levels.)
+pub const ALIEN_PULSE: f32 = 0.05;
+/// Beats per alien gravity pulse (the tritave's 3).
+pub const ALIEN_EVERY: u32 = 3;
+/// Laughing band (all but the sober phrase): run speed staggers down to ×(1 − this) and back
+/// with the pitch wobble (never faster than sober).
+pub const DRUNK_SWAY: f32 = 0.08;
 
 /// Where the music is: bar (counted from the start of the version playing), beat in the bar,
 /// phase in the beat. Written every frame by the audio plugin; headless tests set it with
@@ -139,10 +188,16 @@ pub struct Groove {
     pub time_scale: f32,
     /// Landings spring Nat back up a little.
     pub bounce: bool,
-    /// The tuning the band plays in ([`Tuning::Medley`] for the laughing band). Physics don't
-    /// read it yet.
+    /// The tuning the band plays in ([`Tuning::Medley`] for the laughing band).
     #[reflect(ignore)]
     pub tuning: Tuning,
+    /// The laughing band's phrase: the medley's tuning sounding now ([`Tuning::Just`], ...),
+    /// `None` when the band isn't laughing. Written every frame like [`Groove::clock`] (and,
+    /// like it, not part of equality). See [`Groove::nudge`].
+    #[reflect(ignore)]
+    pub phrase: Option<Tuning>,
+    /// The medley's drunk pitch wobble now, -1..1 (sharpest at 1). Written every frame.
+    pub sway: f32,
     /// Where the music is. Not part of equality: it says when, not how, the physics bend.
     pub clock: BeatClock,
     /// Sweaty grip from the death count (3+ deaths this level), whatever the band plays: a
@@ -175,6 +230,8 @@ impl Groove {
             time_scale: 1.0,
             bounce: filters.just_intonation,
             tuning: if filters.just_intonation { Tuning::Medley } else { Tuning::Equal },
+            phrase: None,
+            sway: 0.0,
             clock: BeatClock::default(),
             nervous: false,
         };
@@ -217,6 +274,89 @@ impl Groove {
         self.gravity_scale.sqrt()
     }
 
+    /// The same groove in the laughing band's `phrase` (tests; the audio plugin writes it).
+    pub fn in_phrase(self, phrase: Tuning) -> Self {
+        Groove { phrase: Some(phrase), ..self }
+    }
+
+    /// The laughing band's phrase nudging the physics now, if any (see the module docs).
+    pub fn nudge(&self) -> Option<Nudge> {
+        if !self.bounce {
+            return None;
+        }
+        Nudge::of(self.phrase?)
+    }
+
+    /// Landings bounce: the laughing band, unless it's sobered up for a phrase.
+    pub fn bouncy(&self) -> bool {
+        self.bounce && self.nudge() != Some(Nudge::Sober)
+    }
+
+    /// Drunk: the run speed sways with the pitch wobble (the laughing band, not sober).
+    pub fn drunk(&self) -> bool {
+        self.bouncy()
+    }
+
+    /// Nat's run speed multiplier now: [`Groove::speed_scale`] and the drunk sway.
+    pub fn run_scale(&self) -> f32 {
+        let sway = if self.drunk() { 1.0 - DRUNK_SWAY * (1.0 - self.sway.clamp(-1.0, 1.0)) / 2.0 } else { 1.0 };
+        self.speed_scale * sway
+    }
+
+    /// Nat's gravity multiplier now: [`Groove::gravity_scale`] and the alien pulse (on every
+    /// [`ALIEN_EVERY`]rd beat of the phrase, heaviest on the beat, easing off through it).
+    pub fn gravity_now(&self) -> f32 {
+        if self.nudge() != Some(Nudge::Alien) {
+            return self.gravity_scale;
+        }
+        let beat = self.clock.bar * self.clock.beats_per_bar as u32 + self.clock.beat as u32;
+        let phrase_beats = crate::audio::tuning::MEDLEY_PHRASE_BEATS as u32;
+        let pulse = if (beat % phrase_beats).is_multiple_of(ALIEN_EVERY) {
+            ALIEN_PULSE * (1.0 - self.clock.phase.clamp(0.0, 1.0))
+        } else {
+            0.0
+        };
+        self.gravity_scale * (1.0 + pulse)
+    }
+
+    /// Nat's ground jump speed multiplier (melting: lower).
+    pub fn jump_scale(&self) -> f32 {
+        if self.nudge() == Some(Nudge::Melting) { MELTING_JUMP } else { 1.0 }
+    }
+
+    /// Nat's drawn size (melting: smaller).
+    pub fn nat_size(&self) -> f32 {
+        if self.nudge() == Some(Nudge::Melting) { MELTING_SIZE } else { 1.0 }
+    }
+
+    /// Ground braking multiplier `since_landing` seconds after Nat landed (seasick: slippery
+    /// for a moment; grip wins).
+    pub fn landing_decel(&self, since_landing: f32) -> f32 {
+        if self.nudge() == Some(Nudge::Seasick) && !self.grip() && since_landing < SEASICK_SECS {
+            SEASICK_DECEL
+        } else {
+            1.0
+        }
+    }
+
+    /// Upward speed of a toot of speed `base` (the toot or the waltz's weak one) by Nat rising
+    /// at `vy` (px/s, up; the physics pass the rise he'd have had without the jump cut that
+    /// letting go to toot makes: holding on, he'd also be higher, so the bound below holds). Normally `base`; in the overtones phrase up to ×[`OVERTONE_TOOT`],
+    /// but never past the apex a toot timed at the top of the rise would reach
+    /// (`vy² + base²` of kinetic energy, give or take a step): it gets there sooner, so it
+    /// also lands sooner. A
+    /// falling Nat (or one whose rise is spent) gets `base`.
+    pub fn toot_speed(&self, base: f32, vy: f32) -> f32 {
+        if self.nudge() != Some(Nudge::Overtones) {
+            return base;
+        }
+        // (Less a step's worth of gravity: a real toot lands on a 60 Hz step, a step short of
+        // the exact top at best.)
+        let step = crate::game::tuning::GRAVITY * self.gravity_now() / 60.0;
+        let rise = (vy - step).max(0.0);
+        (rise * rise + base * base).sqrt().min(base * OVERTONE_TOOT).max(base)
+    }
+
     /// Waltz: are the spray cans firing (beat ONE of the big ONE's bar)?
     pub fn waltz_spray_on(&self) -> bool {
         self.clock.beat == 0 && self.clock.bar.is_multiple_of(WALTZ_SPRAY_BARS)
@@ -245,6 +385,57 @@ impl Groove {
     /// Fly orbits per second (`normal_period`: seconds per orbit outside the waltz).
     pub fn fly_rate(&self, normal_period: f32) -> f32 {
         if self.waltz() { 1.0 / self.clock.bar_secs().max(0.1) } else { 1.0 / normal_period }
+    }
+}
+
+/// What the laughing band's phrase does to the physics ([`Groove::nudge`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Nudge {
+    /// Just intonation: no bounce, no sway.
+    Sober,
+    /// The harmonic series: a stronger toot.
+    Overtones,
+    /// 7-TET: slippery landings, the camera rolls.
+    Seasick,
+    /// Carlos alpha: Nat shrinks, lower jumps.
+    Melting,
+    /// Bohlen–Pierce: gravity pulses in threes.
+    Alien,
+}
+
+impl Nudge {
+    /// The nudge of a medley phrase's tuning.
+    pub fn of(phrase: Tuning) -> Option<Nudge> {
+        Some(match phrase {
+            Tuning::Just => Nudge::Sober,
+            Tuning::Harmonic => Nudge::Overtones,
+            Tuning::Tet7 => Nudge::Seasick,
+            Tuning::CarlosAlpha => Nudge::Melting,
+            Tuning::BohlenPierce => Nudge::Alien,
+            Tuning::Equal | Tuning::Drunk | Tuning::Medley => return None,
+        })
+    }
+
+    /// What it does, in plain words (the HUD's groove badge).
+    pub fn physics(self) -> &'static str {
+        match self {
+            Nudge::Sober => "NO BOUNCE",
+            Nudge::Overtones => "BIG TOOTS",
+            Nudge::Seasick => "SLIPPERY LANDINGS",
+            Nudge::Melting => "TINY JUMPS",
+            Nudge::Alien => "HEAVY BEATS",
+        }
+    }
+
+    /// Its nickname (the HUD's band readout).
+    pub fn label(self) -> &'static str {
+        match self {
+            Nudge::Sober => "SOBER FOR A SEC",
+            Nudge::Overtones => "OVERTONES!",
+            Nudge::Seasick => "SEASICK",
+            Nudge::Melting => "MELTING",
+            Nudge::Alien => "ALIEN",
+        }
     }
 }
 
@@ -289,5 +480,103 @@ fn call_the_step(
         if count.0.is_multiple_of(WALTZ_ONE_LINE_EVERY) {
             says.write(crate::events::HanSays { text: WALTZ_ONE_LINE.to_string() });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::tuning::{DOUBLE_JUMP_SPEED, GRAVITY, JUMP_SPEED};
+
+    fn laughing(phrase: Tuning) -> Groove {
+        Groove::new(Filters { harmony: Harmony::Original, just_intonation: true }).in_phrase(phrase)
+    }
+
+    #[test]
+    fn each_phrase_has_its_nudge() {
+        assert_eq!(Groove::default().in_phrase(Tuning::Tet7).nudge(), None, "not laughing: no nudge");
+        assert_eq!(Groove::new(Filters { harmony: Harmony::Original, just_intonation: true }).nudge(), None);
+        let nudges: Vec<_> =
+            crate::audio::tuning::MEDLEY_TUNINGS.iter().map(|&t| laughing(t).nudge().map(Nudge::label)).collect();
+        assert_eq!(
+            nudges,
+            [Some("SOBER FOR A SEC"), Some("OVERTONES!"), Some("SEASICK"), Some("MELTING"), Some("ALIEN")]
+        );
+        // Sober: no bounce, no sway. The rest bounce and sway.
+        let sober = Groove { sway: 1.0, ..laughing(Tuning::Just) };
+        assert!(!sober.bouncy() && sober.run_scale() == 1.0);
+        let drunk = Groove { sway: 1.0, ..laughing(Tuning::Tet7) };
+        assert!(drunk.bouncy());
+        assert_eq!(drunk.run_scale(), 1.0, "never faster than sober");
+        assert!((Groove { sway: -1.0, ..drunk }.run_scale() - (1.0 - DRUNK_SWAY)).abs() < 1e-6);
+        // Melting: smaller, lower jumps.
+        assert_eq!((laughing(Tuning::CarlosAlpha).nat_size(), laughing(Tuning::CarlosAlpha).jump_scale()), (MELTING_SIZE, MELTING_JUMP));
+        // Seasick: slippery for a moment after landing; grip wins.
+        let sea = laughing(Tuning::Tet7);
+        assert_eq!((sea.landing_decel(0.1), sea.landing_decel(SEASICK_SECS)), (SEASICK_DECEL, 1.0));
+        assert_eq!(Groove { nervous: true, ..sea }.landing_decel(0.1), 1.0);
+        assert_eq!(laughing(Tuning::Harmonic).landing_decel(0.1), 1.0);
+    }
+
+    #[test]
+    fn alien_gravity_pulses_in_threes() {
+        let g = laughing(Tuning::BohlenPierce);
+        let at = |beat: f64| g.at(BeatClock::at(beat, 0.5, 4)).gravity_now();
+        let pulses: Vec<bool> = (0..20).map(|b| at(b as f64) > 1.0).collect();
+        let want: Vec<bool> = (0..20).map(|b: u32| (b % 16).is_multiple_of(ALIEN_EVERY)).collect();
+        assert_eq!(pulses, want, "every third beat of the phrase (a new phrase starts the count)");
+        assert!((at(3.0) - (1.0 + ALIEN_PULSE)).abs() < 1e-6, "heaviest on the beat");
+        assert!(at(3.5) < at(3.0) && at(3.5) > 1.0, "easing off through it");
+        assert_eq!(laughing(Tuning::Harmonic).at(BeatClock::at(3.0, 0.5, 4)).gravity_now(), 1.0);
+        let gs = Groove::new(Filters { harmony: Harmony::Coltrane, just_intonation: true }).in_phrase(Tuning::BohlenPierce);
+        assert!((gs.gravity_now() - GIANT_STEPS_GRAVITY * (1.0 + ALIEN_PULSE)).abs() < 1e-6, "on top of the mode's");
+    }
+
+    /// One ground jump (jump held) with a toot at frame `toot` (Nat's own step order: the toot
+    /// sets the speed, then gravity, then the move): the height every frame.
+    fn arc(g: &Groove, gravity: f32, toot: usize) -> Vec<f32> {
+        let dt = 1.0 / 60.0;
+        let (mut y, mut vy) = (0.0f32, JUMP_SPEED);
+        let mut out = Vec::new();
+        for f in 0..240 {
+            if f == toot {
+                vy = g.toot_speed(DOUBLE_JUMP_SPEED, vy);
+            }
+            vy -= gravity * dt;
+            y += vy * dt;
+            out.push(y);
+            if y < -400.0 {
+                break;
+            }
+        }
+        out
+    }
+
+    /// The overtones' toot: stronger, but it never reaches anything a normal toot can't. For
+    /// every toot time and every height, it's no higher than the best normal toot's apex and
+    /// it's never still at a height later than some normal toot is: no higher, no farther
+    /// (horizontal reach is the time spent at or above a height, running).
+    #[test]
+    fn overtones_toot_reaches_nothing_new() {
+        let over = laughing(Tuning::Harmonic);
+        for gravity in [GRAVITY, GRAVITY * GIANT_STEPS_GRAVITY] {
+            let normal: Vec<Vec<f32>> = (0..90).map(|t| arc(&Groove::default(), gravity, t)).collect();
+            let harmonic: Vec<Vec<f32>> = (0..90).map(|t| arc(&over, gravity, t)).collect();
+            let apex = |arcs: &[Vec<f32>]| arcs.iter().flatten().fold(f32::MIN, |a, &b| a.max(b));
+            assert!(apex(&harmonic) <= apex(&normal) + 0.5, "{} > {}", apex(&harmonic), apex(&normal));
+            // Latest frame at or above each height.
+            let last = |arcs: &[Vec<f32>], h: f32| arcs.iter().filter_map(|a| a.iter().rposition(|&y| y >= h)).max();
+            let mut h = -64.0;
+            while h < apex(&normal) {
+                assert!(last(&harmonic, h) <= last(&normal, h), "at {h}px: {:?} > {:?}", last(&harmonic, h), last(&normal, h));
+                h += 1.0;
+            }
+            // It is stronger: an early toot climbs well above an early normal toot.
+            let early = |arcs: &[Vec<f32>]| arcs[2].iter().fold(f32::MIN, |a, &b| a.max(b));
+            assert!(early(&harmonic) > early(&normal) + 16.0, "{} vs {}", early(&harmonic), early(&normal));
+        }
+        // Falling: just a toot. Never weaker.
+        assert_eq!(over.toot_speed(DOUBLE_JUMP_SPEED, -200.0), DOUBLE_JUMP_SPEED);
+        assert_eq!(over.toot_speed(DOUBLE_JUMP_SPEED, 1000.0), DOUBLE_JUMP_SPEED * OVERTONE_TOOT);
     }
 }
