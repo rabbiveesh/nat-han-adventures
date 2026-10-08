@@ -82,6 +82,7 @@ pub fn plugin(app: &mut App) {
             results::plugin,
             victory::plugin,
             bubble::plugin,
+            crate::freeplay::ui::plugin,
         ));
 }
 
