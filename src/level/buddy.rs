@@ -216,8 +216,10 @@ pub fn intercept(han: &Kin, nat: &Kin, toots_left: u8, gravity: f32, floor_ahead
     let hold = !(nat.vel.y > 0.0 && above < 0.75 * TILE);
     // Sinking below a falling Nat, lined up under him (now, or by the time a toot carries him
     // up): toot back up into his feet.
-    let rel = (nat.pos.x - han.pos.x, (nat.pos.x + nat.vel.x * 0.15) - (han.pos.x + han.vel.x * 0.15));
-    let under = rel.0.abs() < 2.0 * HALF.x || rel.1.abs() < 8.0;
+    // (When his head would meet Nat's feet: the toot's rise against Nat's fall.)
+    let t_meet = (above / (DOUBLE_JUMP_SPEED + (-nat.vel.y).max(0.0))).clamp(0.0, 0.5);
+    let dx_meet = (nat.pos.x + nat.vel.x * t_meet) - (han.pos.x + han.vel.x * t_meet);
+    let under = dx_meet.abs() < 8.0;
     let toot = !han.grounded
         && toots_left > 0
         && han.vel.y < -40.0

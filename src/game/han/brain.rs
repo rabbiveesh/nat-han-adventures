@@ -237,7 +237,9 @@ fn slot_cell(map: &Map, level: &Level, nat: (i32, i32), x: f32) -> Option<(i32, 
 /// up to [`PARACHUTE_HEIGHT`]), outside the band's gates.
 pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
     let mut best: Option<(f32, Vec2)> = None;
-    for k in [1.5, 0.0, -1.5, 3.0, -3.0, 4.5, -4.5, 6.0, -6.0] {
+    // Behind Nat (the way he came) first: the first spot there with room to float down wins;
+    // else wherever has the most room.
+    for k in [1.5, 3.0, 4.5, 6.0, 0.0, -1.5, -3.0, -4.5, -6.0] {
         let x = nat.x + side * k * TILE;
         if x < TILE || x > level.size_px().x - TILE {
             continue;
@@ -256,7 +258,13 @@ pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
         if !level.han_allowed(level.cell_at(Vec2::new(x, y))) {
             continue;
         }
-        let score = y - nat.y - k.abs();
+        let room = y - nat.y;
+        if k > 0.0 && room >= 4.0 * TILE {
+            return Vec2::new(x, y);
+        }
+        // Low ceilings everywhere: still behind him if at all possible (ahead may be across
+        // something he can't walk back over).
+        let score = room + if k > 0.0 { 100.0 * TILE } else { 0.0 };
         if best.is_none_or(|(s, _)| score > s) {
             best = Some((score, Vec2::new(x, y)));
         }
@@ -469,7 +477,8 @@ pub(super) fn think(
     // --- "Lemme check that": Nat standing still, facing a hazard.
     if brain.mode == HanMode::Follow && !nat_dead && nat.grounded && !nat_on_han && nbody.vel.x.abs() < 5.0 {
         let cell = feet_cell(level, nat.pos);
-        if hazard_ahead(level, cell, nctl.facing) && body.on_ground && (pos.0 - nat.pos).length() < 6.0 * TILE {
+        let behind = (pos.0.x - nat.pos.x) * nctl.facing <= 8.0;
+        if hazard_ahead(level, cell, nctl.facing) && behind && body.on_ground && (pos.0 - nat.pos).length() < 6.0 * TILE {
             brain.still += dt;
             if brain.still >= go_ahead_delay(e) {
                 brain.mode = HanMode::Ahead { dir: nctl.facing.signum(), t: 0.0 };
