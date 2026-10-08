@@ -9,7 +9,8 @@
 //! `!` unreachable checkpoint/goal, `@` moving platform (start), `-` its path, `%` a splat
 //! stain the search made, `?` a hint spot, and the take-off of each gate crossing: `W` giant
 //! wall (Giant Steps), `R` long gap (fired up), `Z` waltz row, `Y` grease chute (grip), `K`
-//! stain pit (splats).
+//! stain pit (splats), and Han's: `B` buddy ledge (boost), `H` shield row, `N` chain chasm,
+//! `U` buddy raft pool.
 
 use std::time::Instant;
 
@@ -21,14 +22,14 @@ use nat_han_adventures::level::*;
 const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Bathroom Floor", 1, &[Gate::GiantWall]),
     ("The Bowl", 1, &[]),
-    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit]),
+    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit, Gate::BuddyLedge]),
     ("Pipe Maze", 2, &[Gate::GiantWall]),
-    ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit]),
-    ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute]),
+    ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft]),
+    ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::BuddyLedge]),
     ("Septic Tank", 4, &[Gate::WaltzRow]),
-    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::WaltzRow, Gate::StainPit]),
-    ("Treatment Plant", 5, &[Gate::LongGap, Gate::WaltzRow, Gate::GreaseChute]),
-    ("The Golden Throne", 5, &[Gate::GiantWall]),
+    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::WaltzRow, Gate::StainPit, Gate::ShieldRow, Gate::ChainChasm]),
+    ("Treatment Plant", 5, &[Gate::LongGap, Gate::WaltzRow, Gate::GreaseChute, Gate::BuddyLedge, Gate::BuddyRaft]),
+    ("The Golden Throne", 5, &[Gate::GiantWall, Gate::ShieldRow, Gate::ChainChasm]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).
 const GATED_GOAL: [usize; 2] = [0, 2];
