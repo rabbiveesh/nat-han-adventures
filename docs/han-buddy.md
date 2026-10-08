@@ -1,7 +1,6 @@
 # Han as an AI buddy — design spec
 
-Status: agreed with the user, not built yet. Builds after the level pass (it touches physics,
-hazards and the level validator), alongside the adaptive-engine wiring.
+Status: built (see "As built" at the end for the decisions and numbers).
 
 ## Body and navigation
 - Han is a real physics body: same collisions, gravity and moving-platform riding as Nat, with
@@ -80,3 +79,54 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 - **Chain-jump chasms**: crossable only by chaining boosts and toots (no overuse limit inside).
 - Free play gets all of these as rooms; the adaptive engine tracks a **Buddy** skill (and chain
   chasms) like any other.
+
+## As built
+Code: `src/game/han/` (brain, hazards), `src/level/buddy.rs` (Han's per-mode physics, his
+controller and the goalkeeper reflex, pure: the game and the validator run the same code),
+`src/level/nav.rs` (the nav graph), `src/level/validate.rs` (Han's gates), `src/art/buddy.rs`.
+Tests: `tests/han.rs` (mechanics), `tests/han_campaign.rs` (every Han gate of the campaign
+played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (validator).
+
+- **Body**: `game::step_body` is the one body step (gravity, carriers, tile collision) for Nat
+  and Han. Han: run 165 px/s (Nat 150), 3 toots, invulnerable to spikes/flies/sprays; his
+  jumps write no `Jumped` (the band never counts him). Han's head is a one-way carrier for Nat.
+- **Plunger boost**: 560 px/s, 7 tiles above Han's head (~7.9 above his floor); the refreshed
+  toot adds ~2.4: ~10.3 tiles ideal, >= 9.3 for a human. Buddy ledges are 9 tiles: out of
+  Giant Steps' reach (~8.7), comfortably in the boost's. Not a `Jumped`: a `HanBoosted`.
+- **Navigation**: A* (seconds of travel) on a lazily simulated graph of Han's moves (66 jump /
+  walk-off moves from a standing start, up to 3 toots) on the validator's map with his physics,
+  per mode (normal; Giant Steps built on demand), re-planned 4x/s, at most 24 new cells
+  simulated per step. ~100-160 us per cell natively; a whole level 12-34 ms eagerly (est.
+  20-70 ms in wasm), so it's lazy: a cold 6-tile route costs ~0.5-1 ms. Moving platforms: he
+  waits until the platform will be under the landing cell (real air time) and steers onto it.
+  Lost (no route / stuck 3 s) and out of sight: parachute from ~8.5 tiles above, behind Nat.
+- **Giant walls etc.**: levels mark every gate (`gate: <topic> c0,r0 c1,r1`, validated against
+  the crossings). Han keeps 14 columns / 10 rows clear of band and death gate marks (giant,
+  gap, waltz, grip, stain); the validator proves no boost from anywhere Han may be (ground or
+  mid-air, normal/Giant Steps/fired up) opens them.
+- **Intercept**: a goalkeeper dive (1.4x speed and accel), stays under Nat (cuts his jump
+  while Nat rises close above), toots into a descending Nat when lined up at the moment of
+  contact. Brace range 1.5-3.5 tiles, intercept range 3-7 tiles (eagerness).
+- **Lemme check that**: Nat still and facing sewage, a can or a swarm within 4 tiles for
+  2.0 / 1.5 / 0.7 s (lazy / neutral / eager). It's an escort: Han never leads by more than
+  1.5 tiles, he's solid from the side so Nat can't overtake him into the jets, every jet he's
+  plugged stays plugged while he escorts (and 0.5 s after); flies circle away from him.
+- **Sewage**: sinks 1 s, gone 3 s, parachutes back ("I'm fine! I'm a professional!"); his raft
+  is 3 tiles from the splat on, 30 s x `raft_life_mult`. Not Nat's death.
+- **Overuse**: 3 / 5 / 7 boosts in a row (lazy / neutral / eager; reset after 1.2 s on real
+  ground or 4 s without a boost) → "My back! I'm union, Nat!", a breather of 3 to 1.5 s with
+  no boosts (his head still holds you). No limit inside `chain` marks.
+- **Modes**: Giant Steps gravity x0.8 more than Nat's and paddling; fired up he stays at his
+  speed (falls behind, "Wheeze..."), the waltz: steps only in the first 40% of each beat;
+  nervous: 0.8-tile follow gap, trembling; laughing band: bounces (x1.3), rolls.
+- **Gates**: buddy ledges (a boost reaches it, no mode does); shield rows (24+ adjacent cans
+  under a grating and a low ceiling: no mode dashes them, the waltz included); chain chasms
+  (14+ bottomless columns; crossed by a co-simulated chain with the real reflex, for every
+  moment the band might switch to Giant Steps after the chain's toots; one boost must not do
+  it); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
+  tile it; Nat's own: fewest rafts x (respawn + walk back at full speed) must exceed 12 s).
+  Teaching topics `boost`, `shield`, `chain`, `buddyraft`.
+- **Markers**: from the marks: gold staff trim + note emblem (giant), red notches + yellow tape
+  (boost), a PLUMBERS ONLY sign (shield).
+- Repeating a hint after repeated deaths is the adaptive engine's `han_hint` lever.
+

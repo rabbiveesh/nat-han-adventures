@@ -25,10 +25,14 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/state.rs` AppState (Title, LevelSelect, Playing{Running,Paused}, LevelComplete, Victory) + `CurrentLevel`.
 - `src/input.rs` leafwing `Action`s on one global entity: `Single<&ActionState<Action>>`.
 - `src/events.rs` gameplay messages (NuggetCollected, Jumped, Landed, PlayerDied, ...).
-- `src/level.rs` the ASCII level format (documented at the top of the file) and parser;
-  `src/level/validate.rs` the level validator (reachability, gates, splat stains, grease
-  chutes, teaching hints). Pure and wasm-safe; `tests/levels.rs` runs it on the campaign.
+- `src/level.rs` the ASCII level format (documented at the top of the file, gate marks
+  included) and parser; `src/level/validate.rs` the level validator (reachability, gates,
+  splat stains, grease chutes, Han's gates, teaching hints); `src/level/nav.rs` Han's lazily
+  built nav graph; `src/level/buddy.rs` Han's physics and reflexes (shared by the game and the
+  validator). Pure and wasm-safe; `tests/levels.rs` runs the validator on the campaign.
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
+  `src/game/han/` is Han, the AI buddy (`docs/han-buddy.md`); `tests/han.rs` and
+  `tests/han_campaign.rs` play him headless.
 - `src/adapt/` the adaptive difficulty engine (pure reducers); `src/game/adaptive.rs` wires it
   into play: story deaths/checkpoints → the invisible `Assists` (coyote, buffer, hitboxes, rafts,
   Han's eagerness, a hidden midway respawn, hint repeats), Han's encouragement, the band's
