@@ -9,7 +9,8 @@
 //! run is stitched (fixed-length runs; an endless run that fills the grid ends there too).
 //!
 //! The grid is as tall as the tallest room ([`COURSE_H`]) and every room sits on its bottom,
-//! so all the pipes line up; above a shorter room is open sky, as above any level's grid.
+//! so all the pipes line up; above a shorter room is solid ground, as the top of any level's
+//! grid is a ceiling (`Level::tile` above row 0), so a room's validation still holds stitched.
 
 use super::canvas::{CHECKPOINT_COL, CLIMB_H, ENTRY, H, PIPE_ROOF, STAND};
 use crate::level::{Level, Thing, ThingKind, Tile};
@@ -96,9 +97,9 @@ impl Course {
         if let Some(cap) = self.cap.take() {
             uncapped.extend(Course::pipe_rows().map(|r| (cap, r)));
         }
-        for r in 0..room.height {
+        for r in 0..COURSE_H {
             for c in 0..room.width {
-                level.tiles[(r + dr) * w + col0 + c] = room.tile(c as i32, r as i32);
+                level.tiles[r * w + col0 + c] = if r < dr { Tile::Solid } else { room.tile(c as i32, (r - dr) as i32) };
             }
         }
         let checkpoint = level.checkpoints().count();

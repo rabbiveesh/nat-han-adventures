@@ -204,7 +204,8 @@ fn unlocks_follow_the_story() {
 }
 
 /// A climb is taller than the other rooms: the course is as tall as it, every room sits on its
-/// bottom, so the pipes line up and everything in a short room moves down with it.
+/// bottom, so the pipes line up and everything in a short room moves down with it, under a
+/// ceiling.
 #[test]
 fn tall_rooms_stitch_on_the_course_floor() {
     use nat_han_adventures::freeplay::course::{COURSE_H, Course};
@@ -224,6 +225,10 @@ fn tall_rooms_stitch_on_the_course_floor() {
         }
     }
     let dr = COURSE_H - flat.height;
+    // Over a short room the course is solid: its ceiling, as at the top of its own grid.
+    for col in a.cols().chain(c.cols()) {
+        assert!((0..dr).all(|r| level.tile(col as i32, r as i32).is_solid()), "ceiling over column {col}");
+    }
     assert_eq!(level.start, (flat.start.0, flat.start.1 + dr));
     assert_eq!(level.goal.1, STAND);
     let say = &level.say_at[0];
