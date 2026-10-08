@@ -117,38 +117,56 @@ impl PlayStats {
 }
 
 /// Timestamped (play time) toots, nuggets, deaths and waltz steps of the last
-/// [`MUSIC_CHECK_SECS`].
+/// [`MUSIC_CHECK_SECS`], with their running totals (so filling the stats every frame doesn't
+/// re-add the whole window: the formal checks step the band tens of millions of times).
 #[derive(Debug, Clone, Default)]
-pub struct Window(VecDeque<(f32, [u32; 4])>);
+pub struct Window {
+    entries: VecDeque<(f32, [u32; 4])>,
+    /// The sum of `entries`.
+    total: [u32; 4],
+}
 
 impl Window {
     /// Note what happened at play time `now` (and forget what's too old).
     pub fn record(&mut self, now: f32, toots: u32, nuggets: u32, deaths: u32, waltzes: u32) {
-        if toots + nuggets + deaths + waltzes > 0 {
-            self.0.push_back((now, [toots, nuggets, deaths, waltzes]));
+        let c = [toots, nuggets, deaths, waltzes];
+        if c != [0; 4] {
+            self.entries.push_back((now, c));
+            self.total = std::array::from_fn(|k| self.total[k] + c[k]);
         }
-        while self.0.front().is_some_and(|e| e.0 < now - MUSIC_CHECK_SECS) {
-            self.0.pop_front();
+        while let Some(&(t, c)) = self.entries.front()
+            && t < now - MUSIC_CHECK_SECS
+        {
+            self.total = std::array::from_fn(|k| self.total[k] - c[k]);
+            self.entries.pop_front();
         }
     }
 
     /// The entries remembered: (play time, [toots, nuggets, deaths, waltz steps]), oldest
     /// first (for the formal checks in `tests/formal.rs`, which hash the band's state).
     pub fn entries(&self) -> impl Iterator<Item = (f32, [u32; 4])> + '_ {
-        self.0.iter().copied()
+        self.entries.iter().copied()
     }
 
     /// Forget a summon's counter (column 0 toots, 1 nuggets, 3 waltz steps).
     pub fn clear(&mut self, column: usize) {
-        for e in &mut self.0 {
+        for e in &mut self.entries {
             e.1[column] = 0;
         }
+        self.total[column] = 0;
     }
 
     /// Fill the window fields of `stats` as of `now` (the level started at `level_start`).
     pub fn fill(&self, stats: &mut PlayStats, now: f32, level_start: f32) {
-        let recent = self.0.iter().filter(|e| e.0 >= now - MUSIC_CHECK_SECS);
-        let c = recent.fold([0; 4], |a, e| std::array::from_fn(|k| a[k] + e.1[k]));
+        // The total, less the oldest entries if they've aged out since the last record.
+        let mut c = self.total;
+        let mut i = 0;
+        while let Some(&(t, e)) = self.entries.get(i)
+            && t < now - MUSIC_CHECK_SECS
+        {
+            c = std::array::from_fn(|k| c[k] - e[k]);
+            i += 1;
+        }
         stats.stretch_toots = c[0];
         stats.stretch_nuggets = c[1];
         stats.stretch_deaths = c[2];
@@ -316,8 +334,11 @@ impl Band {
             self.steps.reset();
         }
         // Stats as they stood before this frame's events (to see whether they summon a mode).
-        let mut before = self.stats;
-        self.window.fill(&mut before, now, self.level_start);
+        let before = (ev.toots + ev.nuggets + waltzes > 0).then(|| {
+            let mut before = self.stats;
+            self.window.fill(&mut before, now, self.level_start);
+            before
+        });
         self.window.record(now, ev.toots, ev.nuggets, ev.deaths, waltzes);
         self.stats.level_deaths += ev.deaths;
         self.stats.checkpoint_deaths += ev.deaths;
@@ -335,7 +356,7 @@ impl Band {
             self.stats.mood_deaths += ev.deaths;
         }
         self.window.fill(&mut self.stats, now, self.level_start);
-        let summon = if ev.toots + ev.nuggets + waltzes > 0 { summoned(&before, &self.stats) } else { None };
+        let summon = before.and_then(|before| summoned(&before, &self.stats));
         if let Some(h) = summon {
             // (Clears every summon's progress, so one completed in the same frame that lost
             // can't stay "met" and block itself for a window.)
@@ -481,6 +502,11 @@ mod tests {
         w.record(22.5, 0, 0, 0, 0);
         w.fill(&mut s, 22.5, 0.0);
         assert_eq!((s.stretch_toots, s.stretch_nuggets, s.stretch_waltzes, s.stretch_secs), (3, 2, 1, 20.0));
+        // A cleared column stays cleared.
+        w.clear(1);
+        w.fill(&mut s, 22.5, 0.0);
+        assert_eq!((s.stretch_toots, s.stretch_nuggets, s.stretch_deaths), (3, 0, 1));
+        // Aged out before the next record too.
         w.fill(&mut s, 40.0, 0.0);
         assert_eq!((s.stretch_toots, s.stretch_nuggets, s.stretch_waltzes), (0, 0, 0));
     }
