@@ -186,12 +186,14 @@ fn update_hud(
     run: Res<LevelRun>,
     levels: Res<Levels>,
     current: Res<CurrentLevel>,
+    free: Option<Res<crate::freeplay::FreePlayRun>>,
     mut q: Query<(&HudText, &mut Text)>,
 ) {
     for (h, mut text) in &mut q {
         let s = match h {
             HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),
-            HudText::Name => level_name(&levels, current.0),
+            // Free play: the room counter (never a difficulty).
+            HudText::Name => free.as_ref().map_or_else(|| level_name(&levels, current.0), |f| f.room_label()),
             HudText::Time => format_time(run.time),
             HudText::Splats if run.deaths == 0 => String::new(),
             HudText::Splats => format!("SPLATS {}", run.deaths),
@@ -202,9 +204,19 @@ fn update_hud(
     }
 }
 
-fn spawn_intro(mut commands: Commands, font: Res<UiFont>, levels: Res<Levels>, current: Res<CurrentLevel>) {
+fn spawn_intro(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    levels: Res<Levels>,
+    current: Res<CurrentLevel>,
+    free: Option<Res<crate::freeplay::FreePlayRun>>,
+) {
     let f = &*font;
-    let world = levels.0.get(current.0).map_or(1, |l| l.world);
+    let world = free.as_ref().map_or_else(|| levels.0.get(current.0).map_or(1, |l| l.world), |r| r.world);
+    let (title, name) = match &free {
+        Some(r) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
+        None => (format!("LEVEL {}", current.0 + 1), level_name(&levels, current.0)),
+    };
     commands
         .spawn((
             Name::new("IntroCard"),
@@ -215,8 +227,8 @@ fn spawn_intro(mut commands: Commands, font: Res<UiFont>, levels: Res<Levels>, c
         .with_children(|root| {
             root.spawn(panel(Node { padding: UiRect::axes(px(16.0), px(8.0)), ..column(8.0, 8.0) }))
                 .with_children(|p| {
-                    p.spawn(label(f, format!("LEVEL {}", current.0 + 1), 16.0, GOLD));
-                    p.spawn(label(f, level_name(&levels, current.0), 8.0, CREAM));
+                    p.spawn(label(f, title, 16.0, GOLD));
+                    p.spawn(label(f, name, 8.0, CREAM));
                     p.spawn(label(f, format!("WORLD {world}: {}", world_name(world)), 8.0, DIM_CREAM));
                 });
         });

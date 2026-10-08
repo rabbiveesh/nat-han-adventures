@@ -1156,6 +1156,17 @@ impl Physics {
         Physics { human, ideal, no_toot }
     }
 
+    /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
+    /// Fewer jumps reach less, so whatever a level passes with them it passes with
+    /// [`strategies`] too: free play (`crate::freeplay`) validates rooms with a lean set, fast
+    /// enough to do while the game runs.
+    pub fn with_human(human: Vec<Strategy>) -> Physics {
+        let ideal = MODES.iter().map(|&m| Arcs::new(Env::new(m, true), ideal_strategies())).collect();
+        let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
+        let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
+        Physics { human, ideal, no_toot }
+    }
+
     pub fn human(&self, m: Mode) -> &Arcs {
         &self.human[MODES.iter().position(|&x| x == m).unwrap()]
     }
@@ -1662,6 +1673,17 @@ pub fn check(level: &Level, opts: &Options) -> Report {
 
 /// [`check`] with the physics tables already built (they take a moment).
 pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
+    check_impl(level, opts, phys, true)
+}
+
+/// [`check_with`] for a generated room (free play, `crate::freeplay`): the deaths its design
+/// needs are worked out and reported in [`Report::deaths`] (the room's expected deaths) instead
+/// of checked against its `deaths:` line.
+pub fn check_room(level: &Level, phys: &Physics) -> Report {
+    check_impl(level, &Options::default(), phys, false)
+}
+
+fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool) -> Report {
     let mut errs = line_errors(level);
     let mut map = Map::new(level);
     let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
@@ -1805,7 +1827,7 @@ pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
         );
         gates.push((c.gate, on_way, nuggets, splats));
     }
-    if level.deaths.unwrap_or(0) != deaths {
+    if check_deaths && level.deaths.unwrap_or(0) != deaths {
         errs.push(format!(
             "`deaths: {}` but the design needs {deaths} (stain pit splats + {NERVOUS_DEATHS} per grease chute)",
             level.deaths.unwrap_or(0)

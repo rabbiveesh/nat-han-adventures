@@ -32,7 +32,7 @@ use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, Playbac
 use rand::Rng;
 
 use crate::events::{BandFreedom, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
-use crate::game::{self, Groove, LevelRun, RestartLevel};
+use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel, PlayState};
 
@@ -103,14 +103,19 @@ fn music_override() -> Option<Filters> {
     None
 }
 
-/// Which music goes with an app state.
-pub fn desired_music(state: AppState, levels: Option<&Levels>, current: CurrentLevel) -> Music {
+/// The world of the level being played: free play's generated level, else the story level.
+pub fn playing_world(levels: Option<&Levels>, current: CurrentLevel, generated: Option<&GeneratedLevel>) -> u8 {
+    match generated {
+        Some(g) => g.0.world,
+        None => levels.and_then(|l| l.0.get(current.0)).map_or(1, |l| l.world),
+    }
+}
+
+/// Which music goes with an app state (`world`: the level being played's, [`playing_world`]).
+pub fn desired_music(state: AppState, world: u8) -> Music {
     match state {
-        AppState::Title | AppState::LevelSelect => Music::Title,
-        AppState::Playing => {
-            let world = levels.and_then(|l| l.0.get(current.0)).map_or(1, |l| l.world);
-            Music::World(world)
-        }
+        AppState::Title | AppState::LevelSelect | AppState::FreePlaySetup => Music::Title,
+        AppState::Playing => Music::World(world),
         AppState::LevelComplete => Music::LevelClear,
         AppState::Victory => Music::Victory,
     }
@@ -300,6 +305,7 @@ fn follow_state(
     state: Res<State<AppState>>,
     levels: Option<Res<Levels>>,
     current_level: Res<CurrentLevel>,
+    generated: Option<Res<GeneratedLevel>>,
     overrides: Res<MusicOverride>,
     mut player: ResMut<LivePlayer>,
     mut now_playing: ResMut<NowPlaying>,
@@ -307,7 +313,8 @@ fn follow_state(
     mut started: MessageWriter<MusicStarted>,
     mut audio: NonSendMut<Audio>,
 ) {
-    let want = desired_music(*state.get(), levels.as_deref(), *current_level);
+    let world = playing_world(levels.as_deref(), *current_level, generated.as_deref());
+    let want = desired_music(*state.get(), world);
     if player.music == Some(want) {
         return;
     }

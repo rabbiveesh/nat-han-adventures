@@ -14,10 +14,17 @@ use crate::input::Action;
 use crate::level::{Level, Levels, TILE, ThingKind, Tile};
 use crate::state::{AppState, CurrentLevel, PlayState};
 
+/// A level built at runtime (free play, [`crate::freeplay`]) to play instead of
+/// `Levels[CurrentLevel]`. While it exists, entering [`AppState::Playing`] loads it, and
+/// [`RestartLevel`] is left to whoever inserted it (free play restarts a room, not the run).
+#[derive(Resource, Debug, Clone)]
+pub struct GeneratedLevel(pub Level);
+
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::Playing), enter_level)
         .add_systems(OnEnter(AppState::Title), unload_level)
         .add_systems(OnEnter(AppState::LevelSelect), unload_level)
+        .add_systems(OnEnter(AppState::FreePlaySetup), unload_level)
         .add_systems(OnEnter(AppState::Victory), unload_level)
         .add_systems(
             Update,
@@ -34,11 +41,19 @@ fn enter_level(
     mut commands: Commands,
     levels: Res<Levels>,
     current: Res<CurrentLevel>,
+    generated: Option<Res<GeneratedLevel>>,
     old: Query<Entity, With<LevelEntity>>,
     mut says: MessageWriter<HanSays>,
 ) {
-    let level = load(&mut commands, &levels, current.0, &old);
-    commands.write_message(crate::events::LevelStarted { level: current.0, restart: false });
+    let index = current.0.min(levels.0.len().saturating_sub(1));
+    let level = match generated {
+        Some(g) => g.0.clone(),
+        None => {
+            commands.write_message(crate::events::LevelStarted { level: index, restart: false });
+            levels.0[index].clone()
+        }
+    };
+    let level = load(&mut commands, level, index, &old);
     if !level.intro.is_empty() {
         says.write(HanSays { text: level.intro.clone() });
     }
@@ -71,28 +86,27 @@ fn restart_level(
     levels: Res<Levels>,
     active: Option<Res<ActiveLevel>>,
     current: Res<CurrentLevel>,
+    generated: Option<Res<GeneratedLevel>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
-    if requests.read().count() == 0 {
+    if requests.read().count() == 0 || generated.is_some() {
         return;
     }
-    let index = active.map_or(current.0, |a| a.index);
-    load(&mut commands, &levels, index, &old);
+    let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
+    load(&mut commands, levels.0[index].clone(), index, &old);
     commands.write_message(crate::events::LevelStarted { level: index, restart: true });
 }
 
-/// Despawn whatever is loaded and spawn level `index` fresh, resetting the run.
+/// Despawn whatever is loaded and spawn `level` (story level `index`) fresh, resetting the run.
 fn load(
     commands: &mut Commands,
-    levels: &Levels,
+    level: Level,
     index: usize,
     old: &Query<Entity, With<LevelEntity>>,
 ) -> Level {
     for e in old {
         commands.entity(e).despawn();
     }
-    let index = index.min(levels.0.len().saturating_sub(1));
-    let level = levels.0[index].clone();
 
     commands.insert_resource(LevelRun {
         nuggets_total: level.nugget_count() as u32,
@@ -110,20 +124,29 @@ fn load(
 }
 
 /// Where the player's box center goes when standing in cell (col, row).
-pub(super) fn stand_pos(level: &Level, col: usize, row: usize) -> Vec2 {
+pub fn stand_pos(level: &Level, col: usize, row: usize) -> Vec2 {
     let c = level.tile_center(col, row);
     Vec2::new(c.x, c.y - TILE / 2.0 + tuning::PLAYER_SIZE.1 / 2.0)
 }
 
 /// Bottom-center of a cell.
-fn cell_floor(level: &Level, col: usize, row: usize) -> Vec2 {
+pub fn cell_floor(level: &Level, col: usize, row: usize) -> Vec2 {
     level.tile_center(col, row) - Vec2::new(0.0, TILE / 2.0)
 }
 
 fn spawn_level(commands: &mut Commands, level: &Level) {
+    spawn_region(commands, level, 0..level.width);
+    spawn_actors(commands, level);
+}
+
+/// Spawn the static part of `level` in columns `cols`: tiles, nuggets, checkpoints, hazards,
+/// hint spots and moving platforms (those starting in the columns). Free play streams its
+/// growing level in with this, a few columns at a time.
+pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Range<usize>) {
+    let cols = cols.start..cols.end.min(level.width);
     // Tiles.
     for row in 0..level.height {
-        for col in 0..level.width {
+        for col in cols.clone() {
             let tile = level.tile(col as i32, row as i32);
             if tile == Tile::Empty {
                 continue;
@@ -146,6 +169,10 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
     // Things.
     let mut checkpoint_index = 0;
     for (i, thing) in level.things.iter().enumerate() {
+        if !cols.contains(&thing.col) {
+            checkpoint_index += (thing.kind == ThingKind::Checkpoint) as usize;
+            continue;
+        }
         let center = level.tile_center(thing.col, thing.row);
         match thing.kind {
             ThingKind::Nugget => {
@@ -192,7 +219,7 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
         }
     }
 
-    for hint in &level.hints {
+    for hint in level.hints.iter().filter(|h| cols.contains(&h.col)) {
         commands.spawn((
             Name::new("HintSpot"),
             LevelEntity,
@@ -200,15 +227,8 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
         ));
     }
 
-    commands.spawn((
-        Name::new("Goal"),
-        LevelEntity,
-        Goal,
-        Transform::from_translation(cell_floor(level, level.goal.0, level.goal.1).extend(2.0)),
-    ));
-
     // Moving platforms: Pos is the center of the platform's tiles.
-    for def in &level.platforms {
+    for def in level.platforms.iter().filter(|p| cols.contains(&p.col)) {
         let left = level.tile_center(def.col, def.row);
         let base = left + Vec2::new((def.width as f32 - 1.0) * TILE / 2.0, 0.0);
         let platform = MovingPlatform {
@@ -229,6 +249,17 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
             Transform::from_translation(pos.extend(1.0)),
         ));
     }
+
+}
+
+/// The goal flag, the player and Han.
+fn spawn_actors(commands: &mut Commands, level: &Level) {
+    commands.spawn((
+        Name::new("Goal"),
+        LevelEntity,
+        Goal,
+        Transform::from_translation(cell_floor(level, level.goal.0, level.goal.1).extend(2.0)),
+    ));
 
     // Player and Han.
     let start = stand_pos(level, level.start.0, level.start.1);
