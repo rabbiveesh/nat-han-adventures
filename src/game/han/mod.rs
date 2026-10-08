@@ -12,14 +12,20 @@
 //! his physics, built lazily and cached) to a follow slot [`FOLLOW_GAP`] behind Nat on the side
 //! Nat came from, re-planning a few times a second when Nat moves on, and steers his body along
 //! the walks, jumps and toots (with corrections), waiting for moving platforms to come round.
-//! He keeps [`HAN_BERTH`](crate::level::HAN_BERTH) columns clear of the band's gates (the
-//! level's `gate:` marks). **Lost** (no route, or stuck for [`STUCK_SECS`]) and out of sight, he
+//! He follows Nat right up to the band's gates (the level's `gate:` marks), keeping out only of
+//! a waltz row and a grease chute's grease ([`Level::han_keeps_out`](crate::level::Level)). **Lost** (no route, or stuck for [`STUCK_SECS`]) and out of sight, he
 //! **parachutes in** on his plunger from above Nat; he never teleports where you can see.
 //!
 //! **Mechanics.**
 //! - His head is a one-way platform ([`HanHead`]); jumping off it is the **plunger boost**
 //!   ([`BOOST_SPEED`](super::BOOST_SPEED), which also refreshes Nat's toot). He **braces**
-//!   (plunger up) when Nat is coming down for one.
+//!   (plunger up) when Nat is coming down for one. In mid-air his head holds Nat only up to
+//!   [`HAN_CATCH_RISE`](crate::level::buddy::HAN_CATCH_RISE) above where he last stood.
+//! - **The band zone** ([`HAN_BERTH`](crate::level::HAN_BERTH) columns around a band or death
+//!   gate's mark, `Level::in_band_zone`): his boost is the weak one
+//!   ([`WEAK_BOOST_SPEED`](super::WEAK_BOOST_SPEED), about a normal jump) and he grumbles
+//!   ([`grumble_line`]); his head only holds Nat there while he's standing, he doesn't go for
+//!   intercepts or go ahead. So the band is still what opens its gates.
 //! - **Intercept**: Nat in the air, coming down near him (or over a drop): he runs, jumps and
 //!   toots to get under Nat (the goalkeeper; [`intercept`](crate::level::buddy::intercept)), so
 //!   mid-air chains work.
@@ -45,7 +51,7 @@ pub use brain::{HanBrain, HanMode, HanNav};
 pub use world::{FlySpin, HanRaft, SprayPlug, han_raft_life};
 
 use super::{ActiveLevel, GameSet};
-use crate::level::TILE;
+use crate::level::{TILE, Topic};
 pub use crate::level::buddy::{HAN_MARCH_SPEED, HAN_RUN_SPEED, HAN_TOOTS, HanPhys};
 
 pub(super) fn plugin(app: &mut App) {
@@ -92,7 +98,41 @@ pub const LEMME_LINE: &str = "Lemme check that.";
 pub const PRO_LINE: &str = "I'm fine! I'm a professional!";
 pub const BACK_WARN_LINE: &str = "Oof. My back...";
 pub const UNION_LINE: &str = "My back! I'm union, Nat!";
-pub const BAND_LINE: &str = "Band stuff! I'll catch up, Nat.";
+/// What Han grumbles when Nat jumps off his head in a band zone (the weak boost), in turn with
+/// the lines of the gate's kind ([`grumble_lines`]).
+pub const GRUMBLE_LINES: &[&str] = &[
+    "Nope. Need more music in my soul for that one.",
+    "Too tired, Nat. Get the band going.",
+    "That's band work, Nat. I'm just the plumber.",
+];
+
+/// Han's grumbles for a band zone of gate kind `topic` (on top of [`GRUMBLE_LINES`]).
+pub fn grumble_lines(topic: Topic) -> &'static [&'static str] {
+    match topic {
+        Topic::Giant => &["My back says no. My heart says Giant Steps.", "Toot it up, Nat! Five toots fetch the giant."],
+        Topic::Gap => &["Grab nuggets, get the band fired up!", "That gap wants a fired-up band, not a plumber."],
+        Topic::Waltz => &["That's a waltz job, Nat!", "Hop in threes, Nat. ONE-two-three!"],
+        Topic::Grip => &["Grease? Only a sweaty band gets a grip on that.", "Slippery job, Nat. Get the band nervous."],
+        Topic::Stain => &["Spikes? That's a splat job, Nat. Sorry!", "Make your own stepping stones, Nat. Splat!"],
+        _ => &[],
+    }
+}
+
+/// Grumble number `n` (counting from 0) in a band zone of kind `topic` (`None`: a generated
+/// room's zone): the kind's lines and the general ones, in turn.
+pub fn grumble_line(topic: Option<Topic>, n: u32) -> &'static str {
+    let own = topic.map_or(&[][..], grumble_lines);
+    // Alternating: the gate's own line, a general one, ...
+    let order: Vec<&str> = (0..own.len().max(GRUMBLE_LINES.len()))
+        .flat_map(|i| [own.get(i), GRUMBLE_LINES.get(i)])
+        .flatten()
+        .copied()
+        .collect();
+    order[n as usize % order.len()]
+}
+
+/// At most one grumble this often (s).
+pub const GRUMBLE_EVERY: f32 = 2.0;
 pub const WHEEZE_LINE: &str = "Wheeze... too fast... go on, Nat!";
 pub const JET_LINES: &[&str] = &["Pssht! Ha! Tickles!", "Smells like... lavender?", "Pssht yourself!"];
 pub const FLY_LINE: &str = "Shoo! Shoo! Union rules!";

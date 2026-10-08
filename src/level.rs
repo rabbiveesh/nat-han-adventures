@@ -66,11 +66,15 @@
 //! Every gate is marked in the header, and [`validate`] checks the marks against what it finds
 //! (each crossing lies in a mark of its kind, each mark holds a crossing), so the marks can't
 //! lie. The game reads them instead of re-running the validator at load:
-//! - **Han keeps clear of the band's gates** (and the death gates): no route, no standing,
-//!   no steering within [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`,
-//!   `waltz`, `grip` or `stain` mark ([`Level::han_allowed`]). So no plunger boost ever opens
-//!   them: they always need their mode (the validator proves it with boosts from everywhere
-//!   Han may be).
+//! - **Han's boost is feeble near the band's gates** (and the death gates): within the *band
+//!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
+//!   `grip` or `stain` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
+//!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
+//!   holds Nat while he's standing on the ground. He follows normally, but keeps out of a
+//!   waltz row's mark and off the grease in a grease chute's zone ([`Level::han_keeps_out`]).
+//!   So no boost, and no chain of boosts, ever opens them: they always need their mode (the
+//!   validator proves it: full boosts from everywhere outside the zones Han may be, weak ones
+//!   from everywhere inside them Nat may get to).
 //! - **Chain-jump chasms** (`chain`) have no overuse limit: Han boosts you as often as it takes
 //!   while you're in the mark's columns ([`Level::in_chasm`]).
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
@@ -103,9 +107,10 @@ pub const HINT_RADIUS: f32 = 2.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
 pub const LEVEL_COUNT: usize = 10;
-/// Han stays this many columns away from the band's gates (see "Gate marks").
+/// The band zone: this many columns around a band (or death) gate's mark, Han's boost is the
+/// weak one (see "Gate marks"). (The name is from when he kept this berth.)
 pub const HAN_BERTH: i32 = 14;
-/// ...and this many rows above/below them.
+/// ...and this many rows above/below it.
 pub const HAN_BERTH_ROWS: i32 = 10;
 
 /// Source of every level, in play order.
@@ -275,7 +280,7 @@ impl Topic {
         )
     }
 
-    /// The band's gates and the death gates: Han keeps clear of these marks.
+    /// The band's gates and the death gates: Han's boost is weak in their zone.
     pub fn han_keeps_clear(self) -> bool {
         matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain)
     }
@@ -296,7 +301,8 @@ impl GateMark {
         (self.c0..=self.c1).contains(&c) && (self.r0..=self.r1).contains(&r)
     }
 
-    /// Where Han won't go: the mark grown by [`HAN_BERTH`] x [`HAN_BERTH_ROWS`].
+    /// The band zone (Han's boost is weak there): the mark grown by [`HAN_BERTH`] x
+    /// [`HAN_BERTH_ROWS`].
     pub fn berth(&self) -> GateMark {
         GateMark {
             c0: self.c0 - HAN_BERTH,
@@ -394,9 +400,32 @@ pub struct Level {
 }
 
 impl Level {
-    /// May Han be in cell (col, row)? Not within the berth of a band/death gate mark.
+    /// The band (or death) gate mark whose zone holds cell (col, row), if any: there Han's
+    /// boost is the weak one.
+    pub fn band_zone(&self, cell: (i32, i32)) -> Option<&GateMark> {
+        self.gates.iter().find(|g| g.topic.han_keeps_clear() && g.berth().contains(cell))
+    }
+
+    /// Is cell (col, row) in a band zone (Han's boost is weak there)?
+    pub fn in_band_zone(&self, cell: (i32, i32)) -> bool {
+        self.band_zone(cell).is_some()
+    }
+
+    /// Is Han's boost full strength in cell (col, row)? Outside every band zone. (The name is
+    /// from when he kept out of the zones; he goes anywhere now but [`Level::han_keeps_out`].)
     pub fn han_allowed(&self, cell: (i32, i32)) -> bool {
-        !self.gates.iter().any(|g| g.topic.han_keeps_clear() && g.berth().contains(cell))
+        !self.in_band_zone(cell)
+    }
+
+    /// Cells Han won't stand in: a waltz row's mark (his body would plug the jets for Nat), and
+    /// grease in a grease chute's zone (Nat on his head would be jumping off the grease).
+    pub fn han_keeps_out(&self, (c, r): (i32, i32)) -> bool {
+        let greasy = self.tile(c, r + 1) == Tile::Grease;
+        self.gates.iter().any(|g| match g.topic {
+            Topic::Waltz => g.contains((c, r)),
+            Topic::Grip => greasy && g.berth().contains((c, r)),
+            _ => false,
+        })
     }
 
     /// Is column `col` inside a chain-jump chasm mark (no overuse limit there)?
@@ -712,9 +741,11 @@ mod tests {
         let src = "name: T\ngate: giant 20,3 5,9\ngate: chain 30,1 40,9\n---\nPG\n##\n";
         let l = Level::parse(src).unwrap();
         assert_eq!(l.gates[0], GateMark { topic: Topic::Giant, c0: 5, r0: 3, c1: 20, r1: 9 });
-        assert!(!l.han_allowed((5 - HAN_BERTH, 3)));
-        assert!(l.han_allowed((5 - HAN_BERTH - 1, 3)));
-        assert!(l.han_allowed((35, 5)), "Han goes into chasms");
+        assert!(l.in_band_zone((5 - HAN_BERTH, 3)) && !l.han_allowed((5 - HAN_BERTH, 3)));
+        assert!(!l.in_band_zone((5 - HAN_BERTH - 1, 3)));
+        assert_eq!(l.band_zone((10, 4)).map(|g| g.topic), Some(Topic::Giant));
+        assert!(l.han_allowed((35, 5)), "full boosts in chasms");
+        assert!(!l.han_keeps_out((10, 4)), "Han goes near giant walls");
         assert!(l.in_chasm(35) && !l.in_chasm(41));
         assert!(Level::parse("name: T\ngate: toot 1,1 2,2\n---\nPG\n##\n").is_err());
         assert!(Level::parse("name: T\ngate: giant 1,1\n---\nPG\n##\n").is_err());

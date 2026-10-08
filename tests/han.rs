@@ -9,7 +9,7 @@ use nat_han_adventures::{
     audio::{Filters, Harmony},
     events::*,
     game::*,
-    level::{Level, Levels, TILE},
+    level::{Level, Levels, TILE, Topic},
     state::AppState,
 };
 
@@ -575,10 +575,10 @@ fn han_makes_a_big_raft_in_sewage() {
     assert_eq!(han_raft_life(&a), 2.0 * HAN_RAFT_LIFE_FLOOR);
 }
 
-// --- Keeping clear of the band's gates ---------------------------------------------------------
+// --- The band zone: Han's boost is feeble near the band's gates --------------------------------
 
-#[test]
-fn han_refuses_to_go_near_giant_walls() {
+/// A level with a giant wall (marked) at col 50: 7 tiles tall, the goal on top.
+fn giant_wall_level() -> String {
     let mut rows = vec![".".repeat(90); 14];
     for r in 7..14 {
         rows[r].replace_range(50..90, &"#".repeat(40));
@@ -587,16 +587,163 @@ fn han_refuses_to_go_near_giant_walls() {
     rows[13].replace_range(2..3, "P");
     rows[6].replace_range(86..87, "G");
     let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
-    let lvl = level("gate: giant 41,6 52,13\n", &rows);
-    let mut app = app(&lvl);
+    level("gate: giant 41,6 52,13\n", &rows)
+}
+
+/// Han follows Nat right up to a giant wall: no hanging back, no parachuting in afterwards.
+#[test]
+fn han_follows_normally_next_to_a_giant_wall() {
+    let mut app = app(&giant_wall_level());
     press(&mut app, RIGHT);
-    let berth = (41 - nat_han_adventures::level::HAN_BERTH) as f32 * TILE;
-    for _ in 0..400 {
+    let mut max_gap: f32 = 0.0;
+    for _ in 0..420 {
         app.update();
         trace(&mut app);
-        assert!(han(&mut app).x < berth + 6.0, "Han went near the wall: {}", han(&mut app));
+        max_gap = max_gap.max((nat(&mut app).x - han(&mut app).x).abs());
     }
-    assert_eq!(said(&app, BAND_LINE), 1);
+    release(&mut app, RIGHT);
+    step(&mut app, 2.0);
+    let (p, h) = (nat(&mut app), han(&mut app));
+    assert!(p.x > 48.0 * TILE, "Nat at the wall: {p}");
+    assert!(max_gap < 4.0 * TILE, "kept up: {max_gap}");
+    assert!((p.x - h.x).abs() < 3.0 * TILE && (p.x - h.x).abs() >= 12.0, "in his slot by the wall: {h} vs {p}");
+    assert_eq!(brain(&mut app).drops, 0, "no parachute");
+    let cell = (h.x / TILE) as i32;
+    assert!(cell > 41 - nat_han_adventures::level::HAN_BERTH, "in the band zone: col {cell}");
+    assert!(head(&mut app).weak, "his boost is the weak one there");
+}
+
+/// Drop Nat on Han (standing at `col`), jump: how high Nat's feet rise above where they were (tiles).
+fn boost_rise(app: &mut App, col: f32) -> f32 {
+    put::<Han>(app, Vec2::new(col * TILE + 8.0, standing(TILE)));
+    step(app, 0.3);
+    let h = han(app);
+    put::<Player>(app, h + Vec2::new(0.0, 1.5 * TILE));
+    step(app, 0.5);
+    assert_eq!(nat_body(app).riding, Some(single::<Han>(app)), "on Han's head");
+    let feet0 = nat(app).y - 7.0;
+    tap(app);
+    let mut top: f32 = 0.0;
+    for _ in 0..60 {
+        app.update();
+        trace(app);
+        top = top.max(nat(app).y - 7.0);
+    }
+    release(app, JUMP);
+    step(app, 0.5);
+    (top - feet0) / TILE
+}
+
+/// Near each kind of band (or death) gate the boost is weak and Han grumbles (a line for the
+/// gate's kind first); away from them it's the full one, silently.
+#[test]
+fn boost_is_weak_near_band_gates_and_han_grumbles() {
+    for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
+        let lvl = FLAT.replace("name: Flat\n", &format!("name: Flat\ngate: {} 40,6 45,7\n", topic.word()));
+        let mut app = app(&lvl);
+        step(&mut app, 0.5);
+        // In the zone (14 columns from the mark): a hop about a normal jump's height.
+        let weak = boost_rise(&mut app, 30.0);
+        assert!(head(&mut app).weak, "{topic:?}");
+        let expect = WEAK_BOOST_SPEED * WEAK_BOOST_SPEED / (2.0 * tuning::GRAVITY) / TILE;
+        assert!((weak - expect).abs() < 0.3, "{topic:?}: weak boost {weak} tiles, expected ~{expect}");
+        assert!(weak < 3.2, "{topic:?}: no more than a normal jump");
+        assert_eq!(heard(&app).boosted, 1, "{topic:?}");
+        let line = grumble_lines(topic)[0];
+        assert!(line.len() <= nat_han_adventures::level::MAX_LINE, "{line}");
+        assert_eq!(said(&app, line), 1, "{topic:?}: {:?}", heard(&app).says);
+        assert_eq!(brain(&mut app).weak_boosts, 1);
+        assert_eq!(brain(&mut app).streak, 0, "his back doesn't mind those");
+        // Away from it: the full boost, no grumbling.
+        let says = heard(&app).says.len();
+        let full = boost_rise(&mut app, 8.0);
+        assert!(!head(&mut app).weak);
+        assert!((6.5..7.5).contains(&full), "{topic:?}: full boost {full} tiles");
+        assert_eq!(heard(&app).says.len(), says, "{:?}", heard(&app).says);
+        // In mid-air in the zone his head holds nobody (no chains of weak boosts).
+        put::<Han>(&mut app, Vec2::new(30.0 * TILE + 8.0, standing(TILE) + 3.0 * TILE));
+        app.update();
+        assert!(!head(&mut app).solid, "{topic:?}: mid-air in the zone");
+    }
+}
+
+/// The grumbles go round: the gate's own lines and the general ones, all short enough.
+#[test]
+fn grumbles_rotate() {
+    for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
+        let n = grumble_lines(topic).len() + GRUMBLE_LINES.len();
+        let lines: std::collections::HashSet<&str> = (0..n as u32).map(|k| grumble_line(Some(topic), k)).collect();
+        assert_eq!(lines.len(), n, "{topic:?}: every line in turn");
+        assert!(lines.iter().all(|l| l.len() <= nat_han_adventures::level::MAX_LINE), "{lines:?}");
+    }
+    assert!(GRUMBLE_LINES.contains(&grumble_line(None, 1)));
+}
+
+/// The weak boost and its toot, however timed, don't get Nat up a 6-tile giant wall from Han's
+/// head at its foot (the band's Giant Steps still does that job).
+#[test]
+fn weak_boost_cannot_climb_a_giant_wall() {
+    let rows = [
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        "....................................",
+        ".........................###########",
+        ".........................###########",
+        ".........................###########",
+        ".........................###########",
+        ".........................###########",
+        ".P.......................##########G",
+        "####################################",
+    ];
+    let lvl = level("gate: giant 10,7 30,13\n", &rows);
+    for toot_at in [0.1, 0.15, 0.2, 0.25, 0.3, 0.35] {
+        let mut app = app(&lvl);
+        put::<Han>(&mut app, Vec2::new(24.0 * TILE + 8.0, standing(TILE)));
+        step(&mut app, 0.3);
+        let h = han(&mut app);
+        put::<Player>(&mut app, h + Vec2::new(0.0, 1.5 * TILE));
+        step(&mut app, 0.5);
+        press(&mut app, RIGHT);
+        tap(&mut app);
+        step(&mut app, toot_at);
+        tap(&mut app);
+        step(&mut app, 1.5);
+        let p = nat(&mut app);
+        assert!(p.y < standing(7.0 * TILE) - 8.0, "toot at {toot_at}: up the wall at {p}");
+        assert_eq!(heard(&app).boosted, 1);
+    }
+}
+
+/// An 11-tile long gap (marked): the weak boost off Han at the edge, running, with the toot,
+/// falls short (the fired-up band still does that job).
+#[test]
+fn weak_boost_cannot_cross_a_long_gap() {
+    let mut rows = vec![".".repeat(60); 14];
+    rows.push(format!("{}{}{}", "#".repeat(25), ".".repeat(11), "#".repeat(24)));
+    rows[13].replace_range(2..3, "P");
+    rows[13].replace_range(56..57, "G");
+    let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+    let lvl = level("gate: gap 23,12 37,13\n", &rows);
+    for toot_at in [0.2, 0.3, 0.4, 0.5] {
+        let mut app = app(&lvl);
+        // Han hanging off the edge, Nat on the front of his head.
+        put::<Han>(&mut app, Vec2::new(25.0 * TILE + 4.0, standing(TILE)));
+        step(&mut app, 0.3);
+        let h = han(&mut app);
+        put::<Player>(&mut app, h + Vec2::new(4.0, 1.5 * TILE));
+        step(&mut app, 0.5);
+        press(&mut app, RIGHT);
+        tap(&mut app);
+        step(&mut app, toot_at);
+        tap(&mut app);
+        step(&mut app, 2.0);
+        assert!(heard(&app).died >= 1 || nat(&mut app).x < 36.0 * TILE, "toot at {toot_at}: across at {}", nat(&mut app));
+    }
 }
 
 // --- Overuse -----------------------------------------------------------------------------------

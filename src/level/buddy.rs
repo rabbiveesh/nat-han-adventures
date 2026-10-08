@@ -28,6 +28,20 @@ pub const HAN_GS_FLOAT: f32 = 0.8;
 pub const HAN_DIVE: f32 = 1.4;
 /// The laughing band: Han rolls along, bouncier than Nat (bounce speed × this).
 pub const HAN_ROLL_BOUNCE: f32 = 1.3;
+/// In mid-air Han's head holds Nat only while his feet are at most this far (px) above where
+/// he last stood (he's a plumber, not a crane): it bounds how high a chain of boosts can
+/// launch from, which the validator's proof relies on. Catches over a drop are mostly below
+/// it anyway.
+pub const HAN_CATCH_RISE: f32 = 2.0 * TILE;
+/// ...and over a chain-jump chasm (in its mark's columns), where chains are the point.
+pub const HAN_CHASM_CATCH_RISE: f32 = 5.0 * TILE;
+
+/// Does Han's head hold Nat (is it a carrier)? Standing: always. In mid-air: only outside the
+/// band zones (no weak-boost chains there), and only [`HAN_CATCH_RISE`] above his last floor
+/// (`rise`: px his feet are above it; [`HAN_CHASM_CATCH_RISE`] over a chasm).
+pub fn head_holds(grounded: bool, rise: f32, in_zone: bool, in_chasm: bool) -> bool {
+    grounded || (!in_zone && rise <= if in_chasm { HAN_CHASM_CATCH_RISE } else { HAN_CATCH_RISE })
+}
 
 /// Han's physics under the music.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -309,7 +323,8 @@ pub fn chain_try(level: &Level, chasm: &Chasm, dir: i32, play: ChainPlay, gs: Gs
     hb.vel.x = d * RUN_SPEED;
     let mut hctl = HanCtl::default();
     let han_id = Entity::from_raw_u32(1).unwrap_or(Entity::PLACEHOLDER);
-    let head = HanHead { solid: true, boost: true, block: false };
+    let mut head = HanHead { solid: true, boost: true, block: false, weak: false };
+    let mut han_floor = han.y;
     let mut groove = Groove::default();
     let (mut jumped, mut has_toot, mut toots, mut t, mut last_launch, mut tooted_since) =
         (false, true, 0u32, 0.0f32, 0.0f32, false);
@@ -339,6 +354,12 @@ pub fn chain_try(level: &Level, chasm: &Chasm, dir: i32, play: ChainPlay, gs: Gs
             input = HanInput { dir: d, speed: 1.0, ..default() };
         }
         drive(level, &mut han, &mut hb, &mut hctl, input, &phys, &[], DT);
+        if hb.on_ground {
+            han_floor = han.y;
+        }
+        // (An unmarked chasm: as the game will have it once it is marked.)
+        let over = level.in_chasm(level.cell_at(han).0) || !level.gates.iter().any(|g| g.topic == super::Topic::Chain);
+        head.solid = head_holds(hb.on_ground, han.y - han_floor, false, over);
         // --- Nat.
         nb.vel.x = move_towards(nb.vel.x, d * speed, if nb.on_ground { GROUND_ACCEL } else { AIR_ACCEL } * groove.speed_scale * DT);
         let on_han = nb.riding == Some(han_id);

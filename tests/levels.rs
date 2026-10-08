@@ -492,6 +492,38 @@ fn validator_knows_chain_chasms() {
     assert!(!gates(&gap).contains(&Gate::ChainChasm), "{:?}", gates(&gap));
 }
 
+/// Han's boost in a band zone, and chains of boosts: an 18-wide stain pit with a ledge 9 tiles
+/// over it that no jump (Giant Steps included) reaches. At full strength one boost off Han at
+/// the edge doesn't cross the pit, but it reaches the ledge, and a second one off Han standing
+/// there crosses: the chain proof catches it. Han's real band-zone boost (the weak one) reaches
+/// neither, so the level is fine.
+#[test]
+fn validator_proves_band_zone_boost_chains() {
+    let mut l = pit_level(18, "deaths: 2\n");
+    for c in 27..31 {
+        l.tiles[l.width + c] = Tile::Solid;
+    }
+    // The mark reaches up over the ledge: the zone covers the air above it (Han may climb up
+    // there, and catch a high-flying Nat jumping off it).
+    l.gates[0].r0 = 0;
+    l.gates[0].c1 = 47;
+    let r = run(&l);
+    assert!(r.errs.is_empty(), "the weak boost doesn't open the pit: {:?}", r.errs);
+    assert_eq!(gates(&r), [Gate::StainPit]);
+    let full = Physics::new().with_weak_boost(nat_han_adventures::game::BOOST_SPEED);
+    let errs = check_with(&l, &Options::default(), &full).errs;
+    assert!(
+        errs.iter().any(|e| e.contains("stain pit") && e.contains("chain of boosts")),
+        "a full boost to the ledge, then another: {errs:?}"
+    );
+    // (The ledge is what makes it a chain: without it, one full boost doesn't do it.)
+    let mut bare = pit_level(18, "deaths: 2\n");
+    bare.things = l.things.clone();
+    bare.gates = l.gates.clone();
+    let one = check_with(&bare, &Options::default(), &full).errs;
+    assert!(one.is_empty(), "{one:?}");
+}
+
 /// Shield rows: a can tunnel too long for the waltz; Han goes ahead.
 #[test]
 fn validator_knows_shield_rows() {
