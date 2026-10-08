@@ -21,7 +21,7 @@ const INTRO_SECS: f32 = 1.6;
 pub fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::Playing), (spawn_hud, spawn_intro)).add_systems(
         Update,
-        (update_hud, update_groove_badge, tick_intro, checkpoint_toast, band_toast).run_if(in_state(AppState::Playing)),
+        (update_hud, update_groove_badge, tick_intro, checkpoint_toast, band_toast, update_band_readout).run_if(in_state(AppState::Playing)),
     );
 }
 
@@ -83,6 +83,7 @@ fn spawn_hud(
             });
         });
     spawn_groove_badge(&mut commands, f, sprites.as_deref());
+    spawn_band_readout(&mut commands, f);
 }
 
 /// Small persistent badge, top left under the nugget count: the mode the music has the physics in.
@@ -314,5 +315,87 @@ mod tests {
             tuning_now: None,
         };
         assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JAZZ WALTZ".to_string()));
+    }
+}
+
+/// Bottom-right: what the band is doing right now — the harmony (or "AS WRITTEN") and the
+/// tuning sounding at this moment (the laughing band's medley changes every phrase).
+#[derive(Component)]
+struct BandReadout;
+
+fn spawn_band_readout(commands: &mut Commands, f: &UiFont) {
+    commands
+        .spawn((
+            Name::new("BandReadoutPanel"),
+            DespawnOnExit(AppState::Playing),
+            Node {
+                position_type: PositionType::Absolute,
+                right: px(6.0),
+                bottom: px(6.0),
+                padding: UiRect::axes(px(4.0), px(3.0)),
+                border: UiRect::all(px(1.0)),
+                ..default()
+            },
+            BackgroundColor(PANEL),
+            BorderColor::all(DARK_GOLD),
+        ))
+        .with_child((BandReadout, label(f, "", 8.0, CREAM), TextLayout::justify(Justify::Right)));
+}
+
+/// The two readout lines for what's sounding.
+pub fn band_readout_text(now: &crate::audio::NowPlaying) -> String {
+    use crate::audio::{Harmony, tuning::Tuning};
+    let harmony = match now.filters.harmony {
+        Harmony::Original => "AS WRITTEN",
+        h => h.label(),
+    };
+    let tuning = match (now.tuning_now, now.filters.just_intonation) {
+        (Some(t), _) => tuning_name(t),
+        (None, true) => tuning_name(Tuning::Medley),
+        (None, false) => "EQUAL TEMPERAMENT",
+    };
+    format!("{harmony}\n{tuning}")
+}
+
+fn tuning_name(t: crate::audio::tuning::Tuning) -> &'static str {
+    use crate::audio::tuning::Tuning::*;
+    match t {
+        Equal => "EQUAL TEMPERAMENT",
+        Just => "JUST INTONATION",
+        CarlosAlpha => "CARLOS ALPHA",
+        BohlenPierce => "BOHLEN-PIERCE",
+        Tet7 => "7-TET",
+        Harmonic => "HARMONIC SERIES",
+        Drunk => "DRUNK",
+        Medley => "DRUNK MEDLEY",
+    }
+}
+
+fn update_band_readout(
+    now: Option<Res<crate::audio::NowPlaying>>,
+    mut q: Query<&mut Text, With<BandReadout>>,
+) {
+    let Some(now) = now else { return };
+    let text = band_readout_text(&now);
+    for mut t in &mut q {
+        if t.0 != text {
+            t.0 = text.clone();
+        }
+    }
+}
+
+#[cfg(test)]
+mod readout_tests {
+    use super::band_readout_text;
+    use crate::audio::{Filters, Harmony, NowPlaying, tuning::Tuning};
+
+    #[test]
+    fn readout_names_harmony_and_tuning() {
+        let mut now = NowPlaying::default();
+        assert_eq!(band_readout_text(&now), "AS WRITTEN\nEQUAL TEMPERAMENT");
+        now.filters = Filters { harmony: Harmony::Coltrane, just_intonation: true };
+        assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\nDRUNK MEDLEY");
+        now.tuning_now = Some(Tuning::Tet7);
+        assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\n7-TET");
     }
 }
