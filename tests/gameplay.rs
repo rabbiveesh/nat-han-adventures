@@ -1606,3 +1606,38 @@ fn top_of_the_screen_is_a_ceiling() {
         assert!(pos.x < 10.0 * TILE, "got past the wall at {pos}");
     }
 }
+
+/// A level you climb (like Septic Tank): the checkpoint at the bottom comes first in play but
+/// last in reading order (top row first).
+const CLIMB: &str = "name: Climb
+---
+.........................
+.....C.................G.
+#########################
+.........................
+.........................
+.P.........C.............
+#########################
+";
+
+#[test]
+fn respawn_at_the_newest_checkpoint_in_a_climb() {
+    // Regression: the highest-index checkpoint used to win, so after the bottom one (index 1)
+    // every death sent you back there, however far up you got.
+    let mut app = app(CLIMB);
+    let p = single::<Player>(&mut app);
+    let teleport = |app: &mut App, col: f32, floor_rows_up: f32| {
+        let at = Vec2::new(col * TILE + TILE / 2.0, standing(floor_rows_up * TILE));
+        app.world_mut().get_mut::<Pos>(p).unwrap().0 = at;
+        app.update();
+        app.update();
+    };
+    teleport(&mut app, 11.0, 1.0);
+    assert_eq!(run(&app).checkpoint, Some(1), "the bottom checkpoint");
+    teleport(&mut app, 5.0, 5.0);
+    assert_eq!(run(&app).checkpoint, Some(0), "the top one, reached later, wins");
+    // Back down past the bottom one (already touched): still the top one.
+    teleport(&mut app, 11.0, 1.0);
+    assert_eq!(run(&app).checkpoint, Some(0));
+    assert_eq!(counted::<CheckpointReached>(&app), 2);
+}
