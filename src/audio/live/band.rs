@@ -10,21 +10,25 @@
 //! - **fill / crash**: the drums' fills (every 4 and 8 bars, phrase ends, press rolls into
 //!   sections) and the crash after one;
 //! - **flourish**: a big moment from the game (a summon switching the harmony: crash and fill;
-//!   a checkpoint: a short fill; a death: the lead's wah-wah).
+//!   a checkpoint: a short fill; a death: the lead's wah-wah);
+//! - **feel**: the groove the band plays the bar in ([`Feel`]: the tune's own swing, or a
+//!   bossa, samba, rock or funk section the band picked for itself; see [`super::feel`]),
+//!   with a fill into it and out of it and a crash on each side.
 //!
 //! Every choice is a pure function of the seed, the bar, the dials and the cues, so it's
 //! deterministic, and the musicians' own plans can show the same choices ahead of time.
 //!
-//! # Extension point: feels
-//! A later *feel* (bossa, samba, rock, funk) belongs here: a per-bar [`BandPlan::feel`] that the
-//! drums read for their pattern, the comp and bass for their rhythm transforms, and every
-//! musician for its instrument ([`super::instrument::Instruments::palette`]); decided like the
-//! trade (per section, from the dials), so the band switches together.
+//! # Feels
+//! [`BandPlan::feel`] is decided here ([`super::feel::decide`]: per section, from the dials,
+//! like the trade), so the band switches together: the drums read it for their pattern, the
+//! comp and bass for their rhythm transforms, every musician for its instrument (the feel's
+//! palette, [`super::instrument::Instruments::feel_palette`]).
 
 use crate::audio::accomp::Rng;
 use crate::audio::chart::{Chord, Family, Quality};
 use crate::audio::tuning;
 
+use super::feel::{self, Feel};
 use super::musician::{BarSlot, PhrasePlan, Target};
 use super::ornament::{self, Harm};
 
@@ -111,8 +115,10 @@ pub struct BandPlan {
     pub flourish: Flourish,
     /// The previous bar anticipated this one's downbeat (comp and bass don't re-attack it).
     pub anticipated: bool,
-    /// Reserved for feels (see the module docs): 0 = the song's own.
-    pub feel: u8,
+    /// The groove ([`super::feel`]); [`Feel::Swing`]: the tune's own.
+    pub feel: Feel,
+    /// The bar the feel started in (two-bar patterns count from it).
+    pub feel_since: u64,
 }
 
 impl BandPlan {
@@ -150,6 +156,11 @@ pub struct BandInput<'a> {
     pub death: bool,
     /// The previous bar's plan (fills crash into this one; anticipations tie over).
     pub prev: &'a BandPlan,
+    /// The bar is in the waltz's shape (no feels there), and the song loops.
+    pub waltz: bool,
+    pub looping: bool,
+    /// The editor's override of the band's feel (`Some(Feel::Swing)`: none).
+    pub force_feel: Option<Feel>,
 }
 
 /// 0 below `lo`, 1 above `hi`, linear between: how far a dial is into a tier.
@@ -227,7 +238,15 @@ impl BandPlan {
         let [lead, comp, bass, drums] = input.freedom;
         let slot = input.slot;
         let mut plan = BandPlan { bar: slot.index, anticipated: input.prev.hit_kind == HitKind::Anticipation && input.prev.bar + 1 == slot.index, ..BandPlan::default() };
+        // The feel: into a new one (or back home) with a crash.
+        let call = feel::decide(input);
+        (plan.feel, plan.feel_since) = (call.feel, call.since);
+        let contiguous = input.prev.bar + 1 == slot.index;
+        let entered = contiguous && plan.feel != input.prev.feel;
+        // The bar before a change of feel: a fill (and no ending figure or trade in its way).
+        let transition = call.next != plan.feel;
         if input.freedom.iter().all(|f| *f <= 0.0) {
+            plan.crash = entered;
             return plan;
         }
         let mut r = rng(input.seed, 5, slot.index, 0);
@@ -236,7 +255,7 @@ impl BandPlan {
         let phrase_last = input.phrase.last_bar() == slot.index;
         let loop_end = slot.song_bar + 1 == input.bars;
 
-        plan.trade = trade_for(input.seed, slot.pass, slot.song_bar, input.bars, lead, drums);
+        plan.trade = if plan.feel == Feel::Swing { trade_for(input.seed, slot.pass, slot.song_bar, input.bars, lead, drums) } else { Trade::None };
 
         // Fills, and the crash after one.
         plan.fill = fill_for(input.seed, slot.index, slot.song_bar, input.bars, phrase_last, drums);
@@ -246,6 +265,10 @@ impl BandPlan {
             plan.fill = Fill::Full;
             plan.crash = input.prev.trade != Trade::Drums;
         }
+        if transition && plan.fill != Fill::PressRoll {
+            plan.fill = Fill::Full;
+        }
+        plan.crash |= entered;
 
         // Flourishes.
         if input.switched && drums > 0.0 {
@@ -268,7 +291,7 @@ impl BandPlan {
             (Some(a), Some(b)) => a.chord != b.chord,
             _ => false,
         };
-        if comp > 0.0 && plan.trade != Trade::Drums && !loop_end {
+        if comp > 0.0 && plan.trade != Trade::Drums && !loop_end && !transition {
             let ending = phrase_last && matches!(input.phrase.target, Target::SectionEnd | Target::Cadence);
             let p_end = 0.55 * mid(comp.min(bass.max(drums)));
             let p_ant = 0.3 * low(comp) * if changes { 1.0 } else { 0.3 };

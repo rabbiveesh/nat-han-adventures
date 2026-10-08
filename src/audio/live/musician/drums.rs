@@ -3,12 +3,15 @@
 //! On the written groove the drummer adds ghost snares and an open hat on an "and" (low),
 //! kicks with the band's hits, crashes after a fill or on a summon, and plays the band's fills
 //! (short, full, press rolls into sections); it breaks the time up on a loose night and solos
-//! for its four when the band trades.
+//! for its four when the band trades. In a feel ([`crate::audio::live::feel`]) it plays the
+//! feel's groove on the feel's kit instead of the written one: the bossa clave on the rim, the
+//! samba's batucada (and a cuíca now and then), a rock backbeat, a funk 16th groove.
 
 use super::{Ctx, Musician, PhrasePlan, Player, Role, clear_span, musician_common, push, work};
 use crate::audio::accomp::Rng;
 use crate::audio::live::band::{Fill, HitKind, Trade, mid};
 use crate::audio::live::engine::Input;
+use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Orn, Orns};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Drum;
@@ -51,7 +54,8 @@ impl Musician for Drums {
                 e.gain *= accent;
             }
         }
-        if self.p.freedom <= 0.0 {
+        let feel = ctx.feel();
+        if self.p.freedom <= 0.0 && feel == Feel::Swing {
             out.extend(self.src.iter().copied());
             self.last = self.src.first().copied().or(self.last);
             return fired;
@@ -61,20 +65,25 @@ impl Musician for Drums {
         let orns = intent.orns;
         let band = ctx.band;
         let bb = ctx.bb();
-        let tmpl = ctx.template(3, self.src.first().copied().or(self.last));
+        let mut tmpl = ctx.template(3, self.src.first().copied().or(self.last));
+        if let Some(kit) = ctx.feel_inst(3, false) {
+            tmpl.inst = kit;
+        }
         let vol = self.src.iter().map(|e| e.volume).max().unwrap_or(tmpl.volume).max(6);
         let mut r = ctx.rng(Role::Drums, 3);
         self.dst.clear();
         if band.trade == Trade::Drums {
             self.solo(ctx, &tmpl, vol, &mut r);
             fired.add(Orn::Trade);
+        } else if feel != Feel::Swing {
+            fired.add(self.groove(ctx, &tmpl, vol, &mut r));
         } else if orns.has(Orn::BrokenTime) {
             self.broken(ctx, &tmpl, vol, &mut r);
             fired.add(Orn::BrokenTime);
         } else {
             self.dst.extend(self.src.iter().copied());
         }
-        if band.trade != Trade::Drums {
+        if band.trade != Trade::Drums && feel == Feel::Swing {
             // Ghost snares before the beats.
             if orns.has(Orn::Ghost) {
                 let sixteenths = (bb * 4.0) as usize;
@@ -161,6 +170,7 @@ impl Musician for Drums {
             }
         }
         if intent.switch
+            && feel == Feel::Swing
             && (fired.has(Orn::Fill) || fired.has(Orn::Trade))
             && let Some(alt) = ctx.alternate(3, self.p.plan.map_or(0, |p| p.start), tmpl.inst)
         {
@@ -185,6 +195,117 @@ impl Musician for Drums {
 }
 
 impl Drums {
+    /// A feel's groove for the bar (what it played).
+    fn groove(&mut self, ctx: &Ctx, t: &NoteEvent, vol: u8, r: &mut Rng) -> Orn {
+        let bb = ctx.bb();
+        let v = |x: i32| (vol as i32 + x).clamp(1, 15) as u8;
+        let sixteenths = (bb * 4.0).round() as usize;
+        let add = |dst: &mut Vec<NoteEvent>, b: f64, d: Drum, volume: u8| {
+            if b < bb - 1e-9 {
+                push(dst, hit(ctx, t, b, d, volume));
+            }
+        };
+        match ctx.feel() {
+            Feel::Bossa => {
+                // Soft: the shaker on the 8ths (the "and"s up), the clave on the rim, a light kick.
+                let pair = !feel::first_of_pair(ctx.bar.index, ctx.band.feel_since) as usize;
+                for k in 0..(bb * 2.0).round() as usize {
+                    add(&mut self.dst, k as f64 * 0.5, Drum::ClosedHat, v(if k % 2 == 1 { -3 } else { -5 }));
+                }
+                for &b in feel::BOSSA_CLAVE[pair] {
+                    add(&mut self.dst, b, Drum::Snare, v(-1));
+                }
+                for (j, &b) in feel::BOSSA_KICK.iter().enumerate() {
+                    add(&mut self.dst, b, Drum::Kick, v(if j % 2 == 0 { -2 } else { -5 }));
+                }
+                Orn::Clave
+            }
+            Feel::Samba => {
+                // The ganzá on every 16th (accents on the "a" and the beat), the tamborim's
+                // teleco-teco, the kick heavy on 2 and 4.
+                for k in 0..sixteenths {
+                    add(&mut self.dst, k as f64 * 0.25, Drum::ClosedHat, v(match k % 4 {
+                        3 => -1,
+                        0 => -3,
+                        _ => -6,
+                    }));
+                }
+                for &k in &feel::SAMBA_TAMBORIM {
+                    add(&mut self.dst, k as f64 * 0.25, Drum::Snare, v(if k % 4 == 0 { 0 } else { -2 }));
+                }
+                for k in 0..bb.round() as usize {
+                    add(&mut self.dst, k as f64, Drum::Kick, v(if k % 2 == 1 { 1 } else { -4 }));
+                }
+                // The cuíca: "oo-EE", now and then.
+                if r.chance(0.4) {
+                    let at = if r.chance(0.5) { bb - 1.5 } else { bb - 0.5 };
+                    for (j, x) in [Extra::CuicaLo, Extra::CuicaHi].into_iter().enumerate() {
+                        let b = at + j as f64 * 0.25;
+                        if b < bb - 1e-9 {
+                            push(&mut self.dst, NoteEvent { inst: ctx.extra(x), ..hit(ctx, t, b, Drum::Snare, v(-1 + j as i32)) });
+                        }
+                    }
+                }
+                Orn::Batucada
+            }
+            Feel::Rock => {
+                // 8th hats, kick on 1 and 3 (and the odd push), the backbeat hard, a crash at a
+                // section's start.
+                let crash = ctx.bar.song_bar.is_multiple_of(8);
+                for k in 0..(bb * 2.0).round() as usize {
+                    if k == 0 && crash {
+                        add(&mut self.dst, 0.0, Drum::Crash, v(1));
+                    } else {
+                        add(&mut self.dst, k as f64 * 0.5, Drum::ClosedHat, v(if k % 2 == 0 { -2 } else { -4 }));
+                    }
+                }
+                let push_kick = r.chance(0.4);
+                for k in 0..bb.round() as usize {
+                    let b = k as f64;
+                    if k % 2 == 0 {
+                        add(&mut self.dst, b, Drum::Kick, v(1));
+                    } else {
+                        add(&mut self.dst, b, Drum::Snare, v(3));
+                    }
+                }
+                if push_kick {
+                    add(&mut self.dst, 2.5, Drum::Kick, v(-1));
+                }
+                Orn::Backbeat
+            }
+            Feel::Funk => {
+                // 16th hats (accented 8ths, an open one now and then), the backbeat with ghosts
+                // around it, the kick's syncopation (the bass locks to it).
+                let open = r.chance(0.5);
+                for k in 0..sixteenths {
+                    let b = k as f64 * 0.25;
+                    if open && k == 14 {
+                        add(&mut self.dst, b, Drum::OpenHat, v(-2));
+                    } else {
+                        add(&mut self.dst, b, Drum::ClosedHat, v(match k % 4 {
+                            0 => -1,
+                            2 => -3,
+                            _ => -7,
+                        }));
+                    }
+                }
+                for &k in &feel::FUNK_BACKBEAT {
+                    add(&mut self.dst, k as f64 * 0.25, Drum::Snare, v(3));
+                }
+                let first = r.below(feel::FUNK_GHOSTS.len());
+                for j in 0..3 {
+                    let k = feel::FUNK_GHOSTS[(first + j * 2) % feel::FUNK_GHOSTS.len()];
+                    add(&mut self.dst, k as f64 * 0.25, Drum::Snare, (vol / 4).max(2));
+                }
+                for &k in feel::FUNK_KICKS[feel::pattern(ctx.seed, ctx.bar.index, feel::FUNK_KICKS.len())] {
+                    add(&mut self.dst, k as f64 * 0.25, Drum::Kick, v(1));
+                }
+                Orn::FunkGroove
+            }
+            Feel::Swing => unreachable!("only in a feel"),
+        }
+    }
+
     /// A full fill over the last two beats: a snare roll, snare and kick 16ths, or triplets.
     fn fill(&mut self, ctx: &Ctx, t: &NoteEvent, vol: u8, r: &mut Rng) {
         let bb = ctx.bb();
