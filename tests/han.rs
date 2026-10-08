@@ -166,8 +166,13 @@ fn level(header: &str, rows: &[&str]) -> String {
     format!("name: T\n{header}---\n{}\n", rows.join("\n"))
 }
 
+/// Tall enough for a full boost: the top of the screen is a ceiling.
 const FLAT: &str = "name: Flat
 ---
+............................................................
+............................................................
+............................................................
+............................................................
 ............................................................
 ............................................................
 ............................................................
@@ -668,7 +673,7 @@ fn boost_rise(app: &mut App, col: f32) -> f32 {
 #[test]
 fn boost_is_weak_near_band_gates_and_han_grumbles() {
     for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
-        let lvl = FLAT.replace("name: Flat\n", &format!("name: Flat\ngate: {} 40,6 45,7\n", topic.word()));
+        let lvl = FLAT.replace("name: Flat\n", &format!("name: Flat\ngate: {} 40,10 45,11\n", topic.word()));
         let mut app = app(&lvl);
         step(&mut app, 0.5);
         // In the zone (14 columns from the mark): a hop about a normal jump's height.
@@ -810,7 +815,7 @@ fn eager_han_allows_more_boosts_and_no_limit_in_chasms() {
     assert!(overuse_limit(1.0) > overuse_limit(0.5) && overuse_limit(0.5) > overuse_limit(0.0));
     assert!(breather(1.0) < breather(0.0));
     // In a chain chasm mark: no limit at all.
-    let lvl = FLAT.replace("name: Flat\n", "name: Flat\ngate: chain 0,0 59,9\n");
+    let lvl = FLAT.replace("name: Flat\n", "name: Flat\ngate: chain 0,0 59,13\n");
     let mut app = app(&lvl);
     step(&mut app, 1.0);
     for k in 0..overuse_limit(0.0) + 3 {

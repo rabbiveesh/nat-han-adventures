@@ -542,9 +542,9 @@ impl<'a> Map<'a> {
 
     #[inline(always)]
     fn f(&self, c: i32, r: i32) -> u16 {
-        if c < 0 || c >= self.w {
+        if c < 0 || c >= self.w || r < 0 {
             SOLID
-        } else if r < 0 || r >= self.h {
+        } else if r >= self.h {
             0
         } else {
             self.flags[(r * self.w + c) as usize]

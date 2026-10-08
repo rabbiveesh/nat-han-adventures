@@ -174,6 +174,31 @@ fn level_of(header: &str, rows: &[String], nugget_row: usize) -> Level {
     l
 }
 
+/// `l` with `n` more rows of sky on top (everything moved down with the grid): headroom for
+/// boosts and chains under the ceiling at the top of the screen.
+fn with_sky(mut l: Level, n: usize) -> Level {
+    let mut tiles = vec![Tile::Empty; n * l.width];
+    tiles.extend(&l.tiles);
+    l.tiles = tiles;
+    l.height += n;
+    l.start.1 += n;
+    l.goal.1 += n;
+    for t in &mut l.things {
+        t.row += n;
+    }
+    for s in l.hints.iter_mut().chain(&mut l.say_at) {
+        s.row += n;
+    }
+    for p in &mut l.platforms {
+        p.row += n;
+    }
+    for g in &mut l.gates {
+        g.r0 += n as i32;
+        g.r1 += n as i32;
+    }
+    l
+}
+
 fn run(l: &Level) -> Report {
     static PHYS: std::sync::OnceLock<Physics> = std::sync::OnceLock::new();
     check_with(l, &Options::default(), PHYS.get_or_init(Physics::new))
@@ -519,9 +544,11 @@ fn chasm_level(width: usize, header: &str) -> Level {
 /// Chain-jump chasms: too wide for any mode and for one boost, crossed by a mid-air chain.
 #[test]
 fn validator_knows_chain_chasms() {
+    // A chain climbs higher than the test levels' 10 rows of sky (as in the campaign's chasms).
+    const SKY: usize = 10;
     let mark = |w: usize| format!("gate: chain 28,9 {},9\n", 33 + w);
     for w in [16, 18] {
-        let r = run(&chasm_level(w, &mark(w)));
+        let r = run(&with_sky(chasm_level(w, &mark(w)), SKY));
         assert!(r.errs.is_empty(), "{w}-wide chasm: {:?}", r.errs);
         assert_eq!(gates(&r), [Gate::ChainChasm], "{w}");
         assert!(r.gated_goal);
@@ -529,17 +556,17 @@ fn validator_knows_chain_chasms() {
         let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chain lesson");
         assert!(!lesson.taught(), "no hint yet");
     }
-    let taught = run(&chasm_level(16, &format!("{}hint@24,9 chain: Jump, toot, land on my head!\n", mark(16))));
+    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Jump, toot, land on my head!\n", mark(16))), SKY));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
     assert!(taught.lessons.iter().any(|l| l.topic == Topic::Chain && l.taught()));
     // Too wide even for a chain (Han's three toots only keep him up so long).
-    let wide = run(&chasm_level(22, &mark(22)));
+    let wide = run(&with_sky(chasm_level(22, &mark(22)), SKY));
     assert!(wide.errs.iter().any(|e| e.contains("goal")), "{:?}", wide.errs);
     // Unmarked: an error (Han's overuse limit would apply in it).
-    let bare = run(&chasm_level(16, ""));
+    let bare = run(&with_sky(chasm_level(16, ""), SKY));
     assert!(bare.errs.iter().any(|e| e.contains("`gate: chain")), "{:?}", bare.errs);
     // Narrower than a chasm: one boost off Han at the edge does it (a buddy ledge, not a chain).
-    let gap = run(&chasm_level(11, "gate: boost 20,9 50,9\n"));
+    let gap = run(&with_sky(chasm_level(11, "gate: boost 20,9 50,9\n"), SKY));
     assert!(!gates(&gap).contains(&Gate::ChainChasm), "{:?}", gates(&gap));
 }
 
@@ -558,6 +585,8 @@ fn validator_proves_band_zone_boost_chains() {
     // there, and catch a high-flying Nat jumping off it).
     l.gates[0].r0 = 0;
     l.gates[0].c1 = 47;
+    // Headroom over the ledge for the second boost (the top of the screen is a ceiling).
+    let l = with_sky(l, 6);
     let r = run(&l);
     assert!(r.errs.is_empty(), "the weak boost doesn't open the pit: {:?}", r.errs);
     assert_eq!(gates(&r), [Gate::StainPit]);
@@ -568,7 +597,7 @@ fn validator_proves_band_zone_boost_chains() {
         "a full boost to the ledge, then another: {errs:?}"
     );
     // (The ledge is what makes it a chain: without it, one full boost doesn't do it.)
-    let mut bare = pit_level(18, "deaths: 2\n");
+    let mut bare = with_sky(pit_level(18, "deaths: 2\n"), 6);
     bare.things = l.things.clone();
     bare.gates = l.gates.clone();
     let one = check_with(&bare, &Options::default(), &full).errs;
@@ -639,3 +668,17 @@ fn validator_knows_buddy_raft_pools() {
     assert!(roomy.errs.iter().any(|e| e.contains("Nat's own rafts bridge it (FiredUp)")), "{:?}", roomy.errs);
 }
 
+
+#[test]
+fn validator_and_game_share_the_ceiling() {
+    // The top of the screen is a ceiling for the validator as for the game (`Level::tile`), so
+    // a wall reaching row 0 is a wall all the way up: nobody can walk on its roof, unseen.
+    for src in LEVEL_SOURCES {
+        let level = Level::parse(src).unwrap();
+        let map = Map::new(&level);
+        for c in 0..level.width as i32 {
+            assert!(level.tile(c, -1).is_solid() && map.is_solid(c, -1), "{}: open sky over col {c}", level.name);
+            assert!(!map.standable((c, -1)), "{}: a roof over col {c}", level.name);
+        }
+    }
+}

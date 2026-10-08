@@ -1573,3 +1573,36 @@ fn chute_splats_are_side_splats_that_fade() {
         assert_eq!(sides, 0, "faded");
     }
 }
+
+/// A wall that reaches the top row, the way the campaign walls in its waltz and shield rows.
+const WALL_TO_THE_TOP: &str = "name: Wall
+intro: Hello Nat!
+---
+..........#..........
+..........#..........
+..........#..........
+..P.......#.........G
+#####################
+";
+
+#[test]
+fn top_of_the_screen_is_a_ceiling() {
+    // Regression: the sky above row 0 was open, so a big enough launch (boost chains, Giant
+    // Steps) carried Nat up off the screen and over a wall that reaches the top row, onto its
+    // roof and past the waltz or shield row under it.
+    let mut app = app(WALL_TO_THE_TOP);
+    step(&mut app, 0.2);
+    let top = 5.0 * TILE;
+    let p = single::<Player>(&mut app);
+    hold(&mut app, RIGHT);
+    for i in 0..180 {
+        if i % 20 == 0 {
+            // Far more than any boost: fling him up again and again.
+            app.world_mut().get_mut::<Body>(p).unwrap().vel.y = 900.0;
+        }
+        app.update();
+        let pos = player_pos(&mut app);
+        assert!(pos.y + tuning::PLAYER_SIZE.1 / 2.0 <= top + 0.01, "above the top of the screen at {pos}");
+        assert!(pos.x < 10.0 * TILE, "got past the wall at {pos}");
+    }
+}
