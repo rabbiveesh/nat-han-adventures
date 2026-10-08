@@ -27,10 +27,12 @@
 //! - `o<n>` set octave (o4 contains middle-C = c), `>` octave up, `<` octave down.
 //! - `l<n>` default note length. `t<bpm>` is NOT used: tempo is the song's `bpm`.
 //! - `v<0-15>` volume. `@<0-3>` pulse duty: 12.5%, 25%, 50%, 75% (pulse channels only).
+//! - `@i <name>` instrument from the song's `[instruments]` ([`live::instrument`]; `default`
+//!   is the channel's built-in).
 //! - `&` between two notes ties them (no re-attack), e.g. `c4&c16`.
 //! - `[ ... ]<n>` repeats the bracketed part n times (nestable).
 //! - Noise channel (drums) uses drum letters instead of notes: `k` kick, `s` snare, `h` closed hat,
-//!   `H` open hat, `r` rest — same length rules, e.g. `k8 h8 s8 h8`.
+//!   `H` open hat, `x` crash, `r` rest — same length rules, e.g. `k8 h8 s8 h8`.
 //!
 //! Swing (the song's `swing`): 0.0 = straight; 0.33 ≈ triplet swing. Off-beat 8th notes are
 //! delayed by `swing * (an 8th)` and the preceding on-beat 8th lengthened to match.

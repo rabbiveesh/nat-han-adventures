@@ -51,7 +51,10 @@ use crate::audio::tuning::{Medley, Tuning};
 use crate::audio::{Filters, Harmony};
 
 use super::arrange::{Arrangement, Shape};
+use super::band::{BandInput, BandPlan};
+use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
+use super::ornament::Orns;
 use super::song::SongFile;
 use super::voice::{MAX_SEGMENT, NoteEvent, VoiceBank};
 
@@ -183,6 +186,10 @@ pub struct CommittedBar {
     pub intensity: f32,
     /// Events committed for it.
     pub events: u32,
+    /// What each musician played beyond the written part (lead, comp, bass, drums).
+    pub orns: [Orns; 4],
+    /// The band's shared plan for it.
+    pub band: BandPlan,
 }
 
 /// One musician, for UIs.
@@ -304,6 +311,11 @@ pub struct Engine {
     bank: VoiceBank,
     scratch: Vec<NoteEvent>,
     seq: u64,
+    instruments: Instruments,
+    /// The last bar committed: its band plan and harmony (fills crash into the next bar; a
+    /// harmony switch is a summon's flourish).
+    prev_band: BandPlan,
+    prev_harmony: Option<Harmony>,
 }
 
 impl Engine {
@@ -338,7 +350,7 @@ impl Engine {
         spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0 });
         Ok(Engine {
             title: song.title.clone(),
-            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley]),
+            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley], &song.instruments),
             medley,
             shape,
             waltz,
@@ -354,13 +366,16 @@ impl Engine {
             stats: PlayStats::default(),
             band: director::Band::default(),
             energy: 0.0,
-            musicians: musician::band(config.seed),
+            musicians: musician::band(config.seed ^ crate::audio::tuning::hash_str(&song.title)),
             committed: VecDeque::with_capacity(16),
             spans,
             next_bar: 0,
             next_song_bar: 0,
             scratch: Vec::with_capacity(4096),
             seq: 0,
+            instruments: song.instruments.clone(),
+            prev_band: BandPlan::default(),
+            prev_harmony: None,
         })
     }
 
@@ -408,6 +423,17 @@ impl Engine {
 
     pub fn sample_rate(&self) -> u32 {
         self.shape.sample_rate
+    }
+
+    /// The song arranged in harmony `h` (its written parts and the harmony in force), if it can
+    /// take it.
+    pub fn arrangement(&self, h: Harmony) -> Option<&Arrangement> {
+        self.arrangements[harmony_index(h)].as_ref()
+    }
+
+    /// The song's instruments.
+    pub fn instruments(&self) -> &Instruments {
+        &self.instruments
     }
 
     /// Can the song take this harmony (it has a chart)?
@@ -558,22 +584,50 @@ impl Engine {
             _ => &self.shape,
         };
         let arrangement = self.arrangements[harmony_index(harmony)].as_ref().expect("checked");
-        let ctx = Ctx {
+        let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
+        let chart = self.charts[waltz as usize].as_ref();
+        let mut ctx = Ctx {
             bar: slot,
             shape,
             arrangement,
-            chart: self.charts[waltz as usize].as_ref(),
+            chart,
             tuning,
             intensity,
             dynamics: self.freedom.dynamics,
-            seed: self.config.seed,
+            seed: self.config.seed ^ shape.song_hash,
+            band: &self.prev_band,
+            freedom,
+            instruments: &self.instruments,
         };
-        self.scratch.clear();
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
                 m.plan(&ctx);
             }
-            m.commit_next_bar(&ctx, &mut self.scratch);
+        }
+        // The band's plan for the bar: from the dials, the cues the musicians hold, the
+        // harmony switching (a summon), the bar before.
+        let intent = |r: Role| self.musicians[r as usize].current_plan().map(|p| p.intent(slot.index)).unwrap_or_default();
+        let phrase = self.musicians[Role::Drums as usize].current_plan().copied().unwrap_or_else(|| PhrasePlan::shape_from(slot, shape, chart));
+        let harm = |b: f64| arrangement.harm_at(slot.song_bar as f64 * shape.bar_beats + b);
+        let band = BandPlan::decide(&BandInput {
+            seed: self.config.seed ^ shape.song_hash,
+            slot,
+            bar_beats: shape.bar_beats,
+            bars: shape.bars,
+            phrase,
+            freedom,
+            harm: &harm,
+            key: shape.key,
+            switched: self.prev_harmony.is_some_and(|h| h != harmony),
+            checkpoint: intent(Role::Drums).short_fill,
+            death: intent(Role::Lead).wah,
+            prev: &self.prev_band,
+        });
+        ctx.band = &band;
+        self.scratch.clear();
+        let mut orns = [Orns::default(); 4];
+        for (m, o) in self.musicians.iter_mut().zip(&mut orns) {
+            *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
         let events = self.scratch.len() as u32;
         for mut e in self.scratch.drain(..) {
@@ -584,7 +638,9 @@ impl Engine {
         if self.committed.len() == self.committed.capacity() {
             self.committed.pop_front();
         }
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band });
+        self.prev_band = band;
+        self.prev_harmony = Some(harmony);
         self.next_bar += 1;
         self.next_song_bar += 1;
     }

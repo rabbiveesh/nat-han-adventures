@@ -19,6 +19,7 @@
 
 use kira::Frame;
 
+use super::live::instrument::Kit;
 use super::live::{Engine, EngineConfig, Input, song::SongFile};
 use super::mml::{Event, Track};
 use super::tuning::Tuning;
@@ -243,23 +244,34 @@ impl Lfsr {
     }
 }
 
-/// Longest a drum rings, in seconds (the open hat).
+/// The built-in open hat's length, in seconds.
 pub const MAX_DRUM_SECS: f32 = 0.3;
 
-/// Natural length of each drum, in seconds.
+/// Natural length of each drum of the built-in kit, in seconds.
 pub fn drum_len(d: super::mml::Drum) -> f32 {
+    kit_drum_len(d, &Kit::DEFAULT)
+}
+
+/// Natural length of a drum of `kit`, in seconds.
+pub fn kit_drum_len(d: super::mml::Drum, kit: &Kit) -> f32 {
     use super::mml::Drum;
     match d {
-        Drum::Kick => 0.16,
-        Drum::Snare => 0.2,
-        Drum::ClosedHat => 0.05,
-        Drum::OpenHat => MAX_DRUM_SECS,
+        Drum::Kick => kit.kick.len,
+        Drum::Snare => kit.snare.len,
+        Drum::ClosedHat => kit.hat.len,
+        Drum::OpenHat => kit.ohat.len,
+        Drum::Crash => kit.crash.len,
     }
 }
 
-/// Synthesize one drum hit into `buf` at sample rate `sr` (its length is the hit's length;
-/// ends at zero).
+/// Synthesize one hit of the built-in kit into `buf` at sample rate `sr` (its length is the
+/// hit's length; ends at zero).
 pub fn drum(d: super::mml::Drum, buf: &mut [f32], lfsr: &mut Lfsr, sr: f32) {
+    drum_kit(d, &Kit::DEFAULT, buf, lfsr, sr)
+}
+
+/// [`drum`] with `kit`'s parameters ([`super::live::instrument::Kit`]).
+pub fn drum_kit(d: super::mml::Drum, kit: &Kit, buf: &mut [f32], lfsr: &mut Lfsr, sr: f32) {
     use super::mml::Drum;
     let n = buf.len();
     let decay = |tau: f32| (-1.0 / (tau * sr)).exp();
@@ -268,33 +280,39 @@ pub fn drum(d: super::mml::Drum, buf: &mut [f32], lfsr: &mut Lfsr, sr: f32) {
     match d {
         Drum::Kick => {
             // Pitch-dropping stepped triangle "boomp" plus a tiny noise click.
-            let (k_amp, k_pitch) = (decay(0.07), decay(0.025));
+            let k = &kit.kick;
+            let (k_amp, k_pitch) = (decay(k.amp_tau), decay(k.pitch_tau));
             let (mut a, mut p) = (1.0f32, 1.0f32);
             for (i, s) in buf.iter_mut().enumerate() {
-                let f = 48.0 + 130.0 * p;
+                let f = k.base_hz + k.sweep_hz * p;
                 advance(&mut phase, f / sr);
-                let click = if i < (0.004 * sr) as usize { lfsr.next_at(12_000.0, false, sr) * 0.3 } else { 0.0 };
+                let click = if i < (0.004 * sr) as usize { lfsr.next_at(12_000.0, false, sr) * k.click } else { 0.0 };
                 *s = (triangle(phase) * 1.1 + click) * a;
                 a *= k_amp;
                 p *= k_pitch;
             }
         }
         Drum::Snare => {
-            let (k_noise, k_tone) = (decay(0.055), decay(0.03));
+            let sn = &kit.snare;
+            let (k_noise, k_tone) = (decay(sn.noise_tau), decay(sn.tone_tau));
             let (mut a, mut t) = (1.0f32, 1.0f32);
             for s in buf.iter_mut() {
-                advance(&mut phase, 185.0 / sr);
-                *s = lfsr.next_at(18_000.0, false, sr) * a * 0.75 + triangle(phase) * t * 0.6;
+                advance(&mut phase, sn.tone_hz / sr);
+                *s = lfsr.next_at(sn.noise_hz, sn.short, sr) * a * 0.75 + triangle(phase) * t * 0.6;
                 a *= k_noise;
                 t *= k_tone;
             }
         }
-        Drum::ClosedHat | Drum::OpenHat => {
-            let tau = if d == Drum::ClosedHat { 0.012 } else { 0.07 };
-            let k = decay(tau);
-            let mut a = 0.55f32;
+        Drum::ClosedHat | Drum::OpenHat | Drum::Crash => {
+            let m = match d {
+                Drum::ClosedHat => &kit.hat,
+                Drum::OpenHat => &kit.ohat,
+                _ => &kit.crash,
+            };
+            let k = decay(m.tau);
+            let mut a = if d == Drum::Crash { 0.7f32 } else { 0.55f32 };
             for s in buf.iter_mut() {
-                let x = lfsr.next_at(220_000.0, false, sr);
+                let x = lfsr.next_at(m.clock_hz, m.short, sr);
                 // First difference: a crude high-pass, keeps hats thin and bright.
                 *s = (x - prev) * 0.5 * a;
                 prev = x;
@@ -464,7 +482,7 @@ mod tests {
 
     #[test]
     fn errors_name_the_channel() {
-        let e = SongFile::from_mml("test", 120.0, 0.0, true, 0, "", ["c", "", "", "x"]).unwrap_err();
+        let e = SongFile::from_mml("test", 120.0, 0.0, true, 0, "", ["c", "", "", "z"]).unwrap_err();
         assert!(e.contains("noise") && e.contains("test"), "{e}");
     }
 

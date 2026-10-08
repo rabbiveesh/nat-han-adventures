@@ -88,6 +88,7 @@ pub fn drums(beats: f64) -> Track {
         volume,
         duty: 0,
         tie: false,
+        inst: 0,
     };
     let mut events = Vec::with_capacity(bars * 4);
     for k in 0..bars {

@@ -132,7 +132,28 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                     CHANNEL[ch]
                 };
                 let text = if solid { label.clone() } else if split > a { "planned".into() } else { label.clone() };
-                ui.painter_at(block.shrink2(vec2(4.0, 0.0))).text(pos2(block.left() + 6.0, block.center().y), Align2::LEFT_CENTER, text, font.clone(), text_c);
+                ui.painter_at(block.shrink2(vec2(4.0, 0.0))).text(pos2(block.left() + 6.0, block.center().y + if solid { 0.0 } else { -4.0 }), Align2::LEFT_CENTER, text, font.clone(), text_c);
+            }
+            // Bar by bar: what was played (committed), what's planned (ahead).
+            let mut tip = Vec::new();
+            for bar in a..z {
+                let played = st.upcoming.iter().find(|c| c.slot.index == bar).map(|c| c.orns[ch]);
+                let orns = played.unwrap_or(plan.intent(bar).orns);
+                let names: Vec<&str> = orns.iter().map(|o| o.name()).collect();
+                if !names.is_empty() {
+                    tip.push(format!("bar {}: {}{}", to_song(bar).floor() as usize + 1, if played.is_some() { "" } else { "(planned) " }, names.join(", ")));
+                }
+                let (xa, xb) = (x_of(to_song(bar)), x_of(to_song(bar + 1)));
+                if xa < rect.left() + LABEL_W || xb > rect.right() || played.is_some() || names.is_empty() {
+                    continue;
+                }
+                let short: String = names[0].chars().take(((xb - xa) / 7.0).max(3.0) as usize).collect();
+                ui.painter_at(Rect::from_min_max(pos2(xa + 2.0, r.top()), pos2(xb - 2.0, r.bottom())))
+                    .text(pos2(xa + 4.0, r.center().y + 5.0), Align2::LEFT_CENTER, short, mono(9.0), CHANNEL[ch].gamma_multiply(0.8));
+            }
+            let hover = ui.interact(Rect::from_min_max(pos2(rect.left() + LABEL_W, r.top()), r.max), ui.id().with(("lane", ch)), Sense::hover());
+            if !tip.is_empty() {
+                hover.on_hover_text(tip.join("\n"));
             }
         } else if !playing && ch == 0 {
             p.text(pos2(rect.left() + LABEL_W + 4.0, r.center().y), Align2::LEFT_CENTER, "(the band's plans show while it plays)", font.clone(), TEXT_FAINT);
@@ -158,27 +179,29 @@ fn plan_label(role: Role, plan: &nat_han_adventures::audio::live::musician::Phra
     };
     let intents = &plan.intents[..plan.bars as usize];
     let mut extra = Vec::new();
-    if intents.iter().any(|i| i.fill) {
-        extra.push(match role {
-            Role::Lead => "fill",
-            Role::Comp => "lays out",
-            Role::Bass => "approach",
-            Role::Drums => "fill",
-        });
-    }
     if intents.iter().any(|i| i.answer) {
-        extra.push("answers the toot");
+        extra.push("answers the toot".to_string());
     }
-    if intents.iter().any(|i| i.accent) {
-        extra.push("crash");
+    if intents.iter().any(|i| i.wah) {
+        extra.push("wah-wah".to_string());
     }
-    if intents.iter().any(|i| i.ornament > 0.0) {
-        extra.push("ornaments");
+    if intents.iter().any(|i| i.short_fill || i.accent) {
+        extra.push("checkpoint fill".to_string());
+    }
+    if intents.iter().any(|i| i.switch) {
+        extra.push("switches instrument".to_string());
+    }
+    if role == Role::Drums && intents.iter().any(|i| i.fill) {
+        extra.push("fill".to_string());
+    }
+    let n = plan.orns().iter().count();
+    if n > 0 {
+        extra.push(format!("{n} ornaments planned"));
     }
     let mut s = format!("{} bars {target}", plan.bars);
     for e in extra {
         s += " · ";
-        s += e;
+        s += &e;
     }
     s
 }

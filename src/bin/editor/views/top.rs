@@ -78,7 +78,7 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 ed.save();
             }
             ui.spacing_mut().item_spacing.x = 0.0;
-            for (v, label) in [(View::Text, "Text"), (View::Piano, "Piano roll"), (View::Tracker, "Tracker")] {
+            for (v, label) in [(View::Instruments, "Instruments"), (View::Text, "Text"), (View::Piano, "Piano roll"), (View::Tracker, "Tracker")] {
                 if seg(ui, ed.view == v, label).clicked() {
                     ed.set_view(v);
                 }

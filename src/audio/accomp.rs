@@ -208,10 +208,10 @@ impl Builder {
             }
         }
         if start > self.time + EPS {
-            self.events.push(Event { start: self.time, dur: start - self.time, kind: EventKind::Rest, volume, duty, tie: false });
+            self.events.push(Event { start: self.time, dur: start - self.time, kind: EventKind::Rest, volume, duty, tie: false, inst: 0 });
         }
         if dur > EPS {
-            self.events.push(Event { start, dur, kind, volume, duty, tie: false });
+            self.events.push(Event { start, dur, kind, volume, duty, tie: false, inst: 0 });
             self.time = start + dur;
         }
     }
@@ -224,7 +224,7 @@ impl Builder {
         }
         if self.time < length - 1e-9 {
             let t = self.time;
-            self.events.push(Event { start: t, dur: length - t, kind: EventKind::Rest, volume: 0, duty: 0, tie: false });
+            self.events.push(Event { start: t, dur: length - t, kind: EventKind::Rest, volume: 0, duty: 0, tie: false, inst: 0 });
         }
         self.events.retain(|e| e.dur > 1e-9);
         Track { events: self.events, length }
