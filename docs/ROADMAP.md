@@ -14,6 +14,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
   flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and
   musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`).
+  The world's beat follows the ear: on the web it steps back by the browser's buffering and
+  output latency (`index.html` reports it; `web_output_lead` in `src/audio/plugin.rs`).
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
   | Mode | Summon / cause | Physics | Gates |
@@ -51,8 +53,6 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   camera roll ("SEASICK"); Carlos alpha = Nat shrinks ~85% + lower jumps ("MELTING");
   Bohlen–Pierce = gravity pulses in threes ("ALIEN"); drunk wobble = run speed sways ±8% with the
   pitch wobble. Read the phrase tuning from `NowPlaying.tuning_now`; small, never unfair.
-- **Web beat-clock latency**: add the browser's output latency to the beat clock (the world's beat
-  runs a few tens of ms ahead of the ear on web).
 - **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
   templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
 - **Free-play validation in a Web Worker** (optional): removes the ~20–60 ms per-room hitch on web.
