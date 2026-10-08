@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# See the game the way a phone does: headless Chrome at a landscape phone size with real touch
+# emulation, forced into touch mode (?touch=1). It taps through title -> level select ->
+# level 1, uses the floating stick and the jump zone, and writes numbered screenshots.
+#   scripts/phone-shots [out-dir] [url]
+#   defaults: out-dir=target/phone-shots, url=the live GitHub Pages build with ?touch=1
+# For a local build: `trunk serve` and pass http://127.0.0.1:8080/?touch=1.
+# Needs google-chrome and node; installs puppeteer-core (no browser download) into target/.
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd)"
+tools="$root/target/phone-tools"
+if [[ ! -d "$tools/node_modules/puppeteer-core" ]]; then
+  mkdir -p "$tools"
+  (cd "$tools" && npm init -y >/dev/null && npm install --silent puppeteer-core@23)
+fi
+out="${1:-$root/target/phone-shots}"
+mkdir -p "$out"
+PPTR="$tools/node_modules/puppeteer-core" node "$root/scripts/phone-shots.js" "$out" ${2:+"$2"}
+echo "screenshots in $out"
