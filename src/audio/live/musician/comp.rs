@@ -17,6 +17,7 @@ use super::{Ctx, Musician, PhrasePlan, Player, Role, clear_from, clear_span, cut
 use crate::audio::accomp::{planing_mode, planing_run};
 use crate::audio::chart::Family;
 use crate::audio::live::band::{Fill, HitKind, Trade};
+use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{self, Harm, Orn, Orns};
@@ -32,6 +33,8 @@ pub struct Comp {
     pub(super) p: Player,
     src: Vec<NoteEvent>,
     dst: Vec<NoteEvent>,
+    /// The lead's written part (a soli, a shout chorus play with it).
+    lead: Vec<NoteEvent>,
     last: Option<NoteEvent>,
     /// The middle of the written part's register (where voicings sit).
     center: u8,
@@ -39,8 +42,13 @@ pub struct Comp {
 
 impl Comp {
     pub(super) fn new(p: Player) -> Self {
-        Comp { p, src: work(), dst: work(), last: None, center: 64 }
+        Comp { p, src: work(), dst: work(), lead: work(), last: None, center: 64 }
     }
+}
+
+/// A pick of `n` for the bar's chorus (the same all through the pass).
+fn band_pick(ctx: &Ctx, n: usize) -> usize {
+    crate::audio::live::band::rng(ctx.seed, 1, ctx.bar.pass, 9).below(n)
 }
 
 /// `arp` moved by `semis`.
@@ -66,15 +74,17 @@ impl Musician for Comp {
             self.center = ((sum / count) as u8).clamp(57, 72);
         }
         let feel = ctx.feel();
-        if self.p.freedom <= 0.0 && feel == Feel::Swing {
+        if self.p.freedom <= 0.0 && feel == Feel::Swing && !ctx.band.arranged() {
             out.extend(self.src.iter().copied());
             self.last = self.src.last().copied().or(self.last);
             return fired;
         }
         let swing = feel == Feel::Swing;
         let intent = self.p.intent(ctx.bar.index);
-        let orns = intent.orns;
         let band = ctx.band;
+        let orns = super::arranged(Role::Comp, band, intent.orns);
+        let step = band.ending.map(|e| e.step());
+        let own_chorus = band.intro.is_none() && band.ending.is_none();
         let bb = ctx.bb();
         let center = self.center;
         let phrase_last = self.p.phrase_last(ctx.bar.index);
@@ -90,7 +100,18 @@ impl Musician for Comp {
         let plain = |c: &crate::audio::chart::Chord| if feel == Feel::Rock { feel::power(c, center) } else { ornament::voice(c, center, 0) };
         self.dst.clear();
         let stab = |b: f64, d: f64, a: Arp| ctx.make(&tmpl, b, d, Sound::Arp(a));
-        if band.trade == Trade::Drums {
+        if step == Some(EndStep::Plinks) {
+            self.plinks(ctx, &tmpl);
+            fired.add(Orn::Plinks);
+        } else if step == Some(EndStep::Final) {
+            if let Some(h) = ctx.harm_at(0.0) {
+                let basie = band.ending.is_some_and(|e| e.kind == EndKind::Basie);
+                let mut e = stab(0.0, if basie { 1.5 } else { bb * 0.95 }, feel::voicing(&h.chord, Feel::Bossa, center, false));
+                e.volume = (e.volume + 2).min(15);
+                push(&mut self.dst, e);
+            }
+            fired.add(Orn::LastChord);
+        } else if band.trade == Trade::Drums || band.tacet || (own_chorus && band.chorus == Chorus::Strolling) {
             fired.add(Orn::LayOut);
         } else {
             let h0 = ctx.harm_at(0.0);
@@ -98,6 +119,15 @@ impl Musician for Comp {
             // The bar's rhythm.
             if h0.is_some() && !swing {
                 fired.add(self.feel_rhythm(ctx, &tmpl, alt));
+            } else if h0.is_some() && own_chorus && band.chorus == Chorus::Riffs {
+                self.riff(ctx, &tmpl);
+                fired.add(Orn::Riff);
+            } else if h0.is_some() && own_chorus && band.chorus == Chorus::Soli {
+                self.soli(ctx, &tmpl);
+                fired.add(Orn::Soli);
+            } else if h0.is_some() && own_chorus && band.chorus == Chorus::Shout {
+                self.shout(ctx, &tmpl);
+                fired.add(Orn::ShoutStabs);
             } else if h0.is_some() && (orns.has(Orn::Charleston) || orns.has(Orn::FreddieGreen)) {
                 let charleston = orns.has(Orn::Charleston);
                 let hits: &[(f64, f64)] = if charleston { &[(0.0, 0.6), (1.5, 0.45)] } else { &[(0.0, 0.4), (1.0, 0.4), (2.0, 0.4), (3.0, 0.4)] };
@@ -193,8 +223,10 @@ impl Musician for Comp {
             }
             // Into the next phrase: chromatic planing up to its chord, or a side-slip above it.
             let next = ctx.plain_harm_at(bb);
+            let own_line = fired.has(Orn::Riff) || fired.has(Orn::Soli);
             if phrase_last
                 && swing
+                && !own_line
                 && band.hits == 0
                 && band.sub_at(bb - 0.5).is_none()
                 && let Some(nh) = next
@@ -218,7 +250,10 @@ impl Musician for Comp {
             {
                 self.dst.remove(i);
             }
-            // The band's hits.
+            // The band's hits (stop-time: nothing but).
+            if band.hit_kind == HitKind::Stop {
+                self.dst.clear();
+            }
             let last_hit = band.hit_beats().last();
             for hb in band.hit_beats() {
                 let h = if band.hit_kind == HitKind::Anticipation { ctx.plain_harm_at(bb) } else { ctx.harm_at(hb) };
@@ -233,13 +268,16 @@ impl Musician for Comp {
                     fired.add(Orn::Anticipation);
                 }
             }
-            if band.hit_kind == HitKind::Ending
+            if matches!(band.hit_kind, HitKind::Ending | HitKind::Stop)
                 && let Some(lh) = last_hit
             {
                 clear_from(ctx, &mut self.dst, lh + 0.5);
+                if band.hit_kind == HitKind::Stop {
+                    fired.add(Orn::Stop);
+                }
             }
             // The odd extra stab in a gap.
-            if orns.has(Orn::ExtraStab) && swing && band.hits == 0 {
+            if orns.has(Orn::ExtraStab) && swing && band.hits == 0 && !(fired.has(Orn::Riff) || fired.has(Orn::Soli) || fired.has(Orn::ShoutStabs)) {
                 let spots = [1.5, 0.5, 2.5];
                 let k0 = r.below(3);
                 for j in 0..3 {
@@ -287,7 +325,108 @@ impl Musician for Comp {
     }
 }
 
+/// One riff figure: (beat, length, chord degree) per note.
+type Figure = &'static [(f64, f64, u8)];
+
+/// The riff backgrounds: two-bar riffs (beats, lengths, chord-tone degrees: 0 the root, 1 the
+/// third, 2 the fifth, 3 the seventh or sixth, 4 the octave), one per chorus, fitted to each
+/// chord as it comes.
+const RIFFS: [[Figure; 2]; 3] = [
+    // Kansas City: a three-note figure answered.
+    [&[(0.0, 0.4, 2), (0.5, 0.4, 3), (1.5, 1.2, 2)], &[(0.5, 0.4, 1), (1.0, 0.4, 2), (2.5, 1.2, 1)]],
+    // Sustained "oohs".
+    [&[(0.0, 1.9, 3), (2.0, 1.9, 2)], &[(0.0, 3.8, 1)]],
+    // Punches on the off-beats.
+    [&[(1.5, 0.3, 2), (2.5, 0.3, 2), (3.5, 0.45, 3)], &[(0.5, 0.3, 4), (1.0, 0.7, 2)]],
+];
+
+/// A harmony note under melody note `n`: a chord tone a third (or fourth) below, else a sixth
+/// below, else a diatonic third.
+fn under(h: &Harm, n: u8) -> u8 {
+    let n = n as i32;
+    let find = |lo: i32, hi: i32| (lo..=hi).rev().find(|&x| x >= 0 && h.is_chord_tone(x as u8));
+    find(n - 5, n - 3).or_else(|| find(n - 9, n - 6)).map_or_else(|| h.scale.step(n as u8, -2), |x| x as u8)
+}
+
 impl Comp {
+    /// A riff behind the lead: the chorus's riff, its two bars in turn, each note the chord
+    /// tone of its degree nearest the riff's register.
+    fn riff(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        let bb = ctx.bb();
+        let riff = &RIFFS[band_pick(ctx, RIFFS.len())];
+        let side = ctx.bar.song_bar % 2;
+        let mut near = self.center as i32 + 5;
+        for &(b, d, deg) in riff[side] {
+            if b >= bb - 1e-9 {
+                continue;
+            }
+            let Some(h) = ctx.harm_at(b) else { continue };
+            let count = h.chord.pitch_classes().count();
+            let pc = h.chord.pitch_classes().nth((deg as usize).min(3).min(count - 1)).unwrap_or(h.chord.root);
+            let mut n = ornament::nearest_pc(pc, near, LO + 12, HI - 4) as i32;
+            if deg == 4 {
+                n = ornament::nearest_pc(h.chord.root, near + 6, LO + 12, HI) as i32;
+            }
+            let s = ctx.swing8(b);
+            let mut e = ctx.make(t, s, d.min(bb - s), Sound::Note(n as u8));
+            e.duty = 1;
+            e.volume = e.volume.saturating_sub(1).max(3);
+            push(&mut self.dst, e);
+            near = n;
+        }
+    }
+
+    /// The soli: the lead's written line, a third (or a sixth) below, note for note.
+    fn soli(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        self.lead.clear();
+        ctx.written(0, &mut self.lead);
+        for k in 0..self.lead.len() {
+            let w = self.lead[k];
+            let Sound::Note(n) = w.sound else { continue };
+            let b = ctx.rel(&w);
+            let Some(h) = ctx.harm_at(b.max(0.0)) else {
+                continue;
+            };
+            let mut e = ctx.make(t, b, ctx.len(&w) * 0.95, Sound::Note(under(&h, n)));
+            e.tie = w.tie;
+            e.duty = w.duty;
+            push(&mut self.dst, e);
+        }
+    }
+
+    /// The shout chorus: a stab with each of the lead's attacks (an 8th or longer), the long
+    /// ones held a beat.
+    fn shout(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        self.lead.clear();
+        ctx.written(0, &mut self.lead);
+        let center = self.center;
+        for k in 0..self.lead.len() {
+            let w = self.lead[k];
+            let (b, d) = (ctx.rel(&w), ctx.len(&w));
+            if w.tie || d < 0.4 || b < 0.0 || !matches!(w.sound, Sound::Note(_)) {
+                continue;
+            }
+            let Some(h) = ctx.harm_at(b) else { continue };
+            let mut e = ctx.make(t, b, if d >= 1.5 { 1.0 } else { (d * 0.6).max(0.3) }, Sound::Arp(ornament::voice(&h.chord, center, 0)));
+            e.volume = (e.volume + 2).min(15);
+            push(&mut self.dst, e);
+        }
+    }
+
+    /// A Basie ending's three quiet plinks, up high: the fifth, the sharp fourth, the fifth.
+    fn plinks(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        let Some(h) = ctx.harm_at(0.0) else { return };
+        let five = ornament::nearest_pc((h.chord.root + 7) % 12, 79, 74, HI - 2);
+        for (j, n) in [five, five - 1, five].into_iter().enumerate() {
+            if (j as f64) < ctx.bb() - 1e-9 {
+                let mut e = ctx.make(t, j as f64, 0.3, Sound::Note(n));
+                e.volume = 6;
+                e.duty = 2;
+                push(&mut self.dst, e);
+            }
+        }
+    }
+
     /// The feel's rhythm for the bar (what it played). `alt`: funk's 7#9 rather than 9.
     fn feel_rhythm(&mut self, ctx: &Ctx, t: &NoteEvent, alt: bool) -> Orn {
         let bb = ctx.bb();

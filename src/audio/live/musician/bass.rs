@@ -13,6 +13,7 @@ use super::{Ctx, Musician, PhrasePlan, Player, Role, clear_span, cut_at, fold, m
 use crate::audio::accomp::Rng;
 use crate::audio::chart::Family;
 use crate::audio::live::band::{HitKind, Trade};
+use crate::audio::live::chorus::{EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Harm, Orn, Orns, nearest_pc};
@@ -48,14 +49,15 @@ impl Musician for Bass {
         self.src.clear();
         ctx.written(2, &mut self.src);
         let feel = ctx.feel();
-        if self.p.freedom <= 0.0 && feel == Feel::Swing {
+        if self.p.freedom <= 0.0 && feel == Feel::Swing && !ctx.band.arranged() {
             out.extend(self.src.iter().copied());
             self.remember();
             return fired;
         }
         let intent = self.p.intent(ctx.bar.index);
-        let orns = intent.orns;
         let band = ctx.band;
+        let orns = super::arranged(Role::Bass, band, intent.orns);
+        let step = band.ending.map(|e| e.step());
         let bb = ctx.bb();
         let phrase_last = self.p.phrase_last(ctx.bar.index);
         let mut tmpl = ctx.template(2, self.src.first().copied().or(self.last));
@@ -66,8 +68,18 @@ impl Musician for Bass {
         let mut r = ctx.rng(Role::Bass, 3);
         let prev = self.last_note.or_else(|| self.src.first().and_then(|e| e.sound.notes().first().copied())).unwrap_or(40) as i32;
         self.dst.clear();
-        let has_harm = ctx.plain_harm_at(0.0).is_some();
-        if band.trade == Trade::Drums && has_harm {
+        let has_harm = ctx.plain_harm_at(0.0).is_some() || band.subs[0].is_some();
+        if band.tacet {
+            fired.add(Orn::LayOut);
+        } else if step == Some(EndStep::Final) {
+            // The last chord's root, low.
+            if let Some(h) = ctx.harm_at(0.0) {
+                let basie = band.ending.is_some_and(|e| e.kind == EndKind::Basie);
+                let n = nearest_pc(h.chord.bass_pc(), 36, LO, HI);
+                push(&mut self.dst, ctx.make(&tmpl, 0.0, if basie { 1.5 } else { bb * 0.95 }, Sound::Note(n)));
+            }
+            fired.add(Orn::LastChord);
+        } else if band.trade == Trade::Drums && has_harm {
             // The drums' four: roots, one per chord, to keep the changes in the air.
             let mut b = 0.0;
             let mut p = prev;
@@ -111,7 +123,9 @@ impl Musician for Bass {
         } else if has_harm && orns.has(Orn::Pedal) {
             let h = ctx.harm_at(0.0).expect("a chart");
             let key = ctx.shape.key;
-            let pc = if h.chord.family() == Family::Dominant { (key + 7) % 12 } else { key };
+            // A pedal intro sits on the dominant all through.
+            let dominant = h.chord.family() == Family::Dominant || band.intro.is_some();
+            let pc = if dominant { (key + 7) % 12 } else { key };
             let n = nearest_pc(pc, prev, LO, HI);
             for k in 0..bb as usize {
                 push(&mut self.dst, ctx.make(&tmpl, k as f64, 0.9, Sound::Note(n)));
@@ -120,8 +134,10 @@ impl Musician for Bass {
         } else {
             self.dst.extend(self.src.iter().copied());
         }
-        // The band's reharmonization: its roots.
-        for sub in band.subs.iter().flatten() {
+        // The band's reharmonization: its roots (not under a pedal, nor when the bass is out or
+        // holding the last chord).
+        let follow = !band.tacet && step != Some(EndStep::Final) && !fired.has(Orn::Pedal);
+        for sub in band.subs.iter().flatten().filter(|_| follow) {
             let h = Harm::new(sub.chord);
             let mut struck = false;
             for e in &mut self.dst {
@@ -179,6 +195,9 @@ impl Musician for Bass {
         let subbed = band.subs.iter().flatten().any(|s| s.to > bb - 2.0);
         if band.hits == 0
             && !subbed
+            && !band.tacet
+            && step != Some(EndStep::Final)
+            && band.intro.is_none_or(|i| i.last())
             && matches!(feel, Feel::Swing | Feel::Rock)
             && let Some(pc) = next_root
         {

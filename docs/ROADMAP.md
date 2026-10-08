@@ -13,7 +13,10 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   Four musicians (lead/comp/bass/drums) with freedom dials and a full ornament vocabulary
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
   flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and
-  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`).
+  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`),
+  and an arrangement across choruses (`src/audio/live/chorus.rs`: head, two-feel, blowing,
+  stop-time, breaks, riff backgrounds, strolling, soli, shout chorus with a key-up), pedal/vamp
+  intros on the level tunes, and endings (Basie on the level-clear jingle, I–VI–ii–V tag, vamp-out).
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
   | Mode | Summon / cause | Physics | Gates |
@@ -56,10 +59,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
   templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
 - **Free-play validation in a Web Worker** (optional): removes the ~20–60 ms per-room hitch on web.
-- **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
-  (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending
-  on the jingle, vamp-outs), stop-time choruses, call-and-response comping, pedal/vamp intros,
-  real dynamics (drop out under quiet phrases, build into the bridge).
+- **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics
+  (drop out under quiet phrases, build into the bridge).
 
 ## Known limits / follow-ups
 - Validator: Giant Steps reaching an otherwise unreachable ledge and then crossing from it isn't

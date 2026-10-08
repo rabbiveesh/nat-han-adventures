@@ -21,6 +21,7 @@
 use super::{Ctx, Musician, PhrasePlan, Player, Role, fold_sound, musician_common, push, tidy, work};
 use crate::audio::chart::{Chord, Quality};
 use crate::audio::live::band::{Flourish, Trade};
+use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
@@ -63,7 +64,7 @@ impl Musician for Lead {
         self.src.clear();
         ctx.written(0, &mut self.src);
         let feel = ctx.feel();
-        if self.p.freedom <= 0.0 && feel == Feel::Swing {
+        if self.p.freedom <= 0.0 && feel == Feel::Swing && !ctx.band.arranged() {
             out.extend(self.src.iter().copied());
             self.remember(ctx);
             return fired;
@@ -73,21 +74,39 @@ impl Musician for Lead {
                 ctx.straighten(e);
             }
         }
-        let intent = self.p.intent(ctx.bar.index);
+        let mut intent = self.p.intent(ctx.bar.index);
         let band = ctx.band;
+        intent.orns = super::arranged(Role::Lead, band, intent.orns);
         let phrase_last = self.p.phrase_last(ctx.bar.index);
         let tmpl = ctx.template(0, self.src.first().copied().or(self.last));
         let mut r = ctx.rng(Role::Lead, 3);
         self.dst.clear();
         let mut replaced = true;
-        if band.trade == Trade::Drums {
+        let f = self.p.freedom;
+        let step = band.ending.map(|e| e.step());
+        let solos =
+            band.trade == Trade::Lead || intent.orns.has(Orn::Solo) || band.chorus.lead_solos(f) || band.solo_break || (step == Some(EndStep::Time) && f > 0.0);
+        if band.trade == Trade::Drums || step == Some(EndStep::Plinks) || band.intro.is_some_and(|i| !i.last()) || (step == Some(EndStep::Time) && f <= 0.0) {
             fired.add(Orn::LayOut);
+        } else if band.intro.is_some() {
+            // The intro's last bar: a pickup into the head.
+            self.pickup(ctx, &tmpl);
+            fired.add(Orn::Pickup);
+        } else if step == Some(EndStep::Final) {
+            self.final_note(ctx, &tmpl);
+            fired.add(Orn::LastChord);
         } else if band.flourish == Flourish::Death || intent.wah {
             wah_wah(ctx, &tmpl, &mut self.dst);
             fired.add(Orn::WahWah);
-        } else if (band.trade == Trade::Lead || intent.orns.has(Orn::Solo)) && ctx.plain_harm_at(0.0).is_some() {
-            self.solo(ctx, &tmpl, &mut r, phrase_last);
+        } else if solos && ctx.plain_harm_at(0.0).is_some() {
+            self.solo(ctx, &tmpl, &mut r, phrase_last && !band.solo_break);
             fired.add(Orn::Solo);
+            if band.solo_break {
+                if band.tacet {
+                    self.break_run(ctx, &tmpl);
+                }
+                fired.add(Orn::Break);
+            }
         } else if let Some(o) = self.whole_bar(ctx, intent.orns, &mut r) {
             fired.add(o);
             replaced = false;
@@ -98,6 +117,10 @@ impl Musician for Lead {
         tidy(&mut self.dst);
         if !replaced && feel != Feel::Swing {
             self.feel_line(ctx, &mut r, &mut fired);
+        }
+        if !replaced && band.chorus == Chorus::Shout {
+            self.shout_line(ctx);
+            fired.add(Orn::ShoutLine);
         }
         if !replaced && phrase_last {
             if feel == Feel::Funk {
@@ -434,6 +457,74 @@ impl Lead {
                 }
             }
             prev_note = Some(note);
+        }
+    }
+
+    /// The intro's last bar: four swung 8ths up (by scale steps) into the head's first note.
+    fn pickup(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        let bb = ctx.bb();
+        let target = ctx.next_first_note(0).unwrap_or(72);
+        let from = bb - 2.0;
+        let scale = scale_at(ctx, from);
+        for j in 0..4 {
+            let n = scale.step(target, -(4 - j as i32));
+            self.eighth(ctx, t, from + j as f64 * 0.5, bb, Sound::Note(n));
+        }
+    }
+
+    /// The last chord: a chord tone near where the line was, held (short for a Basie ending's
+    /// "bwah"), with vibrato.
+    fn final_note(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        let bb = ctx.bb();
+        let Some(h) = ctx.harm_at(0.0) else { return };
+        let near = self.solo_note.unwrap_or(72).clamp(64, 84);
+        let n = h.nearest_chord_tone(near);
+        let basie = ctx.band.ending.is_some_and(|e| e.kind == EndKind::Basie);
+        let mut e = ctx.make(t, 0.0, if basie { 1.5 } else { bb * 0.95 }, Sound::Note(n));
+        e.volume = (e.volume + 1).min(15);
+        e.fx.vib = 30;
+        push(&mut self.dst, e);
+    }
+
+    /// A break's second bar (the band out): the solo's first half, then a 16th-note scale run
+    /// into the next phrase's first note.
+    fn break_run(&mut self, ctx: &Ctx, t: &NoteEvent) {
+        let bb = ctx.bb();
+        let from = (bb - 2.0).max(1.0);
+        super::clear_from(ctx, &mut self.dst, from);
+        let target = ctx.next_first_note(0).or(self.solo_note).unwrap_or(72);
+        let scale = scale_at(ctx, from);
+        let count = ((bb - from) / 0.25).round() as i32;
+        let dir = if self.solo_note.is_some_and(|n| n > target) { -1 } else { 1 };
+        let mut n = scale.step(target, -dir * count);
+        for j in 0..count {
+            push(&mut self.dst, ctx.make(t, from + j as f64 * 0.25, 0.25, Sound::Note(n)));
+            n = scale.step(n, dir);
+        }
+        self.solo_note = Some(n);
+    }
+
+    /// The shout chorus: the tune up an octave where it fits, short, punchy and accented.
+    fn shout_line(&mut self, ctx: &Ctx) {
+        let up = self.dst.iter().filter_map(|e| e.sound.notes().iter().max().copied()).max().is_some_and(|top| top as i32 + 12 <= HI - 2);
+        let n = self.dst.len();
+        for k in 0..n {
+            let next_ties = self.dst.get(k + 1).is_some_and(|x| x.tie);
+            let e = &mut self.dst[k];
+            if up {
+                e.sound = match e.sound {
+                    Sound::Note(x) => Sound::Note(x + 12),
+                    s => s,
+                };
+            }
+            if matches!(e.sound, Sound::Note(_)) && !next_ties {
+                let d = ctx.len(e);
+                if d > 0.75 {
+                    let keep = (d * 0.7).max(0.5);
+                    e.end = e.start + (keep * ctx.shape.samples_per_beat) as u64;
+                }
+                e.volume = (e.volume + 1).min(15);
+            }
         }
     }
 

@@ -38,6 +38,17 @@
 //! the dynamics dial up, musicians scale their volume with it and the drums accent the
 //! downbeat.
 //!
+//! # Choruses, intros, endings
+//! The bar's chorus ([`super::chorus`], [`BandPlan::chorus`]) decides each player's role in it
+//! (the table in [`super::chorus`]): [`arranged`] turns the rolled ornaments into what the
+//! chorus asks (the bass walks or plays in two, the comp Charlestons, the drums play lighter,
+//! the lead keeps to the tune for a soli), and each commit plays the chorus's own parts: the
+//! lead's solos, breaks and shout line, the comp's riffs, soli line and shout stabs, the
+//! band's stop-time hits and breaks. Intros and endings are the same: their changes are the
+//! band's substitutions, and each player has its part (the lead lays out and picks up into the
+//! head; the plinks are the comp's; everyone plays the last chord). These are arrangements the
+//! whole band follows, so they play at freedom 0 too ([`BandPlan::arranged`]), plainly.
+//!
 //! # Feels
 //! The band's feel ([`super::feel`], [`BandPlan::feel`], decided for the whole band at once in
 //! [`BandPlan::decide`]) is realized in each player's commit as a rhythm transform of the bar
@@ -369,6 +380,83 @@ impl Ctx<'_> {
     }
 }
 
+/// The ornaments `orns` a player rolled, made to fit the bar's chorus, intro or ending (see the
+/// module docs).
+pub fn arranged(role: Role, band: &BandPlan, orns: Orns) -> Orns {
+    use super::chorus::{Chorus, EndStep, IntroKind};
+    let mut o = orns;
+    let drop = |o: &mut Orns, list: &[Orn]| {
+        for x in list {
+            o.0 &= !x.bit();
+        }
+    };
+    let chorus = band.chorus;
+    let time = band.ending.is_some_and(|e| e.step() == EndStep::Time);
+    match role {
+        Role::Lead => match chorus {
+            // Tight with the comp: the tune as written, only vibrato on it.
+            Chorus::Soli => o = Orns(o.0 & Orn::Vibrato.bit()),
+            // The shout line is the tune: no whole-bar transformations.
+            Chorus::Shout => drop(
+                &mut o,
+                &[
+                    Orn::Planing,
+                    Orn::Digital,
+                    Orn::Pentatonic,
+                    Orn::Displace,
+                    Orn::Hemiola,
+                    Orn::SideSlip,
+                    Orn::Octave,
+                ],
+            ),
+            _ => {}
+        },
+        Role::Comp => {
+            let charleston = chorus == Chorus::TwoFeel
+                || time
+                || band.intro.is_some_and(|i| i.kind == IntroKind::Vamp);
+            let quarters = band.intro.is_some_and(|i| i.kind == IntroKind::Pedal);
+            if charleston || quarters {
+                drop(&mut o, &[Orn::Charleston, Orn::FreddieGreen, Orn::Fourths]);
+                o.add(if charleston {
+                    Orn::Charleston
+                } else {
+                    Orn::FreddieGreen
+                });
+            }
+        }
+        Role::Bass => {
+            let two = chorus == Chorus::TwoFeel;
+            let pedal = band.intro.is_some_and(|i| i.kind == IntroKind::Pedal);
+            let walk = (chorus.walks() && band.intro.is_none())
+                || time
+                || band.intro.is_some_and(|i| i.kind == IntroKind::Vamp);
+            if two || pedal || walk {
+                drop(
+                    &mut o,
+                    &[Orn::Walking, Orn::TwoFeel, Orn::Pedal, Orn::Ostinato],
+                );
+                o.add(if pedal {
+                    Orn::Pedal
+                } else if two {
+                    Orn::TwoFeel
+                } else {
+                    Orn::Walking
+                });
+            }
+        }
+        Role::Drums => {
+            if matches!(chorus, Chorus::TwoFeel | Chorus::Strolling) || band.intro.is_some() {
+                drop(&mut o, &[Orn::Ghost, Orn::OpenHat, Orn::BrokenTime]);
+            }
+            if chorus == Chorus::Shout || band.ending.is_some() {
+                drop(&mut o, &[Orn::BrokenTime]);
+            }
+        }
+    }
+    o
+}
+
 fn merge(i: &mut BarIntent, cue: BarIntent) {
     i.ornament = i.ornament.max(cue.ornament);
     i.fill |= cue.fill;
@@ -538,10 +626,6 @@ impl Player {
         let mut pr = band::rng(self.seed, role as usize, plan.start, 30);
         let (pick, pick2) = (pr.f(), pr.f());
         let switch = f > 0.0 && pr.chance(0.25 * md + 0.35 * hi);
-        // A solo chorus: the whole pass, now and then, once the band is really loose.
-        let solo_pass = role == Role::Lead
-            && plan.pass >= 1
-            && band::rng(self.seed, 0, plan.pass as u64, 40).chance(0.6 * band::ramp(f, 0.75, 1.0));
         for k in 0..plan.bars as u64 {
             let bar = plan.start + k;
             if bar < from {
@@ -585,9 +669,6 @@ impl Player {
                     if !first && !last {
                         want!(Orn::Octave, 0.18 * md);
                         want!(Orn::SideSlip, 0.2 * md);
-                    }
-                    if solo_pass {
-                        o.add(Orn::Solo);
                     }
                     i.fill = o.has(Orn::RunFill) || o.has(Orn::Pickup);
                 }
@@ -726,6 +807,15 @@ macro_rules! musician_common {
     };
 }
 use musician_common;
+
+/// The range a melodic channel's notes are folded into (lead, comp, bass).
+pub fn range(ch: usize) -> (i32, i32) {
+    match ch {
+        0 => (lead::LO, lead::HI),
+        1 => (comp::LO, comp::HI),
+        _ => (bass::LO - 4, bass::HI + 4),
+    }
+}
 
 /// The band, in channel order.
 pub fn band(seed: u64) -> [Box<dyn Musician>; 4] {

@@ -327,7 +327,7 @@ mod tests {
             filters: Filters { harmony: Harmony::Waltz, just_intonation: false },
             reason: crate::audio::director::REASON_WALTZ,
             tuning_now: None,
-            feel_now: "",
+            band_now: "",
         };
         assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JAZZ WALTZ".to_string()));
     }
@@ -370,7 +370,7 @@ pub fn band_readout_text(now: &crate::audio::NowPlaying) -> String {
         (None, true) => tuning_name(Tuning::Medley),
         (None, false) => "EQUAL TEMPERAMENT",
     };
-    if now.feel_now.is_empty() { format!("{harmony}\n{tuning}") } else { format!("{harmony}\n{tuning}\n{}", now.feel_now) }
+    if now.band_now.is_empty() { format!("{harmony}\n{tuning}") } else { format!("{harmony}\n{tuning}\n{}", now.band_now) }
 }
 
 fn tuning_name(t: crate::audio::tuning::Tuning) -> &'static str {
@@ -413,7 +413,7 @@ mod readout_tests {
         assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\nDRUNK MEDLEY");
         now.tuning_now = Some(Tuning::Tet7);
         assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\n7-TET");
-        now.feel_now = "BOSSA NOVA";
+        now.band_now = "BOSSA NOVA";
         assert_eq!(band_readout_text(&now), "COLTRANE CHANGES\n7-TET\nBOSSA NOVA");
     }
 }

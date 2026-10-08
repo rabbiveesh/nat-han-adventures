@@ -2,6 +2,7 @@
 //! and physics, the force chips and the musicians' freedom.
 
 use bevy_egui::egui::{self, Rect, Sense, Stroke, pos2, vec2};
+use nat_han_adventures::audio::live::chorus::{Call as ChorusCall, Chorus};
 use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::tuning::Tuning;
 use nat_han_adventures::audio::{Filters, Harmony};
@@ -196,6 +197,32 @@ fn forces(ed: &mut Editor, ui: &mut egui::Ui) {
             (_, f) if ed.player.playing && f != Feel::Swing => format!("sounding: {}", f.label().to_lowercase()),
             (Some(f), _) => format!("forced: {} from the next bar", f.slug()),
             (None, _) => String::new(),
+        };
+        ui.label(egui::RichText::new(note).color(TEXT_FAINT).size(11.0));
+        ui.add_space(4.0);
+        caption(ui, "FORCE CHORUS");
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+            ui.spacing_mut().button_padding = vec2(7.0, 2.0);
+            let mut chips: Vec<(Option<ChorusCall>, &str)> = vec![(None, "auto")];
+            chips.extend(Chorus::ALL.map(|chorus| (Some(ChorusCall { chorus, key_up: false }), chorus.slug())));
+            chips.push((Some(ChorusCall { chorus: Chorus::Shout, key_up: true }), "shout +1/2"));
+            for (c, label) in chips {
+                if chip(ui, ed.dials.force_chorus == c, true, label).clicked() {
+                    ed.set_force_chorus(c);
+                }
+            }
+            if chip(ui, false, ed.player.playing, "END").on_hover_text("the band plays an ending from the next bar").clicked() {
+                ed.end_song();
+            }
+        });
+        let st = &ed.player.published.state;
+        let note = match (ed.dials.force_chorus, st.label) {
+            (_, l) if ed.player.playing && !l.is_empty() => {
+                format!("sounding: {}", l.to_lowercase())
+            }
+            (None, _) => "the band arranges (from 0.25 freedom: stop-time, breaks, ...)".to_string(),
+            (Some(c), _) => format!("forced: {} from the next bar", c.chorus.slug()),
         };
         ui.label(egui::RichText::new(note).color(TEXT_FAINT).size(11.0));
         ui.add_space(4.0);

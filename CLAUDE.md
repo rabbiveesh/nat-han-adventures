@@ -46,9 +46,12 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `[instruments]`: macros, kits, palettes; `@i name` in the MML). The musicians ornament by
   their freedom dial (`musician/`, `ornament.rs`; the bar's shared `band.rs` plan keeps hits,
   reharms, trades, flourishes and the feel in step); at high freedom the band picks feels on
-  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz);
+  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz); each pass is
+  a chorus the band arranges by the dial (`chorus.rs`: two-feel, stop-time, breaks, riffs,
+  strolling, soli, shout + key-up), level tunes open with a pedal/vamp intro, `Input::End`
+  plays an ending (the jingle gets a Basie one);
   `cargo run --release --example ornaments` renders listening WAVs with a log of what fired
-  per bar (`-- <dir> feels`: the feels). Offline renders
+  per bar (`-- <dir> feels`: the feels; `-- <dir> choruses`: the choruses, combos with feels, whole shows). Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator

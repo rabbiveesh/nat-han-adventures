@@ -10,6 +10,7 @@
 use super::{Ctx, Musician, PhrasePlan, Player, Role, clear_span, musician_common, push, work};
 use crate::audio::accomp::Rng;
 use crate::audio::live::band::{Fill, HitKind, Trade, mid};
+use crate::audio::live::chorus::EndStep;
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Orn, Orns};
@@ -55,15 +56,16 @@ impl Musician for Drums {
             }
         }
         let feel = ctx.feel();
-        if self.p.freedom <= 0.0 && feel == Feel::Swing {
+        if self.p.freedom <= 0.0 && feel == Feel::Swing && !ctx.band.arranged() {
             out.extend(self.src.iter().copied());
             self.last = self.src.first().copied().or(self.last);
             return fired;
         }
         let f = self.p.freedom;
         let intent = self.p.intent(ctx.bar.index);
-        let orns = intent.orns;
         let band = ctx.band;
+        let orns = super::arranged(Role::Drums, band, intent.orns);
+        let step = band.ending.map(|e| e.step());
         let bb = ctx.bb();
         let mut tmpl = ctx.template(3, self.src.first().copied().or(self.last));
         if let Some(kit) = ctx.feel_inst(3, false) {
@@ -72,7 +74,10 @@ impl Musician for Drums {
         let vol = self.src.iter().map(|e| e.volume).max().unwrap_or(tmpl.volume).max(6);
         let mut r = ctx.rng(Role::Drums, 3);
         self.dst.clear();
-        if band.trade == Trade::Drums {
+        if band.tacet || step == Some(EndStep::Final) {
+            // Out (the last chord's crash comes with the band's crash below).
+            fired.add(Orn::LayOut);
+        } else if band.trade == Trade::Drums {
             self.solo(ctx, &tmpl, vol, &mut r);
             fired.add(Orn::Trade);
         } else if feel != Feel::Swing {
@@ -83,7 +88,7 @@ impl Musician for Drums {
         } else {
             self.dst.extend(self.src.iter().copied());
         }
-        if band.trade != Trade::Drums && feel == Feel::Swing {
+        if band.trade != Trade::Drums && feel == Feel::Swing && !band.tacet && step != Some(EndStep::Final) {
             // Ghost snares before the beats.
             if orns.has(Orn::Ghost) {
                 let sixteenths = (bb * 4.0) as usize;
@@ -114,8 +119,26 @@ impl Musician for Drums {
                 }
             }
         }
-        // Kicks with the band's hits (an ending figure crashes on its last and stops).
-        if mid(f) > 0.0 {
+        // Kicks with the band's hits (an ending figure crashes on its last and stops; a
+        // stop-time hit is a kick and a snare, then only the hats on 2 and 4).
+        if band.hit_kind == HitKind::Stop
+            && let Some(lh) = band.hit_beats().last()
+        {
+            self.dst.retain(|e| ctx.rel(e) < lh + 0.25 - 1e-6);
+            for hb in band.hit_beats() {
+                self.dst.retain(|e| (ctx.rel(e) - hb).abs() > 1e-6);
+                push(&mut self.dst, hit(ctx, &tmpl, hb, Drum::Kick, vol + 2));
+                push(&mut self.dst, hit(ctx, &tmpl, hb, Drum::Snare, vol));
+            }
+            let mut b = 1.0;
+            while b < bb - 1e-9 {
+                if b > lh + 0.25 {
+                    push(&mut self.dst, hit(ctx, &tmpl, b, Drum::ClosedHat, (vol / 2).max(2)));
+                }
+                b += 2.0;
+            }
+            fired.add(Orn::Stop);
+        } else if mid(f) > 0.0 {
             let last = band.hit_beats().last();
             for hb in band.hit_beats() {
                 if !self.dst.iter().any(|e| (ctx.rel(e) - hb).abs() < 1e-6 && e.sound == Sound::Drum(Drum::Kick)) {
@@ -141,7 +164,7 @@ impl Musician for Drums {
         }
         // The fill.
         let fill = if intent.short_fill && band.fill == Fill::None { Fill::Short } else { band.fill };
-        if band.trade != Trade::Drums {
+        if band.trade != Trade::Drums && !band.tacet && step != Some(EndStep::Final) {
             match fill {
                 Fill::None => {}
                 Fill::Short => {

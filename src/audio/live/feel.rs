@@ -21,6 +21,9 @@
 //!   `Some(Swing)` never feels, `Some(feel)` plays it from the next bar committed, at any
 //!   freedom (at freedom 0 each player realizes it plainly).
 //!
+//! - only in the choruses that take one ([`super::chorus::Chorus::allows_feel`]: the head and
+//!   solo choruses), never in an intro or an ending.
+//!
 //! # The waltz
 //! No feels in the waltz: a 3/4 bossa is a different tune. A bar in the waltz's shape is always
 //! [`Feel::Swing`] (the waltz's own feel); a waltz that comes in mid-feel ends it at its bar
@@ -187,11 +190,14 @@ pub struct Call {
 /// the waltz; a force overrides the band).
 pub fn decide(input: &BandInput) -> Call {
     let s = input.slot;
-    if input.waltz {
+    if input.waltz || input.intro.is_some() || input.ending.is_some() {
         return Call { feel: Feel::Swing, since: s.index, next: Feel::Swing };
     }
     let d = dial(input.freedom);
-    let want = |pass: u64, bar: usize| input.force_feel.unwrap_or_else(|| auto(input.seed, pass, bar, input.bars, d));
+    // The band's own feels only in the choruses that take one.
+    let want = |pass: u64, bar: usize| {
+        input.force_feel.unwrap_or_else(|| if input.chorus(pass).chorus.allows_feel() { auto(input.seed, pass, bar, input.bars, d) } else { Feel::Swing })
+    };
     let now = want(s.pass, s.song_bar);
     let before = if s.song_bar > 0 {
         Some(want(s.pass, s.song_bar - 1))
