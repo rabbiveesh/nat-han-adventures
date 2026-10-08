@@ -11,6 +11,7 @@
 //! - [`level`]: the ASCII level format and its parser.
 //! - [`save`]: persistent progress (unlocked levels, best nugget counts).
 
+pub mod adapt;
 pub mod art;
 pub mod audio;
 pub mod events;
