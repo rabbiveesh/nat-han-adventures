@@ -222,7 +222,7 @@ fn start_run(
     mut commands: Commands,
     mut requests: MessageReader<StartFreePlay>,
     mut profile: ResMut<AdaptiveProfile>,
-    progress: Res<Progress>,
+    mut progress: ResMut<Progress>,
     mut settings: ResMut<FreePlaySettings>,
     mut mode: ResMut<AssistMode>,
     mut next: ResMut<NextState<AppState>>,
@@ -230,6 +230,10 @@ fn start_run(
     let Some(req) = requests.read().last().copied() else { return };
     let (run, level) = begin(req.seed, req.endless, &mut profile.0, progress.unlocked);
     settings.last_seed = Some(req.seed);
+    // Remembered between visits (saved with the progress).
+    if progress.last_seed != Some(req.seed) {
+        progress.last_seed = Some(req.seed);
+    }
     settings.endless = req.endless;
     if *mode != AssistMode::Manual {
         *mode = AssistMode::FreePlay;

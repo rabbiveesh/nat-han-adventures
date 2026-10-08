@@ -171,13 +171,13 @@ struct SetupRow(usize);
 #[derive(Component)]
 struct SetupHelp;
 
-fn init_setup(mut commands: Commands, settings: Res<FreePlaySettings>) {
+fn init_setup(mut commands: Commands, settings: Res<FreePlaySettings>, progress: Option<Res<crate::save::Progress>>) {
     commands.insert_resource(Setup {
         row: 2,
         endless: settings.endless,
         source: SeedSource::New,
         new_seed: random_seed(),
-        last_seed: settings.last_seed,
+        last_seed: settings.last_seed.or(progress.and_then(|p| p.last_seed)),
         typed: [0; SEED_DIGITS],
         editing: None,
     });
