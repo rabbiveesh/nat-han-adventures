@@ -1,4 +1,5 @@
-//! The adaptive difficulty engine: pure logic, no Bevy systems (wiring comes later).
+//! The adaptive difficulty engine: pure logic, no Bevy systems (the wiring into play is
+//! `crate::game::adaptive`; the save holds the story dial and the profile, `crate::save`).
 //!
 //! Adapted from robot-game's adaptive learning engine (band blending, ADR-001). The pieces:
 //!

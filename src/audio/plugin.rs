@@ -31,7 +31,7 @@ use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, PlaybackRate};
 use rand::Rng;
 
-use crate::events::{CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
+use crate::events::{BandFreedom, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
 use crate::game::{self, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel, PlayState};
@@ -182,6 +182,9 @@ pub struct LivePlayer {
     ducked: Option<bool>,
     /// Last published chunk count, and when we saw it change.
     seen: (u64, f64),
+    /// The band's freedom, as last decided by the adaptive engine (re-sent to each new level
+    /// engine).
+    freedom: Option<BandFreedom>,
 }
 
 impl LivePlayer {
@@ -193,6 +196,11 @@ impl LivePlayer {
     /// The filters sounding (once the audio thread has said).
     pub fn filters(&self) -> Option<Filters> {
         self.sounding.map(|s| s.0)
+    }
+
+    /// The freedom last posted to the engine ([`BandFreedom`], from the adaptive engine).
+    pub fn freedom(&self) -> Option<BandFreedom> {
+        self.freedom
     }
 
     /// Filters decided but not sounding yet (they come in at the next bar line).
@@ -315,6 +323,9 @@ fn follow_state(
         }
     };
     engine.post(Input::SetFilters(filters));
+    if let (Music::World(_), Some(f)) = (want, player.freedom) {
+        engine.post(set_freedom(f));
+    }
     // The fanfare cuts in quickly; everything else crossfades.
     let (fade_in, fade_out) = match want {
         Music::LevelClear => (0.01, 0.12),
@@ -340,10 +351,16 @@ fn set_groove(g: &mut Groove, filters: Filters) {
     }
 }
 
+fn set_freedom(f: BandFreedom) -> Input {
+    Input::SetFreedom { lead: f.lead, comp: f.comp, bass: f.bass, drums: f.drums, dynamics: f.dynamics }
+}
+
 /// Every gameplay message, as an input.
 #[allow(clippy::too_many_arguments)]
 fn forward(
     mut audio: NonSendMut<Audio>,
+    mut player: ResMut<LivePlayer>,
+    mut freedom: MessageReader<BandFreedom>,
     mut jumped: MessageReader<Jumped>,
     mut landed: MessageReader<Landed>,
     mut nuggets: MessageReader<NuggetCollected>,
@@ -358,6 +375,10 @@ fn forward(
     inputs.extend(died.read().map(|_| Input::Death));
     inputs.extend(checkpoints.read().map(|_| Input::Checkpoint));
     inputs.extend(restart.read().map(|_| Input::Restart));
+    if let Some(f) = freedom.read().last().copied() {
+        player.freedom = Some(f);
+        inputs.push(set_freedom(f));
+    }
     if let Some(h) = audio.handle.as_mut() {
         for i in inputs {
             h.post(i);

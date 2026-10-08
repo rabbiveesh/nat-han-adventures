@@ -1,5 +1,7 @@
-//! Persistent progress: which levels are unlocked and the best nugget haul / time per level.
-//! Stored in `localStorage` on the web and a small text file on native.
+//! Persistent progress: which levels are unlocked and the best nugget haul / time per level,
+//! plus the adaptive engine's state (the story assist dial and free play's
+//! [`PlayerProfile`]: see [`adaptive_to_text`]). Stored in `localStorage` on the web and a small
+//! text file on native.
 //!
 //! [`plugin`] (part of `gameplay`) only creates the in-memory [`Progress`]: it never touches disk,
 //! so headless tests stay hermetic. [`persistence_plugin`] (added by the UI when there's a real
@@ -7,6 +9,8 @@
 
 use bevy::prelude::*;
 
+use crate::adapt::{Calibration, Outcome, PlayerProfile, Probe, Skill, StoryAssist, WindowEntry};
+use crate::game::{AdaptiveProfile, StoryAssistState};
 use crate::level::LEVEL_COUNT;
 
 pub fn plugin(app: &mut App) {
@@ -125,21 +129,34 @@ impl Progress {
 }
 
 fn load_progress(mut commands: Commands) {
-    match storage::read().as_deref().map(Progress::from_text) {
-        Some(Some(p)) => {
+    let Some(text) = storage::read() else { return };
+    match Progress::from_text(&text) {
+        Some(p) => {
             info!("loaded progress: {} level(s) unlocked", p.unlocked);
             commands.insert_resource(p);
+            let (dial, profile) = adaptive_from_text(&text);
+            commands.insert_resource(StoryAssistState(StoryAssist::new(dial)));
+            commands.insert_resource(AdaptiveProfile(profile));
         }
-        Some(None) => warn!("ignoring unreadable save data"),
-        None => {}
+        None => warn!("ignoring unreadable save data"),
     }
 }
 
-fn save_progress(progress: Res<Progress>, mut last: Local<Option<String>>) {
-    if !progress.is_changed() {
+/// The whole save file: progress, then the adaptive state.
+pub fn save_text(progress: &Progress, story: &StoryAssist, profile: &PlayerProfile) -> String {
+    progress.to_text() + &adaptive_to_text(story.assists, profile)
+}
+
+fn save_progress(
+    progress: Res<Progress>,
+    story: Res<StoryAssistState>,
+    profile: Res<AdaptiveProfile>,
+    mut last: Local<Option<String>>,
+) {
+    if !progress.is_changed() && !story.is_changed() && !profile.is_changed() {
         return;
     }
-    let text = progress.to_text();
+    let text = save_text(&progress, &story.0, &profile.0);
     if last.as_deref() == Some(text.as_str()) {
         return;
     }
@@ -151,6 +168,112 @@ fn save_progress(progress: Res<Progress>, mut last: Local<Option<String>>) {
             warn!("couldn't save progress: {e}");
         }
     }
+}
+
+// ─── The adaptive state ──────────────────────────────────────────────────────
+
+/// The adaptive lines of the save, appended after [`Progress::to_text`]'s (same header, so
+/// older builds just skip them, and saves without them load with a fresh dial and profile):
+/// ```text
+/// story-assists 0.24
+/// profile-assists 0.07
+/// profile-rooms 12
+/// profile-streak 3
+/// profile-calibrated 1
+/// profile-probe 3 1 0.8
+/// profile-skill precision 4 0.5 2 -
+/// profile-window precision C 4 4 2 0
+/// ```
+/// (`profile-probe <band> <clean 0/1> <time ratio or ->`;
+/// `profile-skill <name> <center> <spread> <epoch> <fell from or ->`;
+/// `profile-window <skill> <C clean / S struggle / K careless> <band> <center> <epoch> <assists>`,
+/// oldest first.) Floats are written exactly (shortest round-trip form).
+pub fn adaptive_to_text(story_dial: f32, p: &PlayerProfile) -> String {
+    let mut s = format!(
+        "story-assists {story_dial}\nprofile-assists {}\nprofile-rooms {}\nprofile-streak {}\nprofile-calibrated {}\n",
+        p.assists,
+        p.rooms_played,
+        p.streak,
+        u8::from(p.calibration.done)
+    );
+    let opt = |v: Option<String>| v.unwrap_or_else(|| "-".into());
+    for probe in &p.calibration.probes {
+        let ratio = opt(probe.time_ratio.map(|r| r.to_string()));
+        s.push_str(&format!("profile-probe {} {} {ratio}\n", probe.band, u8::from(probe.clean)));
+    }
+    for skill in Skill::ALL {
+        let st = p.skill(skill);
+        let name = skill.name();
+        let fell = opt(st.fell_from.map(|b| b.to_string()));
+        s.push_str(&format!("profile-skill {name} {} {} {} {fell}\n", st.center, st.spread, st.epoch));
+        for e in &st.window.entries {
+            let o = match e.outcome {
+                Outcome::Clean => 'C',
+                Outcome::Struggle => 'S',
+                Outcome::Careless => 'K',
+            };
+            s.push_str(&format!("profile-window {name} {o} {} {} {} {}\n", e.band, e.center, e.epoch, e.assists));
+        }
+    }
+    s
+}
+
+/// Parse [`adaptive_to_text`]'s lines out of a save (any other lines are skipped): the story
+/// dial (0 if absent) and the profile ([`PlayerProfile::new`] where absent). Lenient like
+/// [`Progress::from_text`]: broken lines are skipped, values clamped.
+pub fn adaptive_from_text(src: &str) -> (f32, PlayerProfile) {
+    use crate::adapt::skill::{MAX_BAND, MIN_BAND};
+    let unit = |v: &str| v.parse::<f32>().ok().filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0));
+    let band = |v: &str| v.parse::<u8>().ok().filter(|b| (MIN_BAND..=MAX_BAND).contains(b));
+    let skill_of = |n: &str| Skill::ALL.into_iter().find(|s| s.name() == n);
+    let mut dial = 0.0;
+    let mut p = PlayerProfile::new();
+    let mut probes = Vec::new();
+    let mut calibrated = false;
+    for line in src.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        match parts.as_slice() {
+            ["story-assists", v] => dial = unit(v).unwrap_or(dial),
+            ["profile-assists", v] => p.assists = unit(v).unwrap_or(p.assists),
+            ["profile-rooms", v] => p.rooms_played = v.parse().unwrap_or(p.rooms_played),
+            ["profile-streak", v] => p.streak = v.parse().unwrap_or(p.streak),
+            ["profile-calibrated", v] => calibrated = *v == "1",
+            ["profile-probe", b, clean, ratio] => {
+                if let Some(b) = band(b) {
+                    let time_ratio = ratio.parse::<f32>().ok().filter(|r| r.is_finite() && *r >= 0.0);
+                    probes.push(Probe { band: b, clean: *clean == "1", time_ratio });
+                }
+            }
+            ["profile-skill", name, center, spread, epoch, fell] => {
+                if let (Some(skill), Some(center), Some(spread), Ok(epoch)) =
+                    (skill_of(name), band(center), unit(spread), epoch.parse::<u32>())
+                {
+                    let st = &mut p.skills[skill.index()];
+                    st.center = center;
+                    st.spread = spread;
+                    st.epoch = epoch;
+                    st.fell_from = band(fell);
+                }
+            }
+            ["profile-window", name, o, b, center, epoch, assists] => {
+                let outcome = match *o {
+                    "C" => Some(Outcome::Clean),
+                    "S" => Some(Outcome::Struggle),
+                    "K" => Some(Outcome::Careless),
+                    _ => None,
+                };
+                if let (Some(skill), Some(outcome), Some(b), Some(center), Ok(epoch), Some(assists)) =
+                    (skill_of(name), outcome, band(b), band(center), epoch.parse::<u32>(), unit(assists))
+                {
+                    let st = &mut p.skills[skill.index()];
+                    st.window = st.window.push(WindowEntry { outcome, band: b, center, epoch, assists });
+                }
+            }
+            _ => {}
+        }
+    }
+    p.calibration = Calibration { probes, done: calibrated };
+    (dial, p)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -267,5 +390,61 @@ mod tests {
         assert_eq!(p.unlocked, LEVEL_COUNT);
         // Out of range is ignored.
         assert_eq!(p.record(LEVEL_COUNT, 1, 1.0), RecordOutcome::default());
+    }
+
+    fn played_profile() -> PlayerProfile {
+        use crate::adapt::{AdaptEvent, RoomResult, reduce};
+        let mut p = PlayerProfile::new();
+        for i in 0..14u64 {
+            p = reduce(p, AdaptEvent::RoomStarted {
+                room_id: i,
+                skills: vec![(Skill::Precision, 3), (Skill::Grease, 2)],
+                expected_deaths: 1,
+                par_secs: Some(30.0),
+            });
+            let deaths = [0, 0, 3, 1, 0, 5][i as usize % 6];
+            p = reduce(p, AdaptEvent::RoomFinished(RoomResult { deaths, time_secs: 21.5 + i as f32, ..default() }));
+        }
+        p
+    }
+
+    #[test]
+    fn adaptive_state_round_trips() {
+        let mut progress = Progress::default();
+        progress.record(0, 3, 40.0);
+        let p = played_profile();
+        assert!(!p.skill(Skill::Precision).window.entries.is_empty());
+        let story = StoryAssist::new(0.37);
+        let text = save_text(&progress, &story, &p);
+        assert_eq!(Progress::from_text(&text), Some(progress));
+        let (dial, back) = adaptive_from_text(&text);
+        assert_eq!(dial, 0.37);
+        assert_eq!(back.assists, p.assists);
+        assert_eq!(back.calibration, p.calibration);
+        assert_eq!((back.rooms_played, back.streak), (p.rooms_played, p.streak));
+        assert_eq!(back.skills, p.skills);
+        // Saving what was loaded writes the same file.
+        assert_eq!(save_text(&Progress::from_text(&text).unwrap(), &StoryAssist::new(dial), &back), text);
+    }
+
+    #[test]
+    fn old_saves_load_with_a_fresh_adaptive_state() {
+        let old = "nat-han-adventures-progress 1\nunlocked 3\nlevel 0 12 63.250\nlevel 1 4 20.000\n";
+        let p = Progress::from_text(old).unwrap();
+        assert_eq!(p.unlocked, 3);
+        assert_eq!(p.best_nuggets[1], Some(4));
+        let (dial, profile) = adaptive_from_text(old);
+        assert_eq!(dial, 0.0);
+        assert_eq!(profile, PlayerProfile::new());
+        // Broken adaptive lines are skipped, values clamped.
+        let (dial, profile) = adaptive_from_text(
+            "story-assists 7\nprofile-assists NaN\nprofile-skill nope 3 0.5 0 -\nprofile-skill grease 99 0.5 0 -\nprofile-window grease X 1 1 0 0\nprofile-skill waltz 4 2 1 5\n",
+        );
+        assert_eq!(dial, 1.0);
+        assert_eq!(profile.assists, 0.0);
+        assert_eq!(profile.center(Skill::Grease), 1);
+        assert!(profile.skill(Skill::Grease).window.entries.is_empty());
+        let w = profile.skill(Skill::Waltz);
+        assert_eq!((w.center, w.spread, w.epoch, w.fell_from), (4, 1.0, 1, Some(5)));
     }
 }
