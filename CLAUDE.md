@@ -18,6 +18,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - **Never use xdotool or anything that grabs the user's screen/focus/keyboard.** The user works on this
   machine. Avoid `trunk build --release` (slow fat-LTO) unless asked; CI does that.
 - Builds use `kache` as rustc-wrapper (machine-local `.cargo/config.local.toml`, gitignored).
+  Claude Code cloud sessions get theirs from `scripts/cloud-session-setup` (a SessionStart
+  hook in `.claude/settings.json`): native deps + mold always, kache on the shared S3 remote
+  when the cloud environment sets `KACHE_S3_BUCKET` (+ region and keys).
 
 ## Layout
 - `src/lib.rs`: `gameplay` (headless-testable: state, input, events, save, game) vs `presentation`
