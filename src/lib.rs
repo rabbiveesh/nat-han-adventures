@@ -16,6 +16,7 @@ pub mod art;
 pub mod audio;
 pub mod debug;
 pub mod events;
+pub mod freeplay;
 pub mod game;
 pub mod input;
 pub mod level;

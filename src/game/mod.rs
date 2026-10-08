@@ -32,6 +32,7 @@ pub use hazards::{
     spray_on,
 };
 pub use platforms::platform_pos;
+pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, stand_pos};
 pub use han::{DEATH_LINES, GRIP_LINE, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail, NERVOUS_LINE};
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{Body, Dead, PlayerControl};
