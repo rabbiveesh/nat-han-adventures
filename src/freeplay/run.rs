@@ -1,6 +1,7 @@
-//! A free-play run in the game: starting it, generating rooms ahead of Nat (off the main thread
-//! where there are threads, an attempt at a time), streaming them into the loaded level, the
-//! adaptive engine's room events, room restarts, and the end.
+//! A free-play run in the game: starting it, generating rooms ahead of Nat (in a Web Worker on
+//! web, [`super::offload`]; otherwise off the main thread where there are threads, an attempt
+//! at a time), streaming them into the loaded level, the adaptive engine's room events, room
+//! restarts, and the end.
 
 use std::collections::VecDeque;
 use std::ops::Range;
@@ -13,6 +14,7 @@ use super::canvas::STAND;
 use super::course::{COLS_PER_ROOM, Course, ENDLESS_ROOMS};
 use super::dice::{Dice, mix, stream};
 use super::generate::{Job, Room, RoomPlan, WORLD_STREAM, generate};
+use super::offload::{self, Outcome};
 use super::templates::unlocked_skills;
 use crate::adapt::frustration::IDLE_SECS;
 use crate::adapt::{AdaptEvent, FrustrationSignal, RoomResult, Skill, next_room, reduce};
@@ -166,6 +168,29 @@ impl FreePlayRun {
 #[derive(Resource)]
 struct GenTask(Task<(Job, Option<Room>)>);
 
+/// The generation in flight in the web worker.
+#[derive(Resource)]
+struct WorkerGen {
+    id: u64,
+    seed: u32,
+    plan: RoomPlan,
+}
+
+/// Generate `plan`'s room: in the web worker if there is one, else an attempt at a time on the
+/// task pool.
+fn start_generation(commands: &mut Commands, seed: u32, plan: RoomPlan) {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    if let Some(text) = offload::encode_job(id, seed, &plan)
+        && offload::send(&text)
+    {
+        commands.insert_resource(WorkerGen { id, seed, plan });
+    } else {
+        spawn_attempt(commands, Job::new(seed, plan));
+    }
+}
+
 fn spawn_attempt(commands: &mut Commands, mut job: Job) {
     let task = AsyncComputeTaskPool::get().spawn(async move {
         let room = job.step();
@@ -241,6 +266,7 @@ fn start_run(
     commands.insert_resource(GeneratedLevel(level));
     commands.insert_resource(run);
     commands.remove_resource::<GenTask>();
+    commands.remove_resource::<WorkerGen>();
     next.set(AppState::Playing);
 }
 
@@ -252,6 +278,7 @@ fn end_run(mut commands: Commands, run: Option<Res<FreePlayRun>>, mut mode: ResM
     commands.remove_resource::<FreePlayRun>();
     commands.remove_resource::<GeneratedLevel>();
     commands.remove_resource::<GenTask>();
+    commands.remove_resource::<WorkerGen>();
     if *mode == AssistMode::FreePlay {
         *mode = AssistMode::Story;
     }
@@ -308,7 +335,7 @@ fn track_rooms(
     post(run, &mut profile.0, started);
     if !run.is_last(next) && run.planned.is_none() && run.rooms.len() == next + 1 {
         let plan = run.plan(&profile.0, next + 1);
-        spawn_attempt(&mut commands, Job::new(run.seed, plan.clone()));
+        start_generation(&mut commands, run.seed, plan.clone());
         run.planned = Some(plan);
     }
     // Seal the pipe behind the rooms still loaded, and unload everything before it.
@@ -433,10 +460,12 @@ fn finish_run(
     }
 }
 
-/// A finished attempt: stitch the room in (or try again).
+/// A finished room (from the worker, or an attempt that validated): stitch it in (or try
+/// again).
 #[allow(clippy::too_many_arguments)]
 fn poll_generation(
     mut commands: Commands,
+    worker: Option<Res<WorkerGen>>,
     task: Option<ResMut<GenTask>>,
     mut run: ResMut<FreePlayRun>,
     mut active: ResMut<ActiveLevel>,
@@ -444,12 +473,28 @@ fn poll_generation(
     tiles: Query<(Entity, &LevelTile)>,
     mut goal: Query<&mut Transform, With<Goal>>,
 ) {
-    let Some(mut task) = task else { return };
-    let Some((job, room)) = check_ready(&mut task.0) else { return };
-    commands.remove_resource::<GenTask>();
-    let Some(room) = room else {
-        spawn_attempt(&mut commands, job);
-        return;
+    let room = if let Some(w) = worker {
+        match offload::poll(w.id, w.seed, &w.plan) {
+            Outcome::Pending => return,
+            Outcome::Done(room) => {
+                commands.remove_resource::<WorkerGen>();
+                *room
+            }
+            Outcome::Failed => {
+                commands.remove_resource::<WorkerGen>();
+                spawn_attempt(&mut commands, Job::new(w.seed, w.plan.clone()));
+                return;
+            }
+        }
+    } else {
+        let Some(mut task) = task else { return };
+        let Some((job, room)) = check_ready(&mut task.0) else { return };
+        commands.remove_resource::<GenTask>();
+        let Some(room) = room else {
+            spawn_attempt(&mut commands, job);
+            return;
+        };
+        room
     };
     let run = &mut *run;
     run.planned = None;

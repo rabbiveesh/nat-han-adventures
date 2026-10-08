@@ -334,15 +334,21 @@ fn long_gap(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built
 
 // ─── Waltz: a waltz row ──────────────────────────────────────────────────────
 
-/// Spray cans a waltz needs, by length: every row the validator accepts (shortest first).
+/// Spray cans a waltz needs, by length: every row the validator accepts (shortest first). The
+/// cans stand on the floor you walk on (deadly while they fire, like their jets; the can is
+/// no wider than its jet), so a row's danger zone, and so the lengths, are the same as the
+/// campaign's grated tunnels: 20 or 21 cans.
 pub fn waltz_cans() -> Vec<usize> {
     (crate::level::validate::WALTZ_ROW_MIN..48)
-        .filter(|&n| waltz_row_timing(&WaltzRow { row: FLOOR as i32 + 1, c0: 0, c1: n as i32 - 1 }).is_empty())
+        .filter(|&n| {
+            waltz_row_timing(&WaltzRow { row: STAND as i32, c0: 0, c1: n as i32 - 1, grated: false }).is_empty()
+        })
         .collect()
 }
 
-/// A runway (9 → 7 tiles) and a row of adjacent cans under a grating with a low roof: longer
-/// rows (the valid range, shortest to longest) as the band rises.
+/// A runway (9 → 7 tiles) and a row of adjacent cans on the floor, no grating, under a low
+/// roof (so nobody hops over the cans in the off-beats and hangs above them while they fire):
+/// longer rows (the valid range, shortest to longest) as the band rises.
 fn waltz_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     use std::sync::OnceLock;
     static CANS: OnceLock<Vec<usize>> = OnceLock::new();
@@ -352,20 +358,20 @@ fn waltz_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(lerpi(band, 9.0, 7.0) + d.int(0, 1) as usize, FLOOR);
     let k = ((cans.len() - 1) as f32 * t(band) * 0.8).round() as usize + d.int(0, 1) as usize;
     let n = cans[k.min(cans.len() - 1)];
-    let x = c.width();
     for _ in 0..n {
         c.column(|r| match r {
             r if r <= PIPE_ROOF => b'#',
-            FLOOR => b'=',
-            r if r == FLOOR + 1 => b'S',
-            r if r > FLOOR + 1 => b'#',
+            STAND => b'S',
+            r if r >= FLOOR => b'#',
             _ => b'.',
         });
     }
-    for k in (1..n).step_by(3) {
-        c.nugget(x + k, STAND);
-    }
+    // The prize past the row.
+    let past = c.width();
     c.ground(4, FLOOR);
+    for k in 0..3 {
+        c.nugget(past + k, STAND);
+    }
     Built { hint: Some((&[Topic::Waltz], "Hop-hop-hop, even beats: the band waltzes! GO!")), checkpoint }
 }
 

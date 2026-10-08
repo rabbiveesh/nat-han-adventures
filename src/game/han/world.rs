@@ -9,7 +9,7 @@ use super::{FLY_LINE, HAN_PLUG_LINGER, HAN_RAFT_WIDTH, HAN_SINK_TIME, HanAnim, J
 use crate::events::HanSays;
 use crate::game::{
     ActiveLevel, Assists, Body, Fly, Han, LevelEntity, MovingPlatform, Pos, PrevPos, Raft,
-    SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
+    CAN_HEIGHT, CAN_WIDTH, SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
 };
 use crate::level::buddy::HALF;
 use crate::level::{PlatformKind, TILE, Tile};
@@ -34,6 +34,19 @@ impl SprayPlug {
             None => top,
         };
         (top > base.y).then(|| (base - Vec2::new(SPRAY_WIDTH / 2.0, 0.0), Vec2::new(base.x + SPRAY_WIDTH / 2.0, top)))
+    }
+
+    /// The can's body box (min, max) for a can standing at `floor` (world, the bottom-center
+    /// of its cell), while its jet is live at the nozzle: not while it's plugged, nor while
+    /// Han stands over it (the jet then stops at his feet, at or below the nozzle).
+    pub fn can(plug: Option<&SprayPlug>, floor: Vec2) -> Option<(Vec2, Vec2)> {
+        Self::jet(plug, floor + Vec2::new(0.0, TILE))?;
+        Some((floor - Vec2::new(CAN_WIDTH / 2.0, 0.0), floor + Vec2::new(CAN_WIDTH / 2.0, CAN_HEIGHT)))
+    }
+
+    /// Everything that's deadly about a firing can standing at `floor`: its body and its jet.
+    pub fn danger(plug: Option<&SprayPlug>, floor: Vec2) -> [Option<(Vec2, Vec2)>; 2] {
+        [Self::can(plug, floor), Self::jet(plug, floor + Vec2::new(0.0, TILE))]
     }
 }
 
@@ -85,11 +98,13 @@ pub(super) fn han_hazards(
     // Spray jets stop at his body, and sputter a moment after he's past.
     let mut hit = false;
     for (e, spray, tf, plug) in &mut sprays {
-        let base = tf.translation.truncate() + Vec2::new(0.0, TILE);
+        // His body over the can or in its jet (the can is no wider than the jet).
+        let floor = tf.translation.truncate();
+        let base = floor + Vec2::new(0.0, TILE);
         let inside = present
-            && max.x > base.x - SPRAY_WIDTH / 2.0
-            && min.x < base.x + SPRAY_WIDTH / 2.0
-            && max.y > base.y
+            && max.x > base.x - SPRAY_WIDTH.max(CAN_WIDTH) / 2.0
+            && min.x < base.x + SPRAY_WIDTH.max(CAN_WIDTH) / 2.0
+            && max.y > floor.y
             && min.y < base.y + SPRAY_HEIGHT;
         // Escorting Nat through: the jets he's plugged stay plugged.
         let escorting = matches!(brain.mode, HanMode::Ahead { .. });

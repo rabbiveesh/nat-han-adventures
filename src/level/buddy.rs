@@ -12,7 +12,7 @@ use bevy::prelude::*;
 use super::{Level, TILE};
 use crate::audio::Harmony;
 use crate::game::{
-    BOOST_SPEED, Body, Carrier, Contact, Fall, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, han_carrier, move_towards,
+    BOOST_SPEED, Body, Carrier, Contact, Fall, WEAK_BOOST_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, han_carrier, move_towards,
     step_body, tuning::*, HanHead,
 };
 
@@ -303,10 +303,36 @@ pub fn stand(level: &Level, (c, r): (i32, i32)) -> Vec2 {
     Vec2::new(center.x, center.y - TILE / 2.0 + HALF.y)
 }
 
+/// Which columns count as a chain-jump chasm's (Han's head holds Nat [`HAN_CHASM_CATCH_RISE`]
+/// up over them, not just [`HAN_CATCH_RISE`]) in a [`chain_try`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ChasmMarks {
+    /// The level's `chain` marks; in a level without any, the chasm tried is taken as marked
+    /// (the validator proving a chasm it found: the marks must then say so, as the game reads
+    /// them).
+    AsFound,
+    /// The level's `chain` marks only, exactly as the game reads them (a chain tried anywhere
+    /// else, e.g. towards a band gate, gets the plain catch height).
+    Level,
+}
+
 /// Simulate one chain over `chasm` from its edge (heading `dir`), Nat playing `play`, Han
 /// following with the [`intercept`] reflex from [`FOLLOW_GAP`] behind, the band switching to
 /// Giant Steps per `gs`. Returns the cell Nat lands in past the chasm, if he does.
-pub fn chain_try(level: &Level, chasm: &Chasm, dir: i32, play: ChainPlay, gs: GsSwitch) -> Option<(i32, i32)> {
+///
+/// Han's head follows the game's rules (`game::han`): in a band zone ([`Level::in_band_zone`],
+/// at his feet or a row up) it holds Nat only while he stands, and the boost off it is the
+/// weak one ([`WEAK_BOOST_SPEED`]); in mid-air it holds Nat only [`HAN_CATCH_RISE`] above
+/// his last floor ([`HAN_CHASM_CATCH_RISE`] over a chasm, per `marks`); and never where he
+/// keeps out ([`Level::han_keeps_out`]).
+pub fn chain_try(
+    level: &Level,
+    chasm: &Chasm,
+    dir: i32,
+    play: ChainPlay,
+    gs: GsSwitch,
+    marks: ChasmMarks,
+) -> Option<(i32, i32)> {
     const DT: f32 = 1.0 / 60.0;
     let d = dir as f32;
     let edge = if dir > 0 { chasm.c0 - 1 } else { chasm.c1 + 1 };
@@ -357,9 +383,14 @@ pub fn chain_try(level: &Level, chasm: &Chasm, dir: i32, play: ChainPlay, gs: Gs
         if hb.on_ground {
             han_floor = han.y;
         }
-        // (An unmarked chasm: as the game will have it once it is marked.)
-        let over = level.in_chasm(level.cell_at(han).0) || !level.gates.iter().any(|g| g.topic == super::Topic::Chain);
-        head.solid = head_holds(hb.on_ground, han.y - han_floor, false, over);
+        let feet = level.cell_at(han - Vec2::new(0.0, HALF.y - 1.0));
+        let zone = level.in_band_zone(feet) || level.in_band_zone((feet.0, feet.1 - 1));
+        let over = level.in_chasm(feet.0)
+            || (marks == ChasmMarks::AsFound
+                && (chasm.c0..=chasm.c1).contains(&feet.0)
+                && !level.gates.iter().any(|g| g.topic == super::Topic::Chain));
+        head.solid = head_holds(hb.on_ground, han.y - han_floor, zone, over) && !level.han_keeps_out(feet);
+        head.weak = zone;
         // --- Nat.
         nb.vel.x = move_towards(nb.vel.x, d * speed, if nb.on_ground { GROUND_ACCEL } else { AIR_ACCEL } * groove.speed_scale * DT);
         let on_han = nb.riding == Some(han_id);
@@ -369,7 +400,7 @@ pub fn chain_try(level: &Level, chasm: &Chasm, dir: i32, play: ChainPlay, gs: Gs
             jumped = true;
             last_launch = t;
         } else if jumped && on_han && nb.on_ground {
-            nb.vel.y = BOOST_SPEED;
+            nb.vel.y = if head.weak { WEAK_BOOST_SPEED } else { BOOST_SPEED };
             nb.on_ground = false;
             nb.riding = None;
             has_toot = true;
@@ -418,7 +449,7 @@ pub fn chain_cross(level: &Level, chasm: &Chasm, dir: i32) -> Option<(i32, i32)>
     let plays = chain_plays();
     let mut first = None;
     for gs in gs_switches() {
-        let hit = plays.iter().find_map(|&p| chain_try(level, chasm, dir, p, gs))?;
+        let hit = plays.iter().find_map(|&p| chain_try(level, chasm, dir, p, gs, ChasmMarks::AsFound))?;
         first.get_or_insert(hit);
     }
     first

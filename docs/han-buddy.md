@@ -136,7 +136,8 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   speed (falls behind, "Wheeze..."), the waltz: steps only in the first 40% of each beat;
   nervous: 0.8-tile follow gap, trembling; laughing band: bounces (x1.3), rolls.
 - **Gates**: buddy ledges (a boost reaches it, no mode does); shield rows (24+ adjacent cans
-  under a grating and a low ceiling: no mode dashes them, the waltz included); chain chasms
+  on the floor or under a grating, with a low ceiling: no mode dashes them, the waltz
+  included; Han plugs both the jets and the cans); chain chasms
   (14+ bottomless columns; crossed by a co-simulated chain with the real reflex, for every
   moment the band might switch to Giant Steps after the chain's toots; one boost must not do
   it); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
