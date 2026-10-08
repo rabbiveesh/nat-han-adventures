@@ -42,6 +42,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   freedom. Never shown to the player.
 - **Free play** (`src/freeplay/`): procedural rooms from 8 templates, validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
+  On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
+  so a new room never hitches the game; the main thread takes over if the worker fails.
 - **Tooling**: level validator library (`src/level/validate.rs`), formal checks (tier 1 in every
   test run, tier 2 `scripts/check-deep` + non-blocking CI), music editor (`cargo run --bin
   editor`), F9 debug dump, phone touch controls (`scripts/phone-shots`), deterministic video
@@ -57,7 +59,6 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
   runs a few tens of ms ahead of the ear on web).
 - **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
   templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
-- **Free-play validation in a Web Worker** (optional): removes the ~20–60 ms per-room hitch on web.
 - **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
   (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending
   on the jingle, vamp-outs), stop-time choruses, call-and-response comping, pedal/vamp intros,
