@@ -12,7 +12,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   jazz standards from `music/*.song` (MML + chord chart + FamiTracker-style `[instruments]`).
   Four musicians (lead/comp/bass/drums) with freedom dials and a full ornament vocabulary
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
-  flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah).
+  flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and
+  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`).
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
   | Mode | Summon / cause | Physics | Gates |
@@ -39,11 +40,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   capture (`scripts/record-run --capture`), headless BRP driving (`scripts/headless-run`).
 
 ## In flight when this was written
-1. **Musician-chosen feels** — bossa, samba, rock, funk (music only, no physics, band's choice at
-   higher freedom). Reworked from feedback (rock perfect; bossa laid-back/half-time at fast tempos;
-   samba thinned; funk = one tight JB-style vamp). Remaining: tests, editor "force feel" chips +
-   feel lane, HUD readout third line, docs. Branch `worktree-agent-a206b564c58758fdf`.
-2. **Deadly spray cans** — a can's own tile kills while firing (Han's plug covers it); campaign
+1. **Deadly spray cans** — a can's own tile kills while firing (Han's plug covers it); campaign
    waltz/shield rows keep their gratings; free play uses plain floor-level can rows. Also syncs
    the deep checker's `chain_try` with Han's weak-boost rules so `KNOWN_BYPASSES` empties.
    Branch `worktree-agent-a19140d228fb5d7cf`.
