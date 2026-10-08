@@ -386,6 +386,7 @@ fn animate_han(
                 HanPose::Idle => (SpriteId::HanIdle, (t * 3.0) as usize),
                 HanPose::Run => (SpriteId::HanRun, (t * 12.0) as usize),
                 HanPose::Jump => (SpriteId::HanJump, (t * 10.0) as usize),
+                _ => (SpriteId::HanIdle, 0),
             };
             let img = sprites.frame(id, frame);
             if sprite.image != img {

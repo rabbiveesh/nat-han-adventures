@@ -3,8 +3,8 @@
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
-use super::han::{HanAnim, HanMotion, HanTrail};
-use super::physics::{Body, PlayerControl};
+use super::han::{HanAnim, HanBrain, HanNav};
+use super::physics::{Body, HanHead, PlayerControl};
 use super::{
     ActiveLevel, Checkpoint, Fly, GameSet, Goal, Groove, Han, LevelEntity, LevelRun, LevelTile,
     MovingPlatform, Nugget, Player, Pos, PrevPos, RestartLevel, SimClock, Spray, tuning,
@@ -105,6 +105,7 @@ fn load(
     // next bar line); physics don't wait for it.
     commands.insert_resource(Groove::default());
     commands.insert_resource(ActiveLevel { index, level: level.clone() });
+    commands.insert_resource(HanNav::default());
     spawn_level(commands, &level);
     level
 }
@@ -242,13 +243,16 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
         PrevPos(start),
         Transform::from_translation(start.extend(5.0)),
     ));
-    let han = super::han::behind(level, start, 1.0);
+    let han = super::han::spawn_spot(level, start);
+    let mut han_body = Body::player();
+    han_body.on_ground = true;
     commands.spawn((
         Name::new("Han"),
         LevelEntity,
         Han,
-        HanTrail::default(),
-        HanMotion::default(),
+        han_body,
+        HanBrain::default(),
+        HanHead::default(),
         HanAnim::default(),
         Pos(han),
         PrevPos(han),

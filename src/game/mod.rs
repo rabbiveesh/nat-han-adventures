@@ -34,7 +34,12 @@ pub use hazards::{
     spray_on,
 };
 pub use platforms::platform_pos;
-pub use han::{DEATH_LINES, GRIP_LINE, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail, NERVOUS_LINE};
+pub use han::{
+    BACK_WARN_LINE, BAND_LINE, DEATH_LINES, FOLLOW_GAP, FlySpin, GRIP_LINE, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
+    HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, HAN_TOOTS, HanAnim, HanBrain, HanMode, HanNav, HanPhys,
+    HanPose, HanRaft, LEMME_LINE, NERVOUS_GAP, NERVOUS_LINE, PARACHUTE_FALL, PRO_LINE, SprayPlug, UNION_LINE, brace_range,
+    breather, go_ahead_delay, han_raft_life, intercept_range, overuse_limit,
+};
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{
     BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, PlayerControl, han_carrier, move_towards, step_body,
@@ -118,7 +123,7 @@ pub enum GameSet {
     Player,
     /// Hazards, nuggets, checkpoints, goal, death/respawn.
     Interact,
-    /// Han.
+    /// After the interactions (Han himself moves in `World`, before Nat: Nat stands on him).
     Follow,
     /// Copy [`Pos`] into `Transform`.
     Sync,
@@ -267,7 +272,7 @@ fn sync_transforms(mut q: Query<(&Pos, &mut Transform)>) {
 #[reflect(Component)]
 pub struct Player;
 
-/// Han the plumber, who follows the player around. Exactly one while a level is loaded.
+/// Han the plumber, Nat's AI buddy (see `game::han`). Exactly one while a level is loaded.
 #[derive(Component, Debug, Default, Reflect)]
 #[reflect(Component)]
 pub struct Han;

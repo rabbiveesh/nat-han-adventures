@@ -9,7 +9,7 @@ use nat_han_adventures::{
     events::*,
     audio::{Filters, Harmony},
     game::{
-        Body, Checkpoint, Dead, FIRED_UP_SPEED, GIANT_STEPS_SPEED, Groove, HAN_DELAY_STEPS, Han, LevelRun,
+        Body, Checkpoint, Dead, FIRED_UP_SPEED, GIANT_STEPS_SPEED, Groove, Han, LevelRun,
         MovingPlatform, NERVOUS_TIME, Nugget, Player, Pos, SimClock, tuning,
     },
     level::{Level, Levels, TILE},
@@ -408,8 +408,6 @@ fn spikes_kill_and_respawn_at_checkpoint() {
     let pos = player_pos(&mut app);
     assert_eq!(pos.x, 5.0 * TILE + TILE / 2.0);
     assert!((pos.y - standing(TILE)).abs() < 1.0);
-    // Han pops back in behind.
-    assert!(han_pos(&mut app).distance(pos) < 2.0 * TILE);
 }
 
 const PIT: &str = "name: Pit
@@ -568,10 +566,9 @@ const LONG: &str = "name: Long
 ";
 
 #[test]
-fn han_follows_the_same_path() {
+fn han_follows_over_the_bumps() {
     let mut app = app(LONG);
     hold(&mut app, RIGHT);
-    let mut trail = Vec::new();
     for i in 0..240 {
         // Hop over the bumps.
         if i % 40 == 0 {
@@ -581,30 +578,42 @@ fn han_follows_the_same_path() {
         }
         app.update();
         let (p, g) = (player_pos(&mut app), han_pos(&mut app));
-        trail.push(p);
-        assert!(g.distance(p) <= 12.0 * TILE, "Han stays in range");
-        if trail.len() > HAN_DELAY_STEPS + 30 {
-            // Replaying the path ~HAN_DELAY_STEPS steps late.
-            let past = trail[trail.len() - 1 - HAN_DELAY_STEPS];
-            assert!(g.distance(past) < 1.0, "step {i}: han {g} vs player's past {past}");
-        }
+        assert!(g.distance(p) <= 12.0 * TILE, "Han stays in range: {g} vs {p}");
     }
     release(&mut app, RIGHT);
     release(&mut app, JUMP);
-    step(&mut app, 1.5);
+    step(&mut app, 3.0);
     let (p, g) = (player_pos(&mut app), han_pos(&mut app));
     assert!((g.y - p.y).abs() < 1.0, "landed, not frozen mid-jump: {g} vs {p}");
     assert!(p.x - g.x > 0.0 && p.x - g.x < 5.0 * TILE, "waits a little behind: {g} vs {p}");
 }
 
+/// Far away, Han doesn't teleport: he parachutes in from above.
 #[test]
-fn han_pops_back_when_far() {
-    let mut app = app(LONG);
+fn han_parachutes_in_when_far() {
+    use nat_han_adventures::game::{HanBrain, HanMode};
+    // A wall too tall even for Han's three toots; Nat gets put on the far side.
+    let mut rows: Vec<String> = vec![".".repeat(80); 15];
+    for r in 1..15 {
+        rows[r].replace_range(30..33, "###");
+    }
+    rows.push("#".repeat(80));
+    rows[14].replace_range(2..3, "P");
+    rows[14].replace_range(77..78, "G");
+    let level = format!("name: Wall\n---\n{}\n", rows.join("\n"));
+    let mut app = app(&level);
     let p = single::<Player>(&mut app);
-    app.world_mut().get_mut::<Pos>(p).unwrap().0.x += 30.0 * TILE;
-    app.update();
+    app.world_mut().get_mut::<Pos>(p).unwrap().0.x += 50.0 * TILE;
+    let mut floated = false;
+    for _ in 0..600 {
+        app.update();
+        let h = single::<Han>(&mut app);
+        floated |= matches!(app.world().get::<HanBrain>(h).unwrap().mode, HanMode::Parachute { .. });
+    }
     let (pp, g) = (player_pos(&mut app), han_pos(&mut app));
-    assert!(g.distance(pp) < 2.0 * TILE, "popped next to the player");
+    assert!(floated, "he parachuted");
+    assert!(g.distance(pp) < 3.0 * TILE, "next to the player: {g} vs {pp}");
+    assert!((g.y - pp.y).abs() < 1.0, "on the ground");
 }
 
 #[test]
@@ -916,38 +925,6 @@ fn han_follows_down_off_a_ledge() {
     step(&mut app, 2.0);
     let (p, h) = (player_pos(&mut app), han_pos(&mut app));
     assert!((h.y - p.y).abs() < 1.0, "han at {h} should stand on the floor with nat at {p}");
-}
-
-/// A pillar with open air on both sides, floor far below.
-const PILLAR: &str = "name: Pillar
----
-........................................
-........................................
-........................................
-..................##....................
-..................##....................
-..................##....................
-..................##....................
-..................##....................
-.P................##...................G
-########################################
-";
-
-/// Han popping in next to a far-away player can land him in mid-air: he must fall to the floor.
-#[test]
-fn han_falls_after_popping_in_mid_air() {
-    let mut app = app(PILLAR);
-    // Teleport Nat onto the pillar's left edge, facing right: Han's pop spot (behind him) is
-    // off the pillar, in mid-air above the floor.
-    let p = single::<Player>(&mut app);
-    app.world_mut().get_mut::<Pos>(p).unwrap().0 = Vec2::new(18.0 * TILE + 3.0, standing(7.0 * TILE));
-    app.world_mut().get_mut::<nat_han_adventures::game::PlayerControl>(p).unwrap().facing = 1.0;
-    step(&mut app, 2.0);
-    let h = han_pos(&mut app);
-    let on_floor = (h.y - standing(TILE)).abs() < 1.0;
-    let on_pillar = (h.y - standing(7.0 * TILE)).abs() < 1.0;
-    assert!(h.x < 18.0 * TILE, "test setup: han should have popped in left of the pillar, at {h}");
-    assert!(on_floor || on_pillar, "han hanging in the air at {h}");
 }
 
 // --- The waltz: the world dances to the music's clock (driven directly here). ---
@@ -1334,8 +1311,9 @@ fn splats_in_liquid_float_a_raft_that_sinks() {
     assert_eq!(counted::<PlayerDied>(&app), 1);
     // ...until it sinks, taking Nat with it.
     step(&mut app, RAFT_LIFE_FLOOR);
-    // (The splat as it sinks floats a fresh raft on the same spot.)
-    let fresh: Vec<f32> = app.world_mut().query::<&Raft>().iter(app.world()).map(|r| r.age).collect();
+    // (The splat as it sinks floats a fresh raft on the same spot. Han, seeing Nat stand there
+    // facing the sewage, went to check it out: his rafts are his.)
+    let fresh: Vec<f32> = app.world_mut().query_filtered::<&Raft, Without<nat_han_adventures::game::HanRaft>>().iter(app.world()).map(|r| r.age).collect();
     assert!(fresh.len() == 1 && fresh[0] < 4.0, "the old raft sank, a fresh one floats: {fresh:?}");
     assert_eq!(counted::<PlayerDied>(&app), 2, "into the drink");
 }
@@ -1385,3 +1363,4 @@ fn hint_spots_speak_once_per_visit_and_again_after_a_restart() {
     step(&mut app, 1.2);
     assert_eq!(hints(&app), 2, "again after a restart");
 }
+

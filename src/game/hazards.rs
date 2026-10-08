@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 
-use super::han::{self, DEATH_LINES, HanTrail};
+use super::han::{DEATH_LINES, FlySpin, HanRaft, SprayPlug};
 use super::physics::{Body, Dead, Finished, PlayerControl, cells, tile_at};
 use super::{
     ActiveLevel, Fly, GameSet, Groove, Han, LevelEntity, LevelRun, MovingPlatform, Nugget, Player, Pos, PrevPos,
@@ -60,14 +60,18 @@ pub fn spray_on(_col: usize, t: f32) -> bool {
     t.rem_euclid(SPRAY_CYCLE) >= SPRAY_CYCLE - SPRAY_ON
 }
 
-fn move_flies(clock: Res<SimClock>, mut flies: Query<(&Fly, &mut Pos)>) {
-    for (fly, mut pos) in &mut flies {
-        let a = fly_angle(clock.fly_turns, fly.phase);
+pub(super) fn move_flies(clock: Res<SimClock>, mut flies: Query<(&Fly, &mut Pos, Option<&FlySpin>)>) {
+    for (fly, mut pos, spin) in &mut flies {
+        // A swarm that bounced off Han circles the other way.
+        let a = match spin {
+            Some(s) => fly_angle(clock.fly_turns * s.dir, fly.phase + s.offset),
+            None => fly_angle(clock.fly_turns, fly.phase),
+        };
         pos.0 = fly.center + FLY_RADIUS * Vec2::new(a.cos(), a.sin());
     }
 }
 
-fn update_sprays(clock: Res<SimClock>, groove: Res<Groove>, mut sprays: Query<&mut Spray>) {
+pub(super) fn update_sprays(clock: Res<SimClock>, groove: Res<Groove>, mut sprays: Query<&mut Spray>) {
     for mut spray in &mut sprays {
         let on = if groove.waltz() { groove.waltz_spray_on() } else { spray_on(spray.col, clock.time) };
         if spray.on != on {
@@ -109,9 +113,18 @@ impl RaftLife {
 type RaftQuery<'w, 's> = Query<'w, 's, (Entity, &'static mut Raft, &'static MovingPlatform, &'static mut Pos), (Without<Player>, Without<Fly>)>;
 
 /// Rafts age, sink at the end of their life, and go.
-fn float_rafts(mut commands: Commands, time: Res<Time>, life: Res<RaftLife>, mut rafts: RaftQuery) {
-    let life = life.secs();
+pub(super) fn float_rafts(
+    mut commands: Commands,
+    time: Res<Time>,
+    life: Res<RaftLife>,
+    assists: Res<super::Assists>,
+    mut rafts: RaftQuery,
+    han_rafts: Query<(), With<HanRaft>>,
+) {
+    let nat_life = life.secs();
     for (e, mut raft, platform, mut pos) in &mut rafts {
+        // Han's big raft floats longer.
+        let life = if han_rafts.contains(e) { super::han::han_raft_life(&assists) } else { nat_life };
         raft.age += time.delta_secs();
         if raft.age >= life {
             commands.entity(e).despawn();
@@ -181,7 +194,7 @@ pub(super) fn check_hazards(
         (With<Player>, Without<Dead>, Without<Finished>),
     >,
     flies: Query<&Pos, (With<Fly>, Without<Player>)>,
-    sprays: Query<(&Spray, &Transform)>,
+    sprays: Query<(&Spray, &Transform, Option<&SprayPlug>)>,
     mut run: ResMut<LevelRun>,
     assists: Res<super::Assists>,
     mut died: MessageWriter<PlayerDied>,
@@ -223,15 +236,10 @@ pub(super) fn check_hazards(
     dead |= flies.iter().any(|f| rects_overlap(min, max, f.0 - fh, f.0 + fh));
 
     // Spray jets.
-    dead |= sprays.iter().any(|(spray, tf)| {
+    // (Han's body stops a jet: it's cut off above him, and stays plugged a moment after.)
+    dead |= sprays.iter().any(|(spray, tf, plug)| {
         let base = tf.translation.truncate() + Vec2::new(0.0, TILE);
-        spray.on
-            && rects_overlap(
-                min,
-                max,
-                base - Vec2::new(SPRAY_WIDTH / 2.0, 0.0),
-                base + Vec2::new(SPRAY_WIDTH / 2.0, SPRAY_HEIGHT),
-            )
+        spray.on && SprayPlug::jet(plug, base).is_some_and(|(lo, hi)| rects_overlap(min, max, lo, hi))
     });
 
     if !dead {
@@ -264,7 +272,6 @@ pub(super) fn respawn(
         (Entity, &mut Dead, &mut Pos, &mut PrevPos, &mut Body, &mut PlayerControl),
         (With<Player>, Without<Han>),
     >,
-    mut han_q: Query<(&mut Pos, &mut PrevPos, &mut HanTrail), (With<Han>, Without<Player>)>,
     mut respawned: MessageWriter<PlayerRespawned>,
 ) {
     let Ok((entity, mut dead, mut pos, mut prev, mut body, mut ctl)) = player.single_mut() else {
@@ -297,11 +304,5 @@ pub(super) fn respawn(
             Nugget,
             Transform::from_translation(c.extend(2.0)),
         ));
-    }
-
-    for (mut gpos, mut gprev, mut trail) in &mut han_q {
-        gpos.0 = han::behind(level, at, ctl.facing);
-        gprev.0 = gpos.0;
-        trail.0.clear();
     }
 }
