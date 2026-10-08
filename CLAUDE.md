@@ -45,7 +45,18 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   waltz switches meter at a shared bar line). Songs are `music/*.song`. Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
+- `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator
+  (seeded dice + `validate::check_room` with a lean jump set, re-roll on failure), rooms stitched
+  pipe-to-pipe into one growing level, the adaptive engine picks each next room.
+  `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
 - `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
+- `src/bin/editor/` the native music editor (`cargo run --bin editor`; the `editor` feature, in
+  `dev`, never in the game binary or the web build): egui on Bevy, the full live engine with
+  gameplay simulated by buttons/dials (the same `Input`s and director as the game), tracker /
+  piano roll / text views of one `.song` text, hot-swapped into the engine on every parse,
+  Save writes `music/<song>.song`. `--help` lists the scripting options; screenshots:
+  `NATHAN_AUDIO=headless VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+  xvfb-run -a cargo run --bin editor -- --view piano --play --screenshot out.png`.
 
 ## Look
 - Virtual resolution: 216px tall (13.5 tiles), width follows the window aspect. Camera2d with

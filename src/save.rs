@@ -31,11 +31,13 @@ pub struct Progress {
     pub best_nuggets: [Option<u32>; LEVEL_COUNT],
     /// Best completion time per level, seconds.
     pub best_time: [Option<f32>; LEVEL_COUNT],
+    /// The seed of the last free-play run (offered as "LAST" between visits).
+    pub last_seed: Option<u32>,
 }
 
 impl Default for Progress {
     fn default() -> Self {
-        Self { unlocked: 1, best_nuggets: [None; LEVEL_COUNT], best_time: [None; LEVEL_COUNT] }
+        Self { unlocked: 1, best_nuggets: [None; LEVEL_COUNT], best_time: [None; LEVEL_COUNT], last_seed: None }
     }
 }
 
@@ -93,6 +95,9 @@ impl Progress {
                 s.push_str(&format!("level {i} {n} {t:.3}\n"));
             }
         }
+        if let Some(seed) = self.last_seed {
+            s.push_str(&format!("freeplay-seed {seed}\n"));
+        }
         s
     }
 
@@ -121,6 +126,7 @@ impl Progress {
                         p.best_time[i] = Some(t.max(0.0));
                     }
                 }
+                ["freeplay-seed", seed] => p.last_seed = seed.parse().ok(),
                 _ => {}
             }
         }
@@ -342,6 +348,8 @@ mod tests {
         assert_eq!(back, p);
         assert_eq!(back.unlocked, 4);
         assert_eq!(Progress::from_text(&Progress::default().to_text()), Some(Progress::default()));
+        let seeded = Progress { last_seed: Some(424242), ..Progress::default() };
+        assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
     }
 
     #[test]

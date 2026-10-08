@@ -65,7 +65,7 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HanPhys, chain_cross};
-use super::{HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
+use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
     BOOST_SPEED, BeatClock, FORGIVE, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, spray_on,
@@ -389,6 +389,10 @@ pub struct Map<'a> {
     pub pools: Vec<Pool>,
     pub chasms: Vec<Chasm>,
     has_grease: bool,
+    /// Generated rooms (free play) carry no `gate:` marks: the band and death gates found so far,
+    /// marked as they're found (Han keeps clear of them like of marked ones).
+    derive_marks: bool,
+    pub(crate) derived: Vec<GateMark>,
 }
 
 impl<'a> Map<'a> {
@@ -488,7 +492,21 @@ impl<'a> Map<'a> {
         }
         let pools = find_pools(level);
         let chasms = find_chasms(level, &flags);
-        Map { level, w, h, flags, flies, waltz_rows, pits, shield_rows, pools, chasms, has_grease: level.has_grease() }
+        Map {
+            level,
+            w,
+            h,
+            flags,
+            flies,
+            waltz_rows,
+            pits,
+            shield_rows,
+            pools,
+            chasms,
+            has_grease: level.has_grease(),
+            derive_marks: false,
+            derived: Vec::new(),
+        }
     }
 
     /// Han's view of the level: flies and spray jets don't hurt him (spikes and sewage still
@@ -541,6 +559,11 @@ impl<'a> Map<'a> {
 
     pub fn is_solid(&self, c: i32, r: i32) -> bool {
         self.f(c, r) & SOLID != 0
+    }
+
+    /// May Han be in `cell`? Not near a band or death gate (marked, or found in a room).
+    pub fn han_allowed(&self, cell: Cell) -> bool {
+        self.level.han_allowed(cell) && !self.derived.iter().any(|g| g.berth().contains(cell))
     }
 
     /// Does a player box centered at (x, y) overlap anything solid?
@@ -1412,6 +1435,18 @@ impl Physics {
         Physics { human, ideal, no_toot, boost, boost_ideal }
     }
 
+    /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
+    /// Fewer jumps reach less, so whatever a level passes with them it passes with
+    /// [`strategies`] too: free play (`crate::freeplay`) validates rooms with a lean set, fast
+    /// enough to do while the game runs.
+    pub fn with_human(human: Vec<Strategy>) -> Physics {
+        let ideal = MODES.iter().map(|&m| Arcs::new(Env::new(m, true), ideal_strategies())).collect();
+        let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
+        let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
+        let Physics { boost, boost_ideal, .. } = Physics::new();
+        Physics { human, ideal, no_toot, boost, boost_ideal }
+    }
+
     pub fn human(&self, m: Mode) -> &Arcs {
         &self.human[MODES.iter().position(|&x| x == m).unwrap()]
     }
@@ -1617,6 +1652,7 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                         e.extend(seeds.iter().copied());
                     }
                     let new = explore(map, phys.human(Mode::Normal), seeds, Some(i), &mut g);
+                    derive_mark(map, Gate::StainPit, from, to);
                     crossings.push(Crossing { gate: Gate::StainPit, from, to, new, stains, flags });
                     crossed = true;
                     break;
@@ -1682,11 +1718,12 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
 type Found = (Gate, Cell, Cell, Vec<Cell>);
 
 /// Add the crossings `found` (those still leading somewhere new) and explore past them.
-fn take(map: &Map, phys: &Physics, g: &mut Graph, crossings: &mut Vec<Crossing>, found: Vec<Found>) {
+fn take(map: &mut Map, phys: &Physics, g: &mut Graph, crossings: &mut Vec<Crossing>, found: Vec<Found>) {
     for (gate, from, to, touched) in found {
         if g.reached(to) {
             continue;
         }
+        derive_mark(map, gate, from, to);
         let i = g.idx(from).expect("reached");
         g.edges[i].as_mut().expect("reached").push(to);
         for t in touched {
@@ -1698,11 +1735,29 @@ fn take(map: &Map, phys: &Physics, g: &mut Graph, crossings: &mut Vec<Crossing>,
     }
 }
 
+/// The mark a crossing from `from` to `to` would need.
+fn mark_of(gate: Gate, from: Cell, to: Cell) -> GateMark {
+    GateMark {
+        topic: gate.topic(),
+        c0: from.0.min(to.0) - 1,
+        r0: from.1.min(to.1) - 1,
+        c1: from.0.max(to.0) + 1,
+        r1: from.1.max(to.1),
+    }
+}
+
+/// In a generated room, a band or death gate is marked as soon as it's found.
+fn derive_mark(map: &mut Map, gate: Gate, from: Cell, to: Cell) {
+    if map.derive_marks && !gate.needs_han() {
+        map.derived.push(mark_of(gate, from, to));
+    }
+}
+
 /// Can Han be in `cell` with Nat? Nat got there, and it's not near a band gate. (Han
 /// navigates with his own physics, and when he can't follow he parachutes in next to Nat, so
 /// wherever Nat stands, Han can be, outside the band's gates.)
 fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
-    g.reached(cell) && map.level.han_allowed(cell)
+    g.reached(cell) && map.han_allowed(cell)
 }
 
 /// Han's gates from reached cells not tried yet: buddy ledges (a boost off Han standing
@@ -1915,7 +1970,7 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
     match c.gate {
         Gate::ChainChasm => {
             // A chain, not one boost: no single boost off Han standing anywhere near crosses.
-            let cands: Vec<Cell> = near.iter().copied().filter(|&n| before.level.han_allowed(n)).collect();
+            let cands: Vec<Cell> = near.iter().copied().filter(|&n| before.han_allowed(n)).collect();
             for (mode, arcs) in phys.boost_ideal.iter().filter(|(m, _)| *m != Mode::FiredUp) {
                 if let Some((f, to)) = leak(&before, arcs, &cands, &beyond, &HashSet::new()) {
                     errs.push(format!(
@@ -1945,7 +2000,7 @@ fn han_spots(map: &Map, g: &Graph, i: usize, at: Cell, cols: i32) -> Vec<Cell> {
             if map.is_solid(a.0, a.1) {
                 break;
             }
-            if map.level.han_allowed(a) && (k == 0 || g.touched(a)) && !out.contains(&a) {
+            if map.han_allowed(a) && (k == 0 || g.touched(a)) && !out.contains(&a) {
                 out.push(a);
             }
         }
@@ -2084,6 +2139,9 @@ pub struct Report {
     pub segments: Vec<u32>,
     /// The map with reachable cells marked (if asked for).
     pub dump: Option<String>,
+    /// The level's gate marks; for a generated room ([`check_room`]), the marks it needs (its
+    /// gates, found): copy them into the room so the game's Han keeps clear of its band gates.
+    pub marks: Vec<GateMark>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -2137,8 +2195,20 @@ pub fn check(level: &Level, opts: &Options) -> Report {
 
 /// [`check`] with the physics tables already built (they take a moment).
 pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
+    check_impl(level, opts, phys, true)
+}
+
+/// [`check_with`] for a generated room (free play, `crate::freeplay`): the deaths its design
+/// needs are worked out and reported in [`Report::deaths`] (the room's expected deaths) instead
+/// of checked against its `deaths:` line.
+pub fn check_room(level: &Level, phys: &Physics) -> Report {
+    check_impl(level, &Options::default(), phys, false)
+}
+
+fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool) -> Report {
     let mut errs = line_errors(level);
     let mut map = Map::new(level);
+    map.derive_marks = !check_deaths;
     let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
     if !(1..=3).contains(&cps.len()) {
         errs.push(format!("{} checkpoints (want 1..=3)", cps.len()));
@@ -2239,8 +2309,14 @@ pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
         }
     }
 
-    // Gate marks: every crossing in a mark of its kind, every mark holding one.
-    for c in &crossings {
+    // Gate marks: every crossing in a mark of its kind, every mark holding one. (A generated
+    // room's marks are derived instead.)
+    let mut marks = level.gates.clone();
+    if map.derive_marks {
+        marks.extend(map.derived.iter().copied());
+        marks.extend(crossings.iter().filter(|c| c.gate.needs_han()).map(|c| mark_of(c.gate, c.from, c.to)));
+    }
+    for c in crossings.iter().filter(|_| !map.derive_marks) {
         let t = c.gate.topic();
         if !level.gates.iter().any(|m| m.topic == t && m.contains(c.from) && m.contains(c.to)) {
             errs.push(format!(
@@ -2254,7 +2330,7 @@ pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
             ));
         }
     }
-    for m in &level.gates {
+    for m in level.gates.iter().filter(|_| !map.derive_marks) {
         if !crossings.iter().any(|c| c.gate.topic() == m.topic && m.contains(c.from)) {
             errs.push(format!(
                 "`gate: {} {},{} {},{}` holds no {} crossing",
@@ -2318,7 +2394,7 @@ pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
         );
         gates.push((c.gate, on_way, nuggets, splats));
     }
-    if level.deaths.unwrap_or(0) != deaths {
+    if check_deaths && level.deaths.unwrap_or(0) != deaths {
         errs.push(format!(
             "`deaths: {}` but the design needs {deaths} (stain pit splats + {NERVOUS_DEATHS} per grease chute)",
             level.deaths.unwrap_or(0)
@@ -2399,7 +2475,7 @@ pub fn check_with(level: &Level, opts: &Options, phys: &Physics) -> Report {
             dump(level, &map, &g, &crossings)
         )
     });
-    Report { errs, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump }
+    Report { errs, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
 }
 
 /// Every mechanic's first appearance (by path cost from the start), with its best hint.

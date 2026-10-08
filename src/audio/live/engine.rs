@@ -81,6 +81,9 @@ pub enum Input {
     ForceTuning(Option<Tuning>),
     /// Each musician's freedom, and the dynamics, 0..1.
     SetFreedom { lead: f32, comp: f32, bass: f32, drums: f32, dynamics: f32 },
+    /// Each channel's level (pulse 1, pulse 2, triangle, noise): 1 as written, 0 muted. A mixer
+    /// (an editor's mute / solo / volume): it applies at once, not at a bar line.
+    SetMix([f32; 4]),
 }
 
 /// Engine settings.
@@ -359,6 +362,22 @@ impl Engine {
             scratch: Vec::with_capacity(4096),
             seq: 0,
         })
+    }
+
+    /// Start the first pass at sample `sample` (of the song's own shape) instead of the top:
+    /// an editor's "play from here", or a hot swap that carries on where the last engine was.
+    /// Only before the first [`Engine::fill`]. Bars before it are skipped; if it falls inside a
+    /// bar, that bar stays silent and the band comes in at the next bar line. Past the end it's
+    /// ignored.
+    pub fn start_at(&mut self, sample: u64) {
+        if self.t != 0 || !self.committed.is_empty() || sample >= self.shape.len {
+            return;
+        }
+        let bar = self.shape.bar_at(sample);
+        let bar = if self.shape.bar_starts[bar] < sample { bar + 1 } else { bar };
+        self.t = sample;
+        self.next_song_bar = bar;
+        self.next_bar = bar as u64;
     }
 
     pub fn title(&self) -> &str {
@@ -648,6 +667,12 @@ impl Engine {
                 self.freedom = Freedom { lead: c(lead), comp: c(comp), bass: c(bass), drums: c(drums), dynamics: c(dynamics) };
                 for (m, f) in self.musicians.iter_mut().zip([lead, comp, bass, drums]) {
                     m.set_freedom(c(f));
+                }
+                None
+            }
+            Input::SetMix(gains) => {
+                for (ch, g) in gains.into_iter().enumerate() {
+                    self.bank.set_channel_gain(ch, g);
                 }
                 None
             }

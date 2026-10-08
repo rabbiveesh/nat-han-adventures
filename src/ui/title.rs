@@ -1,4 +1,5 @@
-//! Title screen: big title, the stars bobbing, blinking "PRESS ENTER".
+//! Title screen: big title, the stars bobbing, blinking "PRESS ENTER", and the choice of
+//! STORY (level select) or FREE PLAY.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -14,13 +15,22 @@ pub fn plugin(app: &mut App) {
         Update,
         (
             spawn.run_if(in_state(AppState::Title).and_then(not(any_with_component::<TitleScreen>))),
-            (bob, input).run_if(in_state(AppState::Title)),
+            (bob, input, highlight).chain().run_if(in_state(AppState::Title)),
         ),
     );
 }
 
 #[derive(Component)]
 struct TitleScreen;
+
+/// The menu: story mode or free play.
+const OPTIONS: [&str; 2] = ["STORY", "FREE PLAY"];
+
+#[derive(Resource, Default)]
+struct TitleCursor(usize);
+
+#[derive(Component)]
+struct TitleOption(usize);
 
 /// Bobs up and down; `phase` offsets the cycle so the two stars bounce out of step.
 #[derive(Component)]
@@ -63,9 +73,12 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn(label(f, GAME_TAGLINE, 8.0, DIM_CREAM));
             root.spawn((
                 label(f, "PRESS ENTER", 8.0, GOLD),
-                Node { margin: UiRect::top(px(24.0)), ..default() },
+                Node { margin: UiRect::top(px(16.0)), ..default() },
                 Blink(1.0),
             ));
+            for (i, o) in OPTIONS.iter().enumerate() {
+                root.spawn((label(f, *o, 8.0, CREAM), TitleOption(i), Node { margin: UiRect::top(px(6.0)), ..default() }));
+            }
             root.spawn(Node { flex_grow: 1.0, ..default() });
             root.spawn((
                 label(f, "a game by their #2 fan", 8.0, DIM_CREAM),
@@ -85,11 +98,34 @@ fn bob(time: Res<Time>, mut q: Query<(&Bob, &mut Node)>) {
 
 fn input(
     action: Single<&ActionState<Action>>,
+    cursor: Option<ResMut<TitleCursor>>,
+    mut commands: Commands,
     mut next: ResMut<NextState<AppState>>,
     mut sfx_w: MessageWriter<PlaySfx>,
 ) {
+    let Some(mut cursor) = cursor else {
+        commands.init_resource::<TitleCursor>();
+        return;
+    };
+    let d = nav(&action).y;
+    if d != 0 {
+        cursor.0 = (cursor.0 as i32 + d).rem_euclid(OPTIONS.len() as i32) as usize;
+        sfx(&mut sfx_w, Sfx::MenuMove);
+    }
     if action.just_pressed(&Action::Confirm) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
-        next.set(AppState::LevelSelect);
+        next.set(if cursor.0 == 1 { AppState::FreePlaySetup } else { AppState::LevelSelect });
+    }
+}
+
+fn highlight(cursor: Option<Res<TitleCursor>>, mut q: Query<(&TitleOption, &mut Text, &mut TextColor)>) {
+    let at = cursor.map_or(0, |c| c.0);
+    for (o, mut text, mut color) in &mut q {
+        let on = o.0 == at;
+        let s = if on { format!("> {} <", OPTIONS[o.0]) } else { OPTIONS[o.0].to_string() };
+        if text.0 != s {
+            text.0 = s;
+        }
+        color.0 = if on { GOLD } else { DIM_CREAM };
     }
 }

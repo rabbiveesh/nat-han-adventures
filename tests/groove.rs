@@ -272,3 +272,32 @@ fn uneven_jumps_dont_waltz() {
     }
     assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None);
 }
+
+/// A grease chute: quick successive deaths. Neither the laughing band (2nd death) nor a
+/// summon kept alive by re-grabbed nuggets may keep grip away: it comes at the 3rd death, or
+/// the chute soft-locks.
+#[test]
+fn quick_deaths_bring_grip_even_while_laughing() {
+    let mut app = app(5);
+    let mut grip_at = None;
+    for frame in 0..60 * 20 {
+        // A death every 2.5 s (respawn + slide back + splat), re-grabbing 4 ghost nuggets after
+        // each respawn: that keeps refiring "fired up", which must not keep grip away.
+        if frame % 150 == 0 && frame < 150 * 5 {
+            app.world_mut().write_message(PlayerDied { pos: Vec2::ZERO });
+        }
+        if frame % 150 > 60 && frame % 150 <= 64 && frame < 150 * 5 {
+            app.world_mut().write_message(NuggetCollected { pos: Vec2::ZERO });
+        }
+        app.update();
+        let g = *app.world().resource::<Groove>();
+        if frame % 60 == 0 {
+            let p = app.world().resource::<LivePlayer>();
+            println!("t={:.1}s groove {:?} bounce {} grip {} pending {:?}", frame as f32 / 60.0, g.harmony, g.bounce, g.grip(), p.pending_filters());
+        }
+        if g.grip() && grip_at.is_none() {
+            grip_at = Some(frame);
+        }
+    }
+    assert!(grip_at.is_some(), "never got sweaty grip");
+}

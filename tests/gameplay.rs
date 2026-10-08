@@ -1364,3 +1364,42 @@ fn hint_spots_speak_once_per_visit_and_again_after_a_restart() {
     assert_eq!(hints(&app), 2, "again after a restart");
 }
 
+/// A grease run that slides you into spikes (a chute's end).
+const CHUTE: &str = "name: Chute
+---
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+........................................
+..P......................^.............G
+##########_______________###############
+";
+
+/// Sliding into the chute's end spikes leaves a short-lived *side* splat, never a lasting
+/// stain: the next slide kills again, so deaths keep coming until grip (no soft-lock).
+#[test]
+fn chute_splats_are_side_splats_that_fade() {
+    use nat_han_adventures::game::{SIDE_STAIN_LIFE, SideStain, Stain};
+    let mut app = app(CHUTE);
+    for n in 1..=3 {
+        hold(&mut app, RIGHT);
+        for _ in 0..600 {
+            app.update();
+            if counted::<PlayerDied>(&app) == n {
+                break;
+            }
+        }
+        assert_eq!(counted::<PlayerDied>(&app), n, "slide #{n} kills");
+        let stains = app.world_mut().query::<&Stain>().iter(app.world()).count();
+        let sides = app.world_mut().query::<&SideStain>().iter(app.world()).count();
+        assert_eq!(stains, 0, "no lasting stain at a chute's end");
+        assert!(sides >= 1, "a side splat");
+        release(&mut app, RIGHT);
+        step(&mut app, SIDE_STAIN_LIFE + 0.2);
+        let sides = app.world_mut().query::<&SideStain>().iter(app.world()).count();
+        assert_eq!(sides, 0, "faded");
+    }
+}

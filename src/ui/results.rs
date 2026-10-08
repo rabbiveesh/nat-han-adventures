@@ -13,8 +13,10 @@ use crate::state::{AppState, CurrentLevel};
 const HEADERS: [&str; 5] = ["FLUSHED IT!", "WHAT A RELIEF!", "PLOP-TASTIC!", "SMELLS LIKE VICTORY", "DOOTY CALLS!"];
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::LevelComplete), (record, spawn).chain())
-        .add_systems(Update, input.run_if(in_state(AppState::LevelComplete)));
+    // Free play has its own card (`crate::freeplay::ui`) and records nothing here.
+    let story = not(resource_exists::<crate::freeplay::FreePlayRun>);
+    app.add_systems(OnEnter(AppState::LevelComplete), (record, spawn).chain().run_if(story.clone()))
+        .add_systems(Update, input.run_if(in_state(AppState::LevelComplete).and_then(story)));
 }
 
 /// The result of the run just finished, for the card.

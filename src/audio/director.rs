@@ -264,6 +264,11 @@ impl Band {
         (Filters::default(), "")
     }
 
+    /// Play time of the next periodic check.
+    pub fn next_check(&self) -> f32 {
+        self.next_check
+    }
+
     /// The summon held at `now`, if any.
     pub fn held(&self, now: f32) -> Option<Harmony> {
         self.hold.filter(|&(_, until)| now < until).map(|(h, _)| h)
@@ -639,5 +644,26 @@ mod tests {
             }
         }
         assert_eq!(changes, [(3.0, Coltrane), (13.0, Quartal), (50.0, Original), (56.0, MelodicMinor), (107.2, Waltz)]);
+    }
+}
+
+#[cfg(test)]
+mod chute_tests {
+    use super::*;
+
+    /// A grease chute: quick successive deaths with no summon. The laughing band comes at 2 and
+    /// the nervous band at 3 (the physics give grip from 3 level deaths regardless: see
+    /// `Groove::nervous`).
+    #[test]
+    fn quick_deaths_reach_nervous() {
+        let mut b = Band::default();
+        b.start(0.0);
+        let death = Events { deaths: 1, ..Default::default() };
+        let mut last = None;
+        for t in [2.0f32, 4.5, 7.0, 9.5] {
+            last = b.step(t, death);
+        }
+        assert_eq!(last.unwrap().0.harmony, Harmony::MelodicMinor);
+        assert!(b.stats.level_deaths >= NERVOUS_DEATHS);
     }
 }

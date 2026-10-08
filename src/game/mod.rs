@@ -29,11 +29,12 @@ pub use groove::{
     GIANT_STEPS_SPEED, Groove, JumpedOnOne, NERVOUS_TIME, OneJumps, WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
     WALTZ_ONE_LINE_EVERY, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW, WALTZ_SPRAY_BARS,
 };
-pub use hazards::{
+pub use hazards::{SideStain, SIDE_STAIN_LIFE, 
     FLY_PERIOD, FORGIVE, RAFT_LIFE_FLOOR, RAFT_SINK, RAFT_SINK_DEPTH, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, RaftLife, raft_sink,
     spray_on,
 };
 pub use platforms::platform_pos;
+pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, stand_pos};
 pub use han::{
     BACK_WARN_LINE, BAND_LINE, DEATH_LINES, FLY_LINE, FOLLOW_GAP, FlySpin, GRIP_LINE, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
     HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, HAN_TOOTS, HanAnim, HanBrain, HanMode, HanNav, HanPhys,
