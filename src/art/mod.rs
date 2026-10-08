@@ -5,6 +5,7 @@ use bevy::{asset::RenderAssetUsages, platform::collections::HashMap, prelude::*}
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 mod backdrops;
+mod buddy;
 mod characters;
 mod items;
 pub mod palette;
@@ -30,6 +31,32 @@ pub enum SpriteId {
     HanIdle,
     HanRun,
     HanJump,
+    /// Han braced for a boost: plunger up, feet planted. 16x20 (feet at the bottom), 2 frames.
+    HanBraced,
+    /// Han intercepting: arms out like a goalkeeper. 2 frames.
+    HanIntercept,
+    /// Han going ahead into a hazard: determined march, plunger levelled. 4 frames.
+    HanMarch,
+    /// Han floating down on his plunger. 16x24 (feet at the bottom), 2 frames.
+    HanParachute,
+    /// Han winded (his back, or the fired-up band's pace): bent over, sweating. 2 frames.
+    HanWinded,
+    /// Han splatted in sewage, sinking. 3 frames.
+    HanSplat,
+    /// Han paddling the air under Giant Steps. 2 frames.
+    HanPaddle,
+    /// Han rolling along with the laughing band. 4 frames.
+    HanRoll,
+    /// Han's big raft: frames 0/1/2 are its left, middle and right segments. 16x16.
+    HanRaft,
+    /// Gate markers: gold music-staff trim on a giant wall's face, its note emblem, a buddy
+    /// ledge's red plunger-handle notches and yellow plumber's tape (16x16 overlays), and the
+    /// "PLUMBERS ONLY" sign at a shield row (36x16).
+    GiantTrim,
+    GiantEmblem,
+    LedgeNotch,
+    PlumberTape,
+    PlumbersOnly,
     /// Golden nugget, spinning frames. 16x16 with the nugget ~8px centered.
     Nugget,
     /// Checkpoint: toilet-paper holder, untouched / unrolled after touching. 16x16.
@@ -106,7 +133,9 @@ impl SpriteId {
     pub fn all() -> Vec<SpriteId> {
         use SpriteId::*;
         let mut v = vec![
-            PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, Nugget,
+            PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, HanBraced, HanIntercept,
+            HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
+            LedgeNotch, PlumberTape, PlumbersOnly, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
@@ -123,6 +152,9 @@ impl SpriteId {
         use SpriteId::*;
         match self {
             GoalFlag => (16, 32),
+            HanBraced => (16, 20),
+            HanParachute => (16, 24),
+            PlumbersOnly => (36, 16),
             Throne => (32, 32),
             Fly | IconNugget | IconLock => (8, 8),
             Particle => (2, 2),
@@ -146,6 +178,20 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         HanIdle => characters::han_idle(),
         HanRun => characters::han_run(),
         HanJump => characters::han_jump(),
+        HanBraced => buddy::han_braced(),
+        HanIntercept => buddy::han_intercept(),
+        HanMarch => buddy::han_march(),
+        HanParachute => buddy::han_parachute(),
+        HanWinded => buddy::han_winded(),
+        HanSplat => buddy::han_splat(),
+        HanPaddle => buddy::han_paddle(),
+        HanRoll => buddy::han_roll(),
+        HanRaft => buddy::han_raft(),
+        GiantTrim => buddy::giant_trim(),
+        GiantEmblem => buddy::giant_emblem(),
+        LedgeNotch => buddy::ledge_notches(),
+        PlumberTape => buddy::plumber_tape(),
+        PlumbersOnly => buddy::plumbers_only(),
         Nugget => items::nugget(),
         CheckpointOff => items::checkpoint_off(),
         CheckpointOn => items::checkpoint_on(),
@@ -244,6 +290,9 @@ mod tests {
         assert_eq!(n(HanIdle), 2);
         assert_eq!(n(HanRun), 4);
         assert_eq!(n(HanJump), 1);
+        assert_eq!(n(HanRaft), 3, "left, middle, right");
+        assert_eq!(n(HanMarch), 4);
+        assert_eq!(n(HanRoll), 4);
         assert_eq!(n(Nugget), 4);
         assert!((2..=3).contains(&n(GoalFlag)));
         assert_eq!(n(Fly), 2);
@@ -256,7 +305,7 @@ mod tests {
 
     #[test]
     fn grids_are_rectangular_and_use_only_palette_chars() {
-        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids());
+        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids()).chain(buddy::grids());
         for (name, rows, pal) in all {
             if let Err(e) = palette::try_grid(&rows, pal) {
                 panic!("grid {name}: {e:?}");

@@ -13,7 +13,7 @@ use bevy::sprite::Anchor;
 pub use camera::GameCamera;
 pub use particles::Particle;
 
-use super::han::{HanAnim, HanPose};
+use super::han::{HanAnim, HanBrain, HanMode, HanPose, SprayPlug};
 use super::physics::{Body, Dead, PlayerControl};
 use super::{
     Checkpoint, Fly, Goal, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
@@ -21,7 +21,7 @@ use super::{
 };
 use crate::art::{SpriteId, Sprites};
 use crate::events::{Jumped, Landed};
-use crate::level::{PlatformKind, TILE, Tile};
+use crate::level::{Level, PlatformKind, TILE, Tile, Topic};
 use crate::state::PlayState;
 
 /// Ordering of the presentation systems in `PostUpdate` (all before transform propagation).
@@ -49,6 +49,7 @@ pub(super) fn plugin(app: &mut App) {
     .add_observer(stain_sprite)
     .add_observer(player_sprite)
     .add_observer(han_sprite)
+    .add_observer(gate_markers)
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
     .add_systems(
         PostUpdate,
@@ -59,6 +60,7 @@ pub(super) fn plugin(app: &mut App) {
             relax_squash,
             update_checkpoints,
             update_sprays,
+            han_fx,
         )
             .chain()
             .in_set(VisualSet::Animate)
@@ -243,6 +245,18 @@ fn platform_sprite(
         PlatformKind::Plunger => SpriteId::PlatformPlunger,
         PlatformKind::Raft => SpriteId::StainRaft,
     };
+    if p.kind == PlatformKind::Raft && p.width > 1 {
+        // Han's big raft: his splatted overalls, three segments.
+        let width = p.width;
+        commands.entity(add.entity).insert(Visibility::default()).with_children(|c| {
+            for i in 0..width {
+                let x = (i as f32 - (width as f32 - 1.0) / 2.0) * TILE;
+                let frame = if i == 0 { 0 } else if i + 1 == width { 2 } else { 1 };
+                c.spawn((Sprite::from_image(sprites.frame(SpriteId::HanRaft, frame)), Transform::from_xyz(x, 0.0, 0.0)));
+            }
+        });
+        return;
+    }
     if p.kind == PlatformKind::Raft {
         // One bobbing blob.
         commands.entity(add.entity).insert(Visibility::default()).with_child((
@@ -283,6 +297,95 @@ fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Co
     let Some(sprites) = sprites else { return };
     let child = character_child(&sprites, SpriteId::HanIdle);
     commands.entity(add.entity).insert(Visibility::default()).with_child(child);
+}
+
+/// What a gate mark looks like, and where (world center of the overlay, z): giant walls get
+/// gold music-staff trim on their face and a note emblem; buddy ledges red plunger-handle
+/// notches on their face and Han's yellow plumber's tape along the top; shield rows a
+/// "PLUMBERS ONLY" sign over their start.
+pub fn gate_decor(level: &Level) -> Vec<(SpriteId, Vec2, f32)> {
+    let mut out = Vec::new();
+    for m in &level.gates {
+        // The faces: solid cells in the mark with open air beside them, inside the mark.
+        let mut faces = Vec::new();
+        for c in m.c0..=m.c1 + 1 {
+            for r in m.r0 - 1..=m.r1 {
+                let open = |cc: i32| m.contains((cc, r)) && !level.tile(cc, r).is_solid();
+                if level.tile(c, r).is_solid() && c >= 0 && r >= 0 && (open(c - 1) || open(c + 1)) {
+                    faces.push((c, r));
+                }
+            }
+        }
+        let at = |(c, r): (i32, i32)| level.tile_center(c.max(0) as usize, r.max(0) as usize);
+        match m.topic {
+            Topic::Giant => {
+                for &f in &faces {
+                    out.push((SpriteId::GiantTrim, at(f), 0.4));
+                }
+                if let Some(&mid) = faces.get(faces.len() / 2) {
+                    out.push((SpriteId::GiantEmblem, at(mid), 0.45));
+                }
+            }
+            Topic::Boost => {
+                for &(c, r) in &faces {
+                    out.push((SpriteId::LedgeNotch, at((c, r)), 0.4));
+                    if !level.tile(c, r - 1).is_solid() {
+                        out.push((SpriteId::PlumberTape, at((c, r)), 0.45));
+                    }
+                }
+            }
+            Topic::Shield => {
+                let p = at((m.c0, m.r0)) + Vec2::new(0.0, TILE);
+                out.push((SpriteId::PlumbersOnly, p, 0.6));
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
+/// Gate markers, drawn when a level's Han arrives (once per level load).
+fn gate_markers(
+    _add: On<Add, Han>,
+    active: Option<Res<super::ActiveLevel>>,
+    sprites: Option<Res<Sprites>>,
+    mut commands: Commands,
+) {
+    let (Some(active), Some(sprites)) = (active, sprites) else { return };
+    for (id, at, z) in gate_decor(&active.level) {
+        commands.spawn((
+            Name::new("GateMarker"),
+            LevelEntity,
+            sprite(&sprites, id),
+            Transform::from_translation(at.extend(z)),
+        ));
+    }
+}
+
+/// The plunger boost and Han's sewage splat: a puff, a sound.
+fn han_fx(
+    mut commands: Commands,
+    sprites: Res<Sprites>,
+    mut boosted: MessageReader<super::HanBoosted>,
+    han: Query<(&HanBrain, &Pos), With<Han>>,
+    mut sfx: MessageWriter<crate::events::PlaySfx>,
+    mut was_sinking: Local<bool>,
+) {
+    for b in boosted.read() {
+        sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Jump));
+        commands.spawn((
+            LevelEntity,
+            Particle { vel: Vec2::new(0.0, -30.0), gravity: 0.0, life: 0.4, max_life: 0.4, fade: true },
+            Sprite::from_image(sprites.get(SpriteId::TootPuff)),
+            FrameAnim { id: SpriteId::TootPuff, fps: 10.0, offset: 0.0 },
+            Transform::from_translation((b.pos + Vec2::new(0.0, -12.0)).extend(6.0)),
+        ));
+    }
+    let sinking = han.single().is_ok_and(|(b, _)| matches!(b.mode, HanMode::Sinking { .. }));
+    if sinking && !*was_sinking {
+        sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Splat));
+    }
+    *was_sinking = sinking;
 }
 
 /// Draw simulated entities between their last two fixed-step positions.
@@ -368,15 +471,19 @@ fn animate_player(
 fn animate_han(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    han: Query<(&HanAnim, &Children), With<Han>>,
-    mut kids: Query<(&mut Sprite, &mut CharacterSprite)>,
+    mut han: Query<(&HanAnim, &Children, &mut Visibility), With<Han>>,
+    mut kids: Query<(&mut Sprite, &mut CharacterSprite, &mut Transform)>,
     mut was_jumping: Local<bool>,
 ) {
     let t = time.elapsed_secs();
-    for (anim, children) in &han {
-        let jumping = anim.pose == HanPose::Jump;
+    for (anim, children, mut vis) in &mut han {
+        let want = if anim.hidden { Visibility::Hidden } else { Visibility::Inherited };
+        if *vis != want {
+            *vis = want;
+        }
+        let jumping = matches!(anim.pose, HanPose::Jump | HanPose::Paddle);
         for &child in children {
-            let Ok((mut sprite, mut cs)) = kids.get_mut(child) else { continue };
+            let Ok((mut sprite, mut cs, mut tf)) = kids.get_mut(child) else { continue };
             if jumping && !*was_jumping {
                 cs.squash = Vec2::new(0.8, 1.2);
             } else if !jumping && *was_jumping {
@@ -386,13 +493,24 @@ fn animate_han(
                 HanPose::Idle => (SpriteId::HanIdle, (t * 3.0) as usize),
                 HanPose::Run => (SpriteId::HanRun, (t * 12.0) as usize),
                 HanPose::Jump => (SpriteId::HanJump, (t * 10.0) as usize),
-                _ => (SpriteId::HanIdle, 0),
+                HanPose::Braced => (SpriteId::HanBraced, (t * 4.0) as usize),
+                HanPose::Intercept => (SpriteId::HanIntercept, (t * 8.0) as usize),
+                HanPose::March => (SpriteId::HanMarch, (t * 9.0) as usize),
+                HanPose::Parachute => (SpriteId::HanParachute, (t * 2.0) as usize),
+                HanPose::Winded => (SpriteId::HanWinded, (t * 3.0) as usize),
+                HanPose::Splat => (SpriteId::HanSplat, (t * 3.0) as usize % 3),
+                HanPose::Paddle => (SpriteId::HanPaddle, (t * 8.0) as usize),
+                HanPose::Roll => (SpriteId::HanRoll, (t * 14.0) as usize),
             };
             let img = sprites.frame(id, frame);
             if sprite.image != img {
                 sprite.image = img;
             }
             sprite.flip_x = anim.facing_left;
+            // The nervous band: he trembles. A jet or a fly: a comedic wobble.
+            tf.translation.x = if anim.tremble && (t * 30.0) as i32 % 2 == 0 { 1.0 } else { 0.0 };
+            let wobble = anim.wobble * 0.35 * (t * 28.0).sin();
+            tf.rotation = Quat::from_rotation_z(wobble);
         }
         *was_jumping = jumping;
     }
@@ -417,13 +535,20 @@ fn update_checkpoints(
 }
 
 fn update_sprays(
-    sprays: Query<(&Spray, &Children), Changed<Spray>>,
-    mut jets: Query<&mut Visibility, With<JetSegment>>,
+    sprays: Query<(&Spray, &Children, &Transform, Option<&SprayPlug>), Or<(Changed<Spray>, With<SprayPlug>)>>,
+    mut jets: Query<(&mut Visibility, &Transform), (With<JetSegment>, Without<Spray>)>,
 ) {
-    for (spray, children) in &sprays {
+    for (spray, children, tf, plug) in &sprays {
+        // Han's body stops the jet: segments above where it's cut off don't show.
+        let base = tf.translation.truncate() + Vec2::new(0.0, TILE);
+        let top = if spray.on { SprayPlug::jet(plug, base).map(|(_, hi)| hi.y) } else { None };
         for &c in children {
-            if let Ok(mut vis) = jets.get_mut(c) {
-                *vis = if spray.on { Visibility::Inherited } else { Visibility::Hidden };
+            if let Ok((mut vis, seg)) = jets.get_mut(c) {
+                let bottom = tf.translation.y + seg.translation.y - TILE / 2.0;
+                let want = if top.is_some_and(|t| t > bottom + 4.0) { Visibility::Inherited } else { Visibility::Hidden };
+                if *vis != want {
+                    *vis = want;
+                }
             }
         }
     }
