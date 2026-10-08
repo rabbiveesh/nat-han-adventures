@@ -1,7 +1,8 @@
 //! Hand-rolled player physics: tile AABB collision (X then Y) against the level grid, one-way
 //! tiles and moving platforms; coyote time, jump buffering, variable jump height, the toot.
 //! The music's [`Groove`] scales gravity and run speed, can make landings bounce, and in the
-//! waltz boosts a ground jump on ONE (whose toot is then a weak one).
+//! waltz boosts a ground jump on ONE (whose toot is then a weak one); the laughing band's
+//! phrases nudge them a little more ([`Groove::nudge`]).
 //!
 //! # Grease
 //! Standing on grease (`_`, any grease tile under Nat's feet) Nat slips: no braking (ground
@@ -91,6 +92,12 @@ pub struct PlayerControl {
     /// Last stood on Han's head in a band zone ([`HanHead::weak`]): a (coyote) jump now is the
     /// weak boost.
     pub weak_ground: bool,
+    /// Seconds since the last landing (the seasick phrase's slippery landings).
+    pub since_landing: f32,
+    /// The rise (px/s) the last jump cut threw away, and how long ago: what Nat would be
+    /// rising at now had he held jump (the overtones phrase's toot counts it).
+    pub uncut: f32,
+    pub since_cut: f32,
 }
 
 impl Default for PlayerControl {
@@ -105,6 +112,9 @@ impl Default for PlayerControl {
             weak_toot: false,
             on_grease: false,
             weak_ground: false,
+            since_landing: f32::INFINITY,
+            uncut: 0.0,
+            since_cut: 0.0,
         }
     }
 }
@@ -185,7 +195,7 @@ pub struct Fall {
 impl Fall {
     /// Nat's gravity under `groove`.
     pub fn of(groove: &Groove) -> Self {
-        Fall { gravity: GRAVITY * groove.gravity_scale, max_fall: MAX_FALL * groove.fall_scale() }
+        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale() }
     }
 }
 
@@ -397,14 +407,17 @@ fn player_step(
     if axis != 0.0 {
         ctl.facing = axis;
     }
-    let target = axis * RUN_SPEED * groove.speed_scale;
+    let run = groove.run_scale();
+    let target = axis * RUN_SPEED * run;
     // Slipping on grease (no sweaty grip): can't brake, steers weakly, can't jump.
     let slipping = body.on_ground && ctl.on_grease && !groove.grip();
-    let accel = groove.speed_scale
+    ctl.since_landing += dt;
+    ctl.since_cut += dt;
+    let accel = run
         * if !body.on_ground {
             AIR_ACCEL
         } else if axis == 0.0 || axis * body.vel.x < 0.0 {
-            GROUND_DECEL * if slipping { GREASE_DECEL } else { 1.0 }
+            GROUND_DECEL * if slipping { GREASE_DECEL } else { groove.landing_decel(ctl.since_landing) }
         } else {
             GROUND_ACCEL * if slipping { GREASE_STEER } else { 1.0 }
         };
@@ -447,7 +460,7 @@ fn player_step(
             ctl.weak_toot = false;
             boosted.write(HanBoosted { pos: pos.0, weak: false });
         } else {
-            body.vel.y = JUMP_SPEED;
+            body.vel.y = JUMP_SPEED * groove.jump_scale();
             if groove.on_the_one() {
                 // A waltz step on ONE: higher, golden, and its toot is a weak one.
                 body.vel.y *= WALTZ_ONE_BOOST;
@@ -459,11 +472,18 @@ fn player_step(
         ctl.buffer = 0.0;
         ctl.coyote = 0.0;
         ctl.cut_armed = true;
+        ctl.uncut = 0.0;
         ctl.bouncing = false;
         body.on_ground = false;
         body.riding = None;
     } else if pressed && ctl.has_toot && !slipping {
-        body.vel.y = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
+        let base = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
+        // Letting go of jump to toot cut the rise: the overtones count the rise he'd have had
+        // (with the heaviest gravity there could have been, so never more).
+        let heaviest = GRAVITY * groove.gravity_scale * (1.0 + super::groove::ALIEN_PULSE);
+        let held = ctl.uncut - heaviest * ctl.since_cut;
+        body.vel.y = groove.toot_speed(base, body.vel.y.max(held));
+        ctl.uncut = 0.0;
         ctl.has_toot = false;
         ctl.weak_toot = false;
         ctl.buffer = 0.0;
@@ -471,6 +491,8 @@ fn player_step(
         jumped.write(Jumped { pos: pos.0, double: true });
     }
     if ctl.cut_armed && !input.pressed(&Action::Jump) && body.vel.y > 0.0 {
+        ctl.uncut = body.vel.y;
+        ctl.since_cut = 0.0;
         body.vel.y *= JUMP_CUT;
         ctl.cut_armed = false;
     }
@@ -497,6 +519,9 @@ fn player_step(
         if !contact.was_on_ground && contact.fall_speed > LAND_EVENT_SPEED {
             landed.write(Landed { pos: pos.0, speed: contact.fall_speed });
         }
+        if !contact.was_on_ground {
+            ctl.since_landing = 0.0;
+        }
         ctl.has_toot = true;
         ctl.weak_toot = false;
         ctl.bouncing = false;
@@ -505,7 +530,7 @@ fn player_step(
         // Grease doesn't bounce (unless you've got grip): it would be a jump off grease. Nor
         // does a band zone's Han: a bounce plus the weak boost would be more than a jump.
         let slick = on_grease && !groove.grip();
-        if groove.bounce
+        if groove.bouncy()
             && !groove.grip()
             && !slick
             && !ctl.weak_ground

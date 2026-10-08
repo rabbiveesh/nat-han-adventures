@@ -152,8 +152,13 @@ pub fn groove_badge(g: &Groove) -> String {
     }
     if g.grip() {
         parts.push("GRIP");
-    } else if g.bounce {
-        parts.push("BOUNCY");
+    }
+    match g.nudge() {
+        // Grip wins over the slippery landings (the rest still nudge).
+        Some(crate::game::Nudge::Seasick) if g.grip() => {}
+        Some(n) => parts.push(n.label()),
+        None if g.bounce && !g.grip() => parts.push("BOUNCY"),
+        None => {}
     }
     parts.join(" + ")
 }
@@ -308,7 +313,7 @@ fn band_lines(now: &NowPlaying) -> (String, String) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::{Filters, Harmony, Music};
+    use crate::audio::{Filters, Harmony, Music, tuning::Tuning};
     use crate::game::BeatClock;
 
     #[test]
@@ -317,6 +322,11 @@ mod tests {
         assert_eq!(groove_badge(&w), "WALTZ");
         let laughing = Groove::new(Filters { harmony: Harmony::Waltz, just_intonation: true });
         assert_eq!(groove_badge(&laughing), "WALTZ + BOUNCY");
+        assert_eq!(groove_badge(&laughing.in_phrase(Tuning::Tet7)), "WALTZ + SEASICK");
+        assert_eq!(groove_badge(&laughing.in_phrase(Tuning::Just)), "WALTZ + SOBER FOR A SEC");
+        let gripping = Groove { nervous: true, ..laughing };
+        assert_eq!(groove_badge(&gripping.in_phrase(Tuning::Tet7)), "WALTZ + GRIP");
+        assert_eq!(groove_badge(&gripping.in_phrase(Tuning::BohlenPierce)), "WALTZ + GRIP + ALIEN");
         let dots: Vec<String> =
             [0.2, 1.5, 2.9, 3.1].iter().map(|&b| waltz_beat_dots(&w.at(BeatClock::at(b, 0.5, 3)))).collect();
         assert_eq!(dots, ["1..", ".2.", "..3", "1.."]);

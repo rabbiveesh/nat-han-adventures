@@ -139,6 +139,30 @@ fn levels_are_valid_and_beatable() {
     );
 }
 
+/// The laughing band's phrases that take reach away (`game::groove`: melting jumps, alien
+/// gravity) never close a way through: every goal, checkpoint and nugget stays reachable with
+/// each in force all along ([`Physics::laughing`]). (Gates may read differently: a jump that
+/// can't be made for a phrase can look like one.)
+#[test]
+fn laughing_band_never_closes_a_level() {
+    let levels: Vec<Level> = LEVEL_SOURCES.iter().map(|s| Level::parse(s).unwrap()).collect();
+    let mut failures = Vec::new();
+    for (nudge, phys) in Physics::laughing() {
+        let reports: Vec<Report> = std::thread::scope(|scope| {
+            let phys = &phys;
+            let handles: Vec<_> =
+                levels.iter().map(|l| scope.spawn(move || check_with(l, &Options::default(), phys))).collect();
+            handles.into_iter().map(|h| h.join().expect("validator panicked")).collect()
+        });
+        for (i, (l, r)) in levels.iter().zip(&reports).enumerate() {
+            for e in r.errs.iter().filter(|e| e.contains("unreachable")) {
+                failures.push(format!("{nudge}: levels/{:02}.txt ({}): {e}", i + 1, l.name));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 /// A test level: `rows` (grid lines), plus 15 nuggets in row `nugget_row` cols 3..18 so it
 /// meets the nugget minimum.
 fn level_of(header: &str, rows: &[String], nugget_row: usize) -> Level {

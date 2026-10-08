@@ -649,7 +649,7 @@ pub(super) fn think(
                 HanPose::Jump
             }
         }
-        HanMode::Follow if running && groove.bounce => HanPose::Roll,
+        HanMode::Follow if running && groove.bouncy() => HanPose::Roll,
         HanMode::Follow if running => HanPose::Run,
         HanMode::Follow if groove.harmony == Harmony::Quartal && dx_nat.abs() > 4.0 * TILE => HanPose::Winded,
         HanMode::Follow => HanPose::Idle,
