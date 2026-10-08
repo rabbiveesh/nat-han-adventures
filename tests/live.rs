@@ -697,3 +697,46 @@ fn a_self_directed_engine_waltzes_on_a_jump_in_threes() {
     e.fill(&mut []);
     assert_eq!(e.state().filters.harmony, Harmony::Original);
 }
+
+/// `start_at` (the editor's hot swap and "play from here"): an engine started on a bar line
+/// commits that bar exactly as one that played up to it; started mid-bar, it's silent until
+/// the next bar line.
+#[test]
+fn an_engine_can_start_mid_song() {
+    let m = Music::Title;
+    let mut whole = engine(m, &[]);
+    let shape = whole.shape().clone();
+    let b = |k: usize| shape.bar_starts[k];
+    render_to(&mut whole, b(4) - 10);
+    let mut late = engine(m, &[]);
+    late.start_at(b(4));
+    assert_eq!((late.position().song_bar, late.position().bar), (4, 4));
+    late.fill(&mut []);
+    let bar4 = |e: &Engine| e.pending_events().filter(|ev| ev.bar == 4).map(|ev| (ev.ch, ev.start, ev.end, ev.sound)).collect::<Vec<_>>();
+    assert!(!bar4(&late).is_empty());
+    assert_eq!(bar4(&late), bar4(&whole));
+    // Mid-bar: silence, then the band comes in on the bar line.
+    let mut mid = engine(m, &[]);
+    mid.start_at((b(4) + b(5)) / 2);
+    let out = render_to(&mut mid, b(6));
+    let quiet = (b(5) - (b(4) + b(5)) / 2) as usize;
+    assert!(out[..quiet].iter().all(|f| *f == Frame::ZERO));
+    assert!(out[quiet..].iter().any(|f| f.left.abs() > 1e-3));
+    // Only before the first fill.
+    let pos = mid.position();
+    mid.start_at(b(1));
+    assert_eq!(mid.position(), pos);
+}
+
+/// The mixer: a channel's level applies at once; all at 0 is silence.
+#[test]
+fn the_mixer_mutes_channels() {
+    let m = Music::World(2);
+    let full = render(&mut engine(m, &[]), 64_000, 512);
+    let silent = render(&mut engine(m, &[Input::SetMix([0.0; 4])]), 64_000, 512);
+    assert!(silent.iter().all(|f| *f == Frame::ZERO));
+    let drums = render(&mut engine(m, &[Input::SetMix([0.0, 0.0, 0.0, 1.0])]), 64_000, 512);
+    let energy = |v: &[Frame]| v.iter().map(|f| (f.left * f.left) as f64).sum::<f64>();
+    assert!(energy(&drums) > 0.0 && energy(&drums) < energy(&full));
+    assert_eq!(render(&mut engine(m, &[Input::SetMix([1.0; 4])]), 64_000, 512), full, "unity is as written");
+}
