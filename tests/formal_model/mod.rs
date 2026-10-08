@@ -24,6 +24,7 @@
 
 use std::collections::HashSet;
 use std::fmt::{self, Write as _};
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use nat_han_adventures::audio::director::{
@@ -96,7 +97,7 @@ impl Act {
 }
 
 /// A deliberately broken model, to show the checks catch real bugs (mutation testing).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Mutation {
     None,
     /// The grease-chute soft-lock (before 826ce7b): sweaty grip only from the nervous band
@@ -406,6 +407,11 @@ pub const PROPERTIES: [(&str, &str); 6] = [
 /// Respawn and walk back to a chute (ticks): the respawn delay, rounded up.
 const RESPAWN_TICKS: u16 = ((RESPAWN_DELAY / TICK) as u16) + 1;
 
+/// [`summons`], built once.
+static SUMMONS: LazyLock<Vec<(Harmony, Vec<Act>)>> = LazyLock::new(summons);
+/// [`chute_loops`], built once.
+static CHUTE_LOOPS: LazyLock<Vec<(String, Vec<Act>)>> = LazyLock::new(chute_loops);
+
 /// The summon input sequences (target, acts): each with a few spacings.
 pub fn summons() -> Vec<(Harmony, Vec<Act>)> {
     let mut v = Vec::new();
@@ -471,16 +477,15 @@ fn prop_a(s: &Sim) -> Result<(), Violation> {
             detail: format!("{} level deaths but no grip (playing {:?})", s.band.stats.level_deaths, s.harmony()),
         });
     }
-    for (name, lap) in chute_loops() {
+    for (name, lap) in CHUTE_LOOPS.iter() {
         let mut t = s.clone();
-        let mut witness = Vec::new();
         let mut deaths = 0;
-        for _ in 0..NERVOUS_DEATHS {
-            for &a in &lap {
+        for lap_no in 0..NERVOUS_DEATHS as usize {
+            for (i, &a) in lap.iter().enumerate() {
                 t.apply(a);
-                witness.push(a);
                 deaths += (a == Act::DEATH) as u32;
                 if deaths == NERVOUS_DEATHS && !t.grip() {
+                    let witness = lap.iter().cycle().take(lap_no * lap.len() + i + 1).copied().collect();
                     return Err(Violation {
                         prop: "a",
                         witness,
@@ -498,10 +503,11 @@ fn prop_a(s: &Sim) -> Result<(), Violation> {
 }
 
 fn prop_b(s: &Sim) -> Result<(), Violation> {
-    for (target, seq) in summons() {
+    for (target, seq) in SUMMONS.iter() {
+        let target = *target;
         let mut t = s.clone();
         let mut decided: Vec<Harmony> = Vec::new();
-        for &a in &seq {
+        for &a in seq {
             t.apply_with(a, |_, d| decided.extend(d.map(|f| f.harmony)));
         }
         let after_target = decided.iter().position(|&h| h == target).map(|i| &decided[i..]);
@@ -509,7 +515,7 @@ fn prop_b(s: &Sim) -> Result<(), Violation> {
         if !ok {
             return Err(Violation {
                 prop: "b",
-                witness: seq,
+                witness: seq.clone(),
                 detail: format!("summoning {target:?}: decisions {decided:?}, playing {:?}", t.harmony()),
             });
         }
@@ -526,8 +532,11 @@ fn quiet(s: &Sim, n: i32) -> Quiet {
     let mut changes = Vec::new();
     let mut unheld = t.held().is_none().then_some(0);
     let mut last = t.harmony();
+    // The key after the last decision, and the changes by then.
+    let mut decided_at: Option<(Key, usize)> = None;
     for k in 1..=n {
-        t.apply(Act::Wait(1));
+        let mut decided = false;
+        t.apply_with(Act::Wait(1), |_, d| decided = d.is_some());
         if t.harmony() != last {
             last = t.harmony();
             changes.push((k, last));
@@ -535,8 +544,27 @@ fn quiet(s: &Sim, n: i32) -> Quiet {
         if unheld.is_none() && t.held().is_none() {
             unheld = Some(k);
         }
+        // Settled: back in the state of the last decision with nothing changed since, the hold
+        // over. With no input that stretch repeats forever (states with one key behave the
+        // same), so the rest of the run changes nothing.
+        if decided && unheld.is_some() {
+            let key = (s.mutation, t.key());
+            if SETTLED.with_borrow(|set| set.contains(&key)) {
+                break;
+            }
+            if decided_at.as_ref().is_some_and(|(prev, c)| *prev == key.1 && *c == changes.len()) {
+                SETTLED.with_borrow_mut(|set| set.insert(key));
+                break;
+            }
+            decided_at = Some((key.1, changes.len()));
+        }
     }
     (changes, unheld)
+}
+
+thread_local! {
+    /// Keys (at a decision) [`quiet`] found settled: no input from there changes nothing.
+    static SETTLED: std::cell::RefCell<HashSet<(Mutation, Key)>> = Default::default();
 }
 
 /// How long the no-input runs of (c) and (d) look: a hold ends within a horizon, the check
@@ -747,6 +775,8 @@ pub fn explore_with(
     check: &(dyn Fn(&Sim, &Key) -> Result<(), Violation> + Sync),
 ) -> (Exploration, Vec<Counterexample>) {
     let t0 = Instant::now();
+    // (Each exploration does its own work, so its time is honest.)
+    SETTLED.with_borrow_mut(|set| set.clear());
     let root = Sim::new(cfg.mutation);
     let init = root.key();
     let mut seen: HashSet<Key> = HashSet::new();

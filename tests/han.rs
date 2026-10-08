@@ -954,3 +954,104 @@ fn han_escorts_a_dawdling_nat_through_the_shield_row() {
     assert!(at.x > 56.0 * TILE);
 }
 
+// --- Keeping up ---------------------------------------------------------------------------------
+
+/// A run of short hops: gaps (2-3 tiles) and steps (1-2 tiles up and down) every few tiles,
+/// the kind of ground free play's rooms are made of.
+fn hops_level() -> String {
+    let mut cols: Vec<i32> = Vec::new(); // ground top per column (rows from the top; -1: pit)
+    let floor = 13;
+    cols.extend([floor; 6]);
+    let pattern: &[(i32, usize)] = &[
+        (-1, 3),
+        (floor, 6),
+        (floor - 1, 5),
+        (-1, 2),
+        (floor - 2, 6),
+        (floor, 5),
+        (-1, 3),
+        (floor, 4),
+        (floor - 2, 4),
+        (-1, 2),
+        (floor - 1, 6),
+        (floor, 4),
+        (-1, 3),
+        (floor - 1, 5),
+        (-1, 2),
+        (floor, 7),
+    ];
+    for _ in 0..3 {
+        for &(top, n) in pattern {
+            cols.extend(std::iter::repeat_n(top, n));
+        }
+    }
+    cols.extend([floor; 10]);
+    let h = 16;
+    let mut rows = vec![vec![b'.'; cols.len()]; h];
+    for (c, &top) in cols.iter().enumerate() {
+        if top >= 0 {
+            for row in rows.iter_mut().skip(top as usize) {
+                row[c] = b'#';
+            }
+        }
+    }
+    rows[floor as usize - 1][2] = b'P';
+    let w = cols.len();
+    rows[floor as usize - 1][w - 2] = b'G';
+    let rows: Vec<String> = rows.into_iter().map(|r| String::from_utf8(r).unwrap()).collect();
+    format!("name: Hops\n---\n{}\n", rows.join("\n"))
+}
+
+/// Nat zooms along (running flat out, jumping every gap and step at the last moment, never
+/// stopping): Han keeps up on his own routes, without a parachute.
+#[test]
+fn han_keeps_up_with_a_zooming_nat() {
+    let src = hops_level();
+    let lvl = Level::parse(&src).unwrap();
+    let mut app = app(&src);
+    press(&mut app, RIGHT);
+    let mut max_lag: f32 = 0.0;
+    let mut lag_sum = 0.0;
+    let mut n = 0;
+    let mut held = 0;
+    for _ in 0..60 * 40 {
+        let (p, nb) = (nat(&mut app), nat_body(&mut app));
+        if p.x > (lvl.width as f32 - 6.0) * TILE {
+            break;
+        }
+        // Jump when the ground ends or rises within a tile ahead.
+        let feet = lvl.cell_at(p - Vec2::new(0.0, 7.0));
+        let pit = (1..=4).all(|d| !lvl.tile(feet.0 + 1, feet.1 + d).is_solid());
+        let wall = lvl.tile(feet.0 + 1, feet.1).is_solid();
+        if nb.on_ground && held == 0 && (pit || wall) && p.x % TILE > 8.0 {
+            tap(&mut app);
+            held = 20;
+        } else if held > 0 {
+            held -= 1;
+            if held == 0 {
+                release(&mut app, JUMP);
+            }
+        }
+        app.update();
+        trace(&mut app);
+        let lag = nat(&mut app).x - han(&mut app).x;
+        max_lag = max_lag.max(lag);
+        lag_sum += lag;
+        n += 1;
+    }
+    let p = nat(&mut app);
+    assert!(
+        p.x > (lvl.width as f32 - 8.0) * TILE,
+        "Nat made it: {p} of {} tiles, died {}",
+        lvl.width,
+        heard(&app).died
+    );
+    assert_eq!(heard(&app).died, 0);
+    let mean = lag_sum / n as f32;
+    eprintln!("lag: max {:.1} tiles, mean {:.1} tiles, drops {}", max_lag / TILE, mean / TILE, brain(&mut app).drops);
+    assert_eq!(brain(&mut app).drops, 0, "no parachute needed");
+    // Nat in the air leaves the slot behind at his take-off: a few tiles is fine. Before Han
+    // took off on the run (and re-routed without stopping) he ended up ~90 tiles behind.
+    assert!(max_lag < 8.0 * TILE, "kept up: {} tiles behind at most", max_lag / TILE);
+    assert!(mean < 6.0 * TILE, "kept up: {} tiles behind on average", mean / TILE);
+}
