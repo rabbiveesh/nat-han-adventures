@@ -8,9 +8,9 @@
 use bevy::prelude::*;
 
 use super::{
-    BACK_WARN_LINE, BAND_LINE, FOLLOW_GAP, HanAnim, HanPose, LEMME_LINE, LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL,
+    BACK_WARN_LINE, FOLLOW_GAP, GRUMBLE_EVERY, HanAnim, HanPose, LEMME_LINE, LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL,
     PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE, WHEEZE_LINE, brace_range, breather, go_ahead_delay,
-    intercept_range, overuse_limit,
+    grumble_line, intercept_range, overuse_limit,
 };
 use crate::audio::Harmony;
 use crate::events::HanSays;
@@ -18,7 +18,7 @@ use crate::game::{
     ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, MovingPlatform, Player,
     PlayerControl, Pos, PrevPos, SimClock, platform_pos,
 };
-use crate::level::buddy::{HALF, HanCtl, HanInput, HanPhys, Kin, drive, intercept, waltz_step};
+use crate::level::buddy::{HALF, HanCtl, HanInput, HanPhys, Kin, drive, head_holds, intercept, waltz_step};
 use crate::level::nav::{Edge, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
 use crate::level::{Level, PlatformKind, TILE, ThingKind, Tile};
@@ -91,7 +91,6 @@ pub struct Exec {
 
 /// Lines Han says once per level visit.
 mod once {
-    pub const BAND: u32 = 1;
     pub const WHEEZE: u32 = 2;
 }
 
@@ -131,6 +130,14 @@ pub struct HanBrain {
     pub said: u32,
     /// Braced for Nat this step.
     pub braced: bool,
+    /// Where his feet were (world y) when he last stood on something: in mid-air his head holds
+    /// Nat only [`HAN_CATCH_RISE`](crate::level::buddy::HAN_CATCH_RISE) above it.
+    pub floor_y: f32,
+    /// Weak boosts given this level visit (stats, tests), grumbles said, and seconds since the
+    /// last grumble.
+    pub weak_boosts: u32,
+    pub grumbles: u32,
+    pub since_grumble: f32,
 }
 
 impl Default for HanBrain {
@@ -157,6 +164,10 @@ impl Default for HanBrain {
             drops: 0,
             said: 0,
             braced: false,
+            floor_y: 0.0,
+            weak_boosts: 0,
+            grumbles: 0,
+            since_grumble: f32::INFINITY,
         }
     }
 }
@@ -234,7 +245,7 @@ fn slot_cell(map: &Map, level: &Level, nat: (i32, i32), x: f32) -> Option<(i32, 
 }
 
 /// Where Han's parachute opens: above Nat's area (behind him, as high as the ceiling allows,
-/// up to [`PARACHUTE_HEIGHT`]), outside the band's gates.
+/// up to [`PARACHUTE_HEIGHT`]), not over a waltz row or a chute's grease.
 pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
     let mut best: Option<(f32, Vec2)> = None;
     // Behind Nat (the way he came) first: the first spot there with room to float down wins;
@@ -255,7 +266,7 @@ pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
         while y < nat.y + PARACHUTE_HEIGHT && free(y + TILE) && free(y + HALF.y + TILE) {
             y += TILE;
         }
-        if !level.han_allowed(level.cell_at(Vec2::new(x, y))) {
+        if level.han_keeps_out(level.cell_at(Vec2::new(x, y))) {
             continue;
         }
         let room = y - nat.y;
@@ -365,7 +376,19 @@ pub(super) fn think(
     };
 
     // --- Overuse: boosts in a row.
+    brain.since_grumble += dt;
     for b in boosted.read() {
+        if b.weak {
+            // The band zone: a feeble hop and a grumble (not his back's business).
+            brain.weak_boosts += 1;
+            if brain.since_grumble >= GRUMBLE_EVERY {
+                let topic = level.band_zone(feet_cell(level, pos.0)).or(level.band_zone(level.cell_at(b.pos))).map(|g| g.topic);
+                say(&mut says, grumble_line(topic, brain.grumbles));
+                brain.grumbles += 1;
+                brain.since_grumble = 0.0;
+            }
+            continue;
+        }
         brain.boosts += 1;
         brain.since_boost = 0.0;
         if !level.in_chasm(level.cell_at(b.pos).0) {
@@ -446,11 +469,14 @@ pub(super) fn think(
     let dx_nat = nat.pos.x - pos.0.x;
     let nat_above = nat.pos.y - HALF.y > pos.0.y + HALF.y;
     let in_chasm = level.in_chasm(level.cell_at(nat.pos).0) || level.in_chasm(level.cell_at(pos.0).0);
+    // The band zone: his boost is weak, and he's no catch in mid-air there.
+    let zoned = |p: Vec2| level.in_band_zone(level.cell_at(p));
+    let in_zone = zoned(pos.0) || zoned(nat.pos);
     match brain.mode {
         HanMode::Follow if !nat_dead && !nat.grounded && nat_above && brain.winded == 0.0 => {
             let coming = nat.vel.y < 0.0 || in_chasm;
             let near = dx_nat.abs() < intercept_range(e);
-            if coming && near && (in_chasm || doomed(level, nat.pos, nat.vel.x)) {
+            if coming && near && !in_zone && (in_chasm || doomed(level, nat.pos, nat.vel.x)) {
                 brain.mode = HanMode::Intercept;
                 brain.exec = None;
                 brain.path.clear();
@@ -478,7 +504,7 @@ pub(super) fn think(
     if brain.mode == HanMode::Follow && !nat_dead && nat.grounded && !nat_on_han && nbody.vel.x.abs() < 5.0 {
         let cell = feet_cell(level, nat.pos);
         let behind = (pos.0.x - nat.pos.x) * nctl.facing <= 8.0;
-        if hazard_ahead(level, cell, nctl.facing) && behind && body.on_ground && (pos.0 - nat.pos).length() < 6.0 * TILE {
+        if hazard_ahead(level, cell, nctl.facing) && behind && body.on_ground && (pos.0 - nat.pos).length() < 6.0 * TILE && !in_zone {
             brain.still += dt;
             if brain.still >= go_ahead_delay(e) {
                 brain.mode = HanMode::Ahead { dir: nctl.facing.signum(), t: 0.0 };
@@ -514,7 +540,9 @@ pub(super) fn think(
             let lead = (pos.0.x - nat.pos.x) * dir;
             let clear = !hazard_ahead(level, me_cell, dir);
             let nat_clear = !hazard_ahead(level, feet_cell(level, nat.pos), dir);
-            let next_ok = level.han_allowed(level.cell_at(pos.0 + Vec2::new(dir * TILE, 0.0)));
+            // Never into a band zone: he'd be escorting Nat through the band's gate.
+            let next = level.cell_at(pos.0 + Vec2::new(dir * TILE, 0.0));
+            let next_ok = level.han_allowed(next) && !level.han_keeps_out(next);
             let backed_off = lead > 6.0 * TILE;
             if (lead > TILE && clear && nat_clear) || backed_off || t > 20.0 || !next_ok || (body.on_ground && !ahead_floor(pos.0.x, dir)) {
                 brain.mode = HanMode::Follow;
@@ -543,16 +571,12 @@ pub(super) fn think(
         input.dir = 0.0;
         input.jump = false;
     }
-    // Keep clear of the band's gates.
-    if !parachute && input.dir != 0.0 {
-        let here = level.han_allowed(level.cell_at(pos.0));
-        let next = level.han_allowed(level.cell_at(pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
-        if here && !next {
+    // Keep out of a waltz row and a chute's grease (on foot).
+    if !parachute && input.dir != 0.0 && body.on_ground {
+        let here = level.han_keeps_out(feet_cell(level, pos.0));
+        let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
+        if !here && next {
             input.dir = 0.0;
-            if brain.said & once::BAND == 0 && brain.mode == HanMode::Follow {
-                brain.said |= once::BAND;
-                say(&mut says, BAND_LINE);
-            }
         }
     }
 
@@ -584,23 +608,27 @@ pub(super) fn think(
     if brain.lost && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
-    // Nat's in the band's gate: Han hangs back.
-    if brain.goal.is_none() && !nat_dead && !level.han_allowed(feet_cell(level, nat.pos)) && brain.said & once::BAND == 0 {
-        brain.said |= once::BAND;
-        say(&mut says, BAND_LINE);
-    }
     // Fired up: he can't keep up.
     if groove.harmony == Harmony::Quartal && dx_nat.abs() > 8.0 * TILE && brain.said & once::WHEEZE == 0 {
         brain.said |= once::WHEEZE;
         say(&mut says, WHEEZE_LINE);
     }
 
-    // --- His head.
+    // --- His head: a perch for Nat (standing, or in mid-air not too high up and not in a band
+    // zone, see `head_holds`), the plunger boost, the weak one in a band zone.
+    if body.on_ground {
+        brain.floor_y = pos.0.y;
+    }
     let up = matches!(brain.mode, HanMode::Follow | HanMode::Intercept | HanMode::Ahead { .. });
+    let my_cell = feet_cell(level, pos.0);
+    let zone = level.in_band_zone(my_cell) || level.in_band_zone((my_cell.0, my_cell.1 - 1));
+    let holds = head_holds(body.on_ground, pos.0.y - brain.floor_y, zone, level.in_chasm(my_cell.0))
+        && !level.han_keeps_out(my_cell);
     *head = HanHead {
-        solid: up,
-        boost: up && brain.winded == 0.0,
+        solid: up && holds,
+        boost: up && holds && brain.winded == 0.0,
         block: matches!(brain.mode, HanMode::Ahead { .. }),
+        weak: zone,
     };
 
     // --- Pose.
@@ -710,7 +738,7 @@ fn follow(
                         brain.path = p;
                         brain.lost = false;
                     }
-                    Route::NoRoute => brain.lost = level.han_allowed(goal),
+                    Route::NoRoute => brain.lost = true,
                     Route::Budget => brain.replan = 0.0, // keep thinking next step
                 }
             }

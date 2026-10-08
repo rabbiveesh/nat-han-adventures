@@ -107,7 +107,7 @@ impl Course {
         for s in &room.say_at {
             level.say_at.push(crate::level::Spot { col: s.col + col0, ..s.clone() });
         }
-        // Gate marks (Han keeps clear of the band's gates; no overuse limit in chasms).
+        // Gate marks (Han's boost is weak around the band's gates; no overuse limit in chasms).
         for g in &room.gates {
             level.gates.push(crate::level::GateMark { c0: g.c0 + col0 as i32, c1: g.c1 + col0 as i32, ..*g });
         }

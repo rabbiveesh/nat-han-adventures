@@ -17,7 +17,8 @@
 //! [`Carrier`]s (moving platforms, rafts, Han's head), tile collision. Nat's controller
 //! ([`PlayerControl`]: input, jumps, toots, grease, bounces) wraps it; Han's AI wraps it with
 //! his own (`game::han`). Han's head is a one-way carrier for Nat ([`HanHead`]); jumping off it
-//! is the plunger boost ([`BOOST_SPEED`], [`HanBoosted`]).
+//! is the plunger boost ([`BOOST_SPEED`], [`HanBoosted`]; in a band zone the weak one,
+//! [`WEAK_BOOST_SPEED`]).
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -87,6 +88,9 @@ pub struct PlayerControl {
     pub weak_toot: bool,
     /// Standing on grease (as of the last step's landing check).
     pub on_grease: bool,
+    /// Last stood on Han's head in a band zone ([`HanHead::weak`]): a (coyote) jump now is the
+    /// weak boost.
+    pub weak_ground: bool,
 }
 
 impl Default for PlayerControl {
@@ -100,6 +104,7 @@ impl Default for PlayerControl {
             bouncing: false,
             weak_toot: false,
             on_grease: false,
+            weak_ground: false,
         }
     }
 }
@@ -323,13 +328,26 @@ pub struct HanHead {
     pub solid: bool,
     pub boost: bool,
     pub block: bool,
+    /// In a band zone (`Level::in_band_zone`): jumping off him (or off the coyote time after
+    /// stepping off him) is the weak boost ([`WEAK_BOOST_SPEED`]), winded or not.
+    pub weak: bool,
 }
 
-/// Nat jumped off Han's head: the plunger boost. Not a [`Jumped`] (the band doesn't count it).
+/// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone). Not a
+/// [`Jumped`] (the band doesn't count it).
 #[derive(Message, Debug, Clone, Copy)]
 pub struct HanBoosted {
     pub pos: Vec2,
+    pub weak: bool,
 }
+
+/// Upward speed of the weak boost, Han's in a band zone (px/s): Nat's feet rise 300²/2800 ≈ 32
+/// px above Han's head, ≈ 46 px (2.9 tiles) above Han's floor: about a normal jump (51.6 px).
+/// It refreshes the toot like any landing, and the toot adds ~39 px: ≤ 85 px with ideal timing,
+/// under a perfect double jump from the ground (90.5 px) and 11 px under a 6-tile giant wall.
+/// The validator proves no weak boost (from wherever Han stands in the zone), and no chain of
+/// them, opens a band gate (`level::validate`).
+pub const WEAK_BOOST_SPEED: f32 = 300.0;
 
 /// Upward speed of the plunger boost (px/s): Nat's feet rise 560²/2800 = 112 px = 7 tiles above
 /// Han's head (≈ 7.9 tiles above Han's floor), and the refreshed toot adds ~39 px: ≈ 10.3
@@ -415,12 +433,19 @@ fn player_step(
         .and_then(|e| han.get(e).ok())
         .map(|(_, _, _, head)| *head);
     if ctl.buffer > 0.0 && ctl.coyote > 0.0 {
-        if on_han.is_some_and(|h| h.boost) {
+        // Off Han's head in a band zone (or just stepped off it): the weak boost, winded or not.
+        let weak = on_han.map_or(!body.on_ground && ctl.weak_ground, |h| h.weak);
+        if weak {
+            body.vel.y = WEAK_BOOST_SPEED;
+            ctl.has_toot = true;
+            ctl.weak_toot = false;
+            boosted.write(HanBoosted { pos: pos.0, weak: true });
+        } else if on_han.is_some_and(|h| h.boost) {
             // The plunger boost: way up, and the toot's fresh again.
             body.vel.y = BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0 });
+            boosted.write(HanBoosted { pos: pos.0, weak: false });
         } else {
             body.vel.y = JUMP_SPEED;
             if groove.on_the_one() {
@@ -475,10 +500,18 @@ fn player_step(
         ctl.has_toot = true;
         ctl.weak_toot = false;
         ctl.bouncing = false;
+        ctl.weak_ground = contact.riding.and_then(|e| han.get(e).ok()).is_some_and(|(_, _, _, h)| h.weak);
         // The laughing band: spring back up a little (lower each time, until it dies out).
-        // Grease doesn't bounce (unless you've got grip): it would be a jump off grease.
+        // Grease doesn't bounce (unless you've got grip): it would be a jump off grease. Nor
+        // does a band zone's Han: a bounce plus the weak boost would be more than a jump.
         let slick = on_grease && !groove.grip();
-        if groove.bounce && !groove.grip() && !slick && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN_SPEED {
+        if groove.bounce
+            && !groove.grip()
+            && !slick
+            && !ctl.weak_ground
+            && !contact.was_on_ground
+            && contact.fall_speed > BOUNCE_MIN_SPEED
+        {
             body.vel.y = (contact.fall_speed * BOUNCE_RESTITUTION).min(BOUNCE_SPEED);
             ctl.bouncing = true;
             ground = false;

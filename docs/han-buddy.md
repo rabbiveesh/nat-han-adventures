@@ -13,8 +13,9 @@ Status: built (see "As built" at the end for the decisions and numbers).
 - **He has 3 toots** (forgiving navigation). **His toots never count for the band.**
 - **Lost** (no route, e.g. Nat used a mode Han can't follow): he **parachutes in on his plunger**.
   Never teleports.
-- **He refuses to go near giant walls** (Giant Steps gates): his AI keeps away from them, so they
-  always need Giant Steps — no buddy shortcut.
+- **He's no use at the band's gates** (giant walls and the rest): he follows Nat right up to
+  them, but there his plunger boost is a feeble hop and he grumbles ("Nope. Need more music in
+  my soul for that one."), so they always need their mode — no buddy shortcut.
 - CPU: graph built once per level load (or precomputed at build time if too slow on phones);
   A* over a few thousand nodes well under 1 ms; trivial per-frame steering.
 
@@ -74,7 +75,7 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 ## Level design (gates the validator must prove are exclusive)
 - **Buddy ledges** (need the plunger boost): marked with **red plunger-handle notches and Han's
   yellow plumber's tape**; shaped beyond Giant Steps' reach (taller/overhanging).
-- **Giant walls**: **gold music-staff trim + a note emblem**. Han won't go near them.
+- **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
 - **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Chain-jump chasms**: crossable only by chaining boosts and toots (no overuse limit inside).
 - Free play gets all of these as rooms; the adaptive engine tracks a **Buddy** skill (and chain
@@ -100,15 +101,30 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   20-70 ms in wasm), so it's lazy: a cold 6-tile route costs ~0.5-1 ms. Moving platforms: he
   waits until the platform will be under the landing cell (real air time) and steers onto it.
   Lost (no route / stuck 3 s) and out of sight: parachute from ~8.5 tiles above, behind Nat.
-- **Giant walls etc.**: levels mark every gate (`gate: <topic> c0,r0 c1,r1`, validated against
-  the crossings). Han keeps 14 columns / 10 rows clear of band and death gate marks (giant,
-  gap, waltz, grip, stain); the validator proves no boost from anywhere Han may be (ground or
-  mid-air, normal/Giant Steps/fired up) opens them.
+- **Giant walls etc.: the band zone**: levels mark every gate (`gate: <topic> c0,r0 c1,r1`,
+  validated against the crossings). Within 14 columns / 10 rows of a band or death gate mark
+  (giant, gap, waltz, grip, stain) Han follows as usual, but jumping off his head is the
+  **weak boost**: 300 px/s (`WEAK_BOOST_SPEED`, Nat's feet ~2.9 tiles over Han's floor, about a
+  normal jump; it refreshes the toot like any landing: ≤ 85 px with the toot, 11 px under a
+  giant wall), even when he's winded, and from the coyote time after stepping off him too (no
+  laughing-band bounce off him there either). He grumbles (`grumble_line`: the gate's own lines
+  and general ones in turn, at most every 2 s) and his back doesn't count it. In the zone his
+  head only holds Nat while he stands (no mid-air catches, no intercepts, no going ahead), and
+  he keeps out of a waltz row's mark and a chute's grease (`Level::han_keeps_out`). Everywhere,
+  his head holds Nat in mid-air only 2 tiles above the floor he left (5 over a chain chasm), so
+  chains of full boosts can't climb out of reach.
+- **The proof** (`validate::boost_leak`, per band/death gate crossing, every mode, ideal input):
+  full boosts from every cell outside the zones Han may be in (standing, or in mid-air up to
+  that catch height and 16 columns from a floor: Nat's before the gate, a chain's, or an
+  unreached ledge in a zone that Nat's own jumps get near), weak boosts (and steps off his
+  head, then a toot) from every zone cell Nat stands in; whatever unreached cells those land on
+  (or pass in a zone) are added, with Nat's own jumps from there, until nothing new: a chain of
+  boosts and toots is a chain of such launches. Nothing may land past the gate.
 - **Intercept**: a goalkeeper dive (1.4x speed and accel), stays under Nat (cuts his jump
   while Nat rises close above), toots into a descending Nat when lined up at the moment of
   contact. Brace range 1.5-3.5 tiles, intercept range 3-7 tiles (eagerness).
 - **Lemme check that**: Nat still and facing sewage, a can or a swarm within 4 tiles for
-  2.0 / 1.5 / 0.7 s (lazy / neutral / eager). It's an escort: Han never leads by more than
+  2.0 / 1.5 / 0.7 s (lazy / neutral / eager), outside the band zones. It's an escort: Han never leads by more than
   1.5 tiles, he's solid from the side so Nat can't overtake him into the jets, every jet he's
   plugged stays plugged while he escorts (and 0.5 s after); flies circle away from him.
 - **Sewage**: sinks 1 s, gone 3 s, parachutes back ("I'm fine! I'm a professional!"); his raft

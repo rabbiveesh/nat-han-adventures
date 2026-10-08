@@ -1,7 +1,8 @@
 //! Han's navigation graph: the validator's reachability graph (standable cells and simulated
 //! jump arcs) with Han's own physics ([`Env::han`]: his run speed, his 3 toots), on his view of
 //! the level ([`Map::for_han`]: flies and spray jets don't hurt him, spikes and sewage he steers
-//! clear of), minus the cells he keeps away from ([`Level::han_allowed`]: the band's gates).
+//! clear of), minus the few cells he keeps out of ([`Level::han_keeps_out`]: a waltz row, a
+//! grease chute's grease).
 //!
 //! Built lazily: a cell's out-edges are simulated the first time a route search reaches it
 //! (and kept for the level visit), so a level load costs nothing and a route costs a few
@@ -125,7 +126,7 @@ const TOOT_COST: f32 = 0.08;
 pub enum Route {
     /// The edges to take, in order (empty: already there).
     Found(Vec<Edge>),
-    /// No way there (with Han's physics, keeping clear of the band's gates).
+    /// No way there (with Han's physics, keeping out of a waltz row and a chute's grease).
     NoRoute,
     /// Ran out of the simulation budget: ask again next time (the cache keeps the work).
     Budget,
@@ -157,8 +158,8 @@ impl Nav {
     }
 
     /// Can Han stand in `cell`?
-    pub fn node(map: &Map, level: &Level, cell: Cell) -> bool {
-        map.standable(cell) && level.han_allowed(cell)
+    pub fn node(map: &Map, _level: &Level, cell: Cell) -> bool {
+        map.standable(cell) && !map.han_keeps_out(cell)
     }
 
     pub fn cached(&self, cell: Cell) -> bool {
@@ -192,7 +193,7 @@ impl Nav {
             let (outcome, t) = fly_timed(map, &self.env, &f, &mut self.buf);
             if let Outcome::Land(to) = outcome
                 && to != cell
-                && level.han_allowed(to)
+                && !map.han_keeps_out(to)
             {
                 let secs = t + JUMP_COST + TOOT_COST * m.toot_count() as f32;
                 let edge = Edge { to, step: Step::Move(k as u16), secs, air: t };

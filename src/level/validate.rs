@@ -49,6 +49,12 @@
 //! a gate meant for a mode. (Long gaps are bottomless for that reason: a raft over an 11-tile
 //! pool is a stepping stone for two normal jumps.)
 //!
+//! Han follows Nat right up to these gates, but in their *band zone* his boost is the weak one
+//! (`game::WEAK_BOOST_SPEED`), so the same goes for him (`boost_leak`): no full boost from
+//! anywhere outside the zones Han may be (standing, or in mid-air as high as his head holds
+//! Nat), no weak boost from anywhere in them Nat may stand, and no chain of boosts and toots
+//! between them, opens a band or death gate, in any mode, with ideal input.
+//!
 //! Teaching ([`Lesson`]): for each mechanic ([`Topic`]) the validator finds its first occurrence
 //! by path cost from the start (the first jump only a toot makes, the first `=` stood on, the
 //! first platform ridden, the first fly or can within 4 tiles, the first take-off of each gate,
@@ -64,11 +70,12 @@
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use super::buddy::{Chasm, HanPhys, chain_cross};
+use super::buddy::{Chasm, HAN_CATCH_RISE, HAN_CHASM_CATCH_RISE, HanPhys, chain_cross};
 use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    BOOST_SPEED, BeatClock, FORGIVE, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, spray_on,
+    BOOST_SPEED, BeatClock, FORGIVE, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
+    WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
 
@@ -253,7 +260,8 @@ pub struct Env {
     /// How far (px) the 12px box dares to hang over a ledge before taking off.
     pub overhang: f32,
     /// Ground jump speed multiplier: the waltz's jump on ONE (the waltz's off-beat jumps are
-    /// [`Mode::Normal`]'s, checked as that mode).
+    /// [`Mode::Normal`]'s, checked as that mode); for weak boosts ([`Launch::Weak`]), of
+    /// [`WEAK_BOOST_SPEED`].
     pub boost: f32,
     /// Upward speed of the toot: the weak toot after a jump on ONE in the waltz.
     pub toot: f32,
@@ -390,7 +398,7 @@ pub struct Map<'a> {
     pub chasms: Vec<Chasm>,
     has_grease: bool,
     /// Generated rooms (free play) carry no `gate:` marks: the band and death gates found so far,
-    /// marked as they're found (Han keeps clear of them like of marked ones).
+    /// marked as they're found (Han's boost is weak around them like around marked ones).
     derive_marks: bool,
     pub(crate) derived: Vec<GateMark>,
 }
@@ -561,9 +569,25 @@ impl<'a> Map<'a> {
         self.f(c, r) & SOLID != 0
     }
 
-    /// May Han be in `cell`? Not near a band or death gate (marked, or found in a room).
+    /// Is Han's boost full strength in `cell`? Not in the zone of a band or death gate (marked,
+    /// or found in a room), where it's the weak one ([`Level::han_allowed`]).
     pub fn han_allowed(&self, cell: Cell) -> bool {
-        self.level.han_allowed(cell) && !self.derived.iter().any(|g| g.berth().contains(cell))
+        !self.in_band_zone(cell)
+    }
+
+    /// Is `cell` in a band zone (marked, or found in a room)? See [`Level::in_band_zone`].
+    pub fn in_band_zone(&self, cell: Cell) -> bool {
+        self.level.in_band_zone(cell) || self.derived.iter().any(|g| g.berth().contains(cell))
+    }
+
+    /// Does Han keep out of `cell` (marked, or found in a room)? See [`Level::han_keeps_out`].
+    pub fn han_keeps_out(&self, cell: Cell) -> bool {
+        self.level.han_keeps_out(cell)
+            || self.derived.iter().any(|g| match g.topic {
+                Topic::Waltz => g.contains(cell),
+                Topic::Grip => self.greasy(cell) && g.berth().contains(cell),
+                _ => false,
+            })
     }
 
     /// Does a player box centered at (x, y) overlap anything solid?
@@ -828,8 +852,9 @@ pub fn ideal_strategies() -> Vec<Strategy> {
     out
 }
 
-/// Envelope rows: landings from 12 tiles above to 48 below the take-off.
-const DR_MIN: i32 = -12;
+/// Envelope rows: landings from 20 tiles above (more than any arc climbs: a full boost and its
+/// toot under Giant Steps are ~16) to 48 below the take-off.
+const DR_MIN: i32 = -20;
 const DR_MAX: i32 = 48;
 
 /// How the arcs of an [`Arcs`] start.
@@ -840,6 +865,11 @@ pub enum Launch {
     /// Standing on Han's head, Han standing in the take-off cell: the plunger boost
     /// ([`BOOST_SPEED`], toot refreshed). Only jumping strategies apply.
     Boost,
+    /// Standing on Han's head in a band zone, Han standing in the take-off cell: the weak boost
+    /// ([`WEAK_BOOST_SPEED`], toot refreshed), or stepping off his head (then a toot). Han may
+    /// stand anywhere in the cell, out to hanging off a ledge, and Nat anywhere on his head:
+    /// edge strategies start from the very edge of his head (off a ledge if there is one).
+    Weak,
 }
 
 /// A mode's strategies with their free-flight envelopes: for each row offset of a landing,
@@ -866,8 +896,15 @@ impl Arcs {
         Arcs::with_launch(env, strategies.into_iter().filter(|s| s.jump).collect(), Launch::Boost)
     }
 
+    /// Weak boosts off Han in a band zone (and steps off his head: the edge strategies that
+    /// don't jump). `env`'s toot is the full one (a weak boost refreshes it).
+    pub fn weak(env: Env, strategies: Vec<Strategy>) -> Arcs {
+        let env = Env { toot: DOUBLE_JUMP_SPEED, ..env };
+        Arcs::with_launch(env, strategies.into_iter().filter(|s| s.jump || s.edge).collect(), Launch::Weak)
+    }
+
     fn with_launch(env: Env, strategies: Vec<Strategy>, launch: Launch) -> Arcs {
-        let y0 = if launch == Launch::Boost { ON_HAN } else { 0.0 };
+        let y0 = if launch == Launch::Ground { 0.0 } else { ON_HAN };
         let envelope =
             strategies.iter().map(|s| free_envelope(&env, &Flight::of(&env, s, launch, 0.0, y0))).collect();
         Arcs { env, strategies, launch, envelope }
@@ -886,11 +923,28 @@ impl Arcs {
         x0 + hi > a && x0 + lo < b
     }
 
+    /// [`Arcs::may_land`] on one of the (sorted) columns `cols` of row `r`.
+    fn may_land_on(&self, k: usize, from: Cell, x0: f32, r: i32, cols: &[i32]) -> bool {
+        let dr = r - from.1;
+        if !(DR_MIN..=DR_MAX).contains(&dr) {
+            return true;
+        }
+        let Some((lo, hi)) = self.envelope[k][(dr - DR_MIN) as usize] else { return false };
+        // The columns a box centered in [x0+lo, x0+hi] overlaps.
+        let c0 = ((x0 + lo - HALF_W - 1.0) / TILE).floor() as i32;
+        let c1 = ((x0 + hi + HALF_W + 1.0) / TILE).floor() as i32;
+        let i = cols.partition_point(|&c| c < c0);
+        cols.get(i).is_some_and(|&c| c <= c1)
+    }
+
     /// Strategy `s` taking off from `cell` (on Han, for boosts), if it applies there.
     pub(crate) fn flight(&self, map: &Map, cell: Cell, s: &Strategy) -> Option<Flight> {
-        let x0 = take_off(map, &self.env, cell, s)?;
+        let x0 = match self.launch {
+            Launch::Weak => weak_take_off(map, &self.env, cell, s),
+            _ => take_off(map, &self.env, cell, s)?,
+        };
         let floor = (cell.1 + 1) as f32 * TILE;
-        let y0 = floor - HALF_H + if self.launch == Launch::Boost { ON_HAN } else { 0.0 };
+        let y0 = floor - HALF_H + if self.launch == Launch::Ground { 0.0 } else { ON_HAN };
         Some(Flight::of(&self.env, s, self.launch, x0, y0))
     }
 }
@@ -919,6 +973,7 @@ impl Flight {
             (false, _) => 0.0,
             (true, Launch::Ground) => -JUMP_SPEED * env.boost,
             (true, Launch::Boost) => -BOOST_SPEED,
+            (true, Launch::Weak) => -WEAK_BOOST_SPEED * env.boost,
         };
         Flight {
             x0,
@@ -1015,6 +1070,22 @@ fn take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> Option<f32> {
         x += s.dir * (8.0 + env.overhang - HALF_W);
     }
     Some(x)
+}
+
+/// Where Nat takes off from Han's head (box center x) for a weak boost (or a step off his head)
+/// with Han standing in `cell`: Han in its middle, or hanging off its ledge in `s.dir` (if it
+/// has one, for edge strategies); Nat in the middle of his head, or (edge strategies) on its
+/// very edge in `s.dir` (just off it, stepping off).
+fn weak_take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> f32 {
+    let mut x = c as f32 * TILE + 8.0;
+    if s.edge {
+        let n = (c + s.dir as i32, r);
+        if !map.is_solid(n.0, n.1) && !map.standable(n) {
+            x += s.dir * (8.0 + env.overhang - HALF_W);
+        }
+        x += s.dir * (PLAYER_SIZE.0 + if s.jump { -0.5 } else { 0.5 });
+    }
+    x
 }
 
 /// One arc from cell (c, r); the cells the box touched go into `touched`.
@@ -1416,6 +1487,9 @@ pub struct Physics {
     /// the modes that could carry them farthest.
     boost: Arcs,
     boost_ideal: Vec<(Mode, Arcs)>,
+    /// Weak boosts off Han in a band zone, ideal, in the modes with their own geometry (the
+    /// waltz and the nervous band jump like normal).
+    weak_ideal: Vec<(Mode, Arcs)>,
 }
 
 impl Physics {
@@ -1432,7 +1506,11 @@ impl Physics {
             .into_iter()
             .map(|m| (m, Arcs::boost(Env::new(m, true), ideal_strategies())))
             .collect();
-        Physics { human, ideal, no_toot, boost, boost_ideal }
+        let weak_ideal = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp]
+            .into_iter()
+            .map(|m| (m, Arcs::weak(Env::new(m, true), ideal_strategies())))
+            .collect();
+        Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1443,8 +1521,17 @@ impl Physics {
         let ideal = MODES.iter().map(|&m| Arcs::new(Env::new(m, true), ideal_strategies())).collect();
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, boost_ideal, .. } = Physics::new();
-        Physics { human, ideal, no_toot, boost, boost_ideal }
+        let Physics { boost, boost_ideal, weak_ideal, .. } = Physics::new();
+        Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
+    }
+
+    /// The same physics with the weak boost (Han in a band zone) launching at `speed` (px/s)
+    /// instead of [`WEAK_BOOST_SPEED`]: for testing the boost proof.
+    pub fn with_weak_boost(mut self, speed: f32) -> Physics {
+        for (_, a) in &mut self.weak_ideal {
+            *a = Arcs::weak(Env { boost: speed / WEAK_BOOST_SPEED, ..a.env }, a.strategies.clone());
+        }
+        self
     }
 
     pub fn human(&self, m: Mode) -> &Arcs {
@@ -1753,11 +1840,12 @@ fn derive_mark(map: &mut Map, gate: Gate, from: Cell, to: Cell) {
     }
 }
 
-/// Can Han be in `cell` with Nat? Nat got there, and it's not near a band gate. (Han
-/// navigates with his own physics, and when he can't follow he parachutes in next to Nat, so
-/// wherever Nat stands, Han can be, outside the band's gates.)
+/// Can Han be in `cell` with Nat, at full strength? Nat got there (Han navigates with his own
+/// physics, and when he can't follow he parachutes in next to Nat, so wherever Nat stands, Han
+/// can be), and neither Han nor Nat on his head is in a band zone (there it's the weak boost,
+/// no good for Han's gates, and he doesn't go ahead).
 fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
-    g.reached(cell) && map.han_allowed(cell)
+    g.reached(cell) && map.han_allowed(cell) && map.han_allowed((cell.0, cell.1 - 1)) && !map.han_keeps_out(cell)
 }
 
 /// Han's gates from reached cells not tried yet: buddy ledges (a boost off Han standing
@@ -1954,18 +2042,10 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
             }
         }
     }
-    if !c.gate.needs_han() {
-        // Han keeps clear of the band's gates: no boost from anywhere he may be opens them.
-        let cands = han_spots(&before, g, i, c.from, HAN_BERTH + 16);
-        for (mode, arcs) in &phys.boost_ideal {
-            if let Some((f, to)) = leak(&before, arcs, &cands, &beyond, &HashSet::new()) {
-                errs.push(format!(
-                    "{what} is passable with a plunger boost ({mode:?}) off Han at col {} row {} -> col {} row {}: mark it (`gate:`) so Han keeps clear",
-                    f.0, f.1, to.0, to.1
-                ));
-                break;
-            }
-        }
+    if !c.gate.needs_han()
+        && let Some(e) = boost_leak(&before, phys, g, i, c, &beyond)
+    {
+        errs.push(format!("{what} {e}"));
     }
     match c.gate {
         Gate::ChainChasm => {
@@ -1986,26 +2066,208 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
     errs
 }
 
-/// Where Han may be with Nat near `at` before crossing `i` (within `cols` columns): reached
-/// cells outside the band's gates, and the air above them where Nat comes down on Han's head
-/// in mid-air (up to a double jump above).
-fn han_spots(map: &Map, g: &Graph, i: usize, at: Cell, cols: i32) -> Vec<Cell> {
-    let mut out = Vec::new();
-    for &cell in &g.order {
-        if !g.before(cell, i) || (cell.0 - at.0).abs() > cols || (cell.1 - at.1).abs() > 12 {
-            continue;
-        }
-        for k in 0..=4 {
-            let a = (cell.0, cell.1 - k);
-            if map.is_solid(a.0, a.1) {
-                break;
-            }
-            if map.han_allowed(a) && (k == 0 || g.touched(a)) && !out.contains(&a) {
-                out.push(a);
+/// In mid-air Han's head holds Nat up to [`HAN_CATCH_RISE`] above the floor he last stood on:
+/// that many rows, plus one (his feet anywhere in a cell); [`HAN_CHASM_CATCH_RISE`] over a
+/// chain-jump chasm...
+const CATCH_ROWS: i32 = (HAN_CATCH_RISE / TILE) as i32 + 1;
+const CHASM_CATCH_ROWS: i32 = (HAN_CHASM_CATCH_RISE / TILE) as i32 + 1;
+/// ...as far as this (columns) from it (at that height he runs and toots a long way)...
+const CATCH_COLS: i32 = 16;
+/// ...and down to this many rows below it (off a ledge, down a pit).
+const CATCH_DROP: i32 = 4;
+/// Where Han may be in mid-air, holding Nat, after leaving the floor of `cell`: the open cells
+/// (flood-filled, so not through walls) up to [`CATCH_ROWS`] above it (over a chasm,
+/// [`CHASM_CATCH_ROWS`]), [`CATCH_DROP`] below and [`CATCH_COLS`] to either side.
+fn han_air(map: &Map, h: Cell) -> Vec<Cell> {
+    let up = |x: i32| if map.level.in_chasm(x) { CHASM_CATCH_ROWS } else { CATCH_ROWS };
+    let inside = |(x, y): Cell| (x - h.0).abs() <= CATCH_COLS && (h.1 - up(x)..=h.1 + CATCH_DROP).contains(&y);
+    let mut seen: HashSet<Cell> = HashSet::from([h]);
+    let mut todo = vec![h];
+    while let Some((x, y)) = todo.pop() {
+        for n in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
+            if inside(n) && !map.is_solid(n.0, n.1) && !map.deadly_tile(n.0, n.1) && seen.insert(n) {
+                todo.push(n);
             }
         }
     }
-    out
+    seen.into_iter().collect()
+}
+
+/// How far (columns, rows) around a gate's take-off the boost proof looks for Nat and Han.
+pub const BOOST_COLS: i32 = HAN_BERTH + 16;
+pub const BOOST_ROWS: i32 = 12;
+
+/// The boost proof for band (or death) gate crossing `c` (number `i`): no plunger boost, and no
+/// chain of boosts and toots, opens it, in any mode, with ideal input. Returns what does.
+///
+/// Han follows Nat everywhere, so (over-approximating where a chain can put them):
+/// - **Full boosts**, outside the band zones (Han's cell and Nat's on his head): Han standing,
+///   or in mid-air up to [`HAN_CATCH_RISE`] (over a chasm [`HAN_CHASM_CATCH_RISE`]) above a
+///   floor he may have stood on, anywhere [`CATCH_COLS`] from it, through open air ([`han_air`]):
+///   a cell Nat reached before the gate, one a chain got Nat to, or one nobody reached in a
+///   zone this side of the gate whose air Nat gets into on his own. Whatever came before, a
+///   chain of full boosts only ever launches from one of these.
+/// - **Weak boosts**, in the zones: his head holds Nat there only while he stands, so from the
+///   cells Nat stands in: reached before the gate, and (the chains) every unreached cell any
+///   of these arcs lands on (or passes through, in a zone), iterated. Each weak boost
+///   refreshes the toot, so every one is tried with every toot timing, and stepping off his
+///   head too.
+/// - From cells first got to that way: Nat's own ideal jumps, and walking on.
+///
+/// Every arc landing past the gate is a leak. (The gate's own mode is left out for weak boosts
+/// and jumps: there the band is playing.)
+fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyond: &HashSet<Cell>) -> Option<String> {
+    let at = c.from;
+    let window = |(x, y): Cell| (x - at.0).abs() <= BOOST_COLS && (y - at.1).abs() <= BOOST_ROWS;
+    let reached: Vec<Cell> = g.order.iter().copied().filter(|&cell| g.before(cell, i) && window(cell)).collect();
+    let mut unreached: HashSet<Cell> = HashSet::new();
+    for y in at.1 - BOOST_ROWS..=at.1 + BOOST_ROWS {
+        for x in at.0 - BOOST_COLS..=at.0 + BOOST_COLS {
+            if map.standable((x, y)) && !g.reached((x, y)) {
+                unreached.insert((x, y));
+            }
+        }
+    }
+    // This side of the gate (an unreached cell past where it lands isn't a floor Han jumps from
+    // to catch a Nat still on the near side).
+    let dir = (c.to.0 - at.0).signum();
+    let near_side = |(x, _): Cell| dir == 0 || (x - c.to.0) * dir < 0;
+    let zone = |(x, y): Cell| map.in_band_zone((x, y)) || map.in_band_zone((x, y - 1));
+    let weak_at = |cell: Cell| zone(cell) && map.standable(cell) && !map.han_keeps_out(cell);
+    let full_at = |cell: Cell| {
+        !zone(cell) && !map.is_solid(cell.0, cell.1) && !map.deadly_tile(cell.0, cell.1) && !map.han_keeps_out(cell)
+    };
+    // Landing targets (per row, the columns), for the envelopes.
+    let mut rows: HashMap<i32, Vec<i32>> = HashMap::new();
+    for &(x, y) in beyond.iter().chain(&unreached) {
+        rows.entry(y).or_default().push(x);
+    }
+    let rows: Vec<(i32, Vec<i32>)> = rows
+        .into_iter()
+        .map(|(r, mut cols)| {
+            cols.sort_unstable();
+            cols.dedup();
+            (r, cols)
+        })
+        .collect();
+    let mut buf = Vec::new();
+    // One launch: a landing past the gate, or (into `new`) the unreached cells it gets Nat to.
+    let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>| -> Option<Cell> {
+        for (k, s) in arcs.strategies.iter().enumerate() {
+            let Some(f) = arcs.flight(map, from, s) else { continue };
+            if !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
+                continue;
+            }
+            if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
+                if beyond.contains(&l) {
+                    return Some(l);
+                }
+                if unreached.contains(&l) {
+                    new.push(l);
+                }
+            }
+            // Passing through a zone cell: Han may be standing there to catch him.
+            new.extend(buf.iter().copied().filter(|&t| unreached.contains(&t) && weak_at(t)));
+        }
+        None
+    };
+    let name = |m: Mode| if m == Mode::Normal { "normal, waltz or nervous".to_string() } else { format!("{m:?}") };
+    let own = |m: Mode| Some(m) == c.gate.mode();
+    // Han's floors to start with, and the air around each where he may catch Nat: where Nat
+    // stands before the gate, and the unreached ledges in a zone this side of it whose air Nat
+    // gets into on his own (a jump above where he stands).
+    let mut nat_air: HashSet<Cell> = HashSet::new();
+    for &(x, y) in &reached {
+        for k in 0..=5 {
+            if map.is_solid(x, y - k) {
+                break;
+            }
+            nat_air.insert((x, y - k));
+        }
+    }
+    let mut first_floors: Vec<(Cell, Vec<Cell>)> = reached.iter().map(|&h| (h, han_air(map, h))).collect();
+    for &u in &unreached {
+        if near_side(u) && map.in_band_zone(u) {
+            let air = han_air(map, u);
+            if air.iter().any(|a| nat_air.contains(a)) {
+                first_floors.push((u, air));
+            }
+        }
+    }
+    for (mode, full) in &phys.boost_ideal {
+        let mode = *mode;
+        let weak = phys.weak_ideal.iter().find(|(m, _)| *m == mode).map(|(_, a)| a).filter(|_| !own(mode));
+        let alike = if mode == Mode::Normal { vec![Mode::Normal, Mode::Waltz, Mode::Nervous] } else { vec![mode] };
+        let ground: Vec<&Arcs> = alike
+            .into_iter()
+            .filter(|&m| !own(m) && (m != Mode::Nervous || map.has_grease))
+            .map(|m| phys.ideal(m))
+            .collect();
+        // Nat's cells: reached before, then whatever the boosts get him to.
+        let mut nat: HashSet<Cell> = reached.iter().copied().collect();
+        let mut queue: Vec<(Cell, bool)> = reached.iter().map(|&r| (r, false)).collect();
+        // Han's floors (for full boosts in mid-air), and the cells full boosts were tried from.
+        let mut floors: Vec<(Cell, Vec<Cell>)> = first_floors.clone();
+        let mut full_tried: HashSet<Cell> = HashSet::new();
+        let mut new = Vec::new();
+        loop {
+            // Full boosts from every cell Han may be in, around every floor so far.
+            for (h, air) in std::mem::take(&mut floors) {
+                for a in air {
+                    if !full_at(a) || near_side(a) != near_side(h) || !full_tried.insert(a) {
+                        continue;
+                    }
+                    if let Some(l) = fly_from(full, a, &mut new) {
+                        return Some(format!(
+                            "is passable with a full plunger boost ({}) off Han at col {} row {} (from his floor at col {} row {}) -> col {} row {}: mark it (`gate:`) so his boost is weak there",
+                            name(mode), a.0, a.1, h.0, h.1, l.0, l.1
+                        ));
+                    }
+                }
+            }
+            for l in new.drain(..) {
+                if nat.insert(l) {
+                    queue.push((l, true));
+                }
+            }
+            let Some((cell, fresh)) = queue.pop() else { break };
+            if let Some(weak) = weak
+                && weak_at(cell)
+                && let Some(l) = fly_from(weak, cell, &mut new)
+            {
+                let how = if fresh { " (got to by a chain of boosts)" } else { "" };
+                return Some(format!(
+                    "is passable with a weak plunger boost ({}) off Han at col {} row {}{how} -> col {} row {}: his band-zone boost must not open it",
+                    name(mode), cell.0, cell.1, l.0, l.1
+                ));
+            }
+            if fresh {
+                // Somewhere new: Nat's own jumps from there, walking on, and a floor for Han.
+                floors.push((cell, han_air(map, cell)));
+                for arcs in &ground {
+                    if let Some(l) = fly_from(arcs, cell, &mut new) {
+                        return Some(format!(
+                            "is passable with a chain of plunger boosts ({}) off Han to col {} row {}, then a jump -> col {} row {}",
+                            name(mode), cell.0, cell.1, l.0, l.1
+                        ));
+                    }
+                }
+                for d in [-1, 1] {
+                    let n = (cell.0 + d, cell.1);
+                    if beyond.contains(&n) {
+                        return Some(format!(
+                            "is passable with a chain of plunger boosts ({}) off Han to col {} row {}, then a walk",
+                            name(mode), cell.0, cell.1
+                        ));
+                    }
+                    if unreached.contains(&n) {
+                        new.push(n);
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 /// A buddy raft pool must defeat Nat's own rafts: the fewest of them that bridge it (ideal
@@ -2140,7 +2402,7 @@ pub struct Report {
     /// The map with reachable cells marked (if asked for).
     pub dump: Option<String>,
     /// The level's gate marks; for a generated room ([`check_room`]), the marks it needs (its
-    /// gates, found): copy them into the room so the game's Han keeps clear of its band gates.
+    /// gates, found): copy them into the room so the game's Han is feeble around its band gates.
     pub marks: Vec<GateMark>,
 }
 
