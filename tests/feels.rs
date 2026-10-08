@@ -100,7 +100,9 @@ fn feels_are_deterministic_and_follow_the_dial() {
     }
     println!("share of bars in a feel at 0.35 / 0.6 / 0.9: {share:?}");
     assert_eq!(share[0], 0.0);
-    assert!(share[1] > 0.03 && share[1] < share[2] && share[2] > 0.2, "{share:?}");
+    // (The arranged choruses share the loose end of the dial: no feels in a stop-time, soli,
+    // breaks, two-feel or shout chorus.)
+    assert!(share[1] > 0.03 && share[1] < share[2] && share[2] > 0.1, "{share:?}");
 }
 
 /// A feel changes at a bar line, announced: a full fill in the bar before (into it and out of

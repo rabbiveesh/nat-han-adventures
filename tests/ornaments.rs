@@ -5,6 +5,7 @@
 use kira::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony, Music,
+    chart::Family,
     live::{
         Engine, EngineConfig, Input,
         band::{Fill, Flourish, HitKind},
@@ -301,14 +302,19 @@ fn the_reharm_keeps_bass_and_comp_together() {
 }
 
 /// Side-slips move half a bar of the tune by exactly a semitone (and snap back); planing keeps
-/// the tune on top of parallel fourths, triads or clusters.
+/// the tune on top of parallel fourths, triads or clusters; both only over a dominant. The
+/// bass slips into the next phrase a semitone off its root.
 #[test]
 fn side_slips_and_planing_have_their_intervals() {
-    let (mut slips, mut planes) = (0, 0);
+    let (mut slips, mut planes, mut bass_slips) = (0, 0, 0);
     for m in LOOPING {
         let plain = written(m, &[], 40);
         for f in [0.55, 0.8] {
-        let (_, bars) = play(song(m), 21, &[freedom(f)], |_| vec![], 40);
+        let (e, bars) = play(song(m), 21, &[freedom(f)], |_| vec![], 40);
+        let arr = e.arrangement(Harmony::Original).unwrap();
+        let bar_beats = e.shape().bar_beats;
+        // The harmony at song beat `at` of bar `b`, as the band played it.
+        let harm = |b: &Bar, at: f64| b.c.band.sub_at(at - b.c.slot.song_bar as f64 * bar_beats).map(|s| Harm::new(s.chord)).or_else(|| arr.harm_at(at)).expect("a chart");
         for (p, b) in plain.iter().zip(&bars) {
             // (A feel plays the line straight: not the written grid.)
             if b.c.band.feel != Feel::Swing {
@@ -322,6 +328,10 @@ fn side_slips_and_planing_have_their_intervals() {
                     assert_eq!(w.start, e.start, "{m:?} bar {}: a side-slip moved a note in time", b.c.slot.index);
                     let d = z as i32 - a as i32;
                     assert!(d.abs() <= 1, "{m:?} bar {}: slipped by {d}", b.c.slot.index);
+                    if d != 0 {
+                        let h = harm(b, e.beat);
+                        assert_eq!(h.chord.family(), Family::Dominant, "{m:?} bar {}: a side-slip over {}", b.c.slot.index, h.chord);
+                    }
                     moved += (d != 0) as u32;
                 }
                 assert!(moved > 0);
@@ -334,13 +344,25 @@ fn side_slips_and_planing_have_their_intervals() {
                     assert_eq!(*n.last().unwrap(), a, "{m:?}: the tune isn't on top");
                     let iv: Vec<i32> = n.windows(2).map(|x| x[1] as i32 - x[0] as i32).collect();
                     assert!(iv.iter().all(|&i| i == 5) || iv.iter().all(|&i| (1..=4).contains(&i)), "{m:?}: planed {n:?}");
+                    let h = harm(b, e.beat);
+                    assert_eq!(h.chord.family(), Family::Dominant, "{m:?} bar {}: planing over {}", b.c.slot.index, h.chord);
                 }
                 planes += 1;
+            }
+            // The bass's slip into the next phrase: its root a semitone off, on the last 8th.
+            if b.c.orns[2].has(Orn::SlipBass)
+                && let Some(next) = arr.harm_at((b.c.slot.song_bar + 1) as f64 * bar_beats)
+                && let Some(last) = b.ch(2).last()
+                && let Sound::Note(n) = last.sound
+            {
+                let off = (n as i32 - next.chord.bass_pc() as i32).rem_euclid(12);
+                assert!(off == 1 || off == 11, "{m:?} bar {}: slipped {n} into {}", b.c.slot.index, next.chord);
+                bass_slips += 1;
             }
         }
         }
     }
-    assert!(slips > 0 && planes > 0, "slips {slips}, planes {planes}");
+    assert!(slips > 0 && planes > 0 && bass_slips > 0, "slips {slips}, planes {planes}, bass slips {bass_slips}");
 }
 
 /// The game's big moments: a summon crashes and fills; a checkpoint fills short; a death gets

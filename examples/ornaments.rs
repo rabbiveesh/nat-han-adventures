@@ -24,6 +24,7 @@ use nat_han_adventures::audio::{
     live::{
         Engine, EngineConfig, Input,
         band::{Fill, Flourish, HitKind, Trade},
+        chorus::{Call, Chorus},
         feel::Feel,
         library,
         musician::Role,
@@ -93,14 +94,14 @@ fn listen(dir: &Path) {
         let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
         for f in [0.35f32, 0.7] {
             let script = |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: f * 0.7 }] } else { vec![] };
-            let (out, log, _) = run(&file, script, 32, |_| "", false);
+            let (out, log, _) = run(&file, script, 32, |_| "", false, false);
             let name = format!("{stem}_f{:03}", (f * 100.0).round() as u32);
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
             println!("{name}.wav");
         }
         if stem != "the_entertainer" {
-            let (out, log, _) = run(&file, tour, 34, tour_note, true);
+            let (out, log, _) = run(&file, tour, 34, tour_note, true, false);
             write_wav(&dir.join(format!("tour_{stem}.wav")), &out);
             std::fs::write(dir.join(format!("tour_{stem}.txt")), log).expect("write log");
             println!("tour_{stem}.wav");
@@ -133,7 +134,7 @@ fn instrument_tour(dir: &Path) {
                     3 => vec![Input::SetMix([1.0; 4])],
                     _ => vec![],
                 };
-                let (out, _, _) = run(&song, solo, 4, |_| "", false);
+                let (out, _, _) = run(&song, solo, 4, |_| "", false, false);
                 all.extend(out);
                 all.extend(std::iter::repeat_n(Frame::ZERO, RATE as usize / 3));
             }
@@ -155,6 +156,10 @@ fn main() {
         listen(dir);
         return;
     }
+    if only.as_deref() == Some("choruses") {
+        choruses(dir);
+        return;
+    }
     if only.as_deref() == Some("feels") {
         feels(dir);
         return;
@@ -165,7 +170,7 @@ fn main() {
         }
         let file = SongFile::parse(text).expect("song parses");
         for f in FREEDOMS {
-            let (out, log, _) = run(&file, |bar| script(bar, f), BARS, script_note, false);
+            let (out, log, _) = run(&file, |bar| script(bar, f), BARS, script_note, false, false);
             let name = format!("{prefix}_{stem}_f{:03}", (f * 100.0).round() as u32);
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
@@ -178,8 +183,8 @@ fn main() {
 }
 
 /// Run an engine through a script, logging every committed bar.
-fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
-    let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, self_directed, ..EngineConfig::default() }).expect("engine");
+fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool, intro: bool) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
+    let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, self_directed, intro, ..EngineConfig::default() }).expect("engine");
     let looping = e.shape().looping;
     let mut out: Vec<Frame> = Vec::new();
     let mut buf = [Frame::ZERO; 256];
@@ -231,6 +236,9 @@ fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(
             if p.flourish != Flourish::None {
                 band.push(format!("flourish: {:?}", p.flourish));
             }
+            if !p.label().is_empty() {
+                band.push(format!("arrangement: {}", p.label()));
+            }
             if p.feel != Feel::Swing {
                 band.push(format!("feel: {} (since bar {})", p.feel.label(), p.feel_since + 1));
             }
@@ -264,7 +272,7 @@ fn feels(dir: &Path) {
                     vec![]
                 }
             };
-            let (out, l, _) = run(&file, script, 24, |_| "", false);
+            let (out, l, _) = run(&file, script, 24, |_| "", false, false);
             let name = format!("forced_{}_{stem}", f.slug());
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), l).expect("write log");
@@ -274,7 +282,7 @@ fn feels(dir: &Path) {
     for (stem, text) in library::FILES {
         let file = SongFile::parse(text).expect("song parses");
         let script = |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 }] } else { vec![] };
-        let (out, l, bar_feels) = run(&file, script, 96, |_| "", false);
+        let (out, l, bar_feels) = run(&file, script, 96, |_| "", false, false);
         let name = format!("auto_{stem}");
         write_wav(&dir.join(format!("{name}.wav")), &out);
         std::fs::write(dir.join(format!("{name}.txt")), &l).expect("write log");
@@ -292,6 +300,71 @@ fn feels(dir: &Path) {
     }
     std::fs::write(dir.join("feels_log.txt"), log).expect("write log");
     println!("feels_log.txt");
+}
+
+/// The choruses: each forced in turn on one song (a pass each, freedom 0.5, one file with the
+/// switches logged), a few forced against a feel, a whole show at 0.8 (an intro, the band
+/// arranging its own choruses, an ending), and the level-clear jingle's Basie ending.
+fn choruses(dir: &Path) {
+    let free = |f: f32| Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: f.min(0.5) };
+    let parse = |stem: &str| SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+    let save = |name: &str, out: &[Frame], log: &str| {
+        write_wav(&dir.join(format!("{name}.wav")), out);
+        std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+        println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    };
+    // Every chorus in a row, a pass each.
+    let file = parse("sweet_georgia_brown");
+    let (mut all, mut log) = (Vec::new(), String::new());
+    let calls = Chorus::ALL.map(|chorus| Call { chorus, key_up: false }).into_iter().chain([Call { chorus: Chorus::Shout, key_up: true }]);
+    for c in calls {
+        let t = all.len() as f64 / RATE as f64;
+        let name = if c.key_up { "SHOUT KEY-UP" } else if c.chorus == Chorus::Head { "HEAD" } else { c.chorus.label() };
+        let _ = writeln!(log, "{:02}:{:05.2}  {name}", (t / 60.0) as u32, t % 60.0);
+        let script = move |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(c)), free(0.5)] } else { vec![] };
+        let (out, _, _) = run(&file, script, file_bars(&file), |_| "", false, false);
+        all.extend(out);
+    }
+    save("choruses_sweet_georgia_brown", &all, &log);
+    // Choruses against feels.
+    let combos = [
+        ("tiger_rag", Chorus::StopTime, Feel::Funk),
+        ("sweet_georgia_brown", Chorus::Soli, Feel::Bossa),
+        ("muskrat_ramble", Chorus::Riffs, Feel::Samba),
+        ("i_got_rhythm", Chorus::Breaks, Feel::Rock),
+        ("st_louis_blues", Chorus::Strolling, Feel::Bossa),
+        ("when_the_saints", Chorus::Shout, Feel::Samba),
+    ];
+    for (stem, chorus, feel) in combos {
+        let file = parse(stem);
+        let call = Call { chorus, key_up: chorus == Chorus::Shout };
+        let script = move |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::ForceFeel(Some(feel)), free(0.6)] } else { vec![] };
+        let (out, l, _) = run(&file, script, file_bars(&file), |_| "", false, false);
+        save(&format!("combo_{}_{}_{stem}", chorus.slug(), feel.slug()), &out, &l);
+    }
+    // The whole show: an intro, the band's own arrangement for a while, an ending.
+    for stem in ["tiger_rag", "i_got_rhythm", "the_entertainer"] {
+        let file = parse(stem);
+        let end = 6 * file_bars(&file) + 1;
+        let script = move |bar: u64| match bar {
+            1 => vec![Input::LevelStart, free(0.8)],
+            b if b == end => vec![Input::End],
+            _ => vec![],
+        };
+        let (out, l, _) = run(&file, script, end + 12, |_| "", false, true);
+        save(&format!("show_{stem}"), &out, &l);
+    }
+    // The level-clear jingle, a Basie ending on it.
+    let stem = "shave_and_a_haircut";
+    let file = parse(stem);
+    let (out, l, _) = run(&file, move |bar| if bar == 1 { vec![free(0.5)] } else { vec![] }, 32, |_| "", false, false);
+    save(&format!("jingle_{stem}"), &out, &l);
+}
+
+/// A song's pass, in bars.
+fn file_bars(file: &SongFile) -> u64 {
+    let e = Engine::with_config(file, RATE, EngineConfig::default()).expect("engine");
+    e.shape().bars as u64
 }
 
 /// Each song's palette in turn, a phrase (4 bars) on each instrument: the musicians at a
@@ -326,7 +399,7 @@ fn showcase(file: &SongFile, stem: &str, dir: &Path) {
         };
         let t = all.len() as f64 / RATE as f64;
         let _ = writeln!(log, "{:>2}:{:05.2}  {}", (t / 60.0) as u32, t % 60.0, names.join("  "));
-        let (out, _, _) = run(&song, |bar| if bar == 1 { vec![Input::SetFreedom { lead: 0.0, comp: 0.0, bass: 0.0, drums: 0.0, dynamics: 0.0 }] } else { vec![] }, 8, |_| "", false);
+        let (out, _, _) = run(&song, |bar| if bar == 1 { vec![Input::SetFreedom { lead: 0.0, comp: 0.0, bass: 0.0, drums: 0.0, dynamics: 0.0 }] } else { vec![] }, 8, |_| "", false, false);
         all.extend(out);
     }
     write_wav(&dir.join(format!("instruments_{stem}.wav")), &all);

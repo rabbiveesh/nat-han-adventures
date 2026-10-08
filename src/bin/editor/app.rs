@@ -432,6 +432,16 @@ impl Editor {
         self.player.post(Input::ForceFeel(f));
     }
 
+    pub fn set_force_chorus(&mut self, c: Option<nat_han_adventures::audio::live::chorus::Call>) {
+        self.dials.force_chorus = c;
+        self.player.post(Input::ForceChorus(c));
+    }
+
+    /// Tell the band to end the song (an ending from the next bar, then it stops).
+    pub fn end_song(&mut self) {
+        self.player.post(Input::End);
+    }
+
     pub fn set_freedom(&mut self, f: [f32; 5]) {
         self.dials.freedom = f;
         self.player.post(self.dials.freedom_input());

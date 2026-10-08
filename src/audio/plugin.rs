@@ -40,7 +40,7 @@ use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel, PlayState};
 
-use super::live::engine::{BeatClock, Engine, Input};
+use super::live::engine::{BeatClock, Engine, EngineConfig, Input};
 use super::live::library;
 use super::live::playback::{ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData};
 use super::tuning::{Tuning, Wobble};
@@ -140,14 +140,15 @@ pub struct NowPlaying {
     /// [`Tuning::Just`], [`Tuning::Tet7`], ...); `None` otherwise. Follows the phrases as they
     /// change (read it every frame; it never fires a message).
     pub tuning_now: Option<Tuning>,
-    /// The feel the band is in, if it's left the tune's own ("BOSSA NOVA";
-    /// [`crate::audio::live::feel::Feel::label`]), else "". The band's own choice: music only.
-    pub feel_now: &'static str,
+    /// What the band's arranging beyond the tune, else "": a feel ("BOSSA NOVA"), a chorus
+    /// ("STOP-TIME"), the intro, an ending ([`crate::audio::live::band::BandPlan::label`]).
+    /// The band's own choice: music only.
+    pub band_now: &'static str,
 }
 
 impl Default for NowPlaying {
     fn default() -> Self {
-        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None, feel_now: "" }
+        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None, band_now: "" }
     }
 }
 
@@ -331,7 +332,9 @@ fn setup(world: &mut World) {
 /// the song can take it).
 fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'static str, Filters), String> {
     let (title, file) = library::song(music)?;
-    let engine = Engine::new(file, ENGINE_RATE)?;
+    // A level's tune starts with an intro (when the band's loose enough: see `chorus`).
+    let config = EngineConfig { intro: matches!(music, Music::World(_)), ..EngineConfig::default() };
+    let engine = Engine::with_config(file, ENGINE_RATE, config)?;
     let mut filters = match overrides.0 {
         Some(f) if music != Music::LevelClear => f,
         _ => Filters::default(),
@@ -372,7 +375,9 @@ fn follow_state(
         }
     };
     engine.post(Input::SetFilters(filters));
-    if let (Music::World(_), Some(f)) = (want, player.freedom) {
+    // The band plays the levels' tunes, and the level-clear jingle (a Basie ending on it,
+    // if it's loose).
+    if let (Music::World(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
         engine.post(set_freedom(f));
     }
     // The fanfare cuts in quickly; everything else crossfades.
@@ -384,7 +389,7 @@ fn follow_state(
         h.play(engine, fade_in, fade_out);
     }
     let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
-    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None, feel_now: "" };
+    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None, band_now: "" };
     // The physics follow the music the moment it starts.
     if let Some(g) = groove.as_deref_mut() {
         set_groove(g, filters);
@@ -591,9 +596,9 @@ fn sync(
     if now_playing.tuning_now != tuning_now {
         now_playing.tuning_now = tuning_now;
     }
-    let feel_now = p.state.feel.label();
-    if now_playing.feel_now != feel_now {
-        now_playing.feel_now = feel_now;
+    let band_now = p.state.label;
+    if now_playing.band_now != band_now {
+        now_playing.band_now = band_now;
     }
     let sounding = (filters, p.state.tuning);
     if player.sounding != Some(sounding) {

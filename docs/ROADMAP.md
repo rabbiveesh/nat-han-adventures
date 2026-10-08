@@ -13,7 +13,10 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   Four musicians (lead/comp/bass/drums) with freedom dials and a full ornament vocabulary
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
   flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and
-  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`).
+  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`),
+  and an arrangement across choruses (`src/audio/live/chorus.rs`: head, two-feel, blowing,
+  stop-time, breaks, riff backgrounds, strolling, soli, shout chorus with a key-up), pedal/vamp
+  intros on the level tunes, and endings (Basie on the level-clear jingle, I–VI–ii–V tag, vamp-out).
   The world's beat follows the ear: on the web it steps back by the browser's buffering and
   output latency (`index.html` reports it; `web_output_lead` in `src/audio/plugin.rs`).
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
@@ -57,10 +60,8 @@ kills while firing; Han's plug covers it; free-play waltz rows are floor cans wi
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 
 ## Planned (agreed, not started)
-- **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
-  (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending
-  on the jingle, vamp-outs), stop-time choruses, call-and-response comping, pedal/vamp intros,
-  real dynamics (drop out under quiet phrases, build into the bridge).
+- **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics
+  (drop out under quiet phrases, build into the bridge).
 
 ## Known limits / follow-ups
 - Validator: Giant Steps reaching an otherwise unreachable ledge and then crossing from it isn't

@@ -7,7 +7,12 @@ use std::cell::Cell;
 use kira::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony,
-    live::{Engine, Input, feel::Feel, library},
+    live::{
+        Engine, EngineConfig, Input,
+        chorus::{Call, Chorus},
+        feel::Feel,
+        library,
+    },
 };
 
 struct Counting;
@@ -40,7 +45,7 @@ static ALLOC: Counting = Counting;
 fn fill_doesnt_allocate() {
     for (stem, f) in [("sweet_georgia_brown", 0.7), ("muskrat_ramble", 1.0), ("shave_and_a_haircut", 0.7), ("tiger_rag", 0.4)] {
         let file = library::load(stem).unwrap();
-        let mut e = Engine::new(&file, 32_000).unwrap();
+        let mut e = Engine::with_config(&file, 32_000, EngineConfig { intro: true, ..EngineConfig::default() }).unwrap();
         // (Every harmony, the waltz and its meter switches included.)
         e.post(Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: 0.7 });
         let mut buf = vec![Frame::ZERO; 512];
@@ -59,12 +64,25 @@ fn fill_doesnt_allocate() {
                 e.post(Input::SetFilters(Filters { harmony: Harmony::ALL[k / 100 % 5], just_intonation: k % 200 == 0 }));
                 // The feels too (the band's own choices at these freedoms, and forced ones).
                 e.post(Input::ForceFeel([None, Some(Feel::Bossa), Some(Feel::Samba), Some(Feel::Rock), Some(Feel::Funk)][k / 300 % 5]));
+                // Every chorus (and the arranger's own picks).
+                let c = Chorus::ALL[k / 100 % Chorus::ALL.len()];
+                e.post(Input::ForceChorus(if k % 1000 == 0 { None } else { Some(Call { chorus: c, key_up: k % 300 == 0 }) }));
             }
             e.fill(&mut buf);
             e.state_into(&mut state);
             let _ = e.beat_clock();
         }
+        // And an ending, to the end.
+        e.post(Input::End);
+        for _ in 0..4000 {
+            e.fill(&mut buf);
+            e.state_into(&mut state);
+            if e.finished() {
+                break;
+            }
+        }
         WATCHING.with(|w| w.set(false));
+        assert!(e.finished(), "{stem}: the ending never ended");
         assert_eq!(COUNT.with(Cell::get), 0, "{stem}: allocations on the audio path");
     }
 }
