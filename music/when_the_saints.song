@@ -15,6 +15,19 @@ meter = 4/4
 | F6 | % | % | % | % | % | % | C7 |                          ; 17-24
 | F6 | F7 | Bb6 | Bbm6 | F6 | C7 | F6 | F6 |                 ; 25-32
 
+[instruments]
+; The band's alternates: each channel's base is `default` (the sound as written); its
+; musician may switch to the others for a phrase or a fill. `@i name` uses one in the MML.
+brass    : vol 9 12 14 15 15 14 13 | duty 0 1 2 | pitch -1 -0.5 -0.25 0 | vib delay=14 depth=14 speed=5.5   ; a trumpet: swell, scoop, late vibrato
+clarinet : vol 10 12 13 | duty 1 | vib delay=10 depth=18 speed=5                ; woody, narrow, a warm vibrato
+banjo    : vol 15 10 7 5 4 3 2 2 1 | duty 2 1 | pitch +0.25 0                ; a banjo: bright, gone in a flash
+tuba     : vol 15 13 12 11 | pitch -0.5 0                                     ; an oom-pah tuba (on the triangle)
+brushes  : kick decay=3 click=0.1 | snare decay=6 period=6 tone=150 body=1 | hat decay=0.6 period=3 ; brushes
+pulse1 = default brass clarinet
+pulse2 = default banjo
+triangle = default tuba
+noise = default brushes
+
 [pulse1]
 v12 @2 o4 r4 f4 a4 b-4 | o5 c1 | o4 r4 f4 a4 b-4 | o5 c1 |               ; 1-4
 o4 r4 f4 a4 b-4 | o5 c2 o4 a2 | o4 f2 a2 | o4 g1 |                       ; 5-8

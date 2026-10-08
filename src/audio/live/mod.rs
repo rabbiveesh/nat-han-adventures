@@ -66,10 +66,12 @@
 //! release build with everything on (Coltrane + medley + freedom), ~600× real time.
 
 pub mod arrange;
+pub mod band;
 pub mod engine;
 pub mod instrument;
 pub mod library;
 pub mod musician;
+pub mod ornament;
 pub mod playback;
 pub mod song;
 pub mod syntax;

@@ -12,6 +12,14 @@ meter = 4/4
 [chords]
 | C % F C/E | G7 % C % |                                     ; 1-2
 
+[instruments]
+; The band's alternates: each channel's base is `default` (the sound as written); its
+; musician may switch to the others for a phrase or a fill. `@i name` uses one in the MML.
+brass : vol 9 12 14 15 15 14 13 | duty 0 1 2 | pitch -1 -0.5 -0.25 0 | vib delay=14 depth=14 speed=5.5   ; a trumpet: swell, scoop, late vibrato
+tight : kick pitch=-30 decay=3 | snare noise=short decay=2 tone=220 | hat decay=0.5 | ohat decay=3 ; a tight, dry kit
+pulse1 = default brass
+noise = default tight
+
 [pulse1]
 v13 @1 o5 c4 o4 g8 g8 a4 g4 | o4 r4 b4 o5 c2 |                           ; 1-2
 

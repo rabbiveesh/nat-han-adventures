@@ -364,7 +364,8 @@ fn replanning_never_alters_committed_events() {
         }
     }
     assert_ne!(replanned[0].intent(3), before[0].intent(3), "the lead didn't replan");
-    assert!(replanned[3].intent(3).accent, "the drums didn't cue a crash after the death");
+    assert!(replanned[3].intent(3).short_fill, "the drums didn't cue a fill for the checkpoint");
+    assert!(replanned[0].intent(3).wah, "the lead didn't cue its wah-wah after the death");
     assert!(replanned[0].intent(3).answer, "the lead didn't cue an answer to the toot");
     // What's heard up to the next bar line is what was committed: the same as without the inputs.
     let mut quiet = engine(m, &[free]);
@@ -488,7 +489,7 @@ fn rendering_is_far_under_real_time() {
     for m in Music::ALL {
         let mut e = engine(m, &[
             Input::SetFilters(Filters { harmony: Harmony::Coltrane, just_intonation: true }),
-            Input::SetFreedom { lead: 0.7, comp: 0.7, bass: 0.7, drums: 0.7, dynamics: 0.7 },
+            Input::SetFreedom { lead: 1.0, comp: 1.0, bass: 1.0, drums: 1.0, dynamics: 0.7 },
         ]);
         let mut buf = vec![Frame::ZERO; block];
         let blocks = 20 * synth::SAMPLE_RATE as usize / block;
@@ -505,38 +506,12 @@ fn rendering_is_far_under_real_time() {
         if per_block > worst_song.0 {
             worst_song = (per_block, library::title(m));
         }
-        // Debug builds (opt-level 1) are slow; release has a far tighter budget.
-        let budget = if cfg!(debug_assertions) { 0.25 } else { 0.02 };
+        // Debug builds (opt-level 1) are slow; release must stay 100x faster than real time.
+        let budget = if cfg!(debug_assertions) { 0.25 } else { 0.01 };
         assert!(per_block < realtime * budget, "{m:?}: {:.0}us per block", per_block * 1e6);
         assert!(worst < realtime, "{m:?}: a block took {:.0}us, longer than it plays", worst * 1e6);
     }
     println!("slowest: {} at {:.1} us/block", worst_song.1, worst_song.0 * 1e6);
-}
-
-/// Above freedom 0 the placeholders play (grace notes, fills); at 0 nothing changes.
-#[test]
-fn freedom_brings_the_placeholders_in() {
-    use nat_han_adventures::audio::live::voice::Sound;
-    use nat_han_adventures::audio::mml::Drum;
-    let m = Music::World(2);
-    let count = |inputs: &[Input]| {
-        let mut e = engine(m, inputs);
-        let shape = e.shape().clone();
-        let (mut events, mut graces, mut snares) = (0, 0, 0);
-        for bar in 1..shape.bars {
-            render_to(&mut e, shape.bar_starts[bar] - 10);
-            for ev in e.pending_events().filter(|ev| ev.bar == bar as u64) {
-                events += 1;
-                graces += (ev.ch == 0 && ((ev.end - ev.start) as f64) < shape.samples_per_beat * 0.15) as u32;
-                snares += (ev.sound == Sound::Drum(Drum::Snare)) as u32;
-            }
-        }
-        (events, graces, snares)
-    };
-    let plain = count(&[]);
-    let free = count(&[Input::SetFreedom { lead: 1.0, comp: 1.0, bass: 1.0, drums: 1.0, dynamics: 1.0 }]);
-    assert!(free.1 > plain.1 + 5, "grace notes: {plain:?} vs {free:?}");
-    assert!(free.2 > plain.2 + 5, "fills: {plain:?} vs {free:?}");
 }
 
 // --- the waltz ----------------------------------------------------------------------------

@@ -16,6 +16,19 @@ meter = 4/4
 | C7 | % | F7 | % | Bb6 Gm7 | Cm7 F7 | Bb6 Gm7 | Cm7 F7 |    ; 25-32
 | Fm7 Bb7 | Eb6 Ebm6 | Bb6 F7 | Bb6 |                        ; 33-36
 
+[instruments]
+; The band's alternates: each channel's base is `default` (the sound as written); its
+; musician may switch to the others for a phrase or a fill. `@i name` uses one in the MML.
+brass : vol 9 12 14 15 15 14 13 | duty 0 1 2 | pitch -1 -0.5 -0.25 0 | vib delay=14 depth=14 speed=5.5   ; a trumpet: swell, scoop, late vibrato
+pluck : vol 15 12 9 7 6 5 4 | duty 1                                    ; plucked: a sharp attack, then quiet
+organ : vol 11 | duty | 2 3                                              ; an organ shimmer (duty flips every frame)
+thump : vol 15 11 9 8 7                                                    ; a plucked upright bass
+tight : kick pitch=-30 decay=3 | snare noise=short decay=2 tone=220 | hat decay=0.5 | ohat decay=3 ; a tight, dry kit
+pulse1 = default brass pluck
+pulse2 = default pluck organ
+triangle = default thump
+noise = default tight
+
 [pulse1]
 v12 @1 o5 b-4. f8 b-4 o6 d4 | o6 e-4. d8 c4 o5 b-4 | o5 b-8 b-8 b-8 r8 f8 f8 f8 r8 | o5 c2 o4 a4 r4 | ; 1-4
 o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 5-8
