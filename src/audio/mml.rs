@@ -1,5 +1,15 @@
-//! MML parser: turns one channel's MML string (dialect documented in [`super`]) into a flat,
-//! time-ordered list of [`Event`]s with start times and durations in beats (quarter notes).
+//! MML: turns one channel's MML string into a flat, time-ordered list of [`Event`]s with
+//! start times and durations in beats (quarter notes). The dialect is documented in
+//! [`super`] (and as data in [`super::live::syntax::CHEAT_SHEET`]); on top of the classic
+//! commands it has
+//! - `{c e g}8`: a chord played as a fast arpeggio (an [`EventKind::Arp`]), up to [`Arp::MAX`]
+//!   notes, lowest first as written; `<` / `>` inside the braces shift the octave for the rest of
+//!   the chord only;
+//! - `;` comments to the end of the line;
+//! - checked bar lines ([`parse_checked`], what `.song` files use): a `|` must fall exactly on a
+//!   bar line of the meter (counted from the start of the track, repeats expanded), like a
+//!   LilyPond bar check. A bar that is too long or too short is caught at the next `|`.
+//!   [`parse`] ignores them.
 //!
 //! Parsing happens in two steps: the text is parsed into a tree (repeats nest), then the tree
 //! is walked with the running state (octave, length, volume, duty), which gives repeats the
@@ -29,8 +39,8 @@ pub enum EventKind {
     Rest,
     Drum(Drum),
     /// A chord played as a fast chiptune arpeggio (the voice cycles through the notes every
-    /// [`super::synth::ARP_STEP`] seconds). Only the accompaniment generator makes these; MML
-    /// has no syntax for them.
+    /// [`super::synth::ARP_STEP`] seconds): `{c e g}` in MML, and what the accompaniment
+    /// generator writes.
     Arp(Arp),
 }
 
@@ -102,6 +112,80 @@ impl fmt::Display for MmlError {
 
 impl std::error::Error for MmlError {}
 
+/// How strictly to read bar lines.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Options {
+    /// Beats (quarter notes) per bar; `None` ignores bar lines (the game's dialect).
+    pub bar_beats: Option<f64>,
+}
+
+/// One visit of the walker to a source position (repeats visit their body several times).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Visit {
+    /// Byte offset of the node (or of the `]` closing a repeat).
+    pub pos: usize,
+    /// Track time (beats) when the walker got there.
+    pub time: f64,
+}
+
+/// What sits at a source position, in source order (for tools like the song converter).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Item {
+    /// A note, rest, drum hit or chord: moves time on.
+    Sound,
+    /// `o l v @ < >`: changes state, takes no time.
+    Command,
+    /// `&`.
+    Tie,
+    /// `[`.
+    Open,
+    /// `]n` (its position is the `]`).
+    Close,
+    /// `|`.
+    Bar,
+}
+
+/// A parse with the walker's visits, for tools.
+#[derive(Debug, Clone)]
+pub struct Parsed {
+    pub track: Track,
+    /// Every node in source order.
+    pub items: Vec<(usize, Item)>,
+    /// Every visit, in walk order.
+    pub visits: Vec<Visit>,
+}
+
+/// Parse one channel; `|` bar lines are ignored. An empty string is an empty track.
+pub fn parse(src: &str, channel: Channel) -> Result<Track, MmlError> {
+    parse_with(src, channel, Options { bar_beats: None }).map(|p| p.track)
+}
+
+/// Parse one channel with checked bar lines (`bar_beats` beats per bar): what `.song` files use.
+pub fn parse_checked(src: &str, channel: Channel, bar_beats: f64) -> Result<Track, MmlError> {
+    parse_with(src, channel, Options { bar_beats: Some(bar_beats) }).map(|p| p.track)
+}
+
+/// Parse one channel, keeping the walk's visits.
+pub fn parse_with(src: &str, channel: Channel, opts: Options) -> Result<Parsed, MmlError> {
+    let mut p = Parser { src, bytes: src.as_bytes(), i: 0, channel, items: Vec::new() };
+    let nodes = p.block(false)?;
+    let mut w = Walker {
+        src,
+        opts,
+        state: State { octave: 4, length: 1.0, volume: 12, duty: 2 },
+        time: 0.0,
+        last_bar: 0.0,
+        events: Vec::new(),
+        pending_tie: None,
+        visits: Vec::new(),
+    };
+    w.walk(&nodes)?;
+    if let Some(pos) = w.pending_tie {
+        return Err(error(src, pos, "`&` must be followed by a note"));
+    }
+    Ok(Parsed { track: Track { events: w.events, length: w.time }, items: p.items, visits: w.visits })
+}
+
 fn error(src: &str, pos: usize, msg: impl Into<String>) -> MmlError {
     let pos = pos.min(src.len());
     let line_start = src[..pos].rfind('\n').map_or(0, |i| i + 1);
@@ -113,40 +197,31 @@ fn error(src: &str, pos: usize, msg: impl Into<String>) -> MmlError {
     MmlError { pos, line, col, msg: msg.into(), context }
 }
 
-/// Parse one channel. An empty string is an empty track.
-pub fn parse(src: &str, channel: Channel) -> Result<Track, MmlError> {
-    let mut p = Parser { src, bytes: src.as_bytes(), i: 0, channel };
-    let nodes = p.block(false)?;
-    let mut w = Walker {
-        src,
-        state: State { octave: 4, length: 1.0, volume: 12, duty: 2 },
-        time: 0.0,
-        events: Vec::new(),
-        pending_tie: None,
-    };
-    w.walk(&nodes)?;
-    if let Some(pos) = w.pending_tie {
-        return Err(error(src, pos, "`&` must be followed by a note"));
-    }
-    Ok(Track { events: w.events, length: w.time })
-}
-
 // --- syntax tree ---
 
 #[derive(Debug, Clone)]
-enum Node {
-    /// Note: semitone offset from C (may be -1 or 12 with accidentals), length in beats or None.
-    Note { pos: usize, semitone: i32, len: Option<f64> },
-    Rest { pos: usize, len: Option<f64> },
-    Drum { pos: usize, drum: Drum, len: Option<f64> },
+struct Node {
+    pos: usize,
+    kind: NodeKind,
+}
+
+#[derive(Debug, Clone)]
+enum NodeKind {
+    /// Semitone offset from C (may be -1 or 12 with accidentals), length in beats or None.
+    Note { semitone: i32, len: Option<f64> },
+    /// Semitone offsets from C of the current octave (`<`/`>` inside already applied).
+    Chord { semitones: Vec<i32>, len: Option<f64> },
+    Rest { len: Option<f64> },
+    Drum { drum: Drum, len: Option<f64> },
     Octave(i32),
-    OctaveUp { pos: usize },
-    OctaveDown { pos: usize },
+    OctaveUp,
+    OctaveDown,
     Length(f64),
     Volume(u8),
     Duty(u8),
-    Tie { pos: usize },
-    Repeat { body: Vec<Node>, times: u32 },
+    Tie,
+    Bar,
+    Repeat { body: Vec<Node>, times: u32, close: usize },
 }
 
 struct Parser<'a> {
@@ -154,13 +229,32 @@ struct Parser<'a> {
     bytes: &'a [u8],
     i: usize,
     channel: Channel,
+    items: Vec<(usize, Item)>,
+}
+
+fn note_semitone(c: u8) -> Option<i32> {
+    Some(match c {
+        b'c' => 0,
+        b'd' => 2,
+        b'e' => 4,
+        b'f' => 5,
+        b'g' => 7,
+        b'a' => 9,
+        b'b' => 11,
+        _ => return None,
+    })
 }
 
 impl Parser<'_> {
+    /// Whitespace and `;` comments.
     fn skip_ws(&mut self) {
         while let Some(&b) = self.bytes.get(self.i) {
-            if b.is_ascii_whitespace() || b == b'|' {
+            if b.is_ascii_whitespace() {
                 self.i += 1;
+            } else if b == b';' {
+                while self.bytes.get(self.i).is_some_and(|&b| b != b'\n') {
+                    self.i += 1;
+                }
             } else {
                 break;
             }
@@ -176,7 +270,6 @@ impl Parser<'_> {
         error(self.src, pos, msg)
     }
 
-    /// Optional unsigned integer.
     fn number(&mut self) -> Option<(usize, u32)> {
         self.skip_ws();
         let start = self.i;
@@ -190,10 +283,8 @@ impl Parser<'_> {
         Some((start, n))
     }
 
-    /// Optional note length (`4`, `8.`, `2..`): returns beats.
     fn length(&mut self) -> Result<Option<f64>, MmlError> {
         let Some((pos, n)) = self.number() else {
-            // A bare dot (`c.`) would dot the default length: not supported, be explicit.
             if self.peek() == Some(b'.') {
                 return Err(self.err(self.i, "a dot needs an explicit length, e.g. `c4.`"));
             }
@@ -217,15 +308,62 @@ impl Parser<'_> {
             return Err(self.err(cmd_pos, format!("`{cmd}` needs a number")));
         };
         if !range.contains(&n) {
-            return Err(self.err(
-                pos,
-                format!("`{cmd}{n}` out of range ({}..={})", range.start(), range.end()),
-            ));
+            return Err(self.err(pos, format!("`{cmd}{n}` out of range ({}..={})", range.start(), range.end())));
         }
         Ok(n)
     }
 
-    /// Parse until end of input (top level) or a `]` (inside a repeat, which consumes it).
+    /// An accidental after a note letter.
+    fn accidental(&mut self) -> i32 {
+        match self.peek() {
+            Some(b'+' | b'#') => {
+                self.i += 1;
+                1
+            }
+            Some(b'-') => {
+                self.i += 1;
+                -1
+            }
+            _ => 0,
+        }
+    }
+
+    /// The inside of `{ ... }` (the `{` is consumed).
+    fn chord(&mut self, open: usize) -> Result<Vec<i32>, MmlError> {
+        let mut semis = Vec::new();
+        let mut shift = 0;
+        loop {
+            let Some(c) = self.peek() else {
+                return Err(self.err(open, "missing `}` to close the chord"));
+            };
+            let pos = self.i;
+            self.i += 1;
+            match c {
+                b'}' => break,
+                b'>' => shift += 12,
+                b'<' => shift -= 12,
+                _ if note_semitone(c).is_some() => {
+                    let s = note_semitone(c).unwrap() + self.accidental() + shift;
+                    if self.peek().is_some_and(|b| b.is_ascii_digit() || b == b'.') {
+                        return Err(self.err(self.i, "the length goes after the `}`: `{c e g}8`"));
+                    }
+                    semis.push(s);
+                }
+                _ => {
+                    let ch = self.src[pos..].chars().next().unwrap();
+                    return Err(self.err(pos, format!("only notes and `<` `>` go inside `{{ }}`, found `{ch}`")));
+                }
+            }
+        }
+        if semis.is_empty() {
+            return Err(self.err(open, "an empty chord `{}`"));
+        }
+        if semis.len() > Arp::MAX {
+            return Err(self.err(open, format!("a chord holds at most {} notes", Arp::MAX)));
+        }
+        Ok(semis)
+    }
+
     fn block(&mut self, nested: bool) -> Result<Vec<Node>, MmlError> {
         let mut nodes = Vec::new();
         loop {
@@ -242,72 +380,64 @@ impl Parser<'_> {
             }
             self.i += 1;
             let c = c as char;
-            let node = match c {
-                'c' | 'd' | 'e' | 'f' | 'g' | 'a' | 'b' if self.channel == Channel::Melodic => {
-                    let mut semitone = match c {
-                        'c' => 0,
-                        'd' => 2,
-                        'e' => 4,
-                        'f' => 5,
-                        'g' => 7,
-                        'a' => 9,
-                        _ => 11,
-                    };
-                    match self.peek() {
-                        Some(b'+' | b'#') => {
-                            self.i += 1;
-                            semitone += 1;
-                        }
-                        Some(b'-') => {
-                            self.i += 1;
-                            semitone -= 1;
-                        }
-                        _ => {}
-                    }
-                    Node::Note { pos, semitone, len: self.length()? }
+            let melodic = self.channel == Channel::Melodic;
+            let (kind, item) = match c {
+                'c' | 'd' | 'e' | 'f' | 'g' | 'a' | 'b' if melodic => {
+                    let semitone = note_semitone(c as u8).unwrap() + self.accidental();
+                    (NodeKind::Note { semitone, len: self.length()? }, Item::Sound)
                 }
-                'k' | 's' | 'h' | 'H' if self.channel == Channel::Drums => {
+                '{' if melodic => {
+                    let semitones = self.chord(pos)?;
+                    (NodeKind::Chord { semitones, len: self.length()? }, Item::Sound)
+                }
+                'k' | 's' | 'h' | 'H' if !melodic => {
                     let drum = match c {
                         'k' => Drum::Kick,
                         's' => Drum::Snare,
                         'h' => Drum::ClosedHat,
                         _ => Drum::OpenHat,
                     };
-                    Node::Drum { pos, drum, len: self.length()? }
+                    (NodeKind::Drum { drum, len: self.length()? }, Item::Sound)
                 }
                 'c' | 'd' | 'e' | 'f' | 'g' | 'a' | 'b' => {
                     return Err(self.err(pos, format!("note `{c}` on the noise channel: use drums `k s h H` or `r`")));
                 }
-                'k' | 's' | 'h' | 'H' => {
-                    return Err(self.err(pos, format!("drum `{c}` on a melodic channel")));
-                }
-                'r' => Node::Rest { pos, len: self.length()? },
-                'o' => Node::Octave(self.ranged(pos, 'o', 0..=8)? as i32),
-                '>' => Node::OctaveUp { pos },
-                '<' => Node::OctaveDown { pos },
+                '{' => return Err(self.err(pos, "chords `{ }` need a melodic channel")),
+                '}' => return Err(self.err(pos, "`}` without a matching `{`")),
+                'k' | 's' | 'h' | 'H' => return Err(self.err(pos, format!("drum `{c}` on a melodic channel"))),
+                'r' => (NodeKind::Rest { len: self.length()? }, Item::Sound),
+                'o' => (NodeKind::Octave(self.ranged(pos, 'o', 0..=8)? as i32), Item::Command),
+                '>' => (NodeKind::OctaveUp, Item::Command),
+                '<' => (NodeKind::OctaveDown, Item::Command),
                 'l' => match self.length()? {
-                    Some(l) => Node::Length(l),
+                    Some(l) => (NodeKind::Length(l), Item::Command),
                     None => return Err(self.err(pos, "`l` needs a length, e.g. `l8`")),
                 },
-                'v' => Node::Volume(self.ranged(pos, 'v', 0..=15)? as u8),
-                '@' => Node::Duty(self.ranged(pos, '@', 0..=3)? as u8),
-                '&' => Node::Tie { pos },
+                'v' => (NodeKind::Volume(self.ranged(pos, 'v', 0..=15)? as u8), Item::Command),
+                '@' => (NodeKind::Duty(self.ranged(pos, '@', 0..=3)? as u8), Item::Command),
+                '&' => (NodeKind::Tie, Item::Tie),
+                '|' => (NodeKind::Bar, Item::Bar),
                 '[' => {
+                    self.items.push((pos, Item::Open));
                     let body = self.block(true)?;
+                    let close = self.i - 1;
+                    self.items.push((close, Item::Close));
                     let times = match self.number() {
                         Some((p, 0)) => return Err(self.err(p, "repeat count must be at least 1")),
                         Some((_, n)) if n > 256 => return Err(self.err(pos, "repeat count too large")),
                         Some((_, n)) => n,
                         None => 2,
                     };
-                    Node::Repeat { body, times }
+                    nodes.push(Node { pos, kind: NodeKind::Repeat { body, times, close } });
+                    continue;
                 }
                 ']' if nested => return Ok(nodes),
                 ']' => return Err(self.err(pos, "`]` without a matching `[`")),
-                't' => return Err(self.err(pos, "`t` (tempo) isn't supported: tempo is Song::bpm")),
+                't' => return Err(self.err(pos, "`t` (tempo) isn't supported: tempo is the song's bpm")),
                 _ => return Err(self.err(pos, format!("unexpected `{c}`"))),
             };
-            nodes.push(node);
+            self.items.push((pos, item));
+            nodes.push(Node { pos, kind });
         }
     }
 }
@@ -324,56 +454,99 @@ struct State {
 
 struct Walker<'a> {
     src: &'a str,
+    opts: Options,
     state: State,
     time: f64,
+    /// Time of the last checked bar line.
+    last_bar: f64,
     events: Vec<Event>,
-    /// Position of a `&` waiting for its following note.
     pending_tie: Option<usize>,
+    visits: Vec<Visit>,
 }
+
+/// Bar-line tolerance, in beats.
+const BAR_EPS: f64 = 1e-6;
 
 impl Walker<'_> {
     fn walk(&mut self, nodes: &[Node]) -> Result<(), MmlError> {
         for node in nodes {
-            match *node {
-                Node::Note { pos, semitone, len } => {
+            let pos = node.pos;
+            self.visits.push(Visit { pos, time: self.time });
+            match node.kind {
+                NodeKind::Note { semitone, len } => {
                     let midi = 12 * (self.state.octave + 1) + semitone;
                     if !(0..=127).contains(&midi) {
                         return Err(error(self.src, pos, format!("note out of range (MIDI {midi})")));
                     }
                     self.push(EventKind::Note(midi as u8), len, pos)?;
                 }
-                Node::Rest { pos, len } => self.push(EventKind::Rest, len, pos)?,
-                Node::Drum { pos, drum, len } => self.push(EventKind::Drum(drum), len, pos)?,
-                Node::Octave(value) => self.state.octave = value,
-                Node::OctaveUp { pos } => {
+                NodeKind::Chord { ref semitones, len } => {
+                    let mut notes = [0u8; Arp::MAX];
+                    for (n, s) in notes.iter_mut().zip(semitones) {
+                        let midi = 12 * (self.state.octave + 1) + s;
+                        if !(0..=127).contains(&midi) {
+                            return Err(error(self.src, pos, format!("chord note out of range (MIDI {midi})")));
+                        }
+                        *n = midi as u8;
+                    }
+                    self.push(EventKind::Arp(Arp::new(&notes[..semitones.len()])), len, pos)?;
+                }
+                NodeKind::Rest { len } => self.push(EventKind::Rest, len, pos)?,
+                NodeKind::Drum { drum, len } => self.push(EventKind::Drum(drum), len, pos)?,
+                NodeKind::Octave(value) => self.state.octave = value,
+                NodeKind::OctaveUp => {
                     if self.state.octave >= 8 {
                         return Err(error(self.src, pos, "`>` above octave 8"));
                     }
                     self.state.octave += 1;
                 }
-                Node::OctaveDown { pos } => {
+                NodeKind::OctaveDown => {
                     if self.state.octave <= 0 {
                         return Err(error(self.src, pos, "`<` below octave 0"));
                     }
                     self.state.octave -= 1;
                 }
-                Node::Length(l) => self.state.length = l,
-                Node::Volume(v) => self.state.volume = v,
-                Node::Duty(d) => self.state.duty = d,
-                Node::Tie { pos } => {
+                NodeKind::Length(l) => self.state.length = l,
+                NodeKind::Volume(v) => self.state.volume = v,
+                NodeKind::Duty(d) => self.state.duty = d,
+                NodeKind::Tie => {
                     let tieable = self.events.last().is_some_and(|e| e.start + e.dur >= self.time - 1e-9);
                     if !tieable || self.pending_tie.is_some() {
                         return Err(error(self.src, pos, "`&` must come right after a note"));
                     }
                     self.pending_tie = Some(pos);
                 }
-                Node::Repeat { ref body, times } => {
+                NodeKind::Bar => self.bar_check(pos)?,
+                NodeKind::Repeat { ref body, times, close } => {
                     for _ in 0..times {
                         self.walk(body)?;
+                        self.visits.push(Visit { pos: close, time: self.time });
                     }
                 }
             }
         }
+        Ok(())
+    }
+
+    fn bar_check(&mut self, pos: usize) -> Result<(), MmlError> {
+        let Some(bb) = self.opts.bar_beats else { return Ok(()) };
+        let t = self.time;
+        let on_line = ((t / bb).round() * bb - t).abs() < BAR_EPS;
+        if !on_line {
+            let bar = (self.last_bar / bb).round() as usize + 1;
+            let len = t - self.last_bar;
+            let msg = if len < bb {
+                format!("bar {bar} is {len} beats long, the meter wants {bb}: {} beats short", bb - len)
+            } else {
+                format!(
+                    "bar line {} beats into bar {}: the meter wants {bb} beats a bar",
+                    t - (t / bb).floor() * bb,
+                    (t / bb).floor() as usize + 1
+                )
+            };
+            return Err(error(self.src, pos, msg));
+        }
+        self.last_bar = t;
         Ok(())
     }
 
@@ -385,12 +558,11 @@ impl Walker<'_> {
         if tie {
             let prev = self.events.last_mut().expect("checked when the `&` was read");
             match (prev.kind, kind) {
-                // Same sound continues: one longer event.
                 (a, b) if a == b && prev.volume == self.state.volume && prev.duty == self.state.duty => {
                     prev.dur += dur;
                     return Ok(());
                 }
-                (EventKind::Note(_), EventKind::Note(_)) => {}
+                (EventKind::Note(_) | EventKind::Arp(_), EventKind::Note(_) | EventKind::Arp(_)) => {}
                 (EventKind::Rest, EventKind::Rest) | (EventKind::Drum(_), EventKind::Drum(_)) => {
                     prev.dur += dur;
                     return Ok(());
@@ -405,6 +577,58 @@ impl Walker<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    #[test]
+    fn chords_are_arpeggios() {
+        let t = parse_checked("o4 {c e g}2 {d f > c}4 {c} 4", Channel::Melodic, 4.0).unwrap();
+        let kinds: Vec<_> = t.events.iter().map(|e| (e.kind, e.dur)).collect();
+        assert_eq!(
+            kinds,
+            [
+                (EventKind::Arp(Arp::new(&[60, 64, 67])), 2.0),
+                (EventKind::Arp(Arp::new(&[62, 65, 72])), 1.0),
+                (EventKind::Arp(Arp::new(&[60])), 1.0),
+            ]
+        );
+        // The shift inside the braces is local.
+        let t = parse_checked("o4 {c > c} c", Channel::Melodic, 4.0).unwrap();
+        assert_eq!(t.events[1].kind, EventKind::Note(60));
+        assert!(parse_checked("{c4 e}", Channel::Melodic, 4.0).unwrap_err().msg.contains("after the `}`"));
+        assert!(parse_checked("{c e", Channel::Melodic, 4.0).unwrap_err().msg.contains("missing `}`"));
+        assert!(parse_checked("{}", Channel::Melodic, 4.0).unwrap_err().msg.contains("empty"));
+        assert!(parse_checked("{c d e f g a b}", Channel::Melodic, 4.0).unwrap_err().msg.contains("at most"));
+        assert!(parse_checked("{k}", Channel::Drums, 4.0).unwrap_err().msg.contains("melodic"));
+    }
+
+    #[test]
+    fn comments_run_to_the_end_of_the_line() {
+        let t = parse_checked("c4 ; d4 e4 |\n d4 ;\n e2 | ; trailing", Channel::Melodic, 4.0).unwrap();
+        assert_eq!(t.events.len(), 3);
+        assert_eq!(t.length, 4.0);
+    }
+
+    #[test]
+    fn bar_lines_are_checked() {
+        assert!(parse_checked("c4 d4 e4 f4 | g1 |", Channel::Melodic, 4.0).is_ok());
+        let e = parse_checked("c4 d4 e4 f4 | g2. |", Channel::Melodic, 4.0).unwrap_err();
+        assert!(e.msg.contains("bar 2 is 3 beats long") && e.msg.contains("1 beats short"), "{e}");
+        assert_eq!(e.col, 19);
+        let e = parse_checked("c4 d4 e4 f4 g4 |", Channel::Melodic, 4.0).unwrap_err();
+        assert!(e.msg.contains("1 beats into bar 2"), "{e}");
+        // Inside repeats every pass is checked.
+        assert!(parse_checked("[c4 d4 e4 f4 |]3", Channel::Melodic, 4.0).is_ok());
+        assert!(parse_checked("[c4 d4 e4 |]2", Channel::Melodic, 4.0).is_err());
+        // 3/4: three beats a bar; ties may cross bar lines.
+        assert!(parse_checked("c2 d4 | e2.& | e4 f2 |", Channel::Melodic, 3.0).is_ok());
+        assert!(parse_checked("c1 |", Channel::Melodic, 3.0).is_err());
+        // The game's dialect ignores them.
+        assert!(parse_with("c4 | d4", Channel::Melodic, Options { bar_beats: None }).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod game_dialect_tests {
     use super::*;
 
     fn notes(src: &str) -> Vec<(f64, f64, u8)> {

@@ -4,7 +4,7 @@
 use std::alloc::{GlobalAlloc, Layout, System};
 use std::cell::Cell;
 
-use bevy_kira_audio::prelude::Frame;
+use kira::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony,
     live::{Engine, Input, library},

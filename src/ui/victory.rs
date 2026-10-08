@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use super::{palette::*, *};
-use crate::audio::{Music, songs::song};
+use crate::audio::{Music, live::library};
 use crate::input::Action;
 use crate::level::Levels;
 use crate::save::Progress;
@@ -61,7 +61,7 @@ fn credits() -> Vec<Line> {
     ];
     let mut seen = Vec::new();
     for m in Music::ALL {
-        let title = song(m).title;
+        let title = library::title(m);
         if !seen.contains(&title) {
             seen.push(title);
             lines.push(Text(title.to_uppercase()));
@@ -204,6 +204,6 @@ mod tests {
             .collect();
         assert!(texts.iter().any(|s| s.starts_with("HAN THE PLUMBER") && s.ends_with("AS HIMSELF")));
         assert!(texts.iter().any(|s| s == "THANKS FOR PLAYING!"));
-        assert!(texts.contains(&song(Music::Title).title.to_uppercase()));
+        assert!(texts.contains(&library::title(Music::Title).to_uppercase()));
     }
 }

@@ -46,7 +46,7 @@
 
 use super::theory::{self, et_hz};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, bevy::reflect::Reflect)]
 pub enum Tuning {
     #[default]
     Equal,
@@ -454,8 +454,8 @@ mod tests {
 
     #[test]
     fn every_song_renders_cleanly_in_every_tuning() {
-        use crate::audio::{Filters, Music, demo, songs, synth};
-        let mut all: Vec<_> = Music::ALL.into_iter().map(songs::song).collect();
+        use crate::audio::{Filters, Music, demo, live::library, synth};
+        let mut all: Vec<_> = Music::ALL.into_iter().map(|m| library::song(m).unwrap().1.clone()).collect();
         all.push(demo::demo_song());
         for song in &all {
             for t in Tuning::ALL {
@@ -471,20 +471,9 @@ mod tests {
 
     #[test]
     fn rendered_pitch_follows_the_tuning() {
-        use crate::audio::{Filters, Song, synth};
+        use crate::audio::{Filters, live::SongFile, synth};
         // C4 then C5 on pulse 1; measure the second note.
-        let s = Song {
-            title: "t",
-            bpm: 120.0,
-            swing: 0.0,
-            looping: true,
-            pulse1: "o4 c2 o5 c2",
-            pulse2: "",
-            triangle: "",
-            noise: "",
-            key: 0,
-            chords: "",
-        };
+        let s = SongFile::from_mml("t", 120.0, 0.0, true, 0, "", ["o4 c2 o5 c2", "", "", ""]).unwrap();
         let freq = |x: &[f32]| {
             let ups: Vec<usize> = (1..x.len()).filter(|&i| x[i - 1] < 0.0 && x[i] >= 0.0).collect();
             let (a, b) = (ups[0], *ups.last().unwrap());

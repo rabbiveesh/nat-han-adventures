@@ -1,7 +1,8 @@
 //! The soundtrack as `.song` files (`music/`), compiled in with `include_str!` so the web
 //! build loads nothing at runtime.
 
-use super::song::{SongError, SongFile};
+pub use super::song::SongFile;
+use super::song::SongError;
 use crate::audio::Music;
 
 /// `(file stem, text)` of every song.
@@ -16,7 +17,7 @@ pub const FILES: [(&str, &str); 8] = [
     ("when_the_saints", include_str!("../../../music/when_the_saints.song")),
 ];
 
-/// The file for a piece of the game's music (same choice as `songs::song`).
+/// The file for a piece of the game's music.
 pub fn stem(music: Music) -> &'static str {
     match music {
         Music::Title => "sweet_georgia_brown",
@@ -39,4 +40,22 @@ pub fn text(stem: &str) -> Option<&'static str> {
 pub fn load(stem: &str) -> Result<SongFile, String> {
     let t = text(stem).ok_or_else(|| format!("no song file `{stem}`"))?;
     SongFile::parse(t).map_err(|e: SongError| format!("music/{stem}.song: {e}"))
+}
+
+/// Every song file, parsed once.
+fn parsed() -> &'static [Result<SongFile, String>] {
+    static SONGS: std::sync::OnceLock<Vec<Result<SongFile, String>>> = std::sync::OnceLock::new();
+    SONGS.get_or_init(|| FILES.iter().map(|(stem, _)| load(stem)).collect())
+}
+
+/// The song for a piece of the game's music, parsed once: its title and file.
+pub fn song(music: Music) -> Result<(&'static str, &'static SongFile), String> {
+    let stem = stem(music);
+    let i = FILES.iter().position(|(s, _)| *s == stem).expect("every stem has a file");
+    parsed()[i].as_ref().map(|f| (f.title.as_str(), f)).map_err(Clone::clone)
+}
+
+/// The title of a piece of the game's music ("" if its file doesn't parse).
+pub fn title(music: Music) -> &'static str {
+    song(music).map_or("", |(t, _)| t)
 }

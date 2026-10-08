@@ -303,8 +303,8 @@ pub fn parse_chord(token: &str) -> Result<Chord, String> {
     Ok(Chord { root, quality, bass })
 }
 
-/// Parse a chart. An empty (or all-whitespace) chart is an error: callers check
-/// `chords.trim().is_empty()` first to mean "no chart".
+/// Parse a chart. An empty (or all-whitespace) chart is an error: a song without one has no
+/// chart at all (`SongFile::chart` is `None`).
 pub fn parse(src: &str) -> Result<Chart, ChartError> {
     let trimmed = src.trim().trim_matches('|');
     if trimmed.trim().is_empty() {

@@ -4,12 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-# bevy_audio is off: bevy_kira_audio replaces it (we feed it PCM from our own chiptune synth).
+# bevy_audio is off: our chiptune synth plays straight through kira (one manager: the live
+# music engine is a custom `Sound`, the sfx are static sounds). Inputs reach the audio thread
+# over a lock-free ring buffer.
 bevy = { version = "0.19.1", default-features = false, features = ["2d", "ui", "default_font"] }
-bevy_kira_audio = { version = "0.26", default-features = false, features = ["wav"] }
-# The live music engine plays through its own kira manager (a custom `Sound`: bevy_kira_audio
-# only plays static sounds) and takes inputs over a lock-free ring buffer. Same versions as
-# bevy_kira_audio uses.
 kira = { version = "0.12", default-features = false, features = ["cpal"] }
 rtrb = "0.4"
 leafwing-input-manager = "0.21"

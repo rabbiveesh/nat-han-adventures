@@ -2,7 +2,7 @@
 //! (pulse, stepped triangle, LFSR noise). All deterministic: randomness comes from fixed seeds
 //! (Han's babble gets its variety from several pre-rendered [`han_blip`] variants).
 
-use bevy_kira_audio::prelude::Frame;
+use kira::Frame;
 
 use super::Sfx;
 use super::synth::{self, Lfsr, Rendered, SAMPLE_RATE, pulse, triangle};

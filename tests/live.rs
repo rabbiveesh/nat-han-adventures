@@ -1,35 +1,13 @@
-//! The live music engine (`audio::live`): song files, the engine against the offline renderer,
-//! scheduling, inputs, clocks and performance.
+//! The live music engine (`audio::live`): song files, the engine against the old renderer's
+//! output, scheduling, inputs, clocks, the waltz and performance.
 
 use nat_han_adventures::audio::{
     Music, chart,
-    live::{convert, library, mml as live_mml, song::SongFile, syntax},
+    live::{library, song::SongFile, syntax},
     mml::{self, Channel},
-    songs,
 };
 
 // --- song files ---------------------------------------------------------------------------
-
-/// Until the swap, songs.rs stays the old engine's source: the files must not drift from it.
-#[test]
-fn every_song_file_parses_to_the_same_events_as_songs_rs() {
-    for m in Music::ALL {
-        let old = songs::song(m);
-        let stem = library::stem(m);
-        let new = library::load(stem).unwrap_or_else(|e| panic!("{e}"));
-        assert_eq!(new.title, old.title, "{stem}");
-        assert_eq!((new.bpm, new.swing, new.key, new.looping), (old.bpm, old.swing, old.key, old.looping), "{stem}");
-        let srcs = [old.pulse1, old.pulse2, old.triangle, old.noise];
-        for (ch, src) in srcs.iter().enumerate() {
-            let channel = if ch == 3 { Channel::Drums } else { Channel::Melodic };
-            assert_eq!(new.tracks[ch], mml::parse(src, channel).unwrap(), "{stem} channel {ch}");
-        }
-        let old_chart = (!old.chords.trim().is_empty()).then(|| chart::parse(old.chords).unwrap());
-        assert_eq!(new.chart, old_chart, "{stem}: chart");
-        // And the committed file is exactly what the converter makes today.
-        assert_eq!(library::text(stem).unwrap(), convert::to_song_file(&old).unwrap(), "{stem}: run `cargo run --example convert_songs`");
-    }
-}
 
 #[test]
 fn song_files_round_trip() {
@@ -72,7 +50,7 @@ fn the_cheat_sheet_covers_every_token() {
             // A token on its own, or with a number (commands), or after a note (accidentals, dots).
             let n = if channel == Channel::Melodic { "c4" } else { "k4" };
             let probes = [format!("{c}"), format!("{c}4"), format!("{n}{c}"), format!("{c}{n}")];
-            let known = probes.iter().any(|p| match live_mml::parse(p, channel, 4.0) {
+            let known = probes.iter().any(|p| match mml::parse_checked(p, channel, 4.0) {
                 Ok(_) => true,
                 Err(e) => !e.msg.starts_with("unexpected"),
             });
@@ -98,7 +76,7 @@ fn the_cheat_sheet_covers_every_token() {
 
 // --- streaming vs offline -----------------------------------------------------------------
 
-use bevy_kira_audio::prelude::Frame;
+use kira::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony,
     live::{Engine, EngineConfig, Input},
@@ -143,53 +121,131 @@ fn bar_diffs(a: &[Frame], b: &[Frame], bar_starts: &[u64]) -> (Vec<f64>, f32) {
     (rms, max)
 }
 
-/// The engine at freedom 0 against the offline renderer (same song, filters and seed), every
-/// song through every filter it can take: the second loop pass is bit-identical; the first
-/// differs only where the offline loop has wrapped the end's drum tails onto its start (a fresh
-/// engine has no previous pass ringing), so only within bar 1; a one-shot only in the offline
-/// render's final fade.
+/// What the old pre-rendering engine rendered (seed 7), every song through every filter it can
+/// take: (music, harmony, laughing band, frames, RMS left, RMS right). The live engine was
+/// checked bit-identical to it (from its second loop pass; one-shots up to the old fade-out)
+/// before it was retired; these keep the music from drifting.
+const OLD_RENDERS: [(Music, Harmony, bool, usize, f64, f64); 80] = [
+    (Music::Title, Harmony::Original, false, 1335652, 0.185888, 0.173820),
+    (Music::Title, Harmony::Original, true, 1335652, 0.185745, 0.173751),
+    (Music::Title, Harmony::Coltrane, false, 1335652, 0.185404, 0.173036),
+    (Music::Title, Harmony::Coltrane, true, 1335652, 0.185662, 0.173369),
+    (Music::Title, Harmony::Quartal, false, 1335652, 0.180266, 0.168990),
+    (Music::Title, Harmony::Quartal, true, 1335652, 0.179898, 0.168661),
+    (Music::Title, Harmony::MelodicMinor, false, 1335652, 0.185620, 0.173285),
+    (Music::Title, Harmony::MelodicMinor, true, 1335652, 0.185010, 0.172688),
+    (Music::Title, Harmony::Waltz, false, 3072000, 0.133936, 0.119291),
+    (Music::Title, Harmony::Waltz, true, 3072000, 0.133905, 0.119348),
+    (Music::World(1), Harmony::Original, false, 1861818, 0.196146, 0.174048),
+    (Music::World(1), Harmony::Original, true, 1861818, 0.196037, 0.173907),
+    (Music::World(1), Harmony::Coltrane, false, 1861818, 0.198321, 0.179597),
+    (Music::World(1), Harmony::Coltrane, true, 1861818, 0.198086, 0.179359),
+    (Music::World(1), Harmony::Quartal, false, 1861818, 0.192867, 0.175132),
+    (Music::World(1), Harmony::Quartal, true, 1861818, 0.192588, 0.174860),
+    (Music::World(1), Harmony::MelodicMinor, false, 1861818, 0.197713, 0.178343),
+    (Music::World(1), Harmony::MelodicMinor, true, 1861818, 0.197752, 0.178394),
+    (Music::World(1), Harmony::Waltz, false, 3072000, 0.152487, 0.128558),
+    (Music::World(1), Harmony::Waltz, true, 3072000, 0.152626, 0.128704),
+    (Music::World(2), Harmony::Original, false, 1280000, 0.187497, 0.174533),
+    (Music::World(2), Harmony::Original, true, 1280000, 0.187486, 0.174492),
+    (Music::World(2), Harmony::Coltrane, false, 1280000, 0.188423, 0.176131),
+    (Music::World(2), Harmony::Coltrane, true, 1280000, 0.187993, 0.175667),
+    (Music::World(2), Harmony::Quartal, false, 1280000, 0.181028, 0.169010),
+    (Music::World(2), Harmony::Quartal, true, 1280000, 0.181659, 0.169645),
+    (Music::World(2), Harmony::MelodicMinor, false, 1280000, 0.187594, 0.174772),
+    (Music::World(2), Harmony::MelodicMinor, true, 1280000, 0.187178, 0.174338),
+    (Music::World(2), Harmony::Waltz, false, 3072000, 0.137759, 0.121169),
+    (Music::World(2), Harmony::Waltz, true, 3072000, 0.137958, 0.121389),
+    (Music::World(3), Harmony::Original, false, 1462857, 0.185373, 0.172563),
+    (Music::World(3), Harmony::Original, true, 1462857, 0.186069, 0.173294),
+    (Music::World(3), Harmony::Coltrane, false, 1462857, 0.185825, 0.173359),
+    (Music::World(3), Harmony::Coltrane, true, 1462857, 0.186284, 0.173863),
+    (Music::World(3), Harmony::Quartal, false, 1462857, 0.180188, 0.167976),
+    (Music::World(3), Harmony::Quartal, true, 1462857, 0.180291, 0.168053),
+    (Music::World(3), Harmony::MelodicMinor, false, 1462857, 0.185617, 0.172580),
+    (Music::World(3), Harmony::MelodicMinor, true, 1462857, 0.185796, 0.172766),
+    (Music::World(3), Harmony::Waltz, false, 3072000, 0.137806, 0.121323),
+    (Music::World(3), Harmony::Waltz, true, 3072000, 0.137633, 0.121132),
+    (Music::World(4), Harmony::Original, false, 2021053, 0.195732, 0.176348),
+    (Music::World(4), Harmony::Original, true, 2021053, 0.195448, 0.176040),
+    (Music::World(4), Harmony::Coltrane, false, 2021053, 0.196652, 0.178110),
+    (Music::World(4), Harmony::Coltrane, true, 2021053, 0.196377, 0.177898),
+    (Music::World(4), Harmony::Quartal, false, 2021053, 0.190951, 0.173030),
+    (Music::World(4), Harmony::Quartal, true, 2021053, 0.190875, 0.172974),
+    (Music::World(4), Harmony::MelodicMinor, false, 2021053, 0.196035, 0.177438),
+    (Music::World(4), Harmony::MelodicMinor, true, 2021053, 0.196683, 0.178140),
+    (Music::World(4), Harmony::Waltz, false, 3840000, 0.151193, 0.128335),
+    (Music::World(4), Harmony::Waltz, true, 3840000, 0.150752, 0.127820),
+    (Music::World(5), Harmony::Original, false, 1440000, 0.185700, 0.174370),
+    (Music::World(5), Harmony::Original, true, 1440000, 0.185174, 0.173775),
+    (Music::World(5), Harmony::Coltrane, false, 1440000, 0.185512, 0.174528),
+    (Music::World(5), Harmony::Coltrane, true, 1440000, 0.185282, 0.174285),
+    (Music::World(5), Harmony::Quartal, false, 1440000, 0.181077, 0.172621),
+    (Music::World(5), Harmony::Quartal, true, 1440000, 0.180907, 0.172414),
+    (Music::World(5), Harmony::MelodicMinor, false, 1440000, 0.184995, 0.173803),
+    (Music::World(5), Harmony::MelodicMinor, true, 1440000, 0.185335, 0.174105),
+    (Music::World(5), Harmony::Waltz, false, 3456000, 0.133628, 0.119191),
+    (Music::World(5), Harmony::Waltz, true, 3456000, 0.133678, 0.119220),
+    (Music::LevelClear, Harmony::Original, false, 109777, 0.182002, 0.172389),
+    (Music::LevelClear, Harmony::Original, true, 109777, 0.181957, 0.172312),
+    (Music::LevelClear, Harmony::Coltrane, false, 109777, 0.193728, 0.180419),
+    (Music::LevelClear, Harmony::Coltrane, true, 109777, 0.192803, 0.179814),
+    (Music::LevelClear, Harmony::Quartal, false, 109777, 0.187042, 0.177560),
+    (Music::LevelClear, Harmony::Quartal, true, 109777, 0.187021, 0.177705),
+    (Music::LevelClear, Harmony::MelodicMinor, false, 109777, 0.191642, 0.178359),
+    (Music::LevelClear, Harmony::MelodicMinor, true, 109777, 0.192590, 0.179508),
+    (Music::LevelClear, Harmony::Waltz, false, 192063, 0.140607, 0.122660),
+    (Music::LevelClear, Harmony::Waltz, true, 192063, 0.140374, 0.122455),
+    (Music::Victory, Harmony::Original, false, 1462857, 0.194583, 0.180031),
+    (Music::Victory, Harmony::Original, true, 1462857, 0.194539, 0.179967),
+    (Music::Victory, Harmony::Coltrane, false, 1462857, 0.193340, 0.177275),
+    (Music::Victory, Harmony::Coltrane, true, 1462857, 0.193153, 0.177019),
+    (Music::Victory, Harmony::Quartal, false, 1462857, 0.186634, 0.170973),
+    (Music::Victory, Harmony::Quartal, true, 1462857, 0.187740, 0.172180),
+    (Music::Victory, Harmony::MelodicMinor, false, 1462857, 0.193388, 0.177215),
+    (Music::Victory, Harmony::MelodicMinor, true, 1462857, 0.193151, 0.176838),
+    (Music::Victory, Harmony::Waltz, false, 3072000, 0.142007, 0.123380),
+    (Music::Victory, Harmony::Waltz, true, 3072000, 0.142055, 0.123392),
+];
+
+/// The offline renders (the engine at freedom 0, run to the end) are still what the old engine
+/// played: the same length, the same loudness on each side to six decimals.
 #[test]
-fn streaming_matches_offline_at_freedom_0() {
-    let mut report = Vec::new();
-    for m in Music::ALL {
-        let song = songs::song(m);
-        for harmony in Harmony::ALL {
-            if harmony != Harmony::Original && song.chords.trim().is_empty() {
-                continue;
-            }
-            for just_intonation in [false, true] {
-                let f = Filters { harmony, just_intonation };
-                let name = if f == Filters::default() { "plain".to_string() } else { f.label() };
-                let off = synth::render_song_with(&song, f, SEED).unwrap();
-                let mut e = engine(m, &[Input::SetFilters(f)]);
-                // The waltz plays on its own shape (3/4, its tempo) from the start.
-                let shape = if harmony == Harmony::Waltz { e.waltz_shape().unwrap() } else { e.shape() };
-                let len = shape.len as usize;
-                let starts = shape.bar_starts.clone();
-                if !song.looping {
-                    // One-shot: identical up to the offline render's trim-and-fade at the end.
-                    let live = render(&mut e, len + 32_000, 512);
-                    let n = off.frames.len() - (0.005 * 32_000.0) as usize;
-                    let (rms, max) = bar_diffs(&live[..n], &off.frames[..n], &[0, n as u64]);
-                    assert_eq!(max, 0.0, "{m:?} {f:?}: one-shot differs (rms {rms:?})");
-                    // After the offline render's end, silence.
-                    let tail = live[off.frames.len()..].iter().map(|f| f.left.abs().max(f.right.abs())).fold(0.0, f32::max);
-                    assert!(tail < 1e-3, "{m:?}: the end rings on ({tail})");
-                    assert!(e.finished(), "{m:?}: a one-shot finishes");
-                    report.push(format!("{m:?} {name}: bit-exact up to the offline fade-out"));
-                    continue;
-                }
-                let live = render(&mut e, 2 * len, 512);
-                let (r0, _) = bar_diffs(&live[..len], &off.frames, &starts);
-                let (r1, max1) = bar_diffs(&live[len..], &off.frames, &starts);
-                assert_eq!(max1, 0.0, "{m:?} {f:?}: second pass differs: per-bar rms {r1:?}");
-                assert!(r0[1..].iter().all(|&r| r == 0.0), "{m:?} {f:?}: first pass differs after bar 1: {r0:?}");
-                assert!(r0[0] < 5e-3, "{m:?} {f:?}: bar 1 differs by more than the wrapped drum tails: {}", r0[0]);
-                report.push(format!("{m:?} {name}: pass 2 bit-exact; pass 1 bit-exact except bar 1, rms {:.1e} (wrapped drum tails)", r0[0]));
-            }
-        }
+fn renders_match_the_old_engine() {
+    let mut seen = 0;
+    for (m, harmony, just_intonation, frames, l, r) in OLD_RENDERS {
+        let (_, song) = library::song(m).unwrap();
+        let f = Filters { harmony, just_intonation };
+        let out = synth::render_song_with(song, f, SEED).unwrap();
+        let n = out.frames.len() as f64;
+        let rms = |x: fn(&Frame) -> f32| (out.frames.iter().map(|f| (x(f) as f64).powi(2)).sum::<f64>() / n).sqrt();
+        assert_eq!(out.frames.len(), frames, "{m:?} {f:?}: length");
+        let (gl, gr) = (rms(|f| f.left), rms(|f| f.right));
+        assert!((gl - l).abs() < 2e-6 && (gr - r).abs() < 2e-6, "{m:?} {f:?}: rms {gl:.6} {gr:.6}, was {l:.6} {r:.6}");
+        seen += 1;
     }
-    println!("{}", report.join("\n"));
+    assert_eq!(seen, 80);
+}
+
+/// A one-shot plays out, rings off and finishes; a fresh looping engine's first pass is its
+/// steady loop except for bar 1 (no previous pass ringing over it).
+#[test]
+fn one_shots_finish_and_loops_settle() {
+    let mut e = engine(Music::LevelClear, &[]);
+    let len = e.shape().len as usize;
+    let live = render(&mut e, len + 32_000, 512);
+    let tail = live[len + 16_000..].iter().map(|f| f.left.abs().max(f.right.abs())).fold(0.0, f32::max);
+    assert!(tail < 1e-3, "the end rings on ({tail})");
+    assert!(e.finished());
+    for f in [Filters::default(), Filters { harmony: Harmony::Waltz, just_intonation: true }] {
+        let mut e = engine(Music::World(3), &[Input::SetFilters(f)]);
+        let shape = if f.harmony == Harmony::Waltz { e.waltz_shape().unwrap().clone() } else { e.shape().clone() };
+        let len = shape.len as usize;
+        let out = render(&mut e, 2 * len, 512);
+        let (r0, _) = bar_diffs(&out[..len], &out[len..], &shape.bar_starts);
+        assert!(r0[1..].iter().all(|&r| r == 0.0), "{f:?}: first pass differs after bar 1: {r0:?}");
+        assert!(r0[0] < 5e-3, "{f:?}: bar 1 differs by more than the drum tails: {}", r0[0]);
+    }
 }
 
 /// The same output whatever the block size, with every dial up and inputs on the way.
@@ -447,7 +503,7 @@ fn rendering_is_far_under_real_time() {
         let realtime = block as f64 / synth::SAMPLE_RATE as f64;
         println!("{m:?}: {:.1} us/block mean, {:.1} us worst ({:.0}x real time)", per_block * 1e6, worst * 1e6, realtime / per_block);
         if per_block > worst_song.0 {
-            worst_song = (per_block, songs::song(m).title);
+            worst_song = (per_block, library::title(m));
         }
         // Debug builds (opt-level 1) are slow; release has a far tighter budget.
         let budget = if cfg!(debug_assertions) { 0.25 } else { 0.02 };

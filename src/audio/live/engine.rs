@@ -144,22 +144,25 @@ impl BeatClock {
     pub fn advanced(&self, secs: f64) -> BeatClock {
         let mut c = *self;
         let mut sb = self.position.song_beat + secs * self.bpm as f64 / 60.0;
-        let mut first_bar = self.position.bar as f64 - self.position.song_bar as f64;
-        let bars_per_loop = (self.loop_beats / self.beats_per_bar).round();
+        // Bars and passes move on from where they are (absolute bars needn't line up with the
+        // song's: a meter switch re-enters the song mid-pass).
+        let (mut pass, mut bar_shift) = (self.position.pass as i64, 0i64);
         if self.loop_beats > 0.0 {
             let passes = (sb / self.loop_beats).floor();
-            if first_bar + passes * bars_per_loop < 0.0 {
-                return BeatClock { position: Position::default(), beat_index: 0, phase: 0.0, ..*self };
-            }
             sb -= passes * self.loop_beats;
-            first_bar += passes * bars_per_loop;
-            c.position.pass = (first_bar / bars_per_loop.max(1.0)).round() as u64;
+            pass += passes as i64;
+            bar_shift = passes as i64 * (self.loop_beats / self.beats_per_bar).round() as i64;
         }
         let sb = sb.max(0.0);
         let song_bar = (sb / self.beats_per_bar + 1e-9).floor();
+        let bar = self.position.bar as i64 + bar_shift + song_bar as i64 - self.position.song_bar as i64;
+        if pass < 0 || bar < 0 {
+            return BeatClock { position: Position::default(), beat_index: 0, phase: 0.0, ..*self };
+        }
+        c.position.pass = pass as u64;
         c.position.song_beat = sb;
         c.position.song_bar = song_bar as usize;
-        c.position.bar = (first_bar + song_bar) as u64;
+        c.position.bar = bar as u64;
         c.position.beat = (sb - song_bar * self.beats_per_bar).max(0.0);
         c.position.sample = (self.position.sample as i64 + (secs * self.sample_rate as f64).round() as i64).max(0) as u64;
         c.beat_index = c.position.beat.floor() as u32;

@@ -1,37 +1,26 @@
 //! The NES voices, streaming: two pulses, the 4-bit triangle and the noise drums, rendering
 //! committed [`NoteEvent`]s block by block.
 //!
-//! Every per-sample operation is the offline renderer's ([`crate::audio::synth`]), in the same
-//! order, so for the same events the output is bit-identical: tone voices are monophonic, keep
-//! their oscillator phase across notes (reset at each loop pass, as a one-loop render would),
-//! and resolve pitch at note-on through the note's [`Tuning`] (the medley's phrase tuning
-//! included); drum hits are synthesized whole at their onset (choke and all) from one shared
-//! LFSR, reset at each loop pass. The mix is summed channel by channel, then drum hits in
-//! order, then whatever rings over from the previous pass (like the offline loop wrap).
-//!
-//! Consolidation note: `advance`, `triangle_lfo`, `Edges`, `pan`, the drum synthesis and the
-//! LFSR are copies of private (or sample-rate-fixed) items in `synth.rs`, taking the sample
-//! rate as a parameter.
+//! The building blocks (oscillators, the LFSR, the drum synthesis, levels) are
+//! [`crate::audio::synth`]'s. Tone voices are monophonic, keep their oscillator phase across
+//! notes (reset at each loop pass, as a one-loop render would), and resolve pitch at note-on
+//! through the note's [`Tuning`] (the medley's phrase tuning included); drum hits are
+//! synthesized whole at their onset (choke and all) from one shared LFSR, reset at each loop
+//! pass. The mix is summed channel by channel, then drum hits in order, then whatever rings
+//! over from the previous pass (so a looping song's second pass is a seamless loop: what the
+//! offline renderer keeps).
 
 use std::collections::VecDeque;
 
 use kira::Frame;
 
 use crate::audio::mml::{Arp, Drum};
-use crate::audio::synth::{ARP_STEP, DUTIES, pulse, triangle};
+use crate::audio::synth::{
+    ARP_STEP, ATTACK, DUTIES, Lfsr, MAX_DRUM_SECS, NOISE_GAIN, PULSE_GAIN, PULSE1_PAN, PULSE2_PAN, RELEASE, TRIANGLE_GAIN, advance,
+    drum, drum_len, pan, pulse, triangle, triangle_lfo,
+};
 use crate::audio::tuning::{Medley, Tuning, Wobble};
 
-// Mix levels, panning and note edges: as `synth.rs`.
-const PULSE_GAIN: f32 = 0.15;
-const TRIANGLE_GAIN: f32 = 0.30;
-const NOISE_GAIN: f32 = 0.30;
-const PULSE1_PAN: f32 = -0.2;
-const PULSE2_PAN: f32 = 0.2;
-const ATTACK: f32 = 0.002;
-const RELEASE: f32 = 0.008;
-
-/// Longest a drum rings, in seconds (the open hat).
-const MAX_DRUM_SECS: f32 = 0.3;
 /// Drum hits that can ring at once.
 const DRUM_VOICES: usize = 24;
 /// Committed events a channel can hold (several bars' worth).
@@ -92,110 +81,6 @@ pub struct NoteEvent {
     pub anchor: u8,
     /// Unique, increasing (set when committed).
     pub seq: u64,
-}
-
-#[inline]
-fn advance(phase: &mut f32, dt: f32) {
-    *phase += dt;
-    if *phase >= 1.0 {
-        *phase -= phase.floor();
-    }
-}
-
-#[inline]
-fn triangle_lfo(phase: f32) -> f32 {
-    4.0 * (phase - 0.5).abs() - 1.0
-}
-
-fn pan(p: f32, gain: f32) -> (f32, f32) {
-    (gain * (1.0 - p), gain * (1.0 + p))
-}
-
-/// The NES noise LFSR, at any sample rate.
-#[derive(Debug, Clone, Copy)]
-pub struct Lfsr {
-    reg: u16,
-    acc: f32,
-}
-
-impl Default for Lfsr {
-    fn default() -> Self {
-        Lfsr { reg: 1, acc: 0.0 }
-    }
-}
-
-impl Lfsr {
-    #[inline]
-    fn next(&mut self, clock_hz: f32, sr: f32) -> f32 {
-        self.acc += clock_hz / sr;
-        while self.acc >= 1.0 {
-            self.acc -= 1.0;
-            let fb = (self.reg ^ (self.reg >> 1)) & 1;
-            self.reg = (self.reg >> 1) | (fb << 14);
-        }
-        if self.reg & 1 == 0 { 1.0 } else { -1.0 }
-    }
-}
-
-/// Natural length of each drum, in seconds.
-pub fn drum_len(d: Drum) -> f32 {
-    match d {
-        Drum::Kick => 0.16,
-        Drum::Snare => 0.2,
-        Drum::ClosedHat => 0.05,
-        Drum::OpenHat => MAX_DRUM_SECS,
-    }
-}
-
-/// One drum hit into `buf` (its length is the hit's), like `synth::drum`.
-pub fn drum(d: Drum, buf: &mut [f32], lfsr: &mut Lfsr, sr: f32) {
-    let n = buf.len();
-    let decay = |tau: f32| (-1.0 / (tau * sr)).exp();
-    let mut phase = 0.0f32;
-    let mut prev = 0.0f32;
-    match d {
-        Drum::Kick => {
-            let (k_amp, k_pitch) = (decay(0.07), decay(0.025));
-            let (mut a, mut p) = (1.0f32, 1.0f32);
-            for (i, s) in buf.iter_mut().enumerate() {
-                let f = 48.0 + 130.0 * p;
-                advance(&mut phase, f / sr);
-                let click = if i < (0.004 * sr) as usize { lfsr.next(12_000.0, sr) * 0.3 } else { 0.0 };
-                *s = (triangle(phase) * 1.1 + click) * a;
-                a *= k_amp;
-                p *= k_pitch;
-            }
-        }
-        Drum::Snare => {
-            let (k_noise, k_tone) = (decay(0.055), decay(0.03));
-            let (mut a, mut t) = (1.0f32, 1.0f32);
-            for s in buf.iter_mut() {
-                advance(&mut phase, 185.0 / sr);
-                *s = lfsr.next(18_000.0, sr) * a * 0.75 + triangle(phase) * t * 0.6;
-                a *= k_noise;
-                t *= k_tone;
-            }
-        }
-        Drum::ClosedHat | Drum::OpenHat => {
-            let tau = if d == Drum::ClosedHat { 0.012 } else { 0.07 };
-            let k = decay(tau);
-            let mut a = 0.55f32;
-            for s in buf.iter_mut() {
-                let x = lfsr.next(220_000.0, sr);
-                *s = (x - prev) * 0.5 * a;
-                prev = x;
-                a *= k;
-            }
-        }
-    }
-    let ramp = ((0.001 * sr) as usize).min(n);
-    for (i, s) in buf.iter_mut().take(ramp).enumerate() {
-        *s *= i as f32 / ramp as f32;
-    }
-    let ramp = ((0.003 * sr) as usize).min(n);
-    for i in 0..ramp {
-        buf[n - 1 - i] *= i as f32 / ramp as f32;
-    }
 }
 
 /// A note sounding on a tone voice.

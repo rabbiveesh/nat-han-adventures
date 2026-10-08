@@ -8,5 +8,8 @@ export BRP_EXTRAS_PORT=${BRP_PORT:-15799}
 # Agent runs must not touch the real save file.
 export NATHAN_SAVE=${NATHAN_SAVE:-$(mktemp -d)/progress.txt}
 export ALSA_CONFIG_PATH="$(dirname "$0")/alsa-null.conf"
+# ALSA's null device pulls audio as fast as it can (the music would race ahead of the game):
+# render it in step with real time, without a device (NATHAN_AUDIO=device to test the device).
+export NATHAN_AUDIO=${NATHAN_AUDIO:-headless}
 export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
 exec xvfb-run -a -s "-screen 0 1280x720x24" cargo run "$@"

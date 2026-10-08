@@ -20,15 +20,14 @@
 //!
 //! Every section is optional except `[song]` with `title` and `bpm`; missing channels are
 //! silent. The MML is the game's dialect plus chords, comments and checked bar lines (see
-//! [`super::mml`]). Every non-empty track must be whole bars long, and the chart (if any)
+//! [`crate::audio::mml`]). Every non-empty track must be whole bars long, and the chart (if any)
 //! exactly as long as the song.
 
 use std::fmt;
 
 use crate::audio::chart::{self, Chart};
-use crate::audio::mml::{Channel, Track};
+use crate::audio::mml::{self, Channel, Track};
 
-use super::mml as live_mml;
 use super::syntax::{SECTIONS, SONG_KEYS};
 
 /// A time signature.
@@ -231,7 +230,7 @@ impl SongFile {
         let mut tracks: [Track; 4] = Default::default();
         for (ch, (name, channel)) in CHANNELS.iter().enumerate() {
             let Some((_, header_line, body_line, body)) = get(name) else { continue };
-            let t = live_mml::parse(body, *channel, bar_beats).map_err(|e| SongError {
+            let t = mml::parse_checked(body, *channel, bar_beats).map_err(|e| SongError {
                 line: body_line + e.line - 1,
                 col: e.col,
                 msg: format!("[{name}]: {}", e.msg),
@@ -270,6 +269,45 @@ impl SongFile {
             }
         };
         Ok(SongFile { title, bpm, swing, key, looping, meter, chords, chart, sources, tracks })
+    }
+
+    /// A 4/4 song straight from MML (pulse 1, pulse 2, triangle, noise) and a chart (`""` for
+    /// none), for tests and demos: bar lines aren't checked and tracks needn't be whole bars,
+    /// but the chart must cover the song exactly. Errors name the song and channel.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_mml(title: &str, bpm: f32, swing: f32, looping: bool, key: u8, chords: &str, parts: [&str; 4]) -> Result<SongFile, String> {
+        let mut tracks: [Track; 4] = Default::default();
+        for (ch, ((name, channel), src)) in CHANNELS.iter().zip(parts).enumerate() {
+            tracks[ch] = mml::parse(src, *channel).map_err(|e| format!("song \"{title}\", {name}: {e}"))?;
+        }
+        let beats = tracks.iter().map(|t| t.length).fold(0.0, f64::max);
+        if beats <= 0.0 {
+            return Err(format!("song \"{title}\" is empty"));
+        }
+        if !bpm.is_finite() || bpm <= 0.0 {
+            return Err(format!("song \"{title}\": bpm must be positive"));
+        }
+        let chart = if chords.trim().is_empty() {
+            None
+        } else {
+            let c = chart::parse(chords).map_err(|e| format!("song \"{title}\": {e}"))?;
+            if (c.beats() - beats).abs() > 1e-6 {
+                return Err(format!("song \"{title}\": the chord chart has {} bars ({} beats) but the song is {beats} beats", c.bars, c.beats()));
+            }
+            Some(c)
+        };
+        Ok(SongFile {
+            title: title.to_string(),
+            bpm,
+            swing,
+            key,
+            looping,
+            meter: Meter::default(),
+            chords: if chart.is_some() { join_chart(chords) } else { String::new() },
+            chart,
+            sources: parts.map(str::to_string),
+            tracks,
+        })
     }
 
     /// Write the file back out (canonical layout; the MML exactly as stored).
