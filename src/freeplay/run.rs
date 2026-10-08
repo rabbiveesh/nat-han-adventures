@@ -10,7 +10,6 @@ use bevy::prelude::*;
 use bevy::tasks::{AsyncComputeTaskPool, Task, futures::check_ready};
 use leafwing_input_manager::prelude::*;
 
-use super::canvas::STAND;
 use super::course::{COLS_PER_ROOM, Course, ENDLESS_ROOMS};
 use super::dice::{Dice, mix, stream};
 use super::generate::{Job, Room, RoomPlan, WORLD_STREAM, generate};
@@ -512,7 +511,7 @@ fn poll_generation(
         }
     }
     if let Some(cap) = run.course.cap {
-        for r in super::canvas::PIPE_ROOF + 1..=STAND {
+        for r in super::course::Course::pipe_rows() {
             spawn_tile(&mut commands, level, cap, r);
         }
     }

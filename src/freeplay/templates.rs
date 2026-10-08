@@ -40,23 +40,26 @@ pub struct Template {
     /// Story levels `0..=unlock` must be unlocked (`crate::save::Progress::unlocked`) before
     /// free play serves this room: the mechanic has been taught.
     pub unlock: usize,
+    /// Rows in its canvas: [`H`], or [`CLIMB_H`] for a tall room.
+    pub height: usize,
     pub build: BuildFn,
 }
 
 /// Every template.
 pub const TEMPLATES: &[Template] = &[
-    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, build: gauntlet },
-    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, build: hazards },
-    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, build: platforms },
-    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, build: giant_wall },
-    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, build: long_gap },
-    Template { name: "waltz row", skill: Skill::Waltz, unlock: 6, build: waltz_row },
-    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, build: stain_pit },
-    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, build: grease_chute },
-    Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, build: buddy_ledge },
-    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, build: buddy_raft_pool },
-    Template { name: "shield row", skill: Skill::Buddy, unlock: 7, build: shield_row },
-    Template { name: "chain chasm", skill: Skill::Buddy, unlock: 7, build: chain_chasm },
+    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, height: H, build: gauntlet },
+    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, height: CLIMB_H, build: shelf_climb },
+    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, height: H, build: hazards },
+    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, height: H, build: platforms },
+    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, height: H, build: giant_wall },
+    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, height: H, build: long_gap },
+    Template { name: "waltz row", skill: Skill::Waltz, unlock: 6, height: H, build: waltz_row },
+    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, height: H, build: stain_pit },
+    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
+    Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, height: H, build: buddy_ledge },
+    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
+    Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
+    Template { name: "chain chasm", skill: Skill::Buddy, unlock: 7, height: H, build: chain_chasm },
 ];
 
 /// The templates for a skill.
@@ -232,6 +235,68 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     }
     c.ground(3, FLOOR);
     Built { hint: None, checkpoint }
+}
+
+// ─── Precision, tall: a shelf climb ──────────────────────────────────────────
+
+/// How far a climb rises: the tower top is this many rows above the floor.
+pub const CLIMB_RISE: usize = 20;
+
+/// Up a shaft of one-way shelves, zigzagging [`CLIMB_RISE`] tiles up beside a tower (the toilet
+/// climb of level 2), across its top and a drop down the far side. Rungs 3 tiles apart (a
+/// jump) and from band 6 sometimes 4 (a toot); shelves 4 → 2 wide with a wider gap between the
+/// sides; from band 5 sewage floods the shaft floor. (No flies: a fly in the shaft sits on
+/// every jump's path.)
+fn shelf_climb(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
+    let summit = floor - CLIMB_RISE;
+    c.ground(3, floor);
+    let w = lerpi(band, 4.0, 2.0);
+    let shaft = 2 * w + lerpi(band, 1.0, 3.0) + d.int(0, 1) as usize;
+    let x0 = c.width();
+    let landing = w.min(2);
+    for k in 0..shaft {
+        if band >= 5 && k >= landing {
+            c.pool(1);
+        } else {
+            c.ground(1, floor);
+        }
+    }
+    // Rungs bottom up, alternating sides; the last is flush with the tower.
+    let mut rungs = Vec::new();
+    let mut r = floor;
+    let mut right = false;
+    loop {
+        let step = if band >= 6 && d.chance(0.4) { 4 } else { 3 };
+        r -= step;
+        let last = r <= summit + step;
+        let sx = if last || right { shaft - w - if last { 0 } else { d.int(0, 1) as usize } } else { d.int(0, 1) as usize };
+        rungs.push((x0 + sx, r.max(summit + 1)));
+        right = !right;
+        if last {
+            break;
+        }
+    }
+    for &(x, r) in &rungs {
+        for k in 0..w {
+            c.set(x + k, r, b'=');
+        }
+        c.nugget(x + w / 2, r - 1);
+    }
+    let checkpoint = Some((c.width() + 1, summit - 1));
+    let x = c.width();
+    let top = (lerpi(band, 5.0, 3.0) + d.int(0, 1) as usize).max(3);
+    c.ground(top, summit);
+    for k in 0..top {
+        c.nugget(x + k, summit - 1);
+    }
+    // Over the edge: nuggets down the drop, and the floor.
+    let x = c.width();
+    c.ground(5, floor);
+    for k in (summit + 2..floor - 1).step_by(4) {
+        c.nugget(x + 1, k);
+    }
+    Built { hint: Some((&[], "Shelves all the way up! Hop, hop, hop... don't look down!")), checkpoint }
 }
 
 // ─── HazardTiming: flies and sprays ──────────────────────────────────────────

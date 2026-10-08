@@ -40,7 +40,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
-- **Free play** (`src/freeplay/`): procedural rooms from 12 templates (Han's four gates among them, one `Buddy` skill), validated as they're
+- **Free play** (`src/freeplay/`): procedural rooms from 13 templates (Han's four gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
   On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
   so a new room never hitches the game; the main thread takes over if the worker fails.
