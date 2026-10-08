@@ -38,12 +38,14 @@
 //! the dynamics dial up, musicians scale their volume with it and the drums accent the
 //! downbeat.
 //!
-//! # Extension points (feels)
-//! A feel (bossa, rock, ...) is a per-phrase choice like the comp's pattern or the bass's
-//! walking: roll it in [`Player::roll`] (or, for the whole band at once, in
-//! [`BandPlan::decide`]'s `feel`), realize it in each player's commit as a rhythm transform of
-//! the bar, and pick its instruments from the palette ([`Ctx::palette`]) the way
-//! [`BarIntent::switch`] does. Nothing else needs to change: commits only ever see one bar.
+//! # Feels
+//! The band's feel ([`super::feel`], [`BandPlan::feel`], decided for the whole band at once in
+//! [`BandPlan::decide`]) is realized in each player's commit as a rhythm transform of the bar
+//! (each player's `feel_*` pattern), on the feel's instrument ([`Ctx::feel_inst`], from the
+//! feel's palette; a phrase's [`BarIntent::switch`] picks another entry of it). Every feel is
+//! straight: [`Ctx::swing8`] stops swinging, so the ornaments go straight too, and the lead
+//! un-swings its line ([`Ctx::straighten`]). A forced feel plays at freedom 0 too (plainly:
+//! nothing else is rolled); the band's own never does.
 
 mod bass;
 mod comp;
@@ -63,6 +65,7 @@ use crate::audio::tuning::{self, Tuning};
 use super::arrange::{Arrangement, Shape};
 use super::band::{self, BandPlan};
 use super::engine::Input;
+use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::ornament::{Harm, Orn, Orns};
 use super::voice::{Fx, NoteEvent, Sound};
@@ -229,10 +232,54 @@ impl Ctx<'_> {
         self.arrangement.harm_at(self.line() + b)
     }
 
-    /// Where an 8th written at beat `b` of the bar starts, swung like the song.
+    /// Where an 8th written at beat `b` of the bar starts, swung like the song (straight in a
+    /// feel: every feel is straight).
     pub fn swing8(&self, b: f64) -> f64 {
+        if self.band.feel != Feel::Swing {
+            return b;
+        }
         let k = (b * 2.0).round();
         if (k * 0.5 - b).abs() < 1e-9 && (k as i64) % 2 == 1 { b + self.arrangement.swing.clamp(0.0, 0.9) as f64 * 0.5 } else { b }
+    }
+
+    /// The bar's feel.
+    pub fn feel(&self) -> Feel {
+        self.band.feel
+    }
+
+    /// A written (swung) event un-swung: off-beat 8ths back on the 8th (the feels are straight).
+    pub fn straighten(&self, e: &mut NoteEvent) {
+        let delay = self.arrangement.swing.clamp(0.0, 0.9) as f64 * 0.5;
+        if delay == 0.0 {
+            return;
+        }
+        let un = |x: f64| {
+            let k = x.floor();
+            if (x - k - 0.5 - delay).abs() < 1e-6 { k + 0.5 } else { x }
+        };
+        let line = self.line();
+        let (b, z) = (un(self.rel(e)), un(self.rel(e) + self.len(e)));
+        e.start = self.at(line + b);
+        e.end = self.at(line + z).max(e.start + 1);
+        e.beat = line + b;
+        e.phrase_beat = self.shape.canon(e.beat);
+    }
+
+    /// The instrument channel `ch` plays this bar's feel on: the feel palette's pick for the
+    /// feel (fixed while it lasts), or with `alt` another entry (a phrase's switch). `None` in
+    /// the tune's own feel.
+    pub fn feel_inst(&self, ch: usize, alt: bool) -> Option<u8> {
+        let p = self.instruments.feel_palette(self.band.feel, ch);
+        if p.is_empty() {
+            return None;
+        }
+        let k = feel::pick(self.seed, ch, self.band.feel_since, p.len()) + alt as usize;
+        Some(p[k % p.len()])
+    }
+
+    /// A player's extra feel sound ([`feel::Extra`]).
+    pub fn extra(&self, x: feel::Extra) -> u8 {
+        self.instruments.feel_extras[x as usize]
     }
 
     /// A new event like `t` (its volume, duty, instrument, tuning), at beat `b` of the bar for
@@ -398,7 +445,7 @@ impl PhrasePlan {
 
     /// Every ornament planned over the phrase.
     pub fn orns(&self) -> Orns {
-        Orns(self.intents[..self.bars as usize].iter().fold(0, |a, i| a | i.orns.0))
+        Orns(self.intents[..self.bars as usize].iter().fold(0u128, |a, i| a | i.orns.0))
     }
 
     /// The phrase from `bar` on: up to the next target, 8 bars at most.

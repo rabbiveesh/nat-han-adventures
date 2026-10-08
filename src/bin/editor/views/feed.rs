@@ -2,6 +2,7 @@
 //! and physics, the force chips and the musicians' freedom.
 
 use bevy_egui::egui::{self, Rect, Sense, Stroke, pos2, vec2};
+use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::tuning::Tuning;
 use nat_han_adventures::audio::{Filters, Harmony};
 use nat_han_adventures::game::Groove;
@@ -176,6 +177,27 @@ fn forces(ed: &mut Editor, ui: &mut egui::Ui) {
                 }
             }
         });
+        ui.add_space(4.0);
+        caption(ui, "FORCE FEEL");
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+            ui.spacing_mut().button_padding = vec2(7.0, 2.0);
+            let mut chips: Vec<(Option<Feel>, &str)> = vec![(None, "auto")];
+            chips.extend(Feel::ALL.map(|f| (Some(f), f.slug())));
+            for (f, label) in chips {
+                if chip(ui, ed.dials.force_feel == f, true, label).clicked() {
+                    ed.set_force_feel(f);
+                }
+            }
+        });
+        let st = &ed.player.published.state;
+        let note = match (ed.dials.force_feel, st.feel) {
+            (None, Feel::Swing) => "the band picks (from 0.4 freedom: a section now and then)".to_string(),
+            (_, f) if ed.player.playing && f != Feel::Swing => format!("sounding: {}", f.label().to_lowercase()),
+            (Some(f), _) => format!("forced: {} from the next bar", f.slug()),
+            (None, _) => String::new(),
+        };
+        ui.label(egui::RichText::new(note).color(TEXT_FAINT).size(11.0));
         ui.add_space(4.0);
         caption(ui, "FORCE TUNING");
         ui.horizontal_wrapped(|ui| {

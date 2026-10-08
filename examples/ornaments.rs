@@ -7,10 +7,14 @@
 //! cargo run --release --example ornaments                        # every song, 0 / 0.35 / 0.7
 //! cargo run --release --example ornaments -- out/ tiger_rag      # one song, somewhere else
 //! cargo run --release --example ornaments -- out/ all before     # a file-name prefix
+//! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
 //! ```
 //!
 //! Files: `<prefix>_<song>_f035.wav` + `.txt`, and `instruments_<song>.wav` (each song's
-//! palette in turn: the base, then each alternate, a phrase each) + `.txt`.
+//! palette in turn: the base, then each alternate, a phrase each) + `.txt`. The `feels` set:
+//! `forced_<feel>_<song>.wav` (each feel forced on three songs, 24 bars) and `auto_<song>.wav`
+//! (every song at freedom 0.8, the band choosing its feels) with `feels_log.txt` (the switches,
+//! mm:ss).
 
 use std::{fmt::Write as _, path::Path};
 
@@ -20,6 +24,7 @@ use nat_han_adventures::audio::{
     live::{
         Engine, EngineConfig, Input,
         band::{Fill, Flourish, HitKind, Trade},
+        feel::Feel,
         library,
         musician::Role,
         song::SongFile,
@@ -88,14 +93,14 @@ fn listen(dir: &Path) {
         let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
         for f in [0.35f32, 0.7] {
             let script = |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: f * 0.7 }] } else { vec![] };
-            let (out, log) = run(&file, script, 32, |_| "", false);
+            let (out, log, _) = run(&file, script, 32, |_| "", false);
             let name = format!("{stem}_f{:03}", (f * 100.0).round() as u32);
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
             println!("{name}.wav");
         }
         if stem != "the_entertainer" {
-            let (out, log) = run(&file, tour, 34, tour_note, true);
+            let (out, log, _) = run(&file, tour, 34, tour_note, true);
             write_wav(&dir.join(format!("tour_{stem}.wav")), &out);
             std::fs::write(dir.join(format!("tour_{stem}.txt")), log).expect("write log");
             println!("tour_{stem}.wav");
@@ -128,7 +133,7 @@ fn instrument_tour(dir: &Path) {
                     3 => vec![Input::SetMix([1.0; 4])],
                     _ => vec![],
                 };
-                let (out, _) = run(&song, solo, 4, |_| "", false);
+                let (out, _, _) = run(&song, solo, 4, |_| "", false);
                 all.extend(out);
                 all.extend(std::iter::repeat_n(Frame::ZERO, RATE as usize / 3));
             }
@@ -150,13 +155,17 @@ fn main() {
         listen(dir);
         return;
     }
+    if only.as_deref() == Some("feels") {
+        feels(dir);
+        return;
+    }
     for (stem, text) in library::FILES {
         if only.as_deref().is_some_and(|o| o != stem) {
             continue;
         }
         let file = SongFile::parse(text).expect("song parses");
         for f in FREEDOMS {
-            let (out, log) = run(&file, |bar| script(bar, f), BARS, script_note, false);
+            let (out, log, _) = run(&file, |bar| script(bar, f), BARS, script_note, false);
             let name = format!("{prefix}_{stem}_f{:03}", (f * 100.0).round() as u32);
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
@@ -169,13 +178,14 @@ fn main() {
 }
 
 /// Run an engine through a script, logging every committed bar.
-fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool) -> (Vec<Frame>, String) {
+fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
     let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, self_directed, ..EngineConfig::default() }).expect("engine");
     let looping = e.shape().looping;
     let mut out: Vec<Frame> = Vec::new();
     let mut buf = [Frame::ZERO; 256];
     let mut log = String::new();
     let mut logged = 0u64;
+    let mut feels = Vec::new();
     for i in script(1) {
         e.post(i);
     }
@@ -221,6 +231,9 @@ fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(
             if p.flourish != Flourish::None {
                 band.push(format!("flourish: {:?}", p.flourish));
             }
+            if p.feel != Feel::Swing {
+                band.push(format!("feel: {} (since bar {})", p.feel.label(), p.feel_since + 1));
+            }
             if !band.is_empty() {
                 let _ = writeln!(log, "    band:  {}", band.join("; "));
             }
@@ -230,10 +243,55 @@ fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(
                     let _ = writeln!(log, "    {:<6} {}", format!("{r:?}").to_lowercase() + ":", o.names());
                 }
             }
+            feels.push((b.slot.index, t, b.band.feel));
             logged = b.slot.index + 1;
         }
     }
-    (out, log)
+    (out, log, feels)
+}
+
+/// The feels: each forced on three songs (24 bars at freedom 0.5, from the top), and every song
+/// at 0.8 with the band choosing (96 bars), with a log of where each feel comes in and goes.
+fn feels(dir: &Path) {
+    let mut log = String::new();
+    for stem in ["sweet_georgia_brown", "the_entertainer", "muskrat_ramble"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        for f in Feel::OTHERS {
+            let script = |bar: u64| {
+                if bar == 1 {
+                    vec![Input::LevelStart, Input::ForceFeel(Some(f)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.4 }]
+                } else {
+                    vec![]
+                }
+            };
+            let (out, l, _) = run(&file, script, 24, |_| "", false);
+            let name = format!("forced_{}_{stem}", f.slug());
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), l).expect("write log");
+            println!("{name}.wav");
+        }
+    }
+    for (stem, text) in library::FILES {
+        let file = SongFile::parse(text).expect("song parses");
+        let script = |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 }] } else { vec![] };
+        let (out, l, bar_feels) = run(&file, script, 96, |_| "", false);
+        let name = format!("auto_{stem}");
+        write_wav(&dir.join(format!("{name}.wav")), &out);
+        std::fs::write(dir.join(format!("{name}.txt")), &l).expect("write log");
+        // The switches.
+        let _ = writeln!(log, "{name}.wav ({:.0}s)", out.len() as f64 / RATE as f64);
+        let mut current = Feel::Swing;
+        for (bar, t, f) in bar_feels {
+            if f != current {
+                let what = if f == Feel::Swing { "back to swing".to_string() } else { f.label().to_string() };
+                let _ = writeln!(log, "  {:02}:{:05.2}  bar {:>3}  {what}", (t / 60.0) as u32, t % 60.0, bar + 1);
+                current = f;
+            }
+        }
+        let _ = writeln!(log);
+    }
+    std::fs::write(dir.join("feels_log.txt"), log).expect("write log");
+    println!("feels_log.txt");
 }
 
 /// Each song's palette in turn, a phrase (4 bars) on each instrument: the musicians at a
@@ -268,7 +326,7 @@ fn showcase(file: &SongFile, stem: &str, dir: &Path) {
         };
         let t = all.len() as f64 / RATE as f64;
         let _ = writeln!(log, "{:>2}:{:05.2}  {}", (t / 60.0) as u32, t % 60.0, names.join("  "));
-        let (out, _) = run(&song, |bar| if bar == 1 { vec![Input::SetFreedom { lead: 0.0, comp: 0.0, bass: 0.0, drums: 0.0, dynamics: 0.0 }] } else { vec![] }, 8, |_| "", false);
+        let (out, _, _) = run(&song, |bar| if bar == 1 { vec![Input::SetFreedom { lead: 0.0, comp: 0.0, bass: 0.0, drums: 0.0, dynamics: 0.0 }] } else { vec![] }, 8, |_| "", false);
         all.extend(out);
     }
     write_wav(&dir.join(format!("instruments_{stem}.wav")), &all);

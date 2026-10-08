@@ -9,6 +9,7 @@
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend};
 use nat_han_adventures::audio::live::playback::{ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData, Published};
+use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::{BeatClock, Engine, EngineConfig, Input, SongFile};
 use nat_han_adventures::audio::tuning::Tuning;
 use nat_han_adventures::audio::{AudioOutput, Filters, Harmony, Sfx, sfx, synth, waltz};
@@ -21,6 +22,8 @@ const MUSIC_DB: f32 = -4.0;
 pub struct Dials {
     pub force_harmony: Option<Harmony>,
     pub force_tuning: Option<Tuning>,
+    /// The band's feel (`None`: the band picks; `Some(Feel::Swing)`: never).
+    pub force_feel: Option<Feel>,
     /// lead, comp, bass, drums, dynamics.
     pub freedom: [f32; 5],
     /// Per channel level after mute / solo / volume.
@@ -29,7 +32,7 @@ pub struct Dials {
 
 impl Default for Dials {
     fn default() -> Self {
-        Dials { force_harmony: None, force_tuning: None, freedom: [0.0; 5], mix: [1.0; 4] }
+        Dials { force_harmony: None, force_tuning: None, force_feel: None, freedom: [0.0; 5], mix: [1.0; 4] }
     }
 }
 
@@ -39,8 +42,8 @@ impl Dials {
         Input::SetFreedom { lead, comp, bass, drums, dynamics }
     }
 
-    pub fn inputs(&self) -> [Input; 4] {
-        [Input::ForceHarmony(self.force_harmony), Input::ForceTuning(self.force_tuning), self.freedom_input(), Input::SetMix(self.mix)]
+    pub fn inputs(&self) -> [Input; 5] {
+        [Input::ForceHarmony(self.force_harmony), Input::ForceTuning(self.force_tuning), Input::ForceFeel(self.force_feel), self.freedom_input(), Input::SetMix(self.mix)]
     }
 }
 

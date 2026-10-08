@@ -71,10 +71,26 @@ pub enum Orn {
     Trade,
     PressRoll,
     BrokenTime,
+    // Feels ([`super::feel`]): what each player's groove was.
+    Bend,
+    HornStab,
+    BossaComp,
+    PartidoAlto,
+    PowerChords,
+    Clav,
+    BossaBass,
+    Surdo,
+    Pumping,
+    Slap,
+    Clave,
+    Batucada,
+    Backbeat,
+    FunkGroove,
+    Cuica,
 }
 
 impl Orn {
-    pub const ALL: [Orn; 51] = [
+    pub const ALL: [Orn; 66] = [
         Orn::Grace,
         Orn::Vibrato,
         Orn::FallOff,
@@ -126,6 +142,21 @@ impl Orn {
         Orn::Trade,
         Orn::PressRoll,
         Orn::BrokenTime,
+        Orn::Bend,
+        Orn::HornStab,
+        Orn::BossaComp,
+        Orn::PartidoAlto,
+        Orn::PowerChords,
+        Orn::Clav,
+        Orn::BossaBass,
+        Orn::Surdo,
+        Orn::Pumping,
+        Orn::Slap,
+        Orn::Clave,
+        Orn::Batucada,
+        Orn::Backbeat,
+        Orn::FunkGroove,
+        Orn::Cuica,
     ];
 
     pub fn name(self) -> &'static str {
@@ -181,17 +212,32 @@ impl Orn {
             Orn::Trade => "trading fours",
             Orn::PressRoll => "press roll",
             Orn::BrokenTime => "broken time",
+            Orn::Bend => "blues bend",
+            Orn::HornStab => "horn stabs",
+            Orn::BossaComp => "bossa batida",
+            Orn::PartidoAlto => "partido-alto",
+            Orn::PowerChords => "power chords",
+            Orn::Clav => "clav stabs",
+            Orn::BossaBass => "bossa root-fifth",
+            Orn::Surdo => "surdo",
+            Orn::Pumping => "pumping 8ths",
+            Orn::Slap => "slap and pop",
+            Orn::Clave => "bossa clave",
+            Orn::Batucada => "batucada",
+            Orn::Backbeat => "rock backbeat",
+            Orn::FunkGroove => "funk groove",
+            Orn::Cuica => "cuica",
         }
     }
 
-    pub fn bit(self) -> u64 {
+    pub fn bit(self) -> u128 {
         1 << self as u8
     }
 }
 
 /// A set of [`Orn`]s.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Hash)]
-pub struct Orns(pub u64);
+pub struct Orns(pub u128);
 
 impl Orns {
     pub fn add(&mut self, o: Orn) {

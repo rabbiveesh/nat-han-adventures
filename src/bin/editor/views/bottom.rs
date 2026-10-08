@@ -3,6 +3,7 @@
 //! selection (drag across the bar numbers).
 
 use bevy_egui::egui::{self, Align2, Color32, Rect, Sense, Shape, Stroke, pos2, vec2};
+use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::musician::{Role, Target};
 
 use crate::app::Editor;
@@ -88,8 +89,32 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
         }
         y = r.bottom() + 2.0;
     }
+    // The feel lane: which bars the band played in another groove.
+    {
+        let r = Rect::from_min_size(pos2(rect.left(), y), vec2(rect.width(), 16.0));
+        p.text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, "feel", font.clone(), TEXT_DIM);
+        let mut tip = Vec::new();
+        for k in 0..n {
+            let b = first + k;
+            let x = x_of(b as f64);
+            let cell = Rect::from_min_max(pos2(x, r.top()), pos2(x + col, r.bottom()));
+            p.line_segment([cell.left_top(), cell.left_bottom()], Stroke::new(1.0, LINE));
+            let f = ed.feels.get(b).copied().unwrap_or_default();
+            if f != Feel::Swing {
+                p.rect_filled(cell.shrink(1.0), 2.0, feel_colour(f).gamma_multiply(0.35));
+                let starts = b == 0 || ed.feels.get(b - 1) != Some(&f) || k == 0;
+                if starts {
+                    ui.painter_at(Rect::from_min_max(cell.min, pos2(rect.right(), cell.max.y))).text(pos2(x + 4.0, r.center().y), Align2::LEFT_CENTER, f.label().to_lowercase(), mono(10.0), feel_colour(f));
+                }
+                tip.push(format!("bar {}: {}", b + 1, f.label().to_lowercase()));
+            }
+        }
+        let hover = ui.interact(Rect::from_min_max(pos2(rect.left() + LABEL_W, r.top()), r.max), ui.id().with("feel-lane"), Sense::hover());
+        hover.on_hover_text(if tip.is_empty() { "the band's feel: swing (the tune's own) so far".to_string() } else { tip.join("\n") });
+        y = r.bottom() + 2.0;
+    }
     if written.is_empty() {
-        p.text(pos2(rect.left() + LABEL_W + 4.0, y - 22.0), Align2::LEFT_CENTER, "(no [chords]: the band can only play it as written)", font.clone(), TEXT_FAINT);
+        p.text(pos2(rect.left() + LABEL_W + 4.0, y - 40.0), Align2::LEFT_CENTER, "(no [chords]: the band can only play it as written)", font.clone(), TEXT_FAINT);
     }
     // Phrase plans.
     y += 6.0;
@@ -137,11 +162,13 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
             // Bar by bar: what was played (committed), what's planned (ahead).
             let mut tip = Vec::new();
             for bar in a..z {
-                let played = st.upcoming.iter().find(|c| c.slot.index == bar).map(|c| c.orns[ch]);
+                let committed = st.upcoming.iter().find(|c| c.slot.index == bar);
+                let played = committed.map(|c| c.orns[ch]);
                 let orns = played.unwrap_or(plan.intent(bar).orns);
                 let names: Vec<&str> = orns.iter().map(|o| o.name()).collect();
+                let feel = committed.map(|c| c.band.feel).filter(|f| *f != Feel::Swing).map(|f| format!("[{}] ", f.label().to_lowercase())).unwrap_or_default();
                 if !names.is_empty() {
-                    tip.push(format!("bar {}: {}{}", to_song(bar).floor() as usize + 1, if played.is_some() { "" } else { "(planned) " }, names.join(", ")));
+                    tip.push(format!("bar {}: {feel}{}{}", to_song(bar).floor() as usize + 1, if played.is_some() { "" } else { "(planned) " }, names.join(", ")));
                 }
                 let (xa, xb) = (x_of(to_song(bar)), x_of(to_song(bar + 1)));
                 if xa < rect.left() + LABEL_W || xb > rect.right() || played.is_some() || names.is_empty() {
@@ -204,6 +231,17 @@ fn plan_label(role: Role, plan: &nat_han_adventures::audio::live::musician::Phra
         s += &e;
     }
     s
+}
+
+/// A feel's colour in the lane.
+fn feel_colour(f: Feel) -> Color32 {
+    match f {
+        Feel::Swing => TEXT_FAINT,
+        Feel::Bossa => Color32::from_rgb(0x7f, 0xc8, 0xa9),
+        Feel::Samba => Color32::from_rgb(0xf0, 0xa0, 0x40),
+        Feel::Rock => Color32::from_rgb(0xe0, 0x60, 0x50),
+        Feel::Funk => Color32::from_rgb(0xb0, 0x80, 0xe0),
+    }
 }
 
 fn dashed(p: &egui::Painter, r: Rect, stroke: Stroke) {

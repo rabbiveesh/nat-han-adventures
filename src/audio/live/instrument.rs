@@ -51,11 +51,14 @@
 //!
 //! # For the band ([`super::musician`]) and feels
 //! [`Instruments::palette`] is what a musician may switch to; switching is just a different
-//! [`super::voice::NoteEvent::inst`] on the events it commits. A future *feel* (bossa, rock)
-//! that swaps instruments can name palette entries the same way (see the module docs of
-//! [`super::musician`]).
+//! [`super::voice::NoteEvent::inst`] on the events it commits. A *feel* ([`super::feel`]) plays
+//! its own palette: `bossa.pulse1 = clarinet flute` (a feel's name, a dot, a channel) lists the
+//! instruments the lead plays a bossa on (the first its base, the others alternates); a feel
+//! and channel a song doesn't list plays the shared built-in set ([`super::feel::equip`]).
 
 use std::fmt;
+
+use super::feel::Feel;
 
 /// Most steps in one sequence.
 pub const SEQ_MAX: usize = 64;
@@ -304,6 +307,11 @@ pub struct Instruments {
     /// Per channel: instrument numbers (0 = `default`) the musician may switch between; the
     /// first is the base. Empty: only what the written part uses.
     pub palettes: [Vec<u8>; 4],
+    /// Per feel ([`Feel::OTHERS`]) and channel: the instruments the band plays it on
+    /// (`bossa.pulse1 = flute clarinet`); empty: the built-in ([`super::feel::equip`]).
+    pub feel_palettes: [[Vec<u8>; 4]; 4],
+    /// The players' extra feel sounds ([`super::feel::Extra`]), once equipped.
+    pub feel_extras: [u8; 5],
 }
 
 /// The instrument name that means "the channel's built-in".
@@ -360,6 +368,12 @@ impl Instruments {
         &self.palettes[ch]
     }
 
+    /// Channel `ch`'s palette in `feel` (empty for the tune's own, or before
+    /// [`super::feel::equip`] for a feel the song doesn't list).
+    pub fn feel_palette(&self, feel: Feel, ch: usize) -> &[u8] {
+        feel.other_index().map_or(&[], |f| &self.feel_palettes[f][ch])
+    }
+
     /// Names and kinds for the MML parser: `(name, is a kit)`.
     pub fn for_mml(&self) -> Vec<(&str, bool)> {
         self.names.iter().zip(&self.defs).map(|(n, d)| (n.as_str(), matches!(d, Def::Kit(_)))).collect()
@@ -368,7 +382,7 @@ impl Instruments {
     /// Parse an `[instruments]` body. Errors carry the 1-based line within the body.
     pub fn parse(body: &str) -> Result<Instruments, (usize, String)> {
         let mut out = Instruments::default();
-        let mut palettes: Vec<(usize, usize, Vec<String>)> = Vec::new();
+        let mut palettes: Vec<(usize, Option<usize>, usize, Vec<String>)> = Vec::new();
         for (k, raw) in body.lines().enumerate() {
             let line_no = k + 1;
             let line = raw.split_once(';').map_or(raw, |(a, _)| a).trim();
@@ -392,20 +406,30 @@ impl Instruments {
                     out.defs.push(def);
                 }
                 (_, Some(e)) => {
-                    let ch = line[..e].trim();
-                    let Some(i) = super::song::CHANNELS.iter().position(|(n, _)| *n == ch) else {
-                        return Err((line_no, format!("`{ch} = ...`: a palette is for a channel (pulse1, pulse2, triangle, noise)")));
+                    let lhs = line[..e].trim();
+                    // `bossa.pulse1 = ...`: a feel's palette.
+                    let (feel, ch) = match lhs.split_once('.') {
+                        Some((f, c)) => {
+                            let feel = Feel::parse(f.trim()).and_then(Feel::other_index).ok_or_else(|| {
+                                (line_no, format!("`{lhs} = ...`: unknown feel `{}` (bossa, samba, rock, funk)", f.trim()))
+                            })?;
+                            (Some(feel), c.trim())
+                        }
+                        None => (None, lhs),
                     };
-                    if palettes.iter().any(|p| p.1 == i) {
-                        return Err((line_no, format!("`{ch}`'s palette is given twice")));
+                    let Some(i) = super::song::CHANNELS.iter().position(|(n, _)| *n == ch) else {
+                        return Err((line_no, format!("`{lhs} = ...`: a palette is for a channel (pulse1, pulse2, triangle, noise)")));
+                    };
+                    if palettes.iter().any(|p| p.1 == feel && p.2 == i) {
+                        return Err((line_no, format!("`{lhs}`'s palette is given twice")));
                     }
                     let names = line[e + 1..].split([' ', '\t', ',']).filter(|w| !w.is_empty()).map(str::to_string).collect();
-                    palettes.push((line_no, i, names));
+                    palettes.push((line_no, feel, i, names));
                 }
                 _ => return Err((line_no, format!("expected `name : macros` or `channel = names`, found `{line}`"))),
             }
         }
-        for (line_no, ch, names) in palettes {
+        for (line_no, feel, ch, names) in palettes {
             for n in names {
                 let Some(i) = out.index(&n) else {
                     return Err((line_no, format!("unknown instrument `{n}` in the palette")));
@@ -415,8 +439,12 @@ impl Instruments {
                     let what = if kit { "a kit is for the noise channel" } else { "the noise channel takes kits" };
                     return Err((line_no, format!("`{n}`: {what}")));
                 }
-                if !out.palettes[ch].contains(&i) {
-                    out.palettes[ch].push(i);
+                let p = match feel {
+                    Some(f) => &mut out.feel_palettes[f][ch],
+                    None => &mut out.palettes[ch],
+                };
+                if !p.contains(&i) {
+                    p.push(i);
                 }
             }
         }

@@ -27,6 +27,9 @@ pulse1 = default pluck musicbox
 pulse2 = default banjo pluck
 triangle = default thump
 noise = default tight
+; The feels' instruments (a feel and channel not listed plays the built-in set):
+bossa.pulse1 = musicbox pluck
+samba.pulse2 = banjo
 
 [pulse1]
 v12 @2 [o4 e8 o5 c4 o4 e8 o5 c4 o4 e8 o5 c8& | c2 c8 d8 d+8 e8 | o5 c8 d8 e4 o4 b8 o5 d4 c8& | c4 r4 r4 o4 d8 d+8 | o4 e8 o5 c4 o4 e8 o5 c4 o4 e8 o5 c8& | c4. o4 a8 g8 f+8 a8 o5 c8 | o5 e4 d8 c8 o4 a8 o5 d4.& | d4 r4 r4 o4 d8 d+8 | o4 e8 o5 c4 o4 e8 o5 c4 o4 e8 o5 c8& | c2 c8 d8 d+8 e8 | o5 c8 d8 e4 o4 b8 o5 d4 c8& | c4 r8 c8 d8 e8 c8 d8 | o5 e4 c8 d8 c8 e8 c8 d8 | o5 e4 c8 d8 c8 e8 c8 d8 | o5 e4 o4 b8 o5 d4 c4. | o5 c4 o4 g4 e4 d8 d+8 | ]2 | ; 1-32

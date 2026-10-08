@@ -139,11 +139,14 @@ pub struct NowPlaying {
     /// [`Tuning::Just`], [`Tuning::Tet7`], ...); `None` otherwise. Follows the phrases as they
     /// change (read it every frame; it never fires a message).
     pub tuning_now: Option<Tuning>,
+    /// The feel the band is in, if it's left the tune's own ("BOSSA NOVA";
+    /// [`crate::audio::live::feel::Feel::label`]), else "". The band's own choice: music only.
+    pub feel_now: &'static str,
 }
 
 impl Default for NowPlaying {
     fn default() -> Self {
-        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None }
+        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None, feel_now: "" }
     }
 }
 
@@ -380,7 +383,7 @@ fn follow_state(
         h.play(engine, fade_in, fade_out);
     }
     let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
-    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None };
+    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None, feel_now: "" };
     // The physics follow the music the moment it starts.
     if let Some(g) = groove.as_deref_mut() {
         set_groove(g, filters);
@@ -582,6 +585,10 @@ fn sync(
     let tuning_now = p.state.medley_phrase;
     if now_playing.tuning_now != tuning_now {
         now_playing.tuning_now = tuning_now;
+    }
+    let feel_now = p.state.feel.label();
+    if now_playing.feel_now != feel_now {
+        now_playing.feel_now = feel_now;
     }
     let sounding = (filters, p.state.tuning);
     if player.sounding != Some(sounding) {

@@ -5,13 +5,16 @@
 //! two-feel or a pedal point (mid), or an ostinato vamp (high). It plays the band's
 //! reharmonization's roots (tritone subs), hits with the comp (a root on the hit, then rest),
 //! ties over an anticipated downbeat, approaches the next bar chromatically (low) and fills
-//! into the next phrase (high).
+//! into the next phrase (high). In a feel ([`crate::audio::live::feel`]) it plays the feel's
+//! line: bossa's root-fifth two-feel with the next root anticipated (and tied over), samba's
+//! surdo, rock's pumping 8ths, funk's slap and pop locked to the kick.
 
 use super::{Ctx, Musician, PhrasePlan, Player, Role, clear_span, cut_at, fold, musician_common, push, tidy, work};
 use crate::audio::accomp::Rng;
 use crate::audio::chart::Family;
 use crate::audio::live::band::{HitKind, Trade};
 use crate::audio::live::engine::Input;
+use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Harm, Orn, Orns, nearest_pc};
 use crate::audio::live::voice::{NoteEvent, Sound};
 
@@ -27,11 +30,13 @@ pub struct Bass {
     last: Option<NoteEvent>,
     /// The last note committed.
     last_note: Option<u8>,
+    /// A bossa bar ended anticipating this note (the next bar ties over it).
+    anticipated: Option<(u64, u8)>,
 }
 
 impl Bass {
     pub(super) fn new(p: Player) -> Self {
-        Bass { p, src: work(), dst: work(), last: None, last_note: None }
+        Bass { p, src: work(), dst: work(), last: None, last_note: None, anticipated: None }
     }
 }
 
@@ -42,7 +47,8 @@ impl Musician for Bass {
         let mut fired = Orns::default();
         self.src.clear();
         ctx.written(2, &mut self.src);
-        if self.p.freedom <= 0.0 {
+        let feel = ctx.feel();
+        if self.p.freedom <= 0.0 && feel == Feel::Swing {
             out.extend(self.src.iter().copied());
             self.remember();
             return fired;
@@ -52,7 +58,11 @@ impl Musician for Bass {
         let band = ctx.band;
         let bb = ctx.bb();
         let phrase_last = self.p.phrase_last(ctx.bar.index);
-        let tmpl = ctx.template(2, self.src.first().copied().or(self.last));
+        let mut tmpl = ctx.template(2, self.src.first().copied().or(self.last));
+        if let Some(k) = ctx.feel_inst(2, intent.switch) {
+            tmpl.inst = k;
+        }
+        let anticipated = self.anticipated.take().filter(|a| a.0 == ctx.bar.index).map(|a| a.1);
         let mut r = ctx.rng(Role::Bass, 3);
         let prev = self.last_note.or_else(|| self.src.first().and_then(|e| e.sound.notes().first().copied())).unwrap_or(40) as i32;
         self.dst.clear();
@@ -73,6 +83,8 @@ impl Musician for Bass {
                 b = z;
             }
             fired.add(Orn::LayOut);
+        } else if has_harm && feel != Feel::Swing {
+            fired.add(self.feel_line(ctx, &tmpl, prev, anticipated));
         } else if has_harm && orns.has(Orn::Ostinato) {
             self.ostinato(ctx, &tmpl, prev);
             fired.add(Orn::Ostinato);
@@ -167,6 +179,7 @@ impl Musician for Bass {
         let subbed = band.subs.iter().flatten().any(|s| s.to > bb - 2.0);
         if band.hits == 0
             && !subbed
+            && matches!(feel, Feel::Swing | Feel::Rock)
             && let Some(pc) = next_root
         {
             let last_i = self.dst.iter().rposition(|e| matches!(e.sound, Sound::Note(_)));
@@ -207,6 +220,7 @@ impl Musician for Bass {
             }
         }
         if intent.switch
+            && feel == Feel::Swing
             && !self.dst.is_empty()
             && let Some(alt) = ctx.alternate(2, self.p.plan.map_or(0, |p| p.start), tmpl.inst)
         {
@@ -234,6 +248,102 @@ impl Musician for Bass {
 }
 
 impl Bass {
+    /// The feel's bass line for the bar (what it played).
+    fn feel_line(&mut self, ctx: &Ctx, t: &NoteEvent, prev: i32, anticipated: Option<u8>) -> Orn {
+        let bb = ctx.bb();
+        let harm = |b: f64| ctx.harm_at(b).expect("a chart");
+        let vol = |x: i32| (t.volume as i32 + x).clamp(1, 15) as u8;
+        let note = |b: f64, d: f64, n: i32, v: u8| NoteEvent { volume: v, ..ctx.make(t, b, d, Sound::Note(n.clamp(LO - 4, HI + 4) as u8)) };
+        match ctx.feel() {
+            Feel::Bossa => {
+                // Root on 1, the fifth on 3 (a new chord's root if it changed), the next bar's
+                // root on the "and" of 4, tied over into it. Half-time in a fast tune: the root
+                // rings through the bar unless the chord changes, the anticipation every other
+                // bar (or into a new chord).
+                let half = feel::fast(ctx.shape.bpm);
+                let h0 = harm(0.0);
+                let same = bb >= 4.0 && harm(2.0).chord == h0.chord;
+                let root = nearest_pc(h0.chord.bass_pc(), prev, LO, HI - 7) as i32;
+                let mut first = note(0.0, if half && same { 3.4 } else { 1.5 }, root, vol(-2));
+                first.tie = anticipated == Some(root as u8) && ctx.band.sub_at(0.0).is_none();
+                push(&mut self.dst, first);
+                let mut p = root;
+                if bb >= 4.0 && !(half && same) {
+                    let h2 = harm(2.0);
+                    let n = if h2.chord == h0.chord { nearest_pc((h0.chord.root + 7) % 12, root, LO, HI) as i32 } else { nearest_pc(h2.chord.bass_pc(), root, LO, HI) as i32 };
+                    push(&mut self.dst, note(2.0, 1.4, n, vol(-2)));
+                    p = n;
+                }
+                let second = !feel::first_of_pair(ctx.bar.index, ctx.band.feel_since);
+                if let Some(nh) = ctx.plain_harm_at(bb).filter(|nh| !half || second || nh.chord != harm(bb - 0.5).chord) {
+                    let n = nearest_pc(nh.chord.bass_pc(), p, LO, HI - 7);
+                    push(&mut self.dst, note(bb - 0.5, 0.5, n as i32, vol(-2)));
+                    self.anticipated = Some((ctx.bar.index + 1, n));
+                }
+                Orn::BossaBass
+            }
+            Feel::Samba => {
+                // The surdo, a 2/4 bar per half: a light root on its 1 with a 16th pickup (the
+                // fifth below), the big hit on its 2.
+                let mut b = 0.0;
+                let mut p = prev;
+                while b < bb - 1e-9 {
+                    let h = harm(b);
+                    let root = nearest_pc(h.chord.bass_pc(), p.min(43), LO + 5, HI - 5) as i32;
+                    push(&mut self.dst, note(b, 0.7, root, vol(-3)));
+                    if b + 1.0 < bb - 1e-9 {
+                        let fifth = nearest_pc((h.chord.root + 7) % 12, root - 5, LO, HI) as i32;
+                        push(&mut self.dst, note(b + 0.75, 0.25, fifth, vol(-4)));
+                        let hb = harm(b + 1.0);
+                        let big = nearest_pc(hb.chord.bass_pc(), root, LO, HI) as i32;
+                        push(&mut self.dst, note(b + 1.0, 0.9, big, vol(2)));
+                    }
+                    p = root;
+                    b += 2.0;
+                }
+                Orn::Surdo
+            }
+            Feel::Rock => {
+                // Pumping 8th-note roots, the beats a little harder.
+                let mut p = prev;
+                for k in 0..(bb * 2.0).round() as usize {
+                    let b = k as f64 * 0.5;
+                    let n = nearest_pc(harm(b).chord.bass_pc(), p, LO, HI - 5) as i32;
+                    push(&mut self.dst, note(b, 0.4, n, vol(if k % 2 == 0 { 1 } else { -1 })));
+                    p = n;
+                }
+                Orn::Pumping
+            }
+            Feel::Funk => {
+                // The vamp, locked to the kick: the one long and hard, short roots on the
+                // kick's other hits, an octave pop, one dead note (a muted blip) leading in.
+                let (vamp, side) = feel::vamp(ctx.seed, ctx.bar.index, ctx.band.feel_since);
+                let kicks = vamp.kick[side];
+                let root_at = |b: f64| nearest_pc(harm(b).chord.bass_pc(), 36, LO, LO + 11) as i32;
+                for &k in kicks {
+                    let b = k as f64 * 0.25;
+                    if b >= bb - 1e-9 {
+                        continue;
+                    }
+                    let (d, dv) = if k == 0 { (0.7, 2) } else { (0.25, 0) };
+                    push(&mut self.dst, note(b, d, root_at(b), vol(dv)));
+                }
+                if let Some(k) = vamp.pop[side] {
+                    let b = k as f64 * 0.25;
+                    if b < bb - 1e-9 {
+                        push(&mut self.dst, note(b, 0.15, root_at(b) + 12, vol(0)));
+                    }
+                }
+                if let Some(&k) = kicks.iter().find(|&&k| k > 1) {
+                    let b = (k - 1) as f64 * 0.25;
+                    push(&mut self.dst, NoteEvent { inst: ctx.extra(Extra::Dead), ..note(b, 0.08, root_at(b), vol(-3)) });
+                }
+                Orn::Slap
+            }
+            Feel::Swing => unreachable!("only in a feel"),
+        }
+    }
+
     fn remember(&mut self) {
         if let Some(e) = self.src.last() {
             self.last = Some(*e);

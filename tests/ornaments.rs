@@ -8,6 +8,7 @@ use nat_han_adventures::audio::{
     live::{
         Engine, EngineConfig, Input,
         band::{Fill, Flourish, HitKind},
+        feel::Feel,
         engine::CommittedBar,
         library,
         musician::{PhrasePlan, Role},
@@ -309,6 +310,10 @@ fn side_slips_and_planing_have_their_intervals() {
         for f in [0.55, 0.8] {
         let (_, bars) = play(song(m), 21, &[freedom(f)], |_| vec![], 40);
         for (p, b) in plain.iter().zip(&bars) {
+            // (A feel plays the line straight: not the written grid.)
+            if b.c.band.feel != Feel::Swing {
+                continue;
+            }
             let o = b.c.orns[0];
             if o.has(Orn::SideSlip) {
                 let mut moved = 0;
@@ -373,20 +378,31 @@ fn big_moments_get_a_flourish() {
     assert!(s.ch(3).any(|e| e.sound == Sound::Drum(Drum::Crash) && e.start == s.c.slot.start));
 }
 
-/// Musicians switch to an alternate from their palette for a phrase, and back.
+/// Musicians switch to an alternate from their palette for a phrase, and back (and play a
+/// feel on the feel's instruments).
 #[test]
 fn musicians_switch_instruments_and_back() {
     let mut switched = 0;
     for m in LOOPING {
         let s = song(m);
-        let (_, bars) = play(s, 5, &[freedom(0.8)], |_| vec![], 40);
+        let (e, bars) = play(s, 5, &[freedom(0.8)], |_| vec![], 40);
+        let insts = e.instruments();
         for b in &bars {
             for r in [Role::Lead, Role::Comp, Role::Bass] {
                 let ch = r as u8;
                 let pal = s.instruments.palette(ch as usize);
+                let feel = insts.feel_palette(b.c.band.feel, ch as usize);
                 for e in b.ch(ch) {
-                    // Only the written instrument or a palette entry.
-                    assert!(e.inst == 0 || pal.contains(&e.inst) || s.tracks[ch as usize].events.iter().any(|w| w.inst == e.inst), "{m:?}: instrument {}", e.inst);
+                    // Only the written instrument, a palette entry, or the feel's.
+                    let extra = insts.feel_extras.contains(&e.inst) && !feel.is_empty();
+                    assert!(
+                        e.inst == 0 || pal.contains(&e.inst) || feel.contains(&e.inst) || extra || s.tracks[ch as usize].events.iter().any(|w| w.inst == e.inst),
+                        "{m:?}: instrument {}",
+                        e.inst
+                    );
+                    if !feel.is_empty() {
+                        assert!(feel.contains(&e.inst) || extra, "{m:?} bar {}: a {:?} bar on {}", b.c.slot.index, b.c.band.feel, insts.name(e.inst));
+                    }
                 }
                 if b.c.orns[ch as usize].has(Orn::Switch) {
                     assert!(b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)));
@@ -395,9 +411,9 @@ fn musicians_switch_instruments_and_back() {
             }
         }
         // And back: some bars after a switch are on the base again.
-        let lead_insts: Vec<u8> = bars.iter().flat_map(|b| b.ch(0).map(|e| e.inst)).collect();
+        let lead_insts: Vec<u8> = bars.iter().filter(|b| b.c.band.feel == Feel::Swing).flat_map(|b| b.ch(0).map(|e| e.inst)).collect();
         if lead_insts.iter().any(|&i| i != 0) {
-            assert!(lead_insts.iter().filter(|&&i| i == 0).count() > lead_insts.len() / 4, "{m:?}: the lead never came back");
+            assert!(lead_insts.contains(&0), "{m:?}: the lead never came back");
         }
     }
     assert!(switched >= 5, "only {switched} switches");

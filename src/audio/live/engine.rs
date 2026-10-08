@@ -52,6 +52,7 @@ use crate::audio::{Filters, Harmony};
 
 use super::arrange::{Arrangement, Shape};
 use super::band::{BandInput, BandPlan};
+use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
 use super::ornament::Orns;
@@ -82,6 +83,9 @@ pub enum Input {
     ForceHarmony(Option<Harmony>),
     /// Override the tuning (`None`: follow the filters: the laughing band plays the medley).
     ForceTuning(Option<Tuning>),
+    /// Override the band's feel ([`super::feel`]; `None`: the band picks, `Some(Feel::Swing)`:
+    /// never). A dev override (the editor's chips); it lands on the next bar committed.
+    ForceFeel(Option<Feel>),
     /// Each musician's freedom, and the dynamics, 0..1.
     SetFreedom { lead: f32, comp: f32, bass: f32, drums: f32, dynamics: f32 },
     /// Each channel's level (pulse 1, pulse 2, triangle, noise): 1 as written, 0 muted. A mixer
@@ -213,6 +217,9 @@ pub struct EngineState {
     pub filters: Filters,
     pub forced_harmony: Option<Harmony>,
     pub forced_tuning: Option<Tuning>,
+    pub forced_feel: Option<Feel>,
+    /// The feel sounding at the playhead.
+    pub feel: Feel,
     pub freedom: Freedom,
     pub stats: PlayStats,
     /// Committed bars from the one at the playhead on.
@@ -232,6 +239,8 @@ impl Default for EngineState {
             filters: Filters::default(),
             forced_harmony: None,
             forced_tuning: None,
+            forced_feel: None,
+            feel: Feel::Swing,
             freedom: Freedom::default(),
             stats: PlayStats::default(),
             upcoming: Vec::with_capacity(8),
@@ -296,6 +305,7 @@ pub struct Engine {
     filters: Filters,
     forced_harmony: Option<Harmony>,
     forced_tuning: Option<Tuning>,
+    forced_feel: Option<Feel>,
     freedom: Freedom,
     stats: PlayStats,
     /// [`EngineConfig::self_directed`]: the director, on the engine's clock.
@@ -348,9 +358,11 @@ impl Engine {
         let waltz_medley = waltz.as_ref().map_or_else(|| medley.clone(), |w| Medley::new(shape.song_hash, shape.beats, secs(w)));
         let mut spans = VecDeque::with_capacity(SPANS);
         spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0 });
+        // The song's instruments and the feels' (appended: the song's own numbers don't move).
+        let instruments = feel::equip(&song.instruments);
         Ok(Engine {
             title: song.title.clone(),
-            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley], &song.instruments),
+            bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley], &instruments),
             medley,
             shape,
             waltz,
@@ -362,6 +374,7 @@ impl Engine {
             filters: Filters::default(),
             forced_harmony: None,
             forced_tuning: None,
+            forced_feel: None,
             freedom: Freedom::default(),
             stats: PlayStats::default(),
             band: director::Band::default(),
@@ -373,7 +386,7 @@ impl Engine {
             next_song_bar: 0,
             scratch: Vec::with_capacity(4096),
             seq: 0,
-            instruments: song.instruments.clone(),
+            instruments,
             prev_band: BandPlan::default(),
             prev_harmony: None,
         })
@@ -431,7 +444,7 @@ impl Engine {
         self.arrangements[harmony_index(h)].as_ref()
     }
 
-    /// The song's instruments.
+    /// The song's instruments, with the feels' ([`feel::equip`]).
     pub fn instruments(&self) -> &Instruments {
         &self.instruments
     }
@@ -622,6 +635,9 @@ impl Engine {
             checkpoint: intent(Role::Drums).short_fill,
             death: intent(Role::Lead).wah,
             prev: &self.prev_band,
+            waltz,
+            looping: shape.looping,
+            force_feel: self.forced_feel,
         });
         ctx.band = &band;
         self.scratch.clear();
@@ -718,6 +734,10 @@ impl Engine {
                 self.forced_tuning = t;
                 None
             }
+            Input::ForceFeel(f) => {
+                self.forced_feel = f;
+                None
+            }
             Input::SetFreedom { lead, comp, bass, drums, dynamics } => {
                 let c = |x: f32| if x.is_finite() { x.clamp(0.0, 1.0) } else { 0.0 };
                 self.freedom = Freedom { lead: c(lead), comp: c(comp), bass: c(bass), drums: c(drums), dynamics: c(dynamics) };
@@ -803,6 +823,8 @@ impl Engine {
         s.filters = self.filters;
         s.forced_harmony = self.forced_harmony;
         s.forced_tuning = self.forced_tuning;
+        s.forced_feel = self.forced_feel;
+        s.feel = self.bar_at_playhead().map_or(Feel::Swing, |b| b.band.feel);
         s.freedom = self.freedom;
         s.stats = self.stats;
         s.upcoming.clear();

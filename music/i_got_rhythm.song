@@ -28,6 +28,9 @@ pulse1 = default brass pluck
 pulse2 = default pluck organ
 triangle = default thump
 noise = default tight
+; The feels' instruments (a feel and channel not listed plays the built-in set):
+funk.pulse1 = brass
+bossa.pulse2 = pluck
 
 [pulse1]
 v12 @1 o5 b-4. f8 b-4 o6 d4 | o6 e-4. d8 c4 o5 b-4 | o5 b-8 b-8 b-8 r8 f8 f8 f8 r8 | o5 c2 o4 a4 r4 | ; 1-4

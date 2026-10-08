@@ -13,11 +13,16 @@
 //! - then, at a phrase end, fills the space before the next phrase (a scale run, triplet
 //!   arpeggios, a swung pickup) or falls off the last note, and makes sure the phrase lands on
 //!   a chord tone (or leads by step into the next phrase).
+//!
+//! In a feel ([`crate::audio::live::feel`]) the written line is played straight (un-swung,
+//! and every ornament with it) on the feel's instrument: a notch softer in a bossa, with
+//! bluesy bends in rock, punchy short notes and horn stabs at its phrase ends in funk.
 
 use super::{Ctx, Musician, PhrasePlan, Player, Role, fold_sound, musician_common, push, tidy, work};
 use crate::audio::chart::{Chord, Quality};
 use crate::audio::live::band::{Flourish, Trade};
 use crate::audio::live::engine::Input;
+use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Arp;
@@ -57,10 +62,16 @@ impl Musician for Lead {
         let mut fired = Orns::default();
         self.src.clear();
         ctx.written(0, &mut self.src);
-        if self.p.freedom <= 0.0 {
+        let feel = ctx.feel();
+        if self.p.freedom <= 0.0 && feel == Feel::Swing {
             out.extend(self.src.iter().copied());
             self.remember(ctx);
             return fired;
+        }
+        if feel != Feel::Swing {
+            for e in &mut self.src {
+                ctx.straighten(e);
+            }
         }
         let intent = self.p.intent(ctx.bar.index);
         let band = ctx.band;
@@ -85,8 +96,15 @@ impl Musician for Lead {
             replaced = false;
         }
         tidy(&mut self.dst);
+        if !replaced && feel != Feel::Swing {
+            self.feel_line(ctx, &mut r, &mut fired);
+        }
         if !replaced && phrase_last {
-            self.phrase_end(ctx, intent.orns, &tmpl, &mut r, &mut fired);
+            if feel == Feel::Funk {
+                self.horn_stabs(ctx, &mut fired);
+            } else {
+                self.phrase_end(ctx, intent.orns, &tmpl, &mut r, &mut fired);
+            }
         }
         if intent.answer && !replaced {
             self.answer(ctx, &tmpl, &mut fired);
@@ -96,7 +114,11 @@ impl Musician for Lead {
         }
         // An instrument for the phrase (or a solo / a fill on a loose night).
         let fill_bar = fired.has(Orn::Solo) || fired.has(Orn::RunFill);
-        if (intent.switch || fill_bar && ornament_switch(&mut r, self.p.freedom))
+        if let Some(k) = ctx.feel_inst(0, intent.switch) {
+            for e in &mut self.dst {
+                e.inst = k;
+            }
+        } else if (intent.switch || fill_bar && ornament_switch(&mut r, self.p.freedom))
             && let Some(alt) = ctx.alternate(0, self.p.plan.map_or(0, |p| p.start), tmpl.inst)
             && !self.dst.is_empty()
         {
@@ -413,6 +435,67 @@ impl Lead {
             }
             prev_note = Some(note);
         }
+    }
+
+    /// The feel's articulation of the bar: softer in a bossa, bluesy bends in rock (a whole
+    /// step up into a long note, the blue third bent up to the major), punchy in funk.
+    fn feel_line(&mut self, ctx: &Ctx, r: &mut crate::audio::accomp::Rng, fired: &mut Orns) {
+        let p_bend = 0.25 + 0.35 * crate::audio::live::band::mid(self.p.freedom);
+        let n = self.dst.len();
+        for k in 0..n {
+            let next_ties = self.dst.get(k + 1).is_some_and(|x| x.tie);
+            let e = &mut self.dst[k];
+            match ctx.feel() {
+                Feel::Bossa => e.volume = e.volume.saturating_sub(1).max(1),
+                Feel::Rock => {
+                    let Sound::Note(note) = e.sound else { continue };
+                    let d = ctx.len(e);
+                    if e.tie || e.fx.slide != 0 || d < 0.75 {
+                        continue;
+                    }
+                    let third = ctx.harm_at(ctx.rel(e)).is_some_and(|h| {
+                        matches!(h.chord.family(), crate::audio::chart::Family::Major | crate::audio::chart::Family::Dominant) && (note + 12 - h.chord.root) % 12 == 4
+                    });
+                    if third && r.chance(0.7) {
+                        (e.fx.slide, e.fx.slide_frames) = (-1, 9);
+                        fired.add(Orn::Bend);
+                    } else if r.chance(p_bend) {
+                        (e.fx.slide, e.fx.slide_frames) = (-2, 7);
+                        fired.add(Orn::Bend);
+                    }
+                }
+                Feel::Funk => {
+                    // Short and punchy (a slur keeps its length).
+                    if matches!(e.sound, Sound::Note(_)) && !next_ties {
+                        let d = ctx.len(e);
+                        if d > 0.5 {
+                            let keep = (d * 0.6).max(0.4);
+                            e.end = e.start + (keep * ctx.shape.samples_per_beat) as u64;
+                        }
+                    }
+                }
+                Feel::Samba | Feel::Swing => {}
+            }
+        }
+    }
+
+    /// Funk: the horn section's stabs in the space after the phrase's last note (on the "e" and
+    /// the "and" of the last beat), the chord voiced up high.
+    fn horn_stabs(&mut self, ctx: &Ctx, fired: &mut Orns) {
+        let bb = ctx.bb();
+        let tail = self.dst.iter().map(|e| ctx.rel(e) + ctx.len(e)).fold(0.0, f64::max);
+        if tail > bb - 1.0 + 1e-6 {
+            return;
+        }
+        let Some(last) = self.dst.iter().rev().find(|e| matches!(e.sound, Sound::Note(_))).copied() else { return };
+        let top = last.sound.notes()[0].clamp(68, 84);
+        for (b, d) in [(bb - 0.75, 0.2), (bb - 0.25, 0.25)] {
+            let Some(h) = ctx.harm_at(b) else { continue };
+            let mut e = ctx.make(&ctx.template(0, Some(last)), b, d, Sound::Arp(ornament::voice(&h.chord, top, 0)));
+            e.volume = (e.volume + 1).min(15);
+            push(&mut self.dst, e);
+        }
+        fired.add(Orn::HornStab);
     }
 
     /// The phrase's last bar: fill the space before the next phrase, or fall off the last note.

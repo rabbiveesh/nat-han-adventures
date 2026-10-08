@@ -27,6 +27,9 @@ pulse1 = default bone clarinet
 pulse2 = default banjo
 triangle = default tuba
 noise = default brushes
+; The feels' instruments (a feel and channel not listed plays the built-in set):
+bossa.pulse1 = clarinet
+samba.pulse2 = banjo
 
 [pulse1]
 v12 @1 o5 d4 f8 d8 r8 c8 o4 b-4 | o5 c8 d8 r8 f8 r2 | o5 c4 e-8 c8 r8 o4 a8 f4 | o4 a8 b-8 r8 o5 c8 r2 | ; 1-4

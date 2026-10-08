@@ -3,6 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use nat_han_adventures::audio::live::song::CHANNELS;
+use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::{Input, SongFile, library};
 use nat_han_adventures::audio::mml::{self, Options};
 use nat_han_adventures::audio::{AudioOutput, Harmony};
@@ -158,6 +159,8 @@ pub struct Editor {
     pub swapped: u64,
     pub played: Option<PlayedCache>,
     pub now: f64,
+    /// The feel each bar of the edited song was last committed in (the bottom strip's lane).
+    pub feels: Vec<Feel>,
 }
 
 /// The repository root (where `music/` is).
@@ -234,6 +237,7 @@ impl Editor {
             swapped: 0,
             played: None,
             now: 0.0,
+            feels: Vec::new(),
         }
     }
 
@@ -276,6 +280,7 @@ impl Editor {
         self.selection = (0, 2.min(self.bars().max(1)));
         self.loop_on = false;
         self.played = None;
+        self.feels.clear();
         self.swapped = self.doc.revision;
         match self.doc.error() {
             Some(e) => self.complain(format!("music/{stem}.song: {e}")),
@@ -422,6 +427,11 @@ impl Editor {
         self.player.post(Input::ForceTuning(t));
     }
 
+    pub fn set_force_feel(&mut self, f: Option<nat_han_adventures::audio::live::feel::Feel>) {
+        self.dials.force_feel = f;
+        self.player.post(Input::ForceFeel(f));
+    }
+
     pub fn set_freedom(&mut self, f: [f32; 5]) {
         self.dials.freedom = f;
         self.player.post(self.dials.freedom_input());
@@ -503,6 +513,7 @@ impl Editor {
         if let Some(e) = self.player.error.take() {
             self.complain(e);
         }
+        self.note_feels();
         if self.player.playing {
             if self.player.published.state.finished {
                 self.player.stop();
@@ -525,6 +536,21 @@ impl Editor {
                 && let Some((song, offset)) = self.engine_song()
             {
                 self.player.swap(song, offset);
+            }
+        }
+    }
+
+    /// Remember the feel of every bar committed (by bar of the edited song).
+    fn note_feels(&mut self) {
+        let bars = self.bars();
+        self.feels.resize(bars, Feel::Swing);
+        if !self.player.playing {
+            return;
+        }
+        for b in &self.player.published.state.upcoming {
+            let bar = if b.harmony == Harmony::Waltz { b.slot.song_bar / 2 } else { b.slot.song_bar } + self.player.offset;
+            if let Some(f) = self.feels.get_mut(bar) {
+                *f = b.band.feel;
             }
         }
     }
