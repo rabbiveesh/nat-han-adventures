@@ -66,8 +66,12 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - Text: Press Start 2P at multiples of 8px.
 
 ## Dev loop
-1. `cargo build` with no warnings.
-2. `cargo test` (unit tests + `tests/*.rs` headless gameplay/level tests). Prefer adding a test over eyeballing.
+1. `cargo build` with no warnings. Run cargo under `nice -n 15` (full parallelism, low priority:
+   the user's desktop stays responsive).
+2. `cargo nextest run` (unit tests + `tests/*.rs` headless gameplay/level tests, all binaries in
+   parallel, ~30 s; `cargo test --doc` for doctests). Wall-time budget tests sit in a serial
+   `timing` group (`.config/nextest.toml`): name new timing tests so its filter catches them.
+   Plain `cargo test` still works (~50 s, binaries in sequence). Prefer adding a test over eyeballing.
 3. To see the real game: `scripts/headless-run` (Xvfb + lavapipe, no window), then drive it with
    `scripts/brp` on port **15799** (`brp_extras/send_keys`, `brp_extras/screenshot`). Never use 15702
    (the user's own game).

@@ -1,0 +1,13 @@
+# cargo-nextest config. Tests run in parallel processes by default; tests that assert on wall
+# time (render/generation/validation budgets) go in a serial group so a fully loaded machine
+# can't starve them into flaky failures.
+
+[test-groups]
+timing = { max-threads = 1 }
+
+[[profile.default.overrides]]
+filter = 'test(/budget|real_time|renders_fast|renders_through_every_filter|waltzes_cleanly|within_budget|timing|_timings/)'
+test-group = 'timing'
+
+[profile.ci]
+fail-fast = false

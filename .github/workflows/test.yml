@@ -18,5 +18,12 @@ jobs:
       # .cargo/config.toml links with clang + mold.
       - uses: rui314/setup-mold@v1
       - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # Test binaries run in parallel (see .config/nextest.toml for the serial timing group).
       - name: Headless gameplay tests
-        run: cargo test
+        run: cargo nextest run --profile ci
+      # nextest doesn't run doctests.
+      - name: Doctests
+        run: cargo test --doc
