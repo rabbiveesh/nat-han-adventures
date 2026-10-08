@@ -19,7 +19,9 @@
 //!   sounds on the same manager.
 //!
 //! [`AudioOutput::Headless`] runs it all without a sound card: a system renders as much music
-//! as real time has passed (tests; sfx are only counted).
+//! as real time has passed (tests; sfx are only counted). With an `AudioCapture` resource
+//! (the `capture` feature, video recording) it runs the same manager on a deviceless backend and
+//! renders exactly one video frame of music + sfx per frame into a WAV (`super::capture`).
 //!
 //! On the web the manager's cpal backend makes the page's one `AudioContext` at startup,
 //! through `window.AudioContext`, which `index.html` wraps to resume it on the first gesture
@@ -29,7 +31,8 @@
 use bevy::prelude::*;
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, PlaybackRate};
-use rand::Rng;
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 use crate::events::{BandFreedom, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
 use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
@@ -57,6 +60,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<Director>()
         .init_resource::<HanBabble>()
         .init_resource::<SfxCount>()
+        .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
         .add_systems(Update, (follow_state, forward, direct, duck, play_sfx, babble).chain())
@@ -227,10 +231,29 @@ pub struct Director {
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SfxCount(pub u32);
 
+/// The kira manager: on the sound card, or (capture) pulled a frame at a time. (One lives for
+/// the whole run: the size difference doesn't matter.)
+#[allow(clippy::large_enum_variant)]
+enum Manager {
+    Device(AudioManager<DefaultBackend>),
+    #[cfg(feature = "capture")]
+    Capture(AudioManager<super::capture::CaptureBackend>),
+}
+
+/// The sfx.s dice (Han.s babble). Fixed seed when capturing, so takes repeat exactly.
+#[derive(Resource)]
+struct SfxRng(StdRng);
+
+impl Default for SfxRng {
+    fn default() -> Self {
+        SfxRng(StdRng::from_rng(&mut rand::rng()))
+    }
+}
+
 /// The audio side (main thread only): the kira manager or the headless sound, the music's
 /// handle, the rendered sfx.
 struct Audio {
-    manager: Option<AudioManager<DefaultBackend>>,
+    manager: Option<Manager>,
     headless: Option<LiveSound>,
     handle: Option<LiveHandle>,
     sfx: Vec<(Sfx, StaticSoundData)>,
@@ -246,9 +269,14 @@ impl Audio {
     fn play(&mut self, data: Option<StaticSoundData>, db: f32, rate: f64, count: &mut SfxCount) {
         let Some(data) = data else { return };
         count.0 += 1;
-        if let Some(m) = self.manager.as_mut()
-            && let Err(e) = m.play(data.volume(Decibels(db)).playback_rate(PlaybackRate(rate)))
-        {
+        let data = data.volume(Decibels(db)).playback_rate(PlaybackRate(rate));
+        let played = match self.manager.as_mut() {
+            Some(Manager::Device(m)) => m.play(data).map(drop),
+            #[cfg(feature = "capture")]
+            Some(Manager::Capture(m)) => m.play(data).map(drop),
+            None => Ok(()),
+        };
+        if let Err(e) = played {
             debug!("sfx: {e}");
         }
     }
@@ -265,6 +293,16 @@ fn setup(world: &mut World) {
     let sfx = Sfx::ALL.into_iter().map(|s| (s, to_static(sfx::render(s)))).collect();
     let han = (0..sfx::HAN_VARIANTS).map(|v| to_static(sfx::han_blip(v))).collect();
     let data = LiveSoundData::new();
+    #[cfg(feature = "capture")]
+    if world.contains_resource::<super::capture::AudioCapture>() {
+        // Capturing: the device path's mix, pulled a frame at a time; Han's babble seeded.
+        let mut manager = AudioManager::<super::capture::CaptureBackend>::new(AudioManagerSettings::default())
+            .expect("the capture backend never fails");
+        let handle = manager.play(data).ok();
+        world.insert_resource(SfxRng(StdRng::seed_from_u64(0x7007)));
+        world.insert_non_send(Audio { manager: Some(Manager::Capture(manager)), headless: None, handle, sfx, han });
+        return;
+    }
     let (manager, headless, handle) = match output {
         AudioOutput::Headless => {
             let (sound, handle) = data.split();
@@ -273,7 +311,7 @@ fn setup(world: &mut World) {
         AudioOutput::Device => match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
             Ok(mut manager) => {
                 let handle = manager.play(data).ok();
-                (Some(manager), None, handle)
+                (Some(Manager::Device(manager)), None, handle)
             }
             Err(e) => {
                 warn!("no audio output ({e:?}): playing silently");
@@ -484,8 +522,20 @@ fn duck(play_state: Option<Res<State<PlayState>>>, mut player: ResMut<LivePlayer
 }
 
 /// Headless output: render as much audio as real time has passed (a 48 kHz "device").
-fn pump(time: Res<Time<Real>>, mut audio: NonSendMut<Audio>) {
+/// Capture: exactly one video frame's audio.
+fn pump(
+    time: Res<Time<Real>>,
+    mut audio: NonSendMut<Audio>,
+    #[cfg(feature = "capture")] capture: Option<ResMut<super::capture::AudioCapture>>,
+) {
     use kira::sound::Sound;
+    #[cfg(feature = "capture")]
+    if let Some(Manager::Capture(m)) = audio.manager.as_mut() {
+        if let Some(mut c) = capture {
+            c.pump(m);
+        }
+        return;
+    }
     const RATE: f64 = 48_000.0;
     let Some(sound) = audio.headless.as_mut() else { return };
     let n = ((time.delta_secs_f64() * RATE).round() as usize).min(48_000);
@@ -574,6 +624,7 @@ fn play_sfx(
     mut completed: MessageReader<LevelCompleted>,
     mut han: MessageReader<HanSays>,
     mut requests: MessageReader<PlaySfx>,
+    mut rng: ResMut<SfxRng>,
 ) {
     let mut queue: Vec<(Sfx, f32)> = Vec::new();
     for j in jumped.read() {
@@ -593,7 +644,7 @@ fn play_sfx(
         let data = audio.sfx(s).cloned();
         audio.play(data, db, 1.0, &mut count);
     }
-    let mut rng = rand::rng();
+    let rng = &mut rng.0;
     for line in han.read() {
         // A few syllables over ~0.4s, roughly following how much he says.
         let syllables = line.text.split_whitespace().count().clamp(2, 4);
@@ -611,12 +662,18 @@ pub fn land_db(speed: f32) -> Option<f32> {
     (k >= 0.15).then(|| 20.0 * (0.2 + 0.8 * k.min(1.0)).log10() - 1.0)
 }
 
-fn babble(time: Res<Time>, mut audio: NonSendMut<Audio>, mut count: ResMut<SfxCount>, mut pending: ResMut<HanBabble>) {
+fn babble(
+    time: Res<Time>,
+    mut audio: NonSendMut<Audio>,
+    mut count: ResMut<SfxCount>,
+    mut pending: ResMut<HanBabble>,
+    mut rng: ResMut<SfxRng>,
+) {
     if pending.0.is_empty() || audio.han.is_empty() {
         return;
     }
     let dt = time.delta_secs();
-    let mut rng = rand::rng();
+    let rng = &mut rng.0;
     let mut last = None;
     let mut due = Vec::new();
     pending.0.retain_mut(|t| {
