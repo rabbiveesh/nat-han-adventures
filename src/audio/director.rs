@@ -298,7 +298,9 @@ impl Band {
             waltzes += self.steps.jump(now) as u32;
         }
         self.steps_taken += waltzes;
-        if ev.deaths > 0 {
+        // A death, or a toot, breaks a jump in threes: waltz steps are plain hops, so a
+        // jump-toot rhythm on a giant wall's runway summons Giant Steps, not the waltz.
+        if ev.deaths > 0 || ev.toots > 0 {
             self.steps.reset();
         }
         // Stats as they stood before this frame's events (to see whether they summon a mode).
@@ -314,6 +316,8 @@ impl Band {
         self.window.fill(&mut self.stats, now, self.level_start);
         let summon = if ev.toots + ev.nuggets + waltzes > 0 { summoned(&before, &self.stats) } else { None };
         if let Some(h) = summon {
+            // (Clears every summon's progress, so one completed in the same frame that lost
+            // can't stay "met" and block itself for a window.)
             self.begin(h, now);
         } else if let Some(h) = self.held(now) {
             let used = match h {
@@ -339,9 +343,15 @@ impl Band {
 
     /// A summon of `h` starts: its counter cleared, its hold started, the mood forgotten.
     fn begin(&mut self, h: Harmony, now: f32) {
-        if let Some(k) = column(h) {
-            self.window.clear(k);
+        // A fresh start for EVERY summon, not just this one: progress toward another mode made
+        // before this summon (4 nuggets, then 5 toots) mustn't flip it over with one more
+        // nugget. The player has to commit to the next mode from scratch.
+        for other in SUMMON_ORDER {
+            if let Some(k) = column(other) {
+                self.window.clear(k);
+            }
         }
+        self.steps.reset();
         self.window.fill(&mut self.stats, now, self.level_start);
         self.hold = Some((h, now + SUMMON_HOLD_SECS));
         self.stats.mood_deaths = 0;
@@ -681,5 +691,34 @@ mod chute_tests {
         }
         assert_eq!(last.unwrap().0.harmony, Harmony::MelodicMinor);
         assert!(b.stats.level_deaths >= NERVOUS_DEATHS);
+    }
+}
+
+#[cfg(test)]
+mod fresh_start_tests {
+    use super::*;
+
+    /// 4 nuggets, then 5 toots summon Giant Steps: the next nugget mustn't flip it to the fired-up
+    /// band (every summon starts from scratch after another one).
+    #[test]
+    fn a_summon_resets_progress_toward_the_others() {
+        let mut b = Band::default();
+        b.start(0.0);
+        for k in 0..4 {
+            b.step(0.5 + k as f32 * 0.5, Events { nuggets: 1, ..Default::default() });
+        }
+        let mut last = None;
+        for k in 0..5 {
+            last = b.step(3.0 + k as f32 * 0.3, Events { toots: 1, ..Default::default() }).or(last);
+        }
+        assert_eq!(last.unwrap().0.harmony, Harmony::Coltrane);
+        let after = b.step(5.0, Events { nuggets: 1, ..Default::default() });
+        assert!(after.is_none_or(|(f, _)| f.harmony == Harmony::Coltrane), "a 5th nugget flipped it: {after:?}");
+        // A fresh run of 4 quick nuggets still summons the fired-up band.
+        let mut got = None;
+        for k in 1..=4 {
+            got = b.step(5.0 + k as f32 * 0.5, Events { nuggets: 1, ..Default::default() }).or(got);
+        }
+        assert_eq!(got.unwrap().0.harmony, Harmony::Quartal);
     }
 }
