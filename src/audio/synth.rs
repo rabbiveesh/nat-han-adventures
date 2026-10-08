@@ -19,7 +19,7 @@ use bevy_kira_audio::prelude::Frame;
 
 use super::mml::{self, Arp, Channel, Drum, Event, EventKind, Track};
 use super::tuning::{self, Medley, Tuning, Wobble};
-use super::{Filters, Harmony, Song, accomp, chart, melody};
+use super::{Filters, Harmony, Song, accomp, chart, melody, waltz};
 
 /// Output sample rate. 32 kHz keeps memory and render time down (a 60s song is ~15 MB of
 /// frames) while leaving plenty of headroom above the highest notes and hats.
@@ -134,6 +134,9 @@ pub struct RenderJob {
     anchors: [u8; 3],
     /// [`tuning::hash_str`] of the title, for [`Tuning::Drunk`] / [`Tuning::Medley`].
     song_hash: u64,
+    /// The waltz: beats are 3/4 beats; the medley's phrases follow the 4/4 song
+    /// ([`waltz::unwarp`]), so they change where they would have.
+    waltz: bool,
     stage: Stage,
     /// Next event (or drum hit) of the current channel.
     cursor: usize,
@@ -167,7 +170,7 @@ impl RenderJob {
         let mut p1 = parse("pulse1", song.pulse1, Channel::Melodic)?;
         let mut p2 = parse("pulse2", song.pulse2, Channel::Melodic)?;
         let mut tri = parse("triangle", song.triangle, Channel::Melodic)?;
-        let noise = parse("noise", song.noise, Channel::Drums)?;
+        let mut noise = parse("noise", song.noise, Channel::Drums)?;
 
         let beats = [&p1, &p2, &tri, &noise].iter().map(|t| t.length).fold(0.0, f64::max);
         if beats <= 0.0 {
@@ -189,11 +192,24 @@ impl RenderJob {
                     chart.beats()
                 ));
             }
-            (p2, tri) = accomp::generate(&chart, filters.harmony, song.key, seed);
-            p1 = melody::reharmonize(&p1, &chart, filters.harmony);
+            if filters.harmony == Harmony::Waltz {
+                // Re-cut into 3/4 (see [`waltz`]): the melody's rhythm warped, a new band.
+                let w = waltz::warp_chart(&chart);
+                (p2, tri) = accomp::waltz(&w, seed);
+                p1 = waltz::warp_track(&p1);
+                noise = waltz::drums(w.beats());
+            } else {
+                (p2, tri) = accomp::generate(&chart, filters.harmony, song.key, seed);
+                p1 = melody::reharmonize(&p1, &chart, filters.harmony);
+            }
         }
+        let is_waltz = filters.harmony == Harmony::Waltz;
+        // The 4/4 length (the medley's phrases count in it), and this version's.
+        let canon_beats = beats;
+        let beats = if is_waltz { waltz::warp(beats) } else { beats };
+        let bpm = if is_waltz { waltz::WALTZ_BPM } else { song.bpm };
 
-        let timing = Timing { samples_per_beat: SR as f64 * 60.0 / song.bpm as f64 };
+        let timing = Timing { samples_per_beat: SR as f64 * 60.0 / bpm as f64 };
         let tracks = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));
         let hits = (0..tracks[3].events.len())
             .filter(|&i| {
@@ -214,7 +230,7 @@ impl RenderJob {
         let tail = (TAIL * SR) as usize;
         let song_hash = tuning::hash_str(song.title);
         let medley = (tuning == Tuning::Medley)
-            .then(|| Medley::new(song_hash, beats, song.looping.then_some(len as f64 / SR as f64)));
+            .then(|| Medley::new(song_hash, canon_beats, song.looping.then_some(len as f64 / SR as f64)));
         Ok(RenderJob {
             looping: song.looping,
             timing,
@@ -226,6 +242,7 @@ impl RenderJob {
             medley,
             anchors,
             song_hash,
+            waltz: is_waltz,
             stage: Stage::Channel(0),
             cursor: 0,
             phase: 0.0,
@@ -318,11 +335,12 @@ impl RenderJob {
             // starts in, and arpeggio tone `j` is salted `salt + j`.
             let anchor = self.anchors[ch];
             let salt = tuning::salt(self.song_hash, ch, i, 0);
+            let phrase_beat = if self.waltz { waltz::unwarp(e.start) } else { e.start };
             let mut hz = [0.0; Arp::MAX];
             for (j, (h, &note)) in hz.iter_mut().zip(notes).enumerate() {
                 let salt = salt.wrapping_add(j as u64);
                 *h = match &self.medley {
-                    Some(m) => m.hz(note, anchor, e.start, salt),
+                    Some(m) => m.hz(note, anchor, phrase_beat, salt),
                     None => self.tuning.hz(note, anchor, salt),
                 };
             }

@@ -36,6 +36,7 @@ fn app(level: &str) -> App {
     count::<CheckpointReached>(&mut app);
     count::<LevelCompleted>(&mut app);
     count::<HanSays>(&mut app);
+    count::<nat_han_adventures::game::JumpedOnOne>(&mut app);
     app.finish();
     app.cleanup();
     app.update(); // Startup
@@ -947,4 +948,167 @@ fn han_falls_after_popping_in_mid_air() {
     let on_pillar = (h.y - standing(7.0 * TILE)).abs() < 1.0;
     assert!(h.x < 18.0 * TILE, "test setup: han should have popped in left of the pillar, at {h}");
     assert!(on_floor || on_pillar, "han hanging in the air at {h}");
+}
+
+// --- The waltz: the world dances to the music's clock (driven directly here). ---
+
+/// The music at `beats` 3/4 beats into the waltz (0.5s a beat, like the real thing).
+fn waltz(app: &mut App, beats: f64) {
+    use nat_han_adventures::game::BeatClock;
+    let secs = 60.0 / nat_han_adventures::audio::waltz::WALTZ_BPM as f64;
+    *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+}
+
+/// Beats of waltz per fixed step.
+const WALTZ_STEP: f64 = DT / 0.5;
+
+#[test]
+fn waltz_sprays_fire_together_on_the_big_one() {
+    use nat_han_adventures::game::{BeatClock, Spray};
+    let mut app = app(SPRAY);
+    let s = single::<Spray>(&mut app);
+    let mut on_steps = 0;
+    for i in 0..360 {
+        // 6 s: four bars, two big ONEs.
+        let beats = i as f64 * WALTZ_STEP;
+        waltz(&mut app, beats);
+        app.update();
+        let on = app.world().get::<Spray>(s).unwrap().on;
+        let c = BeatClock::at(beats, 0.5, 3);
+        assert_eq!(on, c.beat == 0 && c.bar % 2 == 0, "step {i}: bar {} beat {}", c.bar, c.beat);
+        on_steps += on as usize;
+    }
+    assert_eq!(on_steps, 60, "on for one beat (0.5s) of every six");
+    // Back to the normal shared timing outside the waltz.
+    *app.world_mut().resource_mut::<Groove>() = Groove::default();
+    app.update();
+    let t = app.world().resource::<SimClock>().time;
+    assert_eq!(app.world().get::<Spray>(s).unwrap().on, nat_han_adventures::game::spray_on(0, t));
+}
+
+#[test]
+fn waltz_platforms_glide_on_one_and_hold_on_two_three() {
+    use nat_han_adventures::game::{BeatClock, platform_pos};
+    let level = PLATFORM.replacen("..P.............P", "..P..............", 1);
+    let mut app = app(&level);
+    let plat = {
+        let mut q = app.world_mut().query::<(Entity, &MovingPlatform)>();
+        q.iter(app.world()).find(|(_, p)| p.travel.y == 0.0).unwrap().0
+    };
+    let def = app.world().get::<MovingPlatform>(plat).unwrap().clone();
+    let t0 = app.world().resource::<SimClock>().platform_time;
+    let mut prev = app.world().get::<Pos>(plat).unwrap().0;
+    let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+    let bars = 6;
+    for i in 0..bars * 90 {
+        let beats = i as f64 * WALTZ_STEP;
+        waltz(&mut app, beats);
+        app.update();
+        let p = app.world().get::<Pos>(plat).unwrap().0;
+        let c = BeatClock::at(beats, 0.5, 3);
+        if c.beat != 0 {
+            assert_eq!(p, prev, "step {i}: holds on 2 and 3");
+        }
+        let t = app.world().resource::<SimClock>().platform_time;
+        assert_eq!(p, platform_pos(&def, t), "the same path, on its own clock");
+        (lo, hi) = (lo.min(p.x), hi.max(p.x));
+        prev = p;
+    }
+    // A bar's worth of glide per bar: the average speed is unchanged...
+    let t = app.world().resource::<SimClock>().platform_time - t0;
+    assert!((t - bars as f32 * 1.5).abs() < 0.1, "platform clock ran {t}s in {}s", bars as f32 * 1.5);
+    // ...and it still covers its whole path.
+    assert!(hi - lo > def.travel.x - 1.0, "covered {}px of {}", hi - lo, def.travel.x);
+}
+
+#[test]
+fn waltz_flies_circle_once_per_bar() {
+    let mut app = app(HAZARDS);
+    let fly = single::<nat_han_adventures::game::Fly>(&mut app);
+    let at = |app: &mut App| app.world().get::<Pos>(fly).unwrap().0;
+    waltz(&mut app, 0.0);
+    app.update();
+    let start = at(&mut app);
+    let mut far = 0.0f32;
+    for i in 1..=90 {
+        waltz(&mut app, i as f64 * WALTZ_STEP);
+        app.update();
+        far = far.max(at(&mut app).distance(start));
+    }
+    assert!(at(&mut app).distance(start) < 0.5, "back after one bar (1.5s): {} vs {start}", at(&mut app));
+    assert!(far > 1.9 * TILE, "went all the way round ({far}px)");
+}
+
+/// Jump at `offset` seconds from a downbeat (negative: before it). Returns the take-off speed,
+/// whether a toot still works afterwards, and how many golden ONE jumps there were.
+fn jump_at(offset: f64) -> (f32, bool, usize) {
+    use nat_han_adventures::game::JumpedOnOne;
+    let mut app = app(FLAT);
+    step(&mut app, 0.3);
+    assert!(body(&mut app).on_ground);
+    let beats = 3.0 * 5.0 + offset / 0.5;
+    waltz(&mut app, beats);
+    hold(&mut app, JUMP);
+    app.update();
+    let vy = body(&mut app).vel.y + tuning::GRAVITY * DT as f32;
+    for k in 1..10 {
+        waltz(&mut app, beats + k as f64 * WALTZ_STEP);
+        app.update();
+    }
+    release(&mut app, JUMP);
+    app.update();
+    hold(&mut app, JUMP);
+    app.update();
+    let tooted = counted::<Jumped>(&app) == 2;
+    (vy, tooted, counted::<JumpedOnOne>(&app))
+}
+
+#[test]
+fn jump_on_one_is_higher_golden_and_spends_the_toot() {
+    use nat_han_adventures::game::{WALTZ_ONE_BOOST, WALTZ_ONE_WINDOW};
+    let boosted = tuning::JUMP_SPEED * WALTZ_ONE_BOOST;
+    assert!((WALTZ_ONE_WINDOW - 0.12).abs() < 1e-6);
+    for offset in [0.0, 0.05, 0.11, -0.05, -0.11] {
+        let (vy, tooted, golden) = jump_at(offset);
+        assert!((vy - boosted).abs() < 0.5, "{offset}: {vy}");
+        assert!(!tooted, "{offset}: a ONE jump spends the toot");
+        assert_eq!(golden, 1, "{offset}");
+    }
+    for offset in [0.14, -0.14, 0.25, 0.5, -0.6] {
+        let (vy, tooted, golden) = jump_at(offset);
+        assert!((vy - tuning::JUMP_SPEED).abs() < 0.5, "{offset}: off-beat jumps are normal ({vy})");
+        assert!(tooted, "{offset}: the toot is still there");
+        assert_eq!(golden, 0, "{offset}");
+    }
+    // Outside the waltz, a jump on a downbeat is just a jump.
+    let mut app = app(FLAT);
+    step(&mut app, 0.3);
+    hold(&mut app, JUMP);
+    app.update();
+    assert!((body(&mut app).vel.y + tuning::GRAVITY * DT as f32 - tuning::JUMP_SPEED).abs() < 0.5);
+}
+
+#[test]
+fn han_counts_every_third_jump_on_one() {
+    use nat_han_adventures::game::{OneJumps, WALTZ_ONE_LINE_EVERY};
+    let mut app = app(FLAT);
+    step(&mut app, 0.3);
+    let said0 = counted::<HanSays>(&app);
+    let mut beats: f64 = 30.0;
+    for n in 1..=6u32 {
+        // Wait on the ground for the next downbeat, then jump right on it.
+        beats = (beats / 3.0).ceil() * 3.0;
+        waltz(&mut app, beats);
+        hold(&mut app, JUMP);
+        app.update();
+        release(&mut app, JUMP);
+        for _ in 0..80 {
+            beats += WALTZ_STEP;
+            waltz(&mut app, beats);
+            app.update();
+        }
+        assert!(body(&mut app).on_ground);
+        assert_eq!(app.world().resource::<OneJumps>().0, n);
+        assert_eq!(counted::<HanSays>(&app) - said0, (n / WALTZ_ONE_LINE_EVERY) as usize, "after {n} ONE jumps");
+    }
 }

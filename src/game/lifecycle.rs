@@ -97,6 +97,7 @@ fn load(
         ..default()
     });
     commands.insert_resource(SimClock::default());
+    commands.insert_resource(super::OneJumps::default());
     commands.insert_resource(super::pickups::NuggetsAtRisk::default());
     // The band starts every level playing it straight (the audio plugin switches back at the
     // next bar line); physics don't wait for it.
@@ -247,6 +248,7 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
 
 fn tick_clocks(
     time: Res<Time>,
+    groove: Res<Groove>,
     mut clock: ResMut<SimClock>,
     mut run: ResMut<LevelRun>,
     mut prev: Query<(&Pos, &mut PrevPos)>,
@@ -254,6 +256,8 @@ fn tick_clocks(
     let dt = time.delta_secs();
     clock.time += dt;
     clock.steps += 1;
+    clock.platform_time += dt * groove.platform_rate();
+    clock.fly_turns += dt * groove.fly_rate(super::hazards::FLY_PERIOD);
     run.time += dt;
     for (pos, mut prev) in &mut prev {
         prev.0 = pos.0;

@@ -3,7 +3,25 @@
 
 use std::time::Instant;
 
-use nat_han_adventures::audio::{Filters, Harmony, Music, Sfx, Song, demo, sfx, songs, synth};
+use nat_han_adventures::audio::{Filters, Harmony, Meter, Music, Sfx, Song, demo, mml, sfx, songs, synth, waltz};
+
+/// A song's length in 4/4 beats (its longest track).
+fn song_beats(song: &Song) -> f64 {
+    [(song.pulse1, mml::Channel::Melodic), (song.pulse2, mml::Channel::Melodic), (song.triangle, mml::Channel::Melodic), (song.noise, mml::Channel::Drums)]
+        .iter()
+        .map(|(src, ch)| mml::parse(src, *ch).unwrap().length)
+        .fold(0.0, f64::max)
+}
+
+/// Frames a looping version renders to: the plain length, or the waltz's (1.5x the beats at
+/// the waltz tempo).
+fn version_frames(song: &Song, f: Filters, plain: usize) -> usize {
+    if f.harmony == Harmony::Waltz {
+        (Meter::of(song, f).loop_secs(song_beats(song)) * synth::SAMPLE_RATE as f64).round() as usize
+    } else {
+        plain
+    }
+}
 
 /// Render budget for everything. Generous in debug builds (this crate is built at opt-level 1).
 fn budget_secs() -> f64 {
@@ -63,13 +81,14 @@ fn every_song_and_sfx_renders_cleanly_and_quickly() {
 fn every_song_renders_through_every_filter() {
     let mut all: Vec<(String, Song)> = Music::ALL.iter().map(|m| (format!("{m:?}"), songs::song(*m))).collect();
     all.push(("demo".into(), demo::demo_song()));
-    let mut plain_secs = 0.0;
-    let mut filtered_secs = 0.0;
-    let mut filtered = 0;
+    // Render time per second of audio (the waltz is longer than the rest).
+    let (mut plain_secs, mut plain_audio) = (0.0, 0.0);
+    let (mut filtered_secs, mut filtered_audio) = (0.0, 0.0);
     for (name, song) in &all {
         let t = Instant::now();
         let plain = synth::render_song(song).unwrap();
         plain_secs += t.elapsed().as_secs_f64();
+        plain_audio += plain.duration_secs() as f64;
         for harmony in Harmony::ALL {
             if harmony != Harmony::Original && song.chords.trim().is_empty() {
                 continue;
@@ -79,16 +98,119 @@ fn every_song_renders_through_every_filter() {
                 let t = Instant::now();
                 let r = synth::render_song_with(song, f, 42).unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
                 filtered_secs += t.elapsed().as_secs_f64();
-                filtered += 1;
-                assert_eq!(r.frames.len(), plain.frames.len(), "{name} {f:?}: length changed");
+                filtered_audio += r.duration_secs() as f64;
+                if song.looping || harmony != Harmony::Waltz {
+                    assert_eq!(r.frames.len(), version_frames(song, f, plain.frames.len()), "{name} {f:?}: length changed");
+                }
                 check(&format!("{name} {f:?}"), &r);
             }
         }
     }
-    let per_plain = plain_secs / all.len() as f64;
-    let per_filtered = filtered_secs / filtered as f64;
-    println!("plain {:.1}ms/song, filtered {:.1}ms/song", per_plain * 1000.0, per_filtered * 1000.0);
-    assert!(per_filtered < 2.0 * per_plain + 0.005, "filtered renders too slow: {per_filtered:.3}s vs {per_plain:.3}s");
+    let per_plain = plain_secs / plain_audio;
+    let per_filtered = filtered_secs / filtered_audio;
+    println!("plain {:.2}ms/s of audio, filtered {:.2}ms/s", per_plain * 1000.0, per_filtered * 1000.0);
+    assert!(per_filtered < 2.0 * per_plain + 0.0002, "filtered renders too slow: {per_filtered:.5}s vs {per_plain:.5}s per second");
+}
+
+/// The jazz waltz, alone and with the laughing band: every song with a chart, clean (including
+/// the loop seam), exactly 1.5x the beats at the waltz tempo, and within the render budget.
+#[test]
+fn every_song_waltzes_cleanly_and_within_budget() {
+    let mut all: Vec<(String, Song)> = Music::ALL.iter().map(|m| (format!("{m:?}"), songs::song(*m))).collect();
+    all.push(("demo".into(), demo::demo_song()));
+    let t = std::time::Instant::now();
+    let mut waltzed = 0;
+    for (name, song) in &all {
+        if song.chords.trim().is_empty() {
+            continue;
+        }
+        for just_intonation in [false, true] {
+            let f = Filters { harmony: Harmony::Waltz, just_intonation };
+            let r = synth::render_song_with(song, f, 7).unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
+            let beats = song_beats(song);
+            let want = waltz::warp(beats) * 60.0 / waltz::WALTZ_BPM as f64;
+            // (A one-shot rings out a little past its last beat.)
+            let tail = if song.looping { 1e-3 } else { 0.5 };
+            let d = r.duration_secs() as f64;
+            assert!(d > want - 1e-3 && d < want + tail, "{name}: {d} s, want {want}");
+            assert_eq!(r.looping, song.looping);
+            check(&format!("{name} {f:?}"), &r);
+            // Not just the melody: the bass, comping and drums all play.
+            let quiet = r.frames.iter().filter(|x| x.left.abs().max(x.right.abs()) < 1e-3).count();
+            assert!(quiet * 10 < r.frames.len(), "{name} {f:?}: {quiet} silent frames");
+            waltzed += 1;
+        }
+    }
+    assert!(waltzed >= 12, "{waltzed}");
+    let secs = t.elapsed().as_secs_f64();
+    println!("{waltzed} waltz renders: {:.0}ms", secs * 1000.0);
+    assert!(secs < 2.0 * budget_secs(), "waltz renders took {secs:.2}s");
+}
+
+/// The waltz's melody is the written one, rhythm warped (ONE-two-three), pitches untouched.
+#[test]
+fn the_waltz_melody_is_the_tune_in_three() {
+    for m in Music::ALL {
+        let song = songs::song(m);
+        if song.chords.trim().is_empty() {
+            continue;
+        }
+        let mel = mml::parse(song.pulse1, mml::Channel::Melodic).unwrap();
+        let w = waltz::warp_track(&mel);
+        assert_eq!(w.length, 1.5 * mel.length, "{m:?}");
+        assert_eq!(w.events.len(), mel.events.len(), "{m:?}");
+        for (a, b) in w.events.iter().zip(&mel.events) {
+            assert_eq!((a.kind, a.volume, a.duty, a.tie), (b.kind, b.volume, b.duty, b.tie), "{m:?}");
+            assert!((a.start - waltz::warp(b.start)).abs() < 1e-9);
+        }
+        // Every 4/4 downbeat note is on a waltz ONE.
+        for (a, b) in w.events.iter().zip(&mel.events) {
+            if b.start.rem_euclid(2.0) < 1e-9 {
+                assert!(a.start.rem_euclid(3.0) < 1e-9, "{m:?}: {} -> {}", b.start, a.start);
+            }
+        }
+    }
+}
+
+/// Switching between a 4/4 version and the waltz maps the song position through the warp and
+/// lands on a bar line of the new version.
+#[test]
+fn switching_to_and_from_the_waltz_maps_the_song_position() {
+    use nat_han_adventures::audio::switch_point;
+    let song = songs::song(Music::World(3));
+    let beats = song_beats(&song);
+    let plain = Meter::of(&song, Filters::default());
+    let wz = Meter::of(&song, Filters { harmony: Harmony::Waltz, just_intonation: false });
+    let wz_ji = Meter::of(&song, Filters { harmony: Harmony::Waltz, just_intonation: true });
+    let (len_plain, len_wz) = (plain.loop_secs(beats), wz.loop_secs(beats));
+    assert!((len_wz - 1.5 * beats * 0.5).abs() < 1e-3, "the waltz is 1.5x the beats at 0.5s each");
+    let bar4 = 4.0 * plain.beat_secs();
+    let bar3 = 3.0 * wz.beat_secs();
+    for k in 0..200 {
+        let pos = k as f64 * 0.137 % len_plain;
+        // 4/4 -> waltz: at the next 4/4 bar line, which is the first of a pair of waltz bars.
+        let (wait, at) = switch_point(plain, wz, beats, pos, 0.03, len_wz);
+        assert!(wait >= 0.03 - 1e-9 && wait <= bar4 + 0.03 + 1e-9, "{pos}: wait {wait}");
+        let line = pos + wait;
+        assert!(((line / bar4) - (line / bar4).round()).abs() < 1e-6, "{pos}: not a 4/4 bar line");
+        let canon = (line / plain.beat_secs()).rem_euclid(beats);
+        assert!((at - (waltz::warp(canon) * wz.beat_secs()).rem_euclid(len_wz)).abs() < 1e-6, "{pos}: same point of the tune");
+        assert!(((at / (2.0 * bar3)) - (at / (2.0 * bar3)).round()).abs() < 1e-6, "{pos}: {at} not a waltz bar pair");
+        // waltz -> 4/4: wait for a waltz bar line that's also a 4/4 one.
+        let wpos = pos / len_plain * len_wz;
+        let (wait, at) = switch_point(wz, plain, beats, wpos, 0.03, len_plain);
+        assert!(wait >= 0.03 - 1e-9 && wait <= 2.0 * bar3 + 0.03 + 1e-9, "{wpos}: wait {wait}");
+        let line = wpos + wait;
+        assert!(((line / (2.0 * bar3)) - (line / (2.0 * bar3)).round()).abs() < 1e-6);
+        assert!(((at / bar4) - (at / bar4).round()).abs() < 1e-6, "{wpos}: {at} not a 4/4 bar line");
+        let canon = waltz::unwarp(line / wz.beat_secs()).rem_euclid(beats);
+        assert!((at - (canon * plain.beat_secs()).rem_euclid(len_plain)).abs() < 1e-6);
+        // waltz -> waltz (the laughing band joins): any waltz bar line, same position.
+        let (wait, at) = switch_point(wz, wz_ji, beats, wpos, 0.03, len_wz);
+        assert!(wait <= bar3 + 0.03 + 1e-9);
+        assert!((at - (wpos + wait).rem_euclid(len_wz)).abs() < 1e-6);
+        assert!(((at / bar3) - (at / bar3).round()).abs() < 1e-6);
+    }
 }
 
 /// The laughing band's medley tuning (a different tuning every phrase, a bit drunk), alone:
@@ -248,6 +370,8 @@ fn filter_labels_and_override_syntax() {
     assert_eq!(Filters::parse("original+ji"), Some(f(Harmony::Original, true)));
     assert_eq!(Filters::parse("ji"), Some(f(Harmony::Original, true)));
     assert_eq!(Filters::parse("bebop"), None);
+    assert_eq!(f(Harmony::Waltz, false).label(), "JAZZ WALTZ");
+    assert_eq!(Filters::parse("waltz+ji"), Some(f(Harmony::Waltz, true)));
 }
 
 /// A busy, 90-second loop on every channel: an upper bound on what a real song costs.

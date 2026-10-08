@@ -6,7 +6,7 @@ use std::time::Duration;
 
 use bevy::{prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
-    audio::{Filters, Harmony, Music, MusicChanged, MusicPlayer, director, songs},
+    audio::{Filters, Harmony, Music, MusicChanged, MusicPlayer, director, songs, waltz},
     events::{Jumped, NuggetCollected, PlayerDied},
     game::{Groove, LevelRun},
     state::{AppState, CurrentLevel},
@@ -181,4 +181,90 @@ fn groove_follows_every_filter() {
     assert_eq!(Groove::default(), Groove::of(Harmony::Original));
     let plain = Groove::default();
     assert_eq!((plain.gravity_scale, plain.speed_scale, plain.time_scale, plain.bounce), (1.0, 1.0, 1.0, false));
+}
+
+fn ground_jump(app: &mut App) {
+    app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: false });
+    app.update();
+}
+
+/// Three evenly spaced ground jumps summon the waltz at once; it comes in at the next 4/4 bar
+/// line (the first of a pair of waltz bars), the song position mapped through the warp, and the
+/// physics and the world's beat clock follow. Waltzing on keeps it; it ends at a later check.
+#[test]
+fn jumping_in_threes_waltzes_at_the_next_bar() {
+    let mut app = app(7);
+    let bar = bar_secs(&app);
+    // 0.6s apart (36 frames).
+    for k in 0..3 {
+        assert_eq!(app.world().resource::<MusicPlayer>().pending_filters(), None, "{k} jumps: nothing yet");
+        ground_jump(&mut app);
+        if k < 2 {
+            for _ in 0..35 {
+                app.update();
+            }
+        }
+    }
+    let player = app.world().resource::<MusicPlayer>();
+    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Waltz), "decided at the 3rd jump");
+    let decided = now(&app);
+    let (after, change, groove) = until_switch(&mut app, decided);
+    println!("the waltz came in {after:.2}s after the 3rd jump (a 4/4 bar is {bar:.2}s)");
+    assert!(after <= 2.0 * bar + 0.5, "took {after:.2}s");
+    assert_eq!(change.now.filters.harmony, Harmony::Waltz);
+    assert_eq!(change.now.reason, director::REASON_WALTZ);
+    assert_eq!(change.now.toast(), "THE BAND WALTZES - JAZZ WALTZ");
+    assert_eq!(groove, Groove::of(Harmony::Waltz), "physics follow at the switch");
+    assert!(groove.waltz());
+    // On a waltz bar line: the first of a pair (a 4/4 bar line, warped).
+    let pair = 2.0 * 3.0 * 60.0 / waltz::WALTZ_BPM as f64;
+    let pairs = change.at_secs / pair;
+    assert!((pairs - pairs.round()).abs() < 1e-6, "switched mid-bar: {}s = {pairs} waltz bar pairs", change.at_secs);
+    // The world's clock is the waltz's: 3 beats of 0.5s, on the downbeat of the switch.
+    assert_eq!((groove.clock.beats_per_bar, groove.clock.beat_secs), (3, 0.5));
+    assert_eq!(groove.clock.bar % 2, 0);
+    assert_eq!(groove.clock.beat, 0);
+    // The clock keeps following the waltz. (How far it runs here depends on whether kira found
+    // an audio device: its position runs on the wall clock, this test's frames don't.)
+    for _ in 0..45 {
+        app.update();
+    }
+    assert_eq!(app.world().resource::<Groove>().clock.beats_per_bar, 3);
+
+    // Waltzing on (every 0.6s) keeps it going through the periodic check...
+    let t0 = app.world().resource::<LevelRun>().time;
+    while app.world().resource::<LevelRun>().time - t0 < director::MUSIC_CHECK_SECS + 2.0 {
+        ground_jump(&mut app);
+        for _ in 0..35 {
+            app.update();
+        }
+    }
+    assert_eq!(app.world().resource::<Heard>().0.len(), 1, "still waltzing");
+    assert!(app.world().resource::<Groove>().waltz());
+    // ...and without it the band goes back to 4/4 at a later check, on a shared bar line.
+    let mut frames = 0;
+    while app.world().resource::<Heard>().0.len() < 2 {
+        app.update();
+        frames += 1;
+        assert!(frames < 60 * 40, "the waltz never ended");
+    }
+    let (_, back, groove) = app.world().resource::<Heard>().0[1].clone();
+    assert_eq!(back.now.filters.harmony, Harmony::Original);
+    assert_eq!(groove, Groove::default());
+    let bars = back.at_secs / bar;
+    assert!((bars - bars.round()).abs() < 1e-6, "back on a 4/4 bar line: {}s", back.at_secs);
+    assert_eq!(groove.clock.beats_per_bar, 4);
+}
+
+/// Uneven jumps don't waltz.
+#[test]
+fn uneven_jumps_dont_waltz() {
+    let mut app = app(7);
+    for gap in [30, 50, 20, 70, 15] {
+        ground_jump(&mut app);
+        for _ in 0..gap {
+            app.update();
+        }
+    }
+    assert_eq!(app.world().resource::<MusicPlayer>().pending_filters(), None);
 }

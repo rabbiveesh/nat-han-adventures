@@ -21,9 +21,12 @@ mod platforms;
 mod visuals;
 
 pub use groove::{
-    BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, FIRED_UP_SPEED, GIANT_STEPS_GRAVITY,
-    GIANT_STEPS_SPEED, Groove, NERVOUS_TIME,
+    BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, BeatClock, FIRED_UP_SPEED, GIANT_STEPS_GRAVITY,
+    GIANT_STEPS_SPEED, Groove, JumpedOnOne, NERVOUS_TIME, OneJumps, WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
+    WALTZ_ONE_LINE_EVERY, WALTZ_ONE_WINDOW, WALTZ_SPRAY_BARS,
 };
+pub use hazards::{FLY_PERIOD, FORGIVE, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, spray_on};
+pub use platforms::platform_pos;
 pub use han::{DEATH_LINES, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail};
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{Body, Dead, PlayerControl};
@@ -129,6 +132,11 @@ pub struct PrevPos(pub Vec2);
 pub struct SimClock {
     pub time: f32,
     pub steps: u64,
+    /// The moving platforms' clock: `time`, except that while the band waltzes it runs in
+    /// lilting pulses (see [`Groove::platform_rate`]).
+    pub platform_time: f32,
+    /// Orbits the flies have flown (one per [`FLY_PERIOD`], or one per bar in the waltz).
+    pub fly_turns: f32,
 }
 
 /// The level currently loaded (a copy of `Levels[CurrentLevel]` taken when it was spawned).

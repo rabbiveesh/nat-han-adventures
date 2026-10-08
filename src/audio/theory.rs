@@ -177,7 +177,7 @@ pub fn coltrane(chart: &Chart) -> Chart {
         out.push(Slot { start: arrival, dur: target.end() - arrival, chord: target.chord });
         i = t + 1;
     }
-    Chart { slots: out, bars: chart.bars }
+    Chart { slots: out, bars: chart.bars, meter: chart.meter }
 }
 
 /// Melodic-minor modes we use, by the degree of the parent scale the chord root sits on.
