@@ -8,9 +8,9 @@
 use bevy::prelude::*;
 
 use super::{
-    BACK_WARN_LINE, FOLLOW_GAP, GRUMBLE_EVERY, HanAnim, HanPose, LEMME_LINE, LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL,
-    PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE, WHEEZE_LINE, brace_range, breather, go_ahead_delay,
-    grumble_line, intercept_range, overuse_limit,
+    BACK_WARN_LINE, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
+    LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE,
+    WHEEZE_LINE, brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
 };
 use crate::audio::Harmony;
 use crate::events::HanSays;
@@ -19,7 +19,7 @@ use crate::game::{
     PlayerControl, Pos, PrevPos, SimClock, platform_pos,
 };
 use crate::level::buddy::{HALF, HanCtl, HanInput, HanPhys, Kin, drive, head_holds, intercept, waltz_step};
-use crate::level::nav::{Edge, Nav, Route, Step, take_off};
+use crate::level::nav::{Edge, HanMove, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
 use crate::level::{Level, PlatformKind, TILE, ThingKind, Tile};
 
@@ -82,6 +82,8 @@ pub enum HanMode {
 #[derive(Debug, Clone, Copy, PartialEq, Reflect)]
 pub struct Exec {
     pub mv: u16,
+    /// The cell it takes off from, and the one it lands in.
+    pub from: (i32, i32),
     pub to: (i32, i32),
     pub x0: f32,
     pub t: f32,
@@ -138,6 +140,12 @@ pub struct HanBrain {
     pub weak_boosts: u32,
     pub grumbles: u32,
     pub since_grumble: f32,
+    /// The slot moved: a new route is wanted (the old one is kept until it's in).
+    pub reroute: bool,
+    /// Seconds he's been far behind Nat and out of sight (see [`FALL_BEHIND_SECS`]).
+    pub behind: f32,
+    /// How far (px, sideways) Nat was last step.
+    pub gap: f32,
 }
 
 impl Default for HanBrain {
@@ -168,6 +176,9 @@ impl Default for HanBrain {
             weak_boosts: 0,
             grumbles: 0,
             since_grumble: f32::INFINITY,
+            reroute: false,
+            behind: 0.0,
+            gap: 0.0,
         }
     }
 }
@@ -175,6 +186,20 @@ impl Default for HanBrain {
 /// The cell a box at `pos` stands in (its feet's cell).
 pub fn feet_cell(level: &Level, pos: Vec2) -> (i32, i32) {
     level.cell_at(pos - Vec2::new(0.0, HALF.y - 1.0))
+}
+
+/// The nav cell Han stands in: his feet's cell, or, when he's standing on the very edge of a
+/// ledge with his middle out over the drop, the cell of the ledge under his feet.
+pub fn nav_cell(level: &Level, pos: Vec2) -> (i32, i32) {
+    let feet = feet_cell(level, pos);
+    if floor_at(level, feet.0, feet.1 + 1) {
+        return feet;
+    }
+    [-1.0, 1.0]
+        .into_iter()
+        .map(|s| feet_cell(level, pos + Vec2::new(s * (HALF.x - 1.0), 0.0)))
+        .find(|c| floor_at(level, c.0, c.1 + 1))
+        .unwrap_or(feet)
 }
 
 /// Box center standing in cell `c` (world).
@@ -456,7 +481,12 @@ pub(super) fn think(
     let me = Kin { pos: pos.0, vel: body.vel, grounded: body.on_ground };
     let gap = if groove.grip() { NERVOUS_GAP } else { FOLLOW_GAP };
     if nbody.on_ground && !nat_on_han {
-        brain.nat_cell = Some(feet_cell(level, nat.pos));
+        let cell = feet_cell(level, nat.pos);
+        // Nat landed somewhere new while Han has nothing left to do: re-plan right away.
+        if brain.nat_cell != Some(cell) && brain.path.is_empty() && brain.exec.is_none() {
+            brain.replan = 0.0;
+        }
+        brain.nat_cell = Some(cell);
         if nbody.vel.x.abs() > 30.0 {
             brain.side = -nbody.vel.x.signum();
         }
@@ -566,6 +596,13 @@ pub(super) fn think(
         }
         _ => {}
     }
+    // On the run-up to a chain chasm he hangs back a few tiles from its edge until Nat jumps
+    // (then it's an intercept): mid-air catches are much more forgiving from there than from
+    // right on Nat's heels.
+    if brain.mode == HanMode::Follow && body.on_ground && input.dir != 0.0 && chasm_ahead(level, pos.0, input.dir) {
+        input.dir = 0.0;
+        input.jump = false;
+    }
     // The waltz: a step on each beat.
     if phys.on_the_beat && brain.mode == HanMode::Follow && !waltz_step(&groove) {
         input.dir = 0.0;
@@ -604,8 +641,24 @@ pub(super) fn think(
         ex.t += dt;
     }
 
+    // Left behind (Nat running on away from him, out of sight, on the side he came from) for a
+    // while: as good as lost. (Not while he's closing in on Nat, or waiting with him for a ride.)
+    let gap = (nat.pos.x - pos.0.x).abs();
+    let left_behind = brain.mode == HanMode::Follow
+        && out_of_sight(pos.0, nat.pos)
+        && (pos.0.x - nat.pos.x) * brain.side > 0.0
+        && gap > brain.gap + 0.5 * TILE * dt;
+    brain.gap = gap;
+    brain.behind = if nat_dead || !out_of_sight(pos.0, nat.pos) {
+        0.0
+    } else if left_behind {
+        brain.behind + dt
+    } else {
+        (brain.behind - dt).max(0.0)
+    };
     // Lost and out of sight: parachute in.
-    if brain.lost && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
+    let lost = brain.lost || brain.behind > FALL_BEHIND_SECS;
+    if lost && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
     // Fired up: he can't keep up.
@@ -693,6 +746,8 @@ fn start_parachute(
     brain.stuck = 0.0;
     brain.best = f32::INFINITY;
     brain.goal = None;
+    brain.reroute = false;
+    brain.behind = 0.0;
     brain.drops += 1;
 }
 
@@ -713,7 +768,7 @@ fn follow(
     _says: &mut MessageWriter<HanSays>,
 ) -> HanInput {
     let nav = nav.for_groove(groove);
-    let my_cell = feet_cell(level, me.pos);
+    let my_cell = if body.riding.is_some() { feet_cell(level, me.pos) } else { nav_cell(level, me.pos) };
     brain.replan -= dt;
     let flying = brain.exec.is_some_and(|e| e.flying);
     if brain.replan <= 0.0 && me.grounded && !flying {
@@ -722,25 +777,42 @@ fn follow(
         let goal = brain.nat_cell.and_then(|nc| slot_cell(&map, level, nc, slot_x));
         if goal != brain.goal {
             brain.goal = goal;
-            brain.path.clear();
-            brain.exec = None;
-            brain.stuck = 0.0;
-            brain.best = f32::INFINITY;
+            // Re-route, but keep going the way he's going until the new route is in: the slot
+            // moves on with a running Nat a few times a second, and stopping to think each
+            // time is how he falls behind.
+            brain.reroute = true;
+            // Progress is measured afresh toward the new slot, but a Nat on the move keeps
+            // moving it: that alone isn't progress (or he'd never notice he's stuck).
+            brain.best = goal.map_or(f32::INFINITY, |g| (stand(level, g) - me.pos).length());
+            if goal.is_none_or(|g| g == my_cell) {
+                brain.path.clear();
+                brain.exec = None;
+                brain.reroute = false;
+            }
         }
         if let Some(goal) = goal
-            && brain.path.is_empty()
-            && brain.exec.is_none()
+            && (brain.reroute || (brain.path.is_empty() && brain.exec.is_none()))
             && my_cell != goal
+            && Nav::node(&map, level, my_cell)
         {
-            if Nav::node(&map, level, my_cell) {
-                match nav.route(&map, my_cell, goal, ROUTE_BUDGET) {
-                    Route::Found(p) => {
-                        brain.path = p;
-                        brain.lost = false;
+            match nav.route(&map, my_cell, goal, ROUTE_BUDGET) {
+                Route::Found(p) => {
+                    // The jump he's lining up for, if it's still the way to go.
+                    let same = |e: &Exec| p.first().is_some_and(|f| f.to == e.to && f.step == Step::Move(e.mv));
+                    if !brain.exec.as_ref().is_some_and(same) {
+                        brain.exec = None;
                     }
-                    Route::NoRoute => brain.lost = true,
-                    Route::Budget => brain.replan = 0.0, // keep thinking next step
+                    brain.path = p;
+                    brain.lost = false;
+                    brain.reroute = false;
                 }
+                Route::NoRoute => {
+                    brain.path.clear();
+                    brain.exec = None;
+                    brain.lost = true;
+                    brain.reroute = false;
+                }
+                Route::Budget => brain.replan = 0.0, // keep thinking next step
             }
         }
     }
@@ -761,12 +833,37 @@ fn follow(
     // Off the graph (riding a raft, standing somewhere odd) or lost: steer straight for the slot
     // (but never off a ledge into a drop or the sewage).
     if !brain.lost && (brain.path.is_empty() && brain.exec.is_none()) {
+        // Nat just jumped on the run: run on with him (his reflexes take it from here: an
+        // intercept, or the route to where Nat lands) rather than brake in the old slot.
+        let behind_nat = (nat.pos.x - me.pos.x) * me.vel.x > 0.0;
+        if !nat.grounded && nat.vel.x * me.vel.x > 0.0 && me.vel.x.abs() > 30.0 && behind_nat && body.riding.is_none() {
+            let top = HanPhys::of(groove).speed;
+            let on = HanInput { dir: me.vel.x.signum(), speed: (me.vel.x.abs() / top).min(1.0), ..default() };
+            return careful(level, me, body, on);
+        }
         if my_cell == goal {
-            // In the slot's cell: stand right at the slot (not on Nat).
-            let dx = if (slot_x - stand(level, goal).x).abs() < TILE { slot_x } else { stand(level, goal).x } - me.pos.x;
+            // In the slot's cell: stand right at the slot (not on Nat). Nat running on along
+            // the ground: keep to the slot as it moves on, ahead of the next re-plan (minding
+            // the drops).
+            if nat.grounded && nat.vel.x.abs() > 30.0 && body.riding.is_none() {
+                // (Matching Nat's pace, so he runs right in his slot rather than a few px behind
+                // it: where the chain proofs put him. Not when the nervous band has him clinging
+                // close: no overshooting into Nat when he stops.)
+                if !groove.grip() {
+                    return careful(level, me, body, pace(nat.vel.x, slot_x - me.pos.x, HanPhys::of(groove).speed));
+                }
+                return careful(level, me, body, arrive(slot_x - me.pos.x, 2.0));
+            }
+            let dx =
+                if (slot_x - stand(level, goal).x).abs() < TILE { slot_x } else { stand(level, goal).x } - me.pos.x;
             return arrive(dx, 2.0);
         }
         if !Nav::node(&Map::for_han(level), level, my_cell) || body.riding.is_some() {
+            return careful(level, me, body, arrive(slot_x - me.pos.x, 4.0));
+        }
+        // Waiting on a route while Nat runs on: keep after him (minding the drops) rather than
+        // stop to think.
+        if nat.vel.x.abs() > 30.0 && nat.vel.x * (slot_x - me.pos.x) > 0.0 {
             return careful(level, me, body, arrive(slot_x - me.pos.x, 4.0));
         }
         return HanInput::default();
@@ -799,7 +896,8 @@ fn follow(
                 if brain.path.is_empty() && nat.vel.x.abs() > 30.0 {
                     brain.replan = 0.0;
                 }
-                return if more { HanInput { dir: dx.signum(), speed: 1.0, ..default() } } else { arrive(dx, 2.0) };
+                let speed = catch_up(groove, me.pos.x, slot_x, nat.vel.x);
+                return if more { HanInput { dir: dx.signum(), speed, ..default() } } else { arrive(dx, 2.0) };
             }
             Step::Move(k) => {
                 let map = Map::for_han(level);
@@ -808,19 +906,37 @@ fn follow(
                     brain.path.clear();
                     return HanInput::default();
                 };
-                brain.exec = Some(Exec { mv: k, to: edge.to, x0, t: 0.0, flying: false, wait: 0.0 });
+                brain.exec = Some(Exec { mv: k, from: my_cell, to: edge.to, x0, t: 0.0, flying: false, wait: 0.0 });
             }
         }
     }
     let ex = brain.exec.as_mut().expect("set above");
-    let m = nav.moves()[ex.mv as usize];
     if !ex.flying {
+        let m = nav.moves()[ex.mv as usize];
         let dx = ex.x0 - me.pos.x;
-        if dx.abs() > 1.5 || me.vel.x.abs() > 25.0 || !me.grounded {
+        let secs = brain.path.first().map_or(0.5, |e| e.air);
+        // Running up to a jump the way it goes: take off on the run as soon as a jump that way,
+        // from here at this speed, lands where the route goes (the planned cell, or further
+        // along the same walk); else stop at the take-off point and jump from a standstill, the
+        // way the route was planned.
+        let rolling = (me.grounded
+            && body.riding.is_none()
+            && m.dir * me.vel.x > 25.0
+            && dx.abs() < 2.0 * TILE
+            && my_cell == ex.from
+            && landing_ready(level, plats, clock, groove, ex.to, secs))
+        .then(|| rolling_take_off(level, nav, &brain.path, ex, &m, me, nat.pos.x))
+        .flatten();
+        if let Some((k, mv, to)) = rolling {
+            brain.path.drain(1..=k);
+            ex.mv = mv;
+            ex.to = to;
+        }
+        let rolling = rolling.is_some();
+        if !rolling && (dx.abs() > 1.5 || me.vel.x.abs() > 25.0 || !me.grounded) {
             return arrive(dx, 1.0);
         }
-        let secs = brain.path.first().map_or(0.5, |e| e.air);
-        if !landing_ready(level, plats, clock, groove, ex.to, secs) {
+        if !rolling && !landing_ready(level, plats, clock, groove, ex.to, secs) {
             ex.wait += dt;
             if ex.wait > 8.0 {
                 brain.exec = None;
@@ -832,6 +948,7 @@ fn follow(
         ex.flying = true;
         ex.t = 0.0;
     }
+    let m = nav.moves()[ex.mv as usize];
     let t = ex.t;
     if me.grounded && t > 0.05 {
         // Landed: on to the next edge (or re-plan if this wasn't the cell).
@@ -866,6 +983,49 @@ fn follow(
     }
 }
 
+/// A rolling take-off for the jump `ex` (the route's first edge, `path[0]`): the planned move,
+/// or another ground jump the same way, that from where Han is, at the speed he's running,
+/// lands on the planned cell or one further along the walk after it (`path[k].to`, the edges
+/// between all walks), or, when that walk ends the route, a bit further on toward Nat (at `nat_x`).
+/// Returns (k, move, landing cell); k past the route's end: drop the rest of it.
+fn rolling_take_off(
+    level: &Level,
+    nav: &mut Nav,
+    path: &[Edge],
+    ex: &Exec,
+    m: &HanMove,
+    me: &Kin,
+    nat_x: f32,
+) -> Option<(usize, u16, (i32, i32))> {
+    let map = Map::for_han(level);
+    let walks = path.iter().skip(1).take_while(|e| e.step == Step::Walk).count();
+    let last = path.get(walks).map_or(ex.to, |e| e.to);
+    let nat_col = (nat_x / TILE).floor() as i32;
+    let toward_nat = |to: (i32, i32)| {
+        walks + 1 == path.len() && (to.0 - last.0) * m.dir as i32 > 0 && (nat_col - to.0) * m.dir as i32 >= 0
+    };
+    let ok = |to: (i32, i32)| {
+        (0..=walks)
+            .rev()
+            .find(|&k| path.get(k).is_some_and(|e| e.to == to) || (k == 0 && to == ex.to))
+            .or(toward_nat(to).then_some(path.len().saturating_sub(1)))
+    };
+    let planned = std::iter::once(ex.mv);
+    let others = (0..nav.moves().len() as u16).filter(|&k| k != ex.mv);
+    for k in planned.chain(others) {
+        let mk = nav.moves()[k as usize];
+        if mk.dir != m.dir || !mk.jump {
+            continue;
+        }
+        if let Some(to) = nav.lands_rolling(&map, ex.from, &mk, me.pos.x, me.vel.x)
+            && let Some(i) = ok(to)
+        {
+            return Some((i, k, to));
+        }
+    }
+    None
+}
+
 /// Don't walk off a ledge (into a drop of more than 3 tiles, or into sewage) when steering
 /// without a route.
 fn careful(level: &Level, me: &Kin, body: &Body, i: HanInput) -> HanInput {
@@ -880,11 +1040,47 @@ fn careful(level: &Level, me: &Kin, body: &Body, i: HanInput) -> HanInput {
     }
 }
 
+/// Running along a walk after a Nat running away (at `nat_vx`): faster (up to
+/// [`HAN_CATCH_UP`] × his top speed) the further he is from his slot (at `slot_x`), so he
+/// catches up after a hold-up. Not while the band's fired up: then he just can't keep up.
+fn catch_up(groove: &Groove, x: f32, slot_x: f32, nat_vx: f32) -> f32 {
+    if groove.harmony == Harmony::Quartal || nat_vx * (slot_x - x) <= 0.0 || nat_vx.abs() < 30.0 {
+        return 1.0;
+    }
+    let far = ((slot_x - x).abs() / TILE - 3.0) / 4.0;
+    1.0 + (HAN_CATCH_UP - 1.0) * far.clamp(0.0, 1.0)
+}
+
+/// A chain chasm's drop within [`CHASM_HANG_BACK`] tiles ahead (heading `dir`) of Han at `pos`.
+fn chasm_ahead(level: &Level, pos: Vec2, dir: f32) -> bool {
+    let (c, r) = feet_cell(level, pos);
+    let reach = (HALF.x / TILE + CHASM_HANG_BACK).ceil() as i32;
+    (1..=reach)
+        .map(|k| c + k * dir as i32)
+        .any(|cc| level.in_chasm(cc) && !(r + 1..=r + 3).any(|rr| floor_at(level, cc, rr)))
+}
+
+/// How far (tiles) Han hangs back from a chain chasm's edge while Nat runs up to it.
+const CHASM_HANG_BACK: f32 = 2.5;
+
+/// Keep pace with a slot moving at `vx` (px/s), `dx` px away: its speed, plus a bit to close
+/// the gap (`top`: his top speed).
+fn pace(vx: f32, dx: f32, top: f32) -> HanInput {
+    let v = vx + 4.0 * dx;
+    if v.abs() < 5.0 {
+        return HanInput::default();
+    }
+    HanInput { dir: v.signum(), speed: (v.abs() / top).clamp(0.15, 1.0), ..default() }
+}
+
+/// The deceleration (px/s²) [`arrive`] plans its stop with.
+const ARRIVE_DECEL: f32 = 1500.0;
+
 /// Run toward `dx` (px away), slowing to stop on it.
 fn arrive(dx: f32, tol: f32) -> HanInput {
     if dx.abs() <= tol {
         return HanInput::default();
     }
-    let speed = ((2.0 * 1500.0 * dx.abs()).sqrt() / super::HAN_RUN_SPEED).clamp(0.15, 1.0);
+    let speed = ((2.0 * ARRIVE_DECEL * dx.abs()).sqrt() / super::HAN_RUN_SPEED).clamp(0.15, 1.0);
     HanInput { dir: dx.signum(), speed, ..default() }
 }
