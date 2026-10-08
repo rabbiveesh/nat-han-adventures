@@ -170,7 +170,10 @@ pub fn high(f: f32) -> f64 {
 
 /// A deterministic RNG for decision `what` about bar `bar`.
 pub fn rng(seed: u64, who: usize, bar: u64, what: u64) -> Rng {
-    Rng::new(tuning::salt(seed ^ 0xBA4D, who, bar as usize, what as usize))
+    let s = tuning::salt(seed ^ 0xBA4D, who, bar as usize, what as usize);
+    let mut r = Rng::new(s.rotate_left(29).wrapping_mul(0xD6E8_FEB8_6659_FD93));
+    r.next_u64();
+    r
 }
 
 /// The drums' fill for a bar, from its place in the song (used by the plan and shown ahead in
@@ -206,7 +209,8 @@ pub fn fill_for(seed: u64, bar: u64, song_bar: usize, bars: usize, phrase_last: 
 /// Is this bar in a trading stretch, and whose four is it? Decided per 8-bar section.
 pub fn trade_for(seed: u64, pass: u64, song_bar: usize, bars: usize, lead: f32, drums: f32) -> Trade {
     let section = song_bar / 8;
-    if (section + 1) * 8 > bars {
+    // The head first: never in the song's opening section the first time round.
+    if (section + 1) * 8 > bars || pass == 0 && section == 0 {
         return Trade::None;
     }
     let p = 0.45 * high(lead.min(drums));
@@ -238,7 +242,9 @@ impl BandPlan {
         plan.fill = fill_for(input.seed, slot.index, slot.song_bar, input.bars, phrase_last, drums);
         plan.crash = drums > 0.0 && input.prev.bar + 1 == slot.index && input.prev.fill != Fill::None && mid(drums) + low(drums) > 0.5;
         if plan.trade == Trade::Drums {
+            // The drums' four: solo bars; one crash, into it.
             plan.fill = Fill::Full;
+            plan.crash = input.prev.trade != Trade::Drums;
         }
 
         // Flourishes.
@@ -334,7 +340,8 @@ mod tests {
     fn trades_cover_whole_sections() {
         let mut seen = false;
         for seed in 0..40 {
-            let t: Vec<Trade> = (0..16).map(|b| trade_for(seed, 0, b, 32, 1.0, 1.0)).collect();
+            let t: Vec<Trade> = (8..24).map(|b| trade_for(seed, 0, b, 32, 1.0, 1.0)).collect();
+            assert!((0..8).all(|b| trade_for(seed, 0, b, 32, 1.0, 1.0) == Trade::None));
             if t[0] != Trade::None {
                 seen = true;
                 assert!(t[..4].iter().all(|x| *x == Trade::Lead) && t[4..8].iter().all(|x| *x == Trade::Drums), "{t:?}");
@@ -344,3 +351,4 @@ mod tests {
         assert!(seen);
     }
 }
+

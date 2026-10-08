@@ -56,6 +56,89 @@ fn script_note(bar: u64) -> &'static str {
     }
 }
 
+/// The flourish tour (self-directed, like the game's director): toots summon Giant Steps,
+/// a checkpoint, a death, a nugget streak, then the band let loose.
+fn tour(bar: u64) -> Vec<Input> {
+    match bar {
+        1 => vec![Input::LevelStart, Input::SetFreedom { lead: 0.35, comp: 0.35, bass: 0.35, drums: 0.35, dynamics: 0.4 }],
+        4 => vec![Input::Toot; 5],
+        10 => vec![Input::Checkpoint],
+        14 => vec![Input::Death],
+        18 => vec![Input::Nugget; 6],
+        24 => vec![Input::SetFreedom { lead: 0.7, comp: 0.7, bass: 0.7, drums: 0.7, dynamics: 0.6 }],
+        _ => vec![],
+    }
+}
+
+fn tour_note(bar: u64) -> &'static str {
+    match bar {
+        4 => "  <- 5 toots (summon)",
+        10 => "  <- checkpoint",
+        14 => "  <- death",
+        18 => "  <- nugget streak",
+        24 => "  <- freedom up to 0.7",
+        _ => "",
+    }
+}
+
+/// `listen`: the quick listening set (three songs at 0.35 and 0.7, a flourish tour for two,
+/// the instrument showcase).
+fn listen(dir: &Path) {
+    for stem in ["sweet_georgia_brown", "the_entertainer", "muskrat_ramble"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        for f in [0.35f32, 0.7] {
+            let script = |bar: u64| if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: f * 0.7 }] } else { vec![] };
+            let (out, log) = run(&file, script, 32, |_| "", false);
+            let name = format!("{stem}_f{:03}", (f * 100.0).round() as u32);
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav");
+        }
+        if stem != "the_entertainer" {
+            let (out, log) = run(&file, tour, 34, tour_note, true);
+            write_wav(&dir.join(format!("tour_{stem}.wav")), &out);
+            std::fs::write(dir.join(format!("tour_{stem}.txt")), log).expect("write log");
+            println!("tour_{stem}.wav");
+        }
+    }
+    instrument_tour(dir);
+}
+
+/// Every starter instrument, a phrase each (the song's first 4 bars, that channel soloed on it).
+fn instrument_tour(dir: &Path) {
+    let mut all: Vec<Frame> = Vec::new();
+    let mut log = String::new();
+    let mut seen = std::collections::HashSet::new();
+    for (stem, text) in library::FILES {
+        let file = SongFile::parse(text).expect("song parses");
+        let insts = &file.instruments;
+        for ch in 0..4 {
+            for &i in insts.palette(ch).iter().filter(|&&i| i != 0) {
+                let name = insts.name(i).to_string();
+                if !seen.insert((name.clone(), ch)) {
+                    continue;
+                }
+                let mut song = file.clone();
+                song.sources[ch] = format!("@i {name} {}", song.sources[ch]);
+                let Ok(song) = SongFile::parse(&song.to_text()) else { continue };
+                let t = all.len() as f64 / RATE as f64;
+                let _ = writeln!(log, "{:02}:{:02}  {name:<9} on {} ({stem}): first the channel alone, then the band", (t / 60.0) as u32, t as u32 % 60, nat_han_adventures::audio::live::song::CHANNELS[ch].0);
+                let solo = |bar: u64| match bar {
+                    1 => vec![Input::SetMix(std::array::from_fn(|c| if c == ch { 1.0 } else { 0.0 }))],
+                    3 => vec![Input::SetMix([1.0; 4])],
+                    _ => vec![],
+                };
+                let (out, _) = run(&song, solo, 4, |_| "", false);
+                all.extend(out);
+                all.extend(std::iter::repeat_n(Frame::ZERO, RATE as usize / 3));
+            }
+        }
+    }
+    write_wav(&dir.join("instruments_showcase.wav"), &all);
+    std::fs::write(dir.join("instruments_showcase.txt"), log).expect("write log");
+    println!("instruments_showcase.wav: {:.1}s", all.len() as f64 / RATE as f64);
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let dir = args.next().unwrap_or_else(|| DEFAULT_DIR.into());
@@ -63,13 +146,17 @@ fn main() {
     let prefix = args.next().unwrap_or_else(|| "after".into());
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir).expect("create output dir");
+    if only.as_deref() == Some("listen") {
+        listen(dir);
+        return;
+    }
     for (stem, text) in library::FILES {
         if only.as_deref().is_some_and(|o| o != stem) {
             continue;
         }
         let file = SongFile::parse(text).expect("song parses");
         for f in FREEDOMS {
-            let (out, log) = run(&file, |bar| script(bar, f), BARS, true);
+            let (out, log) = run(&file, |bar| script(bar, f), BARS, script_note, false);
             let name = format!("{prefix}_{stem}_f{:03}", (f * 100.0).round() as u32);
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
@@ -82,8 +169,8 @@ fn main() {
 }
 
 /// Run an engine through a script, logging every committed bar.
-fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, notes: bool) -> (Vec<Frame>, String) {
-    let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, ..EngineConfig::default() }).expect("engine");
+fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool) -> (Vec<Frame>, String) {
+    let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, self_directed, ..EngineConfig::default() }).expect("engine");
     let looping = e.shape().looping;
     let mut out: Vec<Frame> = Vec::new();
     let mut buf = [Frame::ZERO; 256];
@@ -110,10 +197,8 @@ fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, notes: bo
         let from = logged;
         for b in s.upcoming.iter().filter(|b| b.slot.index >= from) {
             let t = b.slot.start as f64 / RATE as f64;
-            let _ = write!(log, "bar {:>3} {:>2}:{:05.2} {:?}", b.slot.index + 1, (t / 60.0) as u32, t % 60.0, b.harmony);
-            if notes {
-                let _ = write!(log, "{}", script_note(b.slot.index + 1));
-            }
+            let _ = write!(log, "bar {:>3}  {:02}:{:05.2}  {:?}", b.slot.index + 1, (t / 60.0) as u32, t % 60.0, b.harmony);
+            let _ = write!(log, "{}", note(b.slot.index + 1));
             let _ = writeln!(log);
             let p = b.band;
             let mut band = Vec::new();
@@ -183,7 +268,7 @@ fn showcase(file: &SongFile, stem: &str, dir: &Path) {
         };
         let t = all.len() as f64 / RATE as f64;
         let _ = writeln!(log, "{:>2}:{:05.2}  {}", (t / 60.0) as u32, t % 60.0, names.join("  "));
-        let (out, _) = run(&song, |bar| if bar == 1 { vec![Input::SetFreedom { lead: 0.0, comp: 0.0, bass: 0.0, drums: 0.0, dynamics: 0.0 }] } else { vec![] }, 8, false);
+        let (out, _) = run(&song, |bar| if bar == 1 { vec![Input::SetFreedom { lead: 0.0, comp: 0.0, bass: 0.0, drums: 0.0, dynamics: 0.0 }] } else { vec![] }, 8, |_| "", false);
         all.extend(out);
     }
     write_wav(&dir.join(format!("instruments_{stem}.wav")), &all);

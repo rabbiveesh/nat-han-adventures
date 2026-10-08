@@ -274,7 +274,8 @@ fn the_reharm_keeps_bass_and_comp_together() {
     for m in LOOPING {
         for seed in [1, 2] {
             let (_, bars) = play(song(m), seed, &[freedom(0.95)], |_| vec![], 40);
-            for b in &bars {
+            // (Bar 0's first notes have started before it's collected.)
+            for b in bars.iter().skip(1) {
                 let line = b.c.slot.song_bar as f64 * 4.0;
                 for s in b.c.band.subs.iter().flatten() {
                     let h = Harm::new(s.chord);

@@ -366,7 +366,7 @@ impl Engine {
             stats: PlayStats::default(),
             band: director::Band::default(),
             energy: 0.0,
-            musicians: musician::band(config.seed),
+            musicians: musician::band(config.seed ^ crate::audio::tuning::hash_str(&song.title)),
             committed: VecDeque::with_capacity(16),
             spans,
             next_bar: 0,
@@ -594,7 +594,7 @@ impl Engine {
             tuning,
             intensity,
             dynamics: self.freedom.dynamics,
-            seed: self.config.seed,
+            seed: self.config.seed ^ shape.song_hash,
             band: &self.prev_band,
             freedom,
             instruments: &self.instruments,
@@ -610,7 +610,7 @@ impl Engine {
         let phrase = self.musicians[Role::Drums as usize].current_plan().copied().unwrap_or_else(|| PhrasePlan::shape_from(slot, shape, chart));
         let harm = |b: f64| arrangement.harm_at(slot.song_bar as f64 * shape.bar_beats + b);
         let band = BandPlan::decide(&BandInput {
-            seed: self.config.seed,
+            seed: self.config.seed ^ shape.song_hash,
             slot,
             bar_beats: shape.bar_beats,
             bars: shape.bars,

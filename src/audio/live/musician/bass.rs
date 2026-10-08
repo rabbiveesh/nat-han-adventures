@@ -164,7 +164,9 @@ impl Musician for Bass {
         }
         // Into the next bar: a chromatic approach, or a fill at a phrase end.
         let next_root = ctx.plain_harm_at(bb).map(|h| h.chord.bass_pc());
+        let subbed = band.subs.iter().flatten().any(|s| s.to > bb - 2.0);
         if band.hits == 0
+            && !subbed
             && let Some(pc) = next_root
         {
             let last_i = self.dst.iter().rposition(|e| matches!(e.sound, Sound::Note(_)));
