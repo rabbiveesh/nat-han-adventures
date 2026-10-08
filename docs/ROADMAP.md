@@ -22,8 +22,16 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   | Fired up (quartal) | 4 quick nuggets | run ×1.35 | 11-tile long gaps |
   | Waltz (3/4) | 3 evenly spaced plain hops | world on the beat; jump on ONE ×1.15 + weak toot | waltz rows (spray tunnels) |
   | Nervous (melodic minor) | 3+ deaths (grip is a level-long layer) | slow-mo; **sweaty grip** on grease | grease chutes |
-  | Laughing band (tuning medley) | 2+ deaths since checkpoint; wears off 1 death / 10 s | bouncy landings | — |
+  | Laughing band (tuning medley) | 2+ deaths since checkpoint; wears off 1 death / 10 s | bouncy landings, a nudge per phrase (below) | — |
   A summon resets progress toward every other summon; summons hold 20 s with keep-alive.
+  The laughing band's medley nudges the physics phrase by phrase (`Groove::nudge`; nickname in
+  the band readout, what it does on the groove badge): Just = sober (no bounce, no sway, "SOBER FOR A SEC"); Harmonic = toot up to
+  ×11/8, never past a perfectly timed toot's apex ("OVERTONES!"); 7-TET = slippery landings +
+  camera roll ("SEASICK"); Carlos alpha = Nat drawn at 85%, jumps ×0.95 ("MELTING");
+  Bohlen–Pierce = gravity ×1.05 pulses on every third beat ("ALIEN"); and run speed staggers down
+  to −8% with the pitch wobble (never faster). Nothing adds reach past normal physics (the gate
+  margins are a few px: +8% run speed opens waltz rows), and the campaign stays beatable with the
+  melting jump or the alien gravity in force all along (`Physics::laughing`).
 - **Death as a mechanic**: splat stains on spikes (standable), rafts in sewage, side splats that
   fade at grease-chute ends; stain pits and chutes in the levels.
 - **Han** (`docs/han-buddy.md`): graph navigation, plunger boost (refreshes the toot), mid-air
@@ -47,11 +55,6 @@ kills while firing; Han's plug covers it; free-play waltz rows are floor cans wi
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 
 ## Planned (agreed, not started)
-- **Per-tuning physics nudges** in the laughing band's medley (each 4-bar phrase): Just = sober
-  ("SOBER FOR A SEC"); Harmonic = toot ×11/8 ("OVERTONES!"); 7-TET = slippery landings + slight
-  camera roll ("SEASICK"); Carlos alpha = Nat shrinks ~85% + lower jumps ("MELTING");
-  Bohlen–Pierce = gravity pulses in threes ("ALIEN"); drunk wobble = run speed sways ±8% with the
-  pitch wobble. Read the phrase tuning from `NowPlaying.tuning_now`; small, never unfair.
 - **Web beat-clock latency**: add the browser's output latency to the beat clock (the world's beat
   runs a few tens of ms ahead of the ear on web).
 - **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
@@ -69,6 +72,8 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
 - It's a loving prank on the brother (Nathan): Nat + Han. Cartoonish, never genuinely gross.
 - Music: public domain only (published ≤ 1930). Melody follows reharms. Feels are music-only.
 - Assists only ever loosen things above the floor the validator proves solvable.
+- No music theory on screen: the HUD's groove badge says what the physics does (LOW GRAVITY,
+  SLIPPERY LANDINGS), the band readout gives the band's mood by nickname (GIANT STEPS!, SEASICK).
 - Seeds stay adaptive; last seed is remembered.
 - Every mechanic is taught by Han (hint spots) before its first use; the validator enforces it.
 - Builds at full parallelism under `nice -n 15`; tests with `cargo nextest run`; push to `main`

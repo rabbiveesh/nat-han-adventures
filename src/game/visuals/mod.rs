@@ -16,7 +16,7 @@ pub use particles::Particle;
 use super::han::{HanAnim, HanBrain, HanMode, HanPose, SprayPlug};
 use super::physics::{Body, Dead, PlayerControl};
 use super::{
-    Checkpoint, Fly, Goal, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
+    Checkpoint, Fly, Goal, Groove, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
     PrevPos, Spray, Stain, tuning,
 };
 use crate::art::{SpriteId, Sprites};
@@ -101,11 +101,13 @@ pub struct FrameAnim {
 #[derive(Component, Debug, Clone, Copy)]
 pub struct CharacterSprite {
     pub squash: Vec2,
+    /// Drawn size (the laughing band's melting phrase shrinks Nat), eased.
+    pub size: f32,
 }
 
 impl Default for CharacterSprite {
     fn default() -> Self {
-        Self { squash: Vec2::ONE }
+        Self { squash: Vec2::ONE, size: 1.0 }
     }
 }
 
@@ -575,11 +577,22 @@ fn animate_han(
     }
 }
 
-fn relax_squash(time: Res<Time>, mut q: Query<(&mut CharacterSprite, &mut Transform)>) {
+fn relax_squash(
+    time: Res<Time>,
+    groove: Option<Res<Groove>>,
+    player: Query<&Children, With<Player>>,
+    mut q: Query<(Entity, &mut CharacterSprite, &mut Transform)>,
+) {
     let k = 1.0 - (-time.delta_secs() * 14.0).exp();
-    for (mut cs, mut tf) in &mut q {
+    // Melting (the laughing band's Carlos alpha phrase): Nat shrinks, slowly.
+    let melt = 1.0 - (-time.delta_secs() * 3.0).exp();
+    let nat_size = groove.map_or(1.0, |g| g.nat_size());
+    for (e, mut cs, mut tf) in &mut q {
+        if player.iter().any(|c| c.contains(&e)) {
+            cs.size += (nat_size - cs.size) * melt;
+        }
         cs.squash = cs.squash.lerp(Vec2::ONE, k);
-        tf.scale = cs.squash.extend(1.0);
+        tf.scale = (cs.squash * cs.size).extend(1.0);
     }
 }
 

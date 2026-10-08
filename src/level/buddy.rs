@@ -77,7 +77,7 @@ impl HanPhys {
             air_accel: AIR_ACCEL * speed,
             jump_speed: JUMP_SPEED,
             toot_speed: DOUBLE_JUMP_SPEED,
-            bounce: groove.bounce,
+            bounce: groove.bouncy(),
             on_the_beat: groove.waltz(),
         }
     }
