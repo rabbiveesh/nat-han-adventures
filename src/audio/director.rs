@@ -132,6 +132,12 @@ impl Window {
         }
     }
 
+    /// The entries remembered: (play time, [toots, nuggets, deaths, waltz steps]), oldest
+    /// first (for the formal checks in `tests/formal.rs`, which hash the band's state).
+    pub fn entries(&self) -> impl Iterator<Item = (f32, [u32; 4])> + '_ {
+        self.0.iter().copied()
+    }
+
     /// Forget a summon's counter (column 0 toots, 1 nuggets, 3 waltz steps).
     pub fn clear(&mut self, column: usize) {
         for e in &mut self.0 {
@@ -172,6 +178,11 @@ impl ThreeStep {
         let done = matches!(self.last, [Some(a), Some(b)] if even_threes(a, b, t));
         self.last = [self.last[1], Some(t)];
         done
+    }
+
+    /// The last two takeoffs, older first (for the formal checks).
+    pub fn takeoffs(&self) -> [Option<f32>; 2] {
+        self.last
     }
 
     /// Start counting afresh (a death, a new level).
@@ -262,6 +273,11 @@ impl Band {
     pub fn start(&mut self, now: f32) -> (Filters, &'static str) {
         *self = Band { level_start: now, next_check: now + MUSIC_CHECK_SECS, ..Band::default() };
         (Filters::default(), "")
+    }
+
+    /// Play time the level (re)started (for the formal checks).
+    pub fn level_start(&self) -> f32 {
+        self.level_start
     }
 
     /// Play time of the next periodic check.
