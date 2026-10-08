@@ -14,6 +14,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
   flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and
   musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`).
+  The world's beat follows the ear: on the web it steps back by the browser's buffering and
+  output latency (`index.html` reports it; `web_output_lead` in `src/audio/plugin.rs`).
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
   | Mode | Summon / cause | Physics | Gates |
@@ -55,8 +57,6 @@ kills while firing; Han's plug covers it; free-play waltz rows are floor cans wi
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 
 ## Planned (agreed, not started)
-- **Web beat-clock latency**: add the browser's output latency to the beat clock (the world's beat
-  runs a few tens of ms ahead of the ear on web).
 - **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
   templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
 - **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
