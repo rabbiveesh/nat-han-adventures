@@ -11,6 +11,13 @@
 //! bounce). His feet are back to normal the moment he's in the air (a toot after sliding off a
 //! ledge works). **Sweaty grip**: while the band is nervous ([`Groove::grip`], the 3+ deaths
 //! mood) grease is just ground.
+//!
+//! # The body step
+//! [`step_body`] is the shared physics of every body (Nat and Han): gravity, riding
+//! [`Carrier`]s (moving platforms, rafts, Han's head), tile collision. Nat's controller
+//! ([`PlayerControl`]: input, jumps, toots, grease, bounces) wraps it; Han's AI wraps it with
+//! his own (`game::han`). Han's head is a one-way carrier for Nat ([`HanHead`]); jumping off it
+//! is the plunger boost ([`BOOST_SPEED`], [`HanBoosted`]).
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -24,7 +31,7 @@ use crate::input::Action;
 use crate::level::{Level, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
+    app.add_message::<HanBoosted>().add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
 }
 
 /// Landing faster than this (px/s) writes [`Landed`].
@@ -134,6 +141,214 @@ pub(super) fn tile_at(level: &Level, i: i32, j: i32) -> Tile {
     level.tile(i, row_of(level, j))
 }
 
+/// Something a body can stand on from above and be carried by: a moving platform, a stain
+/// raft, Han's head. Solid on top only (like `=`).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Carrier {
+    pub id: Entity,
+    /// Center x and half width of the top surface.
+    pub x: f32,
+    pub half_w: f32,
+    /// Height of the top surface now and at the start of the step.
+    pub top: f32,
+    pub prev_top: f32,
+    /// How far it moved this step (riders move with it).
+    pub carry: Vec2,
+}
+
+impl Carrier {
+    /// A moving platform (or raft) at `pos` (its top tile row's center), `prev` a step ago.
+    pub fn platform(id: Entity, pos: Vec2, prev: Vec2, width: usize) -> Self {
+        Carrier {
+            id,
+            x: pos.x,
+            half_w: width as f32 * TILE / 2.0,
+            top: pos.y + TILE / 2.0,
+            prev_top: prev.y + TILE / 2.0,
+            carry: pos - prev,
+        }
+    }
+}
+
+/// Gravity for [`step_body`]: acceleration (px/s², downward) and terminal fall speed.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fall {
+    pub gravity: f32,
+    pub max_fall: f32,
+}
+
+impl Fall {
+    /// Nat's gravity under `groove`.
+    pub fn of(groove: &Groove) -> Self {
+        Fall { gravity: GRAVITY * groove.gravity_scale, max_fall: MAX_FALL * groove.fall_scale() }
+    }
+}
+
+/// What [`step_body`] found.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Contact {
+    /// Standing on something after the step.
+    pub ground: bool,
+    /// The carrier stood on, if any.
+    pub riding: Option<Entity>,
+    /// `body.on_ground` before the step.
+    pub was_on_ground: bool,
+    /// Downward speed before the step (px/s), for landing effects.
+    pub fall_speed: f32,
+    /// Ran into a wall (or a blocker) this step.
+    pub blocked_x: bool,
+}
+
+/// One fixed step of the shared body physics (Nat and Han): gravity, being carried by the
+/// carrier stood on, then tile AABB collision X then Y (solid tiles, one-way tiles from above),
+/// then the carriers (one-way, from above). `blockers` are extra boxes (min, max) that stop
+/// horizontal motion into them (a body already overlapping one isn't pushed). Sets
+/// `body.on_ground`/`riding` and zeroes the vertical speed on landing; landing effects (events,
+/// toot refresh, bounces) are the caller's.
+pub fn step_body(
+    level: &Level,
+    pos: &mut Vec2,
+    body: &mut Body,
+    fall: Fall,
+    carriers: &[Carrier],
+    blockers: &[(Vec2, Vec2)],
+    dt: f32,
+) -> Contact {
+    // --- Gravity.
+    body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
+
+    // --- Carried by what we stood on.
+    let carry = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e)).map_or(Vec2::ZERO, |c| c.carry);
+
+    let half = body.half;
+    let was_on_ground = body.on_ground;
+    let fall_speed = -body.vel.y;
+    let mut blocked_x = false;
+
+    // --- X.
+    let dx = body.vel.x * dt + carry.x;
+    let x_before = pos.x;
+    pos.x += dx;
+    if dx != 0.0 {
+        let (xs, ys) = cells(*pos - half, *pos + half);
+        for j in ys {
+            for i in xs.clone() {
+                if !tile_at(level, i, j).is_solid() {
+                    continue;
+                }
+                if dx > 0.0 {
+                    pos.x = pos.x.min(i as f32 * TILE - half.x);
+                } else {
+                    pos.x = pos.x.max((i + 1) as f32 * TILE + half.x);
+                }
+                body.vel.x = 0.0;
+                blocked_x = true;
+            }
+        }
+        for &(min, max) in blockers {
+            let overlaps = |x: f32| x + half.x > min.x && x - half.x < max.x;
+            let y_overlaps = pos.y + half.y > min.y + EPS && pos.y - half.y < max.y - EPS;
+            if !y_overlaps || overlaps(x_before) || !overlaps(pos.x) {
+                continue;
+            }
+            pos.x = if dx > 0.0 { min.x - half.x } else { max.x + half.x };
+            body.vel.x = 0.0;
+            blocked_x = true;
+        }
+    }
+
+    // --- Y.
+    let bottom_before = pos.y - half.y + carry.y;
+    let dy = body.vel.y * dt + carry.y;
+    pos.y += dy;
+    let mut ground = false;
+    let mut riding = None;
+    if dy != 0.0 {
+        let (xs, ys) = cells(*pos - half, *pos + half);
+        for j in ys {
+            for i in xs.clone() {
+                let tile = tile_at(level, i, j);
+                let top = (j + 1) as f32 * TILE;
+                match tile {
+                    t if t.is_solid() && dy < 0.0 => {
+                        pos.y = pos.y.max(top + half.y);
+                        ground = true;
+                    }
+                    t if t.is_solid() => {
+                        pos.y = pos.y.min(j as f32 * TILE - half.y);
+                        body.vel.y = body.vel.y.min(0.0);
+                    }
+                    t if t.is_one_way()
+                        && body.vel.y <= 0.0
+                        && bottom_before - carry.y >= top - ONE_WAY_SLACK
+                        && pos.y - half.y < top =>
+                    {
+                        pos.y = top + half.y;
+                        ground = true;
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+    // Carriers (one-way).
+    if body.vel.y <= 0.0 {
+        for c in carriers {
+            if pos.x + half.x <= c.x - c.half_w + EPS || pos.x - half.x >= c.x + c.half_w - EPS {
+                continue;
+            }
+            let feet = pos.y - half.y;
+            let before = if body.riding == Some(c.id) { bottom_before } else { bottom_before - carry.y };
+            if before >= c.top.min(c.prev_top) - ONE_WAY_SLACK && feet <= c.top + EPS {
+                pos.y = c.top + half.y;
+                ground = true;
+                riding = Some(c.id);
+            }
+        }
+    }
+    if ground {
+        body.vel.y = 0.0;
+    }
+    body.on_ground = ground;
+    body.riding = riding;
+    Contact { ground, riding, was_on_ground, fall_speed, blocked_x }
+}
+
+/// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;
+/// jumping off it is the plunger boost while `boost`; while `block` (marching ahead) his body
+/// also stops Nat walking into him from the side.
+#[derive(Component, Debug, Clone, Copy, Default, PartialEq, Reflect)]
+#[reflect(Component)]
+pub struct HanHead {
+    pub solid: bool,
+    pub boost: bool,
+    pub block: bool,
+}
+
+/// Nat jumped off Han's head: the plunger boost. Not a [`Jumped`] (the band doesn't count it).
+#[derive(Message, Debug, Clone, Copy)]
+pub struct HanBoosted {
+    pub pos: Vec2,
+}
+
+/// Upward speed of the plunger boost (px/s): Nat's feet rise 560²/2800 = 112 px = 7 tiles above
+/// Han's head (≈ 7.9 tiles above Han's floor), and the refreshed toot adds ~39 px: ≈ 10.3
+/// tiles with ideal timing, ≥ 9.3 for a human. A *buddy ledge* is 9 tiles: out of Giant
+/// Steps' reach (a perfect GS double jump tops out at ~8.7 tiles) yet a comfortable boost.
+pub const BOOST_SPEED: f32 = 560.0;
+
+/// Han's head as a carrier, if it's solid (`pos` is his box center).
+pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<Carrier> {
+    head.solid.then(|| Carrier {
+        id,
+        x: pos.x,
+        half_w: PLAYER_SIZE.0 / 2.0,
+        top: pos.y + PLAYER_SIZE.1 / 2.0,
+        prev_top: prev.y + PLAYER_SIZE.1 / 2.0,
+        carry: pos - prev,
+    })
+}
+
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn player_step(
     time: Res<Time>,
@@ -145,9 +360,11 @@ fn player_step(
         (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>),
     >,
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), Without<Player>>,
+    han: Query<(Entity, &Pos, &PrevPos, &HanHead), (Without<Player>, Without<MovingPlatform>)>,
     mut jumped: MessageWriter<Jumped>,
     mut landed: MessageWriter<Landed>,
     mut on_one: MessageWriter<JumpedOnOne>,
+    mut boosted: MessageWriter<HanBoosted>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
@@ -192,13 +409,26 @@ fn player_step(
     } else {
         ctl.buffer -= dt;
     }
+    let on_han = body
+        .riding
+        .and_then(|e| han.get(e).ok())
+        .map(|(_, _, _, head)| *head);
     if ctl.buffer > 0.0 && ctl.coyote > 0.0 {
-        body.vel.y = JUMP_SPEED;
-        if groove.on_the_one() {
-            // A waltz step on ONE: higher, golden, and its toot is a weak one.
-            body.vel.y *= WALTZ_ONE_BOOST;
-            ctl.weak_toot = true;
-            on_one.write(JumpedOnOne { pos: pos.0 });
+        if on_han.is_some_and(|h| h.boost) {
+            // The plunger boost: way up, and the toot's fresh again.
+            body.vel.y = BOOST_SPEED;
+            ctl.has_toot = true;
+            ctl.weak_toot = false;
+            boosted.write(HanBoosted { pos: pos.0 });
+        } else {
+            body.vel.y = JUMP_SPEED;
+            if groove.on_the_one() {
+                // A waltz step on ONE: higher, golden, and its toot is a weak one.
+                body.vel.y *= WALTZ_ONE_BOOST;
+                ctl.weak_toot = true;
+                on_one.write(JumpedOnOne { pos: pos.0 });
+            }
+            jumped.write(Jumped { pos: pos.0, double: false });
         }
         ctl.buffer = 0.0;
         ctl.coyote = 0.0;
@@ -206,7 +436,6 @@ fn player_step(
         ctl.bouncing = false;
         body.on_ground = false;
         body.riding = None;
-        jumped.write(Jumped { pos: pos.0, double: false });
     } else if pressed && ctl.has_toot && !slipping {
         body.vel.y = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
         ctl.has_toot = false;
@@ -223,97 +452,24 @@ fn player_step(
         ctl.cut_armed = false;
     }
 
-    // --- Gravity.
-    body.vel.y = (body.vel.y - GRAVITY * groove.gravity_scale * dt).max(-MAX_FALL * groove.fall_scale());
-
-    // --- Carried by the platform we stood on.
-    let carry = body
-        .riding
-        .and_then(|e| platforms.get(e).ok())
-        .map_or(Vec2::ZERO, |(_, p, prev, _)| p.0 - prev.0);
-
-    let half = body.half;
-    let was_on_ground = body.on_ground;
-    let fall_speed = -body.vel.y;
-
-    // --- X.
-    let dx = body.vel.x * dt + carry.x;
-    pos.0.x += dx;
-    if dx != 0.0 {
-        let (xs, ys) = cells(pos.0 - half, pos.0 + half);
-        for j in ys {
-            for i in xs.clone() {
-                if !tile_at(level, i, j).is_solid() {
-                    continue;
-                }
-                if dx > 0.0 {
-                    pos.0.x = pos.0.x.min(i as f32 * TILE - half.x);
-                } else {
-                    pos.0.x = pos.0.x.max((i + 1) as f32 * TILE + half.x);
-                }
-                body.vel.x = 0.0;
-            }
+    // --- Move: gravity, carriers, collisions.
+    let mut carriers: Vec<Carrier> =
+        platforms.iter().map(|(e, p, prev, plat)| Carrier::platform(e, p.0, prev.0, plat.width)).collect();
+    let mut blockers = Vec::new();
+    for (e, p, prev, head) in &han {
+        carriers.extend(han_carrier(e, p.0, prev.0, head));
+        if head.block {
+            let h = Vec2::new(PLAYER_SIZE.0, PLAYER_SIZE.1) / 2.0;
+            blockers.push((p.0 - h, p.0 + h));
         }
     }
-
-    // --- Y.
-    let bottom_before = pos.0.y - half.y + carry.y;
-    let dy = body.vel.y * dt + carry.y;
-    pos.0.y += dy;
-    let mut ground = false;
-    let mut riding = None;
-    if dy != 0.0 {
-        let (xs, ys) = cells(pos.0 - half, pos.0 + half);
-        for j in ys {
-            for i in xs.clone() {
-                let tile = tile_at(level, i, j);
-                let top = (j + 1) as f32 * TILE;
-                match tile {
-                    t if t.is_solid() && dy < 0.0 => {
-                        pos.0.y = pos.0.y.max(top + half.y);
-                        ground = true;
-                    }
-                    t if t.is_solid() => {
-                        pos.0.y = pos.0.y.min(j as f32 * TILE - half.y);
-                        body.vel.y = body.vel.y.min(0.0);
-                    }
-                    t if t.is_one_way()
-                        && body.vel.y <= 0.0
-                            && bottom_before - carry.y >= top - ONE_WAY_SLACK
-                            && pos.0.y - half.y < top =>
-                    {
-                        pos.0.y = top + half.y;
-                        ground = true;
-                    }
-                    _ => {}
-                }
-            }
-        }
-    }
-    // Moving platforms (one-way).
-    if body.vel.y <= 0.0 {
-        for (e, p, prev, plat) in &platforms {
-            let half_w = plat.width as f32 * TILE / 2.0;
-            if pos.0.x + half.x <= p.0.x - half_w + EPS || pos.0.x - half.x >= p.0.x + half_w - EPS {
-                continue;
-            }
-            let top_now = p.0.y + TILE / 2.0;
-            let top_prev = prev.0.y + TILE / 2.0;
-            let feet = pos.0.y - half.y;
-            let before = if body.riding == Some(e) { bottom_before } else { bottom_before - carry.y };
-            if before >= top_now.min(top_prev) - ONE_WAY_SLACK && feet <= top_now + EPS {
-                pos.0.y = top_now + half.y;
-                ground = true;
-                riding = Some(e);
-            }
-        }
-    }
-    let on_grease = ground && riding.is_none() && grease_underfoot(level, pos.0, half);
+    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, dt);
+    let mut ground = contact.ground;
+    let on_grease = ground && contact.riding.is_none() && grease_underfoot(level, pos.0, body.half);
     ctl.on_grease = on_grease;
     if ground {
-        body.vel.y = 0.0;
-        if !was_on_ground && fall_speed > LAND_EVENT_SPEED {
-            landed.write(Landed { pos: pos.0, speed: fall_speed });
+        if !contact.was_on_ground && contact.fall_speed > LAND_EVENT_SPEED {
+            landed.write(Landed { pos: pos.0, speed: contact.fall_speed });
         }
         ctl.has_toot = true;
         ctl.weak_toot = false;
@@ -321,17 +477,16 @@ fn player_step(
         // The laughing band: spring back up a little (lower each time, until it dies out).
         // Grease doesn't bounce (unless you've got grip): it would be a jump off grease.
         let slick = on_grease && !groove.grip();
-        if groove.bounce && !slick && !was_on_ground && fall_speed > BOUNCE_MIN_SPEED {
-            body.vel.y = (fall_speed * BOUNCE_RESTITUTION).min(BOUNCE_SPEED);
+        if groove.bounce && !slick && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN_SPEED {
+            body.vel.y = (contact.fall_speed * BOUNCE_RESTITUTION).min(BOUNCE_SPEED);
             ctl.bouncing = true;
             ground = false;
-            riding = None;
+            body.riding = None;
         }
     }
     body.on_ground = ground;
-    body.riding = riding;
 }
 
-fn move_towards(v: f32, target: f32, max_delta: f32) -> f32 {
+pub fn move_towards(v: f32, target: f32, max_delta: f32) -> f32 {
     if (target - v).abs() <= max_delta { target } else { v + (target - v).signum() * max_delta }
 }

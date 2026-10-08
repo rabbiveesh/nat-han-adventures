@@ -34,7 +34,9 @@ pub use hazards::{
 pub use platforms::platform_pos;
 pub use han::{DEATH_LINES, GRIP_LINE, HAN_DELAY_STEPS, HanAnim, HanMotion, HanPose, HanTrail, NERVOUS_LINE};
 pub use pickups::CHECKPOINT_QUIPS;
-pub use physics::{Body, Dead, PlayerControl};
+pub use physics::{
+    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, PlayerControl, han_carrier, move_towards, step_body,
+};
 pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
 
 /// Physics and feel tuning. Units: pixels and seconds; a tile is 16px. Level design relies on
