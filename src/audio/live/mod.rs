@@ -15,8 +15,16 @@
 //!   scheduler, the inputs.
 //! - [`arrange`]: the written parts in each harmony (the `accomp` / `melody` / `waltz`
 //!   passes, run once per song), read bar by bar; the waltz on its own 3/4 [`arrange::Shape`].
-//! - [`musician`]: the band behind the [`musician::Musician`] trait: plans, commits, freedom.
-//! - [`voice`]: the NES voices, streaming.
+//! - [`musician`]: the band behind the [`musician::Musician`] trait: plans, commits, freedom,
+//!   and each player's ornaments (`musician/lead.rs`, `comp.rs`, `bass.rs`, `drums.rs`).
+//! - [`band`]: the band's shared plan for each bar ([`band::BandPlan`]: hits, the band's own
+//!   reharmonization, trading fours, fills, the game's flourishes), so the four line up.
+//! - [`ornament`]: the vocabulary ([`ornament::Orn`]) and its harmony helpers (chord-scales,
+//!   voicings, enclosures, digital patterns, planing, substitutions); no allocation.
+//! - [`instrument`]: FamiTracker-style instruments (`[instruments]`, `@i`): macros per 60 Hz
+//!   frame, vibrato, drum kits, each channel's palette.
+//! - [`voice`]: the NES voices, streaming (instrument macros and the ornaments' per-note
+//!   effects included).
 //! - [`playback`]: a kira [`kira::sound::Sound`] running engines on the audio thread.
 //!
 //! # Architecture
@@ -62,8 +70,18 @@
 //! At freedom 0 the engine plays exactly what the old pre-rendering engine rendered (checked
 //! bit for bit, every song through every filter, the waltz included, before that engine was
 //! retired; `tests/live.rs` keeps fingerprints of those renders). A fresh engine's first bar
-//! lacks only the previous pass's drum tails. Rendering costs ~25 µs per 512-frame block in a
-//! release build with everything on (Coltrane + medley + freedom), ~600× real time.
+//! lacks only the previous pass's drum tails. Rendering costs 18-80 µs per 512-frame block in a
+//! release build with everything on (Coltrane + medley + every musician at freedom 1), 200-900×
+//! real time (`tests/live.rs` holds it to 100×).
+//!
+//! # Extension points: feels
+//! A *feel* (bossa, samba, rock, funk) is meant to slot in as a band-wide choice in
+//! [`band::BandPlan`] (its `feel` field, decided per section like trading fours, from the
+//! dials), realized by each player as a rhythm transform of its bar (the comp's
+//! Charleston / Freddie Green and the bass's walking / two-feel are the pattern to follow), with
+//! its instruments picked from the channel palettes ([`musician::Ctx::palette`],
+//! [`musician::Ctx::alternate`]; a song can list a feel's instruments in its palettes). The
+//! musicians only ever see one bar at a time, so nothing else changes.
 
 pub mod arrange;
 pub mod band;
