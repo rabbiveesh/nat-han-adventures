@@ -46,8 +46,14 @@ fn enter_level(
     mut says: MessageWriter<HanSays>,
 ) {
     let index = current.0.min(levels.0.len().saturating_sub(1));
-    let level = generated.map_or_else(|| levels.0[index].clone(), |g| g.0.clone());
-    load(&mut commands, level, index, &old);
+    let level = match generated {
+        Some(g) => g.0.clone(),
+        None => {
+            commands.write_message(crate::events::LevelStarted { level: index, restart: false });
+            levels.0[index].clone()
+        }
+    };
+    let level = load(&mut commands, level, index, &old);
     if !level.intro.is_empty() {
         says.write(HanSays { text: level.intro.clone() });
     }
@@ -88,6 +94,7 @@ fn restart_level(
     }
     let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
     load(&mut commands, levels.0[index].clone(), index, &old);
+    commands.write_message(crate::events::LevelStarted { level: index, restart: true });
 }
 
 /// Despawn whatever is loaded and spawn `level` (story level `index`) fresh, resetting the run.

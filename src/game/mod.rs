@@ -11,6 +11,7 @@ use bevy::prelude::*;
 use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
+pub mod adaptive;
 mod groove;
 mod han;
 mod hazards;
@@ -21,6 +22,7 @@ mod platforms;
 mod visuals;
 
 pub mod assist;
+pub use adaptive::{AdaptiveProfile, AssistMode, HiddenRespawn, StoryAssistState};
 pub use assist::Assists;
 pub use groove::{
     BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, BeatClock, FIRED_UP_SPEED, GIANT_STEPS_GRAVITY,
@@ -100,6 +102,7 @@ pub fn plugin(app: &mut App) {
             hazards::plugin,
             pickups::plugin,
             han::plugin,
+            adaptive::plugin,
         ));
 }
 

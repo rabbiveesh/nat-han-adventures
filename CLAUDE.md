@@ -29,6 +29,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `src/level/validate.rs` the level validator (reachability, gates, splat stains, grease
   chutes, teaching hints). Pure and wasm-safe; `tests/levels.rs` runs it on the campaign.
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
+- `src/adapt/` the adaptive difficulty engine (pure reducers); `src/game/adaptive.rs` wires it
+  into play: story deaths/checkpoints → the invisible `Assists` (coyote, buffer, hitboxes, rafts,
+  Han's eagerness, a hidden midway respawn, hint repeats), Han's encouragement, the band's
+  freedom. `AssistMode` picks story / free play / manual (tests). Never shown on screen.
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
 - `src/audio/` MML parser, NES-style synth blocks, sfx, the director, and the Bevy plugin
   (`audio::plugin`: music + sfx on one kira manager; `AudioOutput::Headless` for tests).
