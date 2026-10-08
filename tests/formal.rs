@@ -81,10 +81,17 @@ fn the_grip_layer_beats_every_filter() {
         for just_intonation in [false, true] {
             let f = Filters { harmony, just_intonation };
             assert!(Groove { nervous: true, ..Groove::new(f) }.grip(), "{f:?}");
-            assert_eq!(groove_of(f, 3, Mutation::None).grip(), true, "{f:?}");
+            assert!(groove_of(f, 3, Mutation::None).grip(), "{f:?}");
             assert_eq!(groove_of(f, 2, Mutation::None).grip(), harmony == MelodicMinor, "{f:?}");
         }
     }
+}
+
+/// States the search treats as one (same key) really do behave the same.
+#[test]
+fn the_abstraction_is_sound() {
+    let pairs = check_abstraction(3, 12, 40).unwrap_or_else(|e| panic!("{e}"));
+    assert!(pairs > 1000, "only {pairs} pairs compared");
 }
 
 /// The trace format round-trips, and replays what it says.

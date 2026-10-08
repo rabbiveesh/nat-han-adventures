@@ -51,7 +51,8 @@ pub const NUGGET: u8 = 2;
 pub const DEATH: u8 = 4;
 pub const CHECKPOINT: u8 = 8;
 pub const JUMP: u8 = 16;
-const BITS: [(u8, &str); 5] = [(TOOT, "toot"), (NUGGET, "nugget"), (DEATH, "death"), (CHECKPOINT, "checkpoint"), (JUMP, "jump")];
+const BITS: [(u8, &str); 5] =
+    [(TOOT, "toot"), (NUGGET, "nugget"), (DEATH, "death"), (CHECKPOINT, "checkpoint"), (JUMP, "jump")];
 
 /// One step of play.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -349,7 +350,10 @@ impl Trace {
                 w => {
                     let mut bits = 0;
                     for name in w.split('+') {
-                        let b = BITS.iter().find(|(_, n)| *n == name).ok_or_else(|| format!("{part:?}: unknown event {name:?}"))?;
+                        let b = BITS
+                            .iter()
+                            .find(|(_, n)| *n == name)
+                            .ok_or_else(|| format!("{part:?}: unknown event {name:?}"))?;
                         bits |= b.0;
                     }
                     Act::Frame(bits)
@@ -382,8 +386,14 @@ pub struct Violation {
 
 /// The properties checked from every reachable state.
 pub const PROPERTIES: [(&str, &str); 6] = [
-    ("a", "deaths always reach grip: 3+ level deaths give grip, whatever else happens (chute loops with ghost nuggets)"),
-    ("b", "each summon input reaches its harmony at once (≤ 1 decision): 5 toots, 4 quick nuggets, 3 even ground jumps"),
+    (
+        "a",
+        "deaths always reach grip: 3+ level deaths give grip, whatever else happens (chute loops with ghost nuggets)",
+    ),
+    (
+        "b",
+        "each summon input reaches its harmony at once (≤ 1 decision): 5 toots, 4 quick nuggets, 3 even ground jumps",
+    ),
     ("c", "no flip-flop: with no input the harmony changes at most once, then stays"),
     ("d", "holds expire without keep-alive input (no input, or only deaths and checkpoints)"),
     ("e", "restart returns to the initial state"),
@@ -604,7 +614,12 @@ fn prop_f(s: &Sim) -> Result<(), Violation> {
         return Err(Violation {
             prop: "f",
             witness: Vec::new(),
-            detail: format!("grip {} with the laughing band {}, {} without", s.grip(), s.playing.just_intonation, other.grip()),
+            detail: format!(
+                "grip {} with the laughing band {}, {} without",
+                s.grip(),
+                s.playing.just_intonation,
+                other.grip()
+            ),
         });
     }
     Ok(())
@@ -712,55 +727,93 @@ impl Exploration {
 /// Explore breadth-first to `cfg.depth` acts, checking every property from every new state.
 /// Stops at the first failure (the shortest trace to a failing state).
 pub fn explore(cfg: &Config) -> Result<Exploration, Box<Counterexample>> {
-    explore_with(cfg, |s, init| check_state(s, init))
+    let (ex, mut found) = explore_with(cfg, 1, true, &|s, init| check_state(s, init));
+    match found.pop() {
+        Some(c) => Err(Box::new(c)),
+        None => Ok(ex),
+    }
 }
 
-/// [`explore`] with another check per state (`|_, _| Ok(())`: just the reachable states).
+/// Breadth-first to `cfg.depth` acts, `check` from every new state (on `threads` threads, a
+/// layer at a time, so the order and the counterexamples don't depend on them). `first`: stop
+/// at the first failure; else carry on and keep the first (shortest) failure per property.
 pub fn explore_with(
     cfg: &Config,
-    mut check: impl FnMut(&Sim, &Key) -> Result<(), Violation>,
-) -> Result<Exploration, Box<Counterexample>> {
+    threads: usize,
+    first: bool,
+    check: &(dyn Fn(&Sim, &Key) -> Result<(), Violation> + Sync),
+) -> (Exploration, Vec<Counterexample>) {
     let t0 = Instant::now();
     let root = Sim::new(cfg.mutation);
     let init = root.key();
     let mut seen: HashSet<Key> = HashSet::new();
     seen.insert(init.clone());
     let mut ex = Exploration { nodes: vec![Node { sim: root, parent: 0, act: None }], coverage: Coverage::default() };
-    let fail = |ex: &Exploration, i: usize, violation: Violation| Box::new(Counterexample { state: ex.trace(i), violation });
-    if let Err(v) = check(&ex.nodes[0].sim, &init) {
-        return Err(fail(&ex, 0, v));
-    }
-    let mut frontier = vec![0usize];
+    let mut found: Vec<Counterexample> = Vec::new();
+    let mut layer = vec![0usize];
     ex.coverage.layers.push(1);
-    for _ in 0..cfg.depth {
+    let mut depth = 0;
+    loop {
+        // Check the layer.
+        let nodes = &ex.nodes;
+        let chunk = layer.len().div_ceil(threads.max(1)).max(1);
+        let run = |part: &[usize]| {
+            let mut out = Vec::new();
+            for &i in part {
+                if let Err(v) = check(&nodes[i].sim, &init) {
+                    out.push((i, v));
+                    if first {
+                        break;
+                    }
+                }
+            }
+            out
+        };
+        // One thread: right here (so its CPU time is this thread's).
+        let fails: Vec<(usize, Violation)> = if threads <= 1 {
+            run(&layer)
+        } else {
+            std::thread::scope(|scope| {
+                let hs: Vec<_> = layer.chunks(chunk).map(|part| scope.spawn(|| run(part))).collect();
+                hs.into_iter().flat_map(|h| h.join().expect("check panicked")).collect()
+            })
+        };
+        for (i, v) in fails {
+            if !found.iter().any(|c| c.violation.prop == v.prop) {
+                found.push(Counterexample { state: ex.trace(i), violation: v });
+            }
+            if first {
+                break;
+            }
+        }
+        if (first && !found.is_empty()) || depth == cfg.depth {
+            break;
+        }
+        // The next layer.
+        depth += 1;
         let mut next = Vec::new();
-        for &i in &frontier {
+        for &i in &layer {
             for &a in &cfg.acts {
                 let mut s = ex.nodes[i].sim.clone();
                 s.apply(a);
-                let k = s.key();
-                if !seen.insert(k) {
+                if !seen.insert(s.key()) {
                     continue;
                 }
-                let j = ex.nodes.len();
+                next.push(ex.nodes.len());
                 ex.nodes.push(Node { sim: s, parent: i, act: Some(a) });
-                if let Err(v) = check(&ex.nodes[j].sim, &init) {
-                    return Err(fail(&ex, j, v));
-                }
-                next.push(j);
             }
         }
         ex.coverage.layers.push(next.len());
         if next.is_empty() {
             break;
         }
-        frontier = next;
+        layer = next;
     }
     ex.coverage.states = ex.nodes.len();
-    ex.coverage.depth = ex.coverage.layers.len() - 1;
+    ex.coverage.depth = depth;
     ex.coverage.music = ex.nodes.iter().map(|n| (n.sim.playing, n.sim.grip())).collect();
     ex.coverage.elapsed = t0.elapsed();
-    Ok(ex)
+    (ex, found)
 }
 
 /// Replay `state` and check every property from each state along it (a regression test).
@@ -779,4 +832,83 @@ pub fn check_trace(state: &str) -> Result<(), String> {
         check(&s, &done)?;
     }
     Ok(())
+}
+
+/// The abstraction is sound: concrete states with the same [`Key`] (all reached within `depth`
+/// acts, no deduplication) behave the same under `probes` pseudo-random plays of `len` acts:
+/// the same decisions, music, grip and holds every frame. Returns the pairs compared.
+pub fn check_abstraction(depth: usize, probes: usize, len: usize) -> Result<usize, String> {
+    let acts = Config::tier1(depth).acts;
+    let mut layer = vec![(Trace::default(), Sim::new(Mutation::None))];
+    let mut reps: std::collections::HashMap<Key, (Trace, Sim)> = std::collections::HashMap::new();
+    let mut pairs = 0;
+    let mut seed = 0x9e3779b97f4a7c15u64;
+    let mut rnd = move || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        seed
+    };
+    let plays: Vec<Vec<Act>> =
+        (0..probes).map(|_| (0..len).map(|_| acts[(rnd() % acts.len() as u64) as usize]).collect()).collect();
+    let observe = |s: &Sim, play: &[Act]| {
+        let mut t = s.clone();
+        let mut seen = Vec::new();
+        for &a in play {
+            t.apply_with(a, |x, d| seen.push((d, x.playing, x.grip(), x.held())));
+        }
+        seen
+    };
+    for d in 0..=depth {
+        let mut next = Vec::new();
+        for (trace, s) in layer {
+            match reps.get(&s.key()) {
+                Some((rt, r)) => {
+                    pairs += 1;
+                    for play in &plays {
+                        if observe(r, play) != observe(&s, play) {
+                            return Err(format!(
+                                "`{rt}` and `{trace}` share a key but differ under `{}`",
+                                Trace(play.clone())
+                            ));
+                        }
+                    }
+                }
+                None => {
+                    reps.insert(s.key(), (trace.clone(), s.clone()));
+                }
+            }
+            if d < depth {
+                for &a in &acts {
+                    let mut t = s.clone();
+                    t.apply(a);
+                    let mut tr = trace.clone();
+                    tr.0.push(a);
+                    next.push((tr, t));
+                }
+            }
+        }
+        layer = next;
+    }
+    Ok(pairs)
+}
+
+/// CPU time this thread has used (Linux: `/proc/thread-self/schedstat`), so a time budget
+/// holds however busy the machine is. `None` elsewhere.
+pub fn thread_cpu() -> Option<Duration> {
+    let s = std::fs::read_to_string("/proc/thread-self/schedstat").ok()?;
+    let ns: u64 = s.split_whitespace().next()?.parse().ok()?;
+    Some(Duration::from_nanos(ns))
+}
+
+/// Time `f`: (its result, CPU time if known else wall time, wall time).
+pub fn timed<T>(f: impl FnOnce() -> T) -> (T, Duration, Duration) {
+    let (c0, w0) = (thread_cpu(), Instant::now());
+    let out = f();
+    let wall = w0.elapsed();
+    let cpu = match (c0, thread_cpu()) {
+        (Some(a), Some(b)) => b.saturating_sub(a),
+        _ => wall,
+    };
+    (out, cpu, wall)
 }

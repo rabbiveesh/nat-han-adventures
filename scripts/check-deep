@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Tier 2 formal checks (tests/deep.rs, #[ignore]d): the band director explored deeper, every
+# campaign gate from every music state, boost chains near band gates, Han reaching his gates.
+# Run it when you touch the director, physics, the groove, Han or the levels (see CLAUDE.md,
+# "Formal checks"). Each check caches its pass in target/tmp/deep-check/, keyed by a hash of
+# the levels and the sources it depends on, and prints "cached" when nothing changed.
+#
+#   scripts/check-deep            # run (or skip what's cached)
+#   scripts/check-deep --force    # rerun everything (NATHAN_DEEP_FORCE=1)
+#   scripts/check-deep deep_director   # just one check (a test-name filter)
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if [[ "${1:-}" == "--force" ]]; then
+    export NATHAN_DEEP_FORCE=1
+    shift
+fi
+# One test at a time (each uses every core), output shown: counterexamples are the point.
+if cargo nextest --version >/dev/null 2>&1; then
+    exec nice -n 15 cargo nextest run --test deep --run-ignored only --no-capture "$@"
+else
+    exec nice -n 15 cargo test --test deep -- --ignored --nocapture --test-threads 1 "$@"
+fi

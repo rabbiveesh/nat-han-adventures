@@ -82,3 +82,37 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
    does it natively.
 5. F9 in the game writes a debug dump (every reflected resource, Nat/Han state, director, raw
    save, recent events): a download on web, a file next to the save on native.
+
+## Formal checks
+Two tiers check the reachable states of the music × physics × levels, so soft-locks (a mode
+you can never summon, grip that never comes) are caught before a player finds them.
+- **Tier 1** (`tests/formal.rs`, every `cargo test` / `cargo nextest run`, ≤ 2 s CPU, enforced by
+  `tier1_director_properties_within_budget`): the real `director::Band` (driven as
+  `audio::plugin` does, physics via `Groove` + the grip layer) explored breadth-first over
+  toots, nuggets, deaths, checkpoints, ground jumps, restarts and waits on a 0.25 s grid
+  (depth 5, ~35k distinct states, deduplicated by an abstraction of the band that a test
+  proves sound). From every state: (a) deaths always reach grip (also with ghost nuggets
+  re-grabbed every lap); (b) 5 toots / 4 quick nuggets / 3 even ground jumps get their mode at
+  once; (c) with no input the harmony changes at most once; (d) holds expire without
+  keep-alive input; (e) restart returns to the initial state; (f) the laughing band never
+  blocks grip. Mutants (the old chute soft-lock, a leaky restart, lazy summons) must be caught.
+- **Tier 2** (`tests/deep.rs`, `#[ignore]`d: `scripts/check-deep`, or `cargo nextest run --test
+  deep --run-ignored only --no-capture`): the director deeper and with two events per frame;
+  every campaign band gate crossable from every tier-1 music state with the level's own runway
+  / nugget line / chute laps (a bar line's latency included); Han's chain boosts near band
+  gates; Han's nav (every mode) or his parachute reaching each of his gates. Each test caches
+  its pass in `target/tmp/deep-check/` keyed by a hash of `levels/*.txt` and the sources it
+  reads (`SOURCES` in `tests/deep.rs`); unchanged, it prints "cached" (`--force` reruns). CI
+  runs it on pushes to main and daily (`.github/workflows/deep-check.yml`, non-blocking).
+  Known, accepted findings are listed in `tests/deep.rs` (`KNOWN`, `KNOWN_BYPASSES`) and
+  printed every run; remove an entry once fixed (a stale one is reported).
+- **Agents: run tier 2 (`scripts/check-deep`) whenever you touch the director, physics, the
+  groove, Han or the levels**, and don't leave new counterexamples behind.
+- **Reading a counterexample**: `property (a) fails: …`, then `state:` (the shortest trace
+  from a level start to the state the property fails from), `full:` (with the property's own
+  witness appended) and `because:`. A trace reads `t=0 nugget ×4 | t=1 death | t=2.25 wait`:
+  frames at play time t (s; `×n`: n frames at that time; `a+b`: two events in one frame;
+  `restart`), a final `wait` for when it ends. Turn one into a regression test by pasting its
+  `state:` into `regressions` in `tests/formal.rs` (`regression("…")` replays it and checks
+  every property from each state on the way); `formal_model::replay` gives the `Sim` to
+  assert on directly.

@@ -1,0 +1,51 @@
+# Tier 2 formal checks (tests/deep.rs): the band director explored deeper, every campaign gate
+# from every music state, boost chains near band gates, Han reaching his gates. Separate from
+# the test and deploy workflows: a red run here blocks nothing, it reports (counterexamples in
+# the job log and the run summary).
+name: Deep check
+
+on:
+  push:
+    branches: ["main"]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: deep-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: System deps
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libasound2-dev libwayland-dev libxkbcommon-dev
+      # Installs exactly what rust-toolchain.toml pins (rustup no longer auto-installs).
+      - name: Install Rust
+        run: rustup toolchain install
+      # .cargo/config.toml links with clang + mold.
+      - uses: rui314/setup-mold@v1
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+      # Always really run in CI (the pass cache is for local dev loops). --no-capture: one test
+      # at a time, every counterexample in the log.
+      - name: Deep formal checks
+        env:
+          NATHAN_DEEP_FORCE: "1"
+        run: |
+          set -o pipefail
+          cargo nextest run --profile ci --test deep --run-ignored only --no-capture 2>&1 | tee deep.log
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo '## Deep check'
+            echo '```'
+            grep -E -A4 'COUNTEREXAMPLE|KNOWN ISSUE|BYPASS|STALE|note:|crossable from|states \(depth|passed in|panicked' deep.log || echo '(no output)'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
