@@ -150,7 +150,9 @@ pub fn groove_badge(g: &Groove) -> String {
     if g.time_scale < 1.0 {
         parts.push("SLOW-MO");
     }
-    if g.bounce {
+    if g.grip() {
+        parts.push("GRIP");
+    } else if g.bounce {
         parts.push("BOUNCY");
     }
     parts.join(" + ")

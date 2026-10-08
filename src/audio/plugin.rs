@@ -345,7 +345,7 @@ fn follow_state(
 
 /// The physics that go with `filters` (the clock carries on: [`sync`] sets it).
 fn set_groove(g: &mut Groove, filters: Filters) {
-    let new = Groove::new(filters);
+    let new = Groove { nervous: g.nervous, ..Groove::new(filters) };
     if *g != new {
         *g = Groove { clock: g.clock, ..new };
     }
@@ -401,6 +401,7 @@ fn direct(
     mut nuggets: MessageReader<NuggetCollected>,
     mut died: MessageReader<PlayerDied>,
     mut checkpoints: MessageReader<CheckpointReached>,
+    mut groove_for_grip: Option<ResMut<Groove>>,
 ) {
     let playing = *state.get() == AppState::Playing;
     let restarted = restart.read().count() > 0;
@@ -434,6 +435,12 @@ fn direct(
         decision = Some(decided);
     }
     let stats = d.band.stats;
+    if let Some(g) = groove_for_grip.as_deref_mut() {
+        let nervous = stats.level_deaths >= director::NERVOUS_DEATHS;
+        if g.nervous != nervous {
+            g.nervous = nervous;
+        }
+    }
     let new_steps = d.band.steps_taken.saturating_sub(steps);
     let decided = decision.map(|(filters, reason)| match overrides.0 {
         Some(f) => (f, "NATHAN_MUSIC"),

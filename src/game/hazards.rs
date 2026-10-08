@@ -21,7 +21,8 @@ use crate::level::{PlatformKind, TILE, Tile};
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<RaftLife>().add_systems(
         FixedUpdate,
-        (move_flies, update_sprays, float_rafts.after(super::platforms::move_platforms)).in_set(GameSet::World),
+        (move_flies, update_sprays, float_rafts.after(super::platforms::move_platforms), fade_side_stains)
+            .in_set(GameSet::World),
     )
         .add_systems(
             FixedUpdate,
@@ -121,6 +122,34 @@ fn float_rafts(mut commands: Commands, time: Res<Time>, life: Res<RaftLife>, mut
     }
 }
 
+/// How long a side splat lasts (s). Shorter than respawning and sliding back, so a slide into
+/// the same spikes kills again: chutes need deaths to make the band nervous (grip), and a lasting
+/// stain there would soft-lock the player.
+pub const SIDE_STAIN_LIFE: f32 = 2.5;
+
+/// A splat on the *side* of a spike tile, from sliding into it on grease. It
+/// makes that tile harmless only from that side, isn't standable, and fades after
+/// [`SIDE_STAIN_LIFE`]. (Landing on spikes from the air leaves a lasting [`Stain`] instead.)
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct SideStain {
+    /// World tile indices (as in `cells`).
+    pub i: i32,
+    pub j: i32,
+    /// -1: on the tile's left face; +1: its right face.
+    pub side: f32,
+    pub life: f32,
+}
+
+fn fade_side_stains(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mut SideStain)>) {
+    for (e, mut s) in &mut q {
+        s.life -= time.delta_secs();
+        if s.life <= 0.0 {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
 /// Leave a splat stain for a death touching the deadly tile at (`i`, `j`) (world tile indices).
 fn leave_stain(commands: &mut Commands, active: &mut ActiveLevel, rafts: &mut RaftQuery, i: i32, j: i32) {
     let level = &mut active.level;
@@ -186,6 +215,7 @@ pub(super) fn check_hazards(
     assists: Res<super::Assists>,
     mut died: MessageWriter<PlayerDied>,
     mut says: MessageWriter<HanSays>,
+    side_stains: Query<&SideStain>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
@@ -208,6 +238,11 @@ pub(super) fn check_hazards(
                 Tile::Liquid => (y0, y0 + TILE),
                 _ => continue,
             };
+            // A fresh side splat shields this tile from that side.
+            let from = (pos.0.x - (x0 + TILE / 2.0)).signum();
+            if side_stains.iter().any(|s| s.i == i && s.j == j && s.side == from) {
+                continue;
+            }
             if rects_overlap(min, max, Vec2::new(x0, lo), Vec2::new(x0 + TILE, hi)) {
                 dead = true;
                 let d = (Vec2::new(x0, y0) + TILE / 2.0).distance(pos.0);
@@ -237,10 +272,25 @@ pub(super) fn check_hazards(
     if !dead {
         return;
     }
+    // Sliding on grease into spikes splats their side (short-lived, so the chute keeps killing
+    // until grip comes); any other death on spikes leaves a lasting stain on top.
+    let under = tile_at(&active.level, (pos.0.x / TILE).floor() as i32, ((pos.0.y - body.half.y - 1.0) / TILE).floor() as i32);
+    let side_hit = body.on_ground && under == Tile::Grease;
     body.vel = Vec2::ZERO;
     body.riding = None;
     if let Some((_, i, j)) = splat_on {
-        leave_stain(&mut commands, &mut active, &mut rafts, i, j);
+        let spikes = matches!(tile_at(&active.level, i, j), Tile::SpikesUp | Tile::SpikesDown);
+        if side_hit && spikes {
+            let side = (pos.0.x - (i as f32 * TILE + TILE / 2.0)).signum();
+            commands.spawn((
+                Name::new("SideStain"),
+                LevelEntity,
+                SideStain { i, j, side, life: SIDE_STAIN_LIFE },
+                Transform::from_xyz(i as f32 * TILE + TILE / 2.0 + side * (TILE / 2.0 - 2.0), j as f32 * TILE + TILE / 2.0, 0.6),
+            ));
+        } else {
+            leave_stain(&mut commands, &mut active, &mut rafts, i, j);
+        }
     }
     commands.entity(entity).insert(Dead { remaining: tuning::RESPAWN_DELAY });
     run.deaths += 1;

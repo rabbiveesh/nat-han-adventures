@@ -47,6 +47,8 @@ pub(super) fn plugin(app: &mut App) {
     .add_observer(spray_sprite)
     .add_observer(platform_sprite)
     .add_observer(stain_sprite)
+    .add_observer(side_stain_sprite)
+    .add_systems(PostUpdate, fade_side_stain_sprites.run_if(resource_exists::<Sprites>))
     .add_observer(player_sprite)
     .add_observer(han_sprite)
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
@@ -228,6 +230,25 @@ fn stain_sprite(add: On<Add, Stain>, q: Query<&Stain>, sprites: Option<Res<Sprit
     let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else { return };
     let id = if s.tile == Tile::StainDown { SpriteId::StainDown } else { SpriteId::StainUp };
     commands.entity(add.entity).insert(sprite(&sprites, id));
+}
+
+/// A side splat: the stain turned onto the spike tile's face Nat ran into, fading as it expires.
+fn side_stain_sprite(
+    add: On<Add, crate::game::SideStain>,
+    q: Query<&crate::game::SideStain>,
+    sprites: Option<Res<Sprites>>,
+    mut commands: Commands,
+) {
+    let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else { return };
+    let _ = s; // (Rotation onto the face is applied by `fade_side_stain_sprites`.)
+    commands.entity(add.entity).insert(sprite(&sprites, SpriteId::StainUp));
+}
+
+fn fade_side_stain_sprites(mut q: Query<(&crate::game::SideStain, &mut Sprite, &mut Transform)>) {
+    for (s, mut sprite, mut tf) in &mut q {
+        sprite.color = Color::srgba(1.0, 1.0, 1.0, (s.life / crate::game::SIDE_STAIN_LIFE).clamp(0.0, 1.0));
+        tf.rotation = Quat::from_rotation_z(-s.side * std::f32::consts::FRAC_PI_2);
+    }
 }
 
 fn platform_sprite(

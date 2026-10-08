@@ -145,6 +145,11 @@ pub struct Groove {
     pub tuning: Tuning,
     /// Where the music is. Not part of equality: it says when, not how, the physics bend.
     pub clock: BeatClock,
+    /// Sweaty grip from the death count (3+ deaths this level), whatever the band plays: a
+    /// layer like the laughing band, so a held summon (or ghost nuggets refiring one) can never
+    /// keep grip away in a grease chute. Set by the audio plugin from the director. Grip wins
+    /// over the laughing band's bounce.
+    pub nervous: bool,
 }
 
 impl PartialEq for Groove {
@@ -171,6 +176,7 @@ impl Groove {
             bounce: filters.just_intonation,
             tuning: if filters.just_intonation { Tuning::Medley } else { Tuning::Equal },
             clock: BeatClock::default(),
+            nervous: false,
         };
         match filters.harmony {
             Harmony::Original | Harmony::Waltz => plain,
@@ -203,7 +209,7 @@ impl Groove {
     /// Sweaty grip: the nervous band (melodic minor, the 3+ deaths mood) lets Nat brake and
     /// jump on grease.
     pub fn grip(&self) -> bool {
-        self.harmony == Harmony::MelodicMinor
+        self.nervous || self.harmony == Harmony::MelodicMinor
     }
 
     /// Max fall speed multiplier.

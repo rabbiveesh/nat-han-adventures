@@ -322,7 +322,7 @@ fn player_step(
         // The laughing band: spring back up a little (lower each time, until it dies out).
         // Grease doesn't bounce (unless you've got grip): it would be a jump off grease.
         let slick = on_grease && !groove.grip();
-        if groove.bounce && !slick && !was_on_ground && fall_speed > BOUNCE_MIN_SPEED {
+        if groove.bounce && !groove.grip() && !slick && !was_on_ground && fall_speed > BOUNCE_MIN_SPEED {
             body.vel.y = (fall_speed * BOUNCE_RESTITUTION).min(BOUNCE_SPEED);
             ctl.bouncing = true;
             ground = false;
