@@ -256,7 +256,14 @@ pub struct Band {
     pub steps_taken: u32,
     level_start: f32,
     next_check: f32,
+    /// When the laughing band's death count next eases off by one (see [`LAUGH_DECAY_SECS`]).
+    laugh_decay_at: f32,
 }
+
+/// The laughing band wears off: every this many seconds without dying, one death comes off
+/// the since-checkpoint count (so 2 deaths then 10 clean seconds bring equal temperament back
+/// before the next checkpoint). Grip is a level-long safety net and doesn't decay.
+pub const LAUGH_DECAY_SECS: f32 = 10.0;
 
 /// The rolling-window column of a summon's counter.
 fn column(h: Harmony) -> Option<usize> {
@@ -278,6 +285,11 @@ impl Band {
     /// Play time the level (re)started (for the formal checks).
     pub fn level_start(&self) -> f32 {
         self.level_start
+    }
+
+    /// When the laughing count next eases off (for the formal checks).
+    pub fn laugh_decay_at(&self) -> f32 {
+        self.laugh_decay_at
     }
 
     /// Play time of the next periodic check.
@@ -309,6 +321,15 @@ impl Band {
         self.window.record(now, ev.toots, ev.nuggets, ev.deaths, waltzes);
         self.stats.level_deaths += ev.deaths;
         self.stats.checkpoint_deaths += ev.deaths;
+        // The laughing band wears off with clean play.
+        let mut sobered = false;
+        if ev.deaths > 0 {
+            self.laugh_decay_at = now + LAUGH_DECAY_SECS;
+        } else if self.stats.checkpoint_deaths > 0 && now >= self.laugh_decay_at {
+            sobered = self.stats.checkpoint_deaths == LAUGHING_DEATHS;
+            self.stats.checkpoint_deaths -= 1;
+            self.laugh_decay_at = now + LAUGH_DECAY_SECS;
+        }
         // Deaths while a summon is held don't count toward a mood.
         if self.held(now).is_none() {
             self.stats.mood_deaths += ev.deaths;
@@ -330,7 +351,7 @@ impl Band {
                 self.hold = Some((h, now + SUMMON_HOLD_SECS));
             }
         }
-        if !(summon.is_some() || ev.deaths > 0 || ev.checkpoints > 0 || now >= self.next_check) {
+        if !(summon.is_some() || sobered || ev.deaths > 0 || ev.checkpoints > 0 || now >= self.next_check) {
             return None;
         }
         let decided = self.decide(now);
@@ -720,5 +741,36 @@ mod fresh_start_tests {
             got = b.step(5.0 + k as f32 * 0.5, Events { nuggets: 1, ..Default::default() }).or(got);
         }
         assert_eq!(got.unwrap().0.harmony, Harmony::Quartal);
+    }
+}
+
+#[cfg(test)]
+mod laugh_decay_tests {
+    use super::*;
+
+    /// Two quick deaths start the laughing band; a clean stretch wears it off before any
+    /// checkpoint; dying again restarts the clock.
+    #[test]
+    fn the_laughing_band_wears_off() {
+        let mut b = Band::default();
+        b.start(0.0);
+        let death = Events { deaths: 1, ..Default::default() };
+        b.step(1.0, death);
+        let (f, _) = b.step(2.0, death).unwrap();
+        assert!(f.just_intonation, "laughing after 2 deaths");
+        // Quiet frames: at 2 + 10 s one death comes off and the band sobers up right away.
+        let mut sober_at = None;
+        let mut t = 2.25;
+        while t < 40.0 {
+            if let Some((f, _)) = b.step(t, Events::default())
+                && !f.just_intonation
+                && sober_at.is_none()
+            {
+                sober_at = Some(t);
+            }
+            t += 0.25;
+        }
+        let at = sober_at.expect("never sobered up");
+        assert!((12.0..=12.5).contains(&at), "sobered at {at}");
     }
 }

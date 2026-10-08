@@ -237,6 +237,7 @@ impl Sim {
             hold: self.band.hold.filter(|&(_, until)| until > now).map(|(h, until)| (h, rel(until))),
             next_check: rel(self.band.next_check()).max(0),
             since_start: (-rel(self.band.level_start())).min(HORIZON),
+            laugh_decay: (s.checkpoint_deaths > 0).then(|| rel(self.band.laugh_decay_at()).max(0)),
             window,
             steps,
             playing: self.playing,
@@ -264,6 +265,8 @@ pub struct Key {
     next_check: i32,
     /// Ticks since the level started (saturated: the stretch is at most a window long).
     since_start: i32,
+    /// Ticks until the laughing count next eases off (while there's a count to ease).
+    laugh_decay: Option<i32>,
     /// (age in ticks, [toots, nuggets, deaths, waltz steps]).
     window: Vec<(i32, [u32; 4])>,
     /// Ages of the takeoffs that still matter.
