@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use super::VisualSet;
 use crate::art::{SpriteId, Sprites};
-use crate::game::{ActiveLevel, Groove, LevelEntity, Player, PlayerControl};
+use crate::game::{ActiveLevel, Groove, LevelEntity, Nudge, Player, PlayerControl, SEASICK_ROLL, SEASICK_ROLL_HZ};
 use crate::level::TILE;
 use crate::touch::TouchMode;
 
@@ -54,6 +54,8 @@ pub struct GameCamera {
     pub wobble: Vec2,
     /// Wobble strength 0..1 (eases in and out with the bouncy groove).
     pub giggle: f32,
+    /// Roll strength 0..1 (eases in and out with the laughing band's seasick phrase).
+    pub seasick: f32,
 }
 
 /// Laughing-band camera wobble: amplitude (px) and frequency (Hz).
@@ -117,12 +119,17 @@ fn follow_player(
     } else {
         p.y.clamp(half.y - margin.y, size.y - half.y)
     };
-    let bouncy = groove.is_some_and(|g| g.bounce);
+    let bouncy = groove.as_ref().is_some_and(|g| g.bouncy());
     gc.giggle = (gc.giggle + if bouncy { dt } else { -dt }).clamp(0.0, 1.0);
     let t = time.elapsed_secs() * std::f32::consts::TAU * WOBBLE_HZ;
     gc.wobble = gc.giggle * WOBBLE_PX * Vec2::new((t * 0.5).sin(), t.sin());
     tf.translation.x = p.x + gc.wobble.x;
     tf.translation.y = p.y + gc.wobble.y;
+    // Seasick (the laughing band's 7-TET phrase): the world rolls a little.
+    let seasick = groove.is_some_and(|g| g.nudge() == Some(Nudge::Seasick));
+    gc.seasick = (gc.seasick + if seasick { dt } else { -dt }).clamp(0.0, 1.0);
+    let roll = gc.seasick * SEASICK_ROLL * (time.elapsed_secs() * std::f32::consts::TAU * SEASICK_ROLL_HZ).sin();
+    tf.rotation = Quat::from_rotation_z(roll);
 }
 
 fn spawn_backdrop(mut commands: Commands, sprites: Res<Sprites>, active: Res<ActiveLevel>) {
@@ -143,10 +150,12 @@ fn spawn_backdrop(mut commands: Commands, sprites: Res<Sprites>, active: Res<Act
 }
 
 fn scroll_backdrop(
-    cam: Query<&Transform, (With<GameCamera>, Without<Backdrop>)>,
+    cam: Query<(&Transform, &GameCamera), Without<Backdrop>>,
     mut q: Query<(&Backdrop, &mut Transform)>,
 ) {
-    let Ok(cam) = cam.single() else { return };
+    let Ok((cam, gc)) = cam.single() else { return };
+    // A rolling camera sees past the backdrop's top and bottom at the corners: grow it a bit.
+    let scale = 1.0 + gc.seasick * 0.06;
     let w = 256.0 * BACKDROP_SCALE;
     let c = cam.translation;
     // Tiles scroll at PARALLAX of the camera speed; wrap so copies always cover the view.
@@ -155,6 +164,7 @@ fn scroll_backdrop(
     for (b, mut tf) in &mut q {
         tf.translation.x = first + b.0 as f32 * w;
         tf.translation.y = c.y;
+        tf.scale = Vec3::new(scale, scale, 1.0);
     }
 }
 

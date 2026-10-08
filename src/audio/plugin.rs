@@ -43,7 +43,7 @@ use crate::state::{AppState, CurrentLevel, PlayState};
 use super::live::engine::{BeatClock, Engine, Input};
 use super::live::library;
 use super::live::playback::{ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData};
-use super::tuning::Tuning;
+use super::tuning::{Tuning, Wobble};
 use super::{Filters, Harmony, Music, Sfx, director, sfx, synth};
 
 /// Music volume (dB). Sfx play at their own levels around 0 dB.
@@ -615,7 +615,18 @@ fn sync(
         }
     }
     if let Some(mut g) = groove {
-        g.clock = game::BeatClock::at(heard.position.song_beat, 60.0 / heard.bpm.max(1.0) as f64, heard.beats_per_bar.round() as u32);
+        let beat_secs = 60.0 / heard.bpm.max(1.0) as f64;
+        g.clock = game::BeatClock::at(heard.position.song_beat, beat_secs, heard.beats_per_bar.round() as u32);
+        // The laughing band's phrase and its wobble, for the phrase's nudge. The voices'
+        // wobble runs on song time fitted to the loop (`Medley::new`): so does this.
+        g.phrase = tuning_now;
+        g.sway = if tuning_now.is_some() {
+            let loop_secs = heard.loop_beats * beat_secs;
+            let wobble = if loop_secs > 0.0 { Wobble::MEDLEY.fitted(loop_secs) } else { Wobble::MEDLEY };
+            (std::f64::consts::TAU * wobble.hz * heard.position.song_beat * beat_secs).sin() as f32
+        } else {
+            0.0
+        };
     }
 }
 

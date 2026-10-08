@@ -7,9 +7,9 @@ use std::time::Duration;
 use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
     events::*,
-    audio::{Filters, Harmony},
+    audio::{Filters, Harmony, tuning::Tuning},
     game::{
-        Body, Checkpoint, Dead, FIRED_UP_SPEED, GIANT_STEPS_SPEED, Groove, Han, LevelRun,
+        Body, Checkpoint, DRUNK_SWAY, Dead, FIRED_UP_SPEED, GIANT_STEPS_SPEED, Groove, Han, LevelRun,
         MovingPlatform, NERVOUS_TIME, Nugget, Player, Pos, SimClock, tuning,
     },
     level::{Level, Levels, TILE},
@@ -883,6 +883,122 @@ fn laughing_band_bounces() {
     step(&mut app, 1.0);
     assert!(body(&mut app).on_ground);
     assert_eq!(counted::<Landed>(&app), 1);
+}
+
+/// The laughing band in a medley phrase: `phrase` (as the audio plugin writes it).
+fn set_phrase(app: &mut App, phrase: Tuning, sway: f32) {
+    let g = Groove { sway, ..Groove::new(Filters { harmony: Harmony::Original, just_intonation: true }).in_phrase(phrase) };
+    app.world_mut().insert_resource(g);
+}
+
+/// Jump, wait for the landing; how many landings by 0.6 s after it.
+fn jump_and_count_landings(app: &mut App) -> usize {
+    hold(app, JUMP);
+    step(app, 0.3);
+    release(app, JUMP);
+    let mut frames = 0;
+    while counted::<Landed>(app) == 0 {
+        app.update();
+        frames += 1;
+        assert!(frames < 120);
+    }
+    step(app, 0.6);
+    counted::<Landed>(app)
+}
+
+/// The laughing band's phrases nudge Nat: sober (no bounce), melting (lower jumps), overtones
+/// (an early toot goes higher), the drunk sway (run speed).
+#[test]
+fn laughing_band_phrases_nudge_nat() {
+    // Sober for a sec: one landing, no bounce. (Any other phrase bounces.)
+    let mut app = app(FLAT);
+    set_phrase(&mut app, Tuning::Just, 0.0);
+    assert_eq!(jump_and_count_landings(&mut app), 1, "sober: no bounce");
+    let mut app = self::app(FLAT);
+    set_phrase(&mut app, Tuning::Harmonic, 0.0);
+    assert!(jump_and_count_landings(&mut app) >= 2, "laughing: bounces");
+
+    // Melting: a single jump is lower (and still over 2.5 tiles).
+    let jump = |phrase: Option<Tuning>| {
+        let mut app = self::app(FLAT);
+        if let Some(p) = phrase {
+            set_phrase(&mut app, p, 0.0);
+        }
+        hold(&mut app, JUMP);
+        max_height_while(&mut app, 0.5, |_, _| {})
+    };
+    let (normal, melting) = (jump(None), jump(Some(Tuning::CarlosAlpha)));
+    println!("jump {normal:.1}px, melting {melting:.1}px");
+    assert!(melting < normal * 0.93 && melting > 2.5 * TILE, "melting jump {melting} vs {normal}");
+
+    // Overtones: tooting early goes higher than an early normal toot, never past a perfect one.
+    let toot_at = |phrase: Option<Tuning>, frame: usize| {
+        let mut app = self::app(FLAT);
+        if let Some(p) = phrase {
+            set_phrase(&mut app, p, 0.0);
+        }
+        max_height_while(&mut app, 1.2, |app, i| match i {
+            0 => hold(app, JUMP),
+            i if i == frame => release(app, JUMP),
+            i if i == frame + 1 => hold(app, JUMP),
+            _ => {}
+        })
+    };
+    let (early, early_over, perfect) =
+        (toot_at(None, 4), toot_at(Some(Tuning::Harmonic), 4), toot_at(None, 17));
+    println!("early toot {early:.1}px, overtones {early_over:.1}px, perfect {perfect:.1}px");
+    assert!(early_over > early + TILE, "overtones toot {early_over} vs {early}");
+    assert!(early_over <= perfect + 1.0, "overtones toot {early_over} vs a perfect one {perfect}");
+
+    // The drunk sway: run speed staggers with the wobble, never faster (not while sober).
+    let top_speed = |phrase: Tuning, sway: f32| {
+        let mut app = self::app(FLAT);
+        set_phrase(&mut app, phrase, sway);
+        hold(&mut app, RIGHT);
+        step(&mut app, 0.5);
+        body(&mut app).vel.x
+    };
+    let run = tuning::RUN_SPEED;
+    assert!((top_speed(Tuning::Tet7, 1.0) - run).abs() < 0.5);
+    assert!((top_speed(Tuning::Tet7, -1.0) - run * (1.0 - DRUNK_SWAY)).abs() < 0.5);
+    assert!((top_speed(Tuning::Just, -1.0) - run).abs() < 0.5);
+}
+
+/// Seasick (7-TET): Nat skids a little further after a running landing; grip wins.
+#[test]
+fn seasick_landings_are_slippery() {
+    // Run, jump, keep running through the bounces; let go the moment Nat lands for good.
+    let skid = |groove: Groove| {
+        let mut app = self::app(FLAT);
+        app.world_mut().insert_resource(groove);
+        hold(&mut app, RIGHT);
+        step(&mut app, 0.4);
+        hold(&mut app, JUMP);
+        app.update();
+        release(&mut app, JUMP);
+        let mut frames = 0;
+        loop {
+            let landings = counted::<Landed>(&app);
+            app.update();
+            frames += 1;
+            assert!(frames < 240, "never settled");
+            if counted::<Landed>(&app) > landings && body(&mut app).on_ground {
+                break;
+            }
+        }
+        release(&mut app, RIGHT);
+        let x = player_pos(&mut app).x;
+        step(&mut app, 1.0);
+        player_pos(&mut app).x - x
+    };
+    let laughing = Groove::new(Filters { harmony: Harmony::Original, just_intonation: true });
+    let (plain, sea) = (skid(laughing.in_phrase(Tuning::Harmonic)), skid(laughing.in_phrase(Tuning::Tet7)));
+    println!("skid {plain:.1}px, seasick {sea:.1}px");
+    assert!(sea > plain + 3.0, "seasick skid {sea} vs {plain}");
+    assert!(sea < plain + TILE, "a little: {sea} vs {plain}");
+    let grip = skid(Groove { nervous: true, ..laughing.in_phrase(Tuning::Tet7) });
+    let grip_plain = skid(Groove { nervous: true, ..laughing.in_phrase(Tuning::Harmonic) });
+    assert!((grip - grip_plain).abs() < 0.5, "grip wins: {grip} vs {grip_plain}");
 }
 
 /// The groove is the music's business, but a fresh level (or a restart) always starts normal.
