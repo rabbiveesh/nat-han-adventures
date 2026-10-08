@@ -56,7 +56,8 @@ fn every_song_and_sfx_renders_cleanly_and_quickly() {
     assert!(secs < budget_secs(), "rendering everything took {secs:.2}s");
 }
 
-/// Every song with a chord chart, through every harmony with and without just intonation:
+/// Every song with a chord chart, through every harmony with and without the laughing band's
+/// medley tuning:
 /// clean, loop-length, and about as fast to render as the original.
 #[test]
 fn every_song_renders_through_every_filter() {
@@ -88,6 +89,24 @@ fn every_song_renders_through_every_filter() {
     let per_filtered = filtered_secs / filtered as f64;
     println!("plain {:.1}ms/song, filtered {:.1}ms/song", per_plain * 1000.0, per_filtered * 1000.0);
     assert!(per_filtered < 2.0 * per_plain + 0.005, "filtered renders too slow: {per_filtered:.3}s vs {per_plain:.3}s");
+}
+
+/// The laughing band's medley tuning (a different tuning every phrase, a bit drunk), alone:
+/// every song clean (including the loop seam), loop-length, and within the render budget.
+#[test]
+fn every_song_renders_cleanly_in_the_medley() {
+    let laughing = Filters { just_intonation: true, ..Filters::default() };
+    let mut all: Vec<(String, Song)> = Music::ALL.iter().map(|m| (format!("{m:?}"), songs::song(*m))).collect();
+    all.push(("demo".into(), demo::demo_song()));
+    let t = Instant::now();
+    for (name, song) in &all {
+        let r = synth::render_song_with(song, laughing, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let plain = synth::render_song(song).unwrap();
+        assert_eq!(r.frames.len(), plain.frames.len(), "{name}: length changed");
+        check(&format!("{name} medley"), &r);
+    }
+    let secs = t.elapsed().as_secs_f64();
+    assert!(secs < 2.0 * budget_secs(), "medley + plain renders took {secs:.2}s");
 }
 
 /// Every real song's melody through every reharmonizing filter: same rhythm, in range, close
@@ -221,8 +240,8 @@ fn filter_labels_and_override_syntax() {
     assert_eq!(f(Harmony::Coltrane, false).label(), "COLTRANE CHANGES");
     assert_eq!(f(Harmony::Quartal, false).label(), "QUARTAL");
     assert_eq!(f(Harmony::MelodicMinor, false).label(), "MELODIC MINOR");
-    assert_eq!(f(Harmony::Original, true).label(), "JUST INTONATION");
-    assert_eq!(f(Harmony::Coltrane, true).label(), "COLTRANE CHANGES + JUST INTONATION");
+    assert_eq!(f(Harmony::Original, true).label(), "TUNING? WHAT TUNING");
+    assert_eq!(f(Harmony::Coltrane, true).label(), "COLTRANE CHANGES + TUNING? WHAT TUNING");
     assert_eq!(Filters::parse("coltrane"), Some(f(Harmony::Coltrane, false)));
     assert_eq!(Filters::parse("Quartal+JI"), Some(f(Harmony::Quartal, true)));
     assert_eq!(Filters::parse("melodic"), Some(f(Harmony::MelodicMinor, false)));

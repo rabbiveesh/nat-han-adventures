@@ -1,5 +1,6 @@
-//! Alternative tunings for the synth ("laughing band" candidates), auditioned with
-//! `cargo run --release --example tunings`. Each [`Tuning`] is a pure function from a MIDI note to
+//! Alternative tunings for the synth, auditioned with `cargo run --release --example tunings`.
+//! The "laughing band" ([`super::Filters::just_intonation`]) plays [`Tuning::Medley`]: all of
+//! them, a phrase each, drunk. Each [`Tuning`] is a pure function from a MIDI note to
 //! Hz ([`Tuning::hz`]), given the voice's *anchor*: a MIDI note on the song's tonic
 //! ([`super::Song::key`]) that keeps its equal-tempered pitch. Octave-equivalent tunings don't
 //! care which octave the anchor is in; the two non-octave ones (alpha, Bohlen–Pierce) do, so the
@@ -39,6 +40,9 @@
 //! - [`Tuning::Drunk`]: 12-TET, but every note-on is off by a random ±40¢ (deterministic per
 //!   song + channel + event + arpeggio tone, see [`drunk_cents`]), and the whole pitched mix
 //!   wobbles ±15¢ at 0.5 Hz ([`Tuning::wobble`]). Drums aren't pitched, so they don't wobble.
+//! - [`Tuning::Medley`]: every phrase ([`MEDLEY_PHRASE_BARS`] bars of 4/4 from the song's start)
+//!   in a different one of [`MEDLEY_TUNINGS`], always slightly drunk on top (±[`MEDLEY_DRUNK_CENTS`]
+//!   per note, ±[`MEDLEY_WOBBLE_CENTS`] wobble). See [`Medley`] for how phrases pick tunings.
 
 use super::theory::{self, et_hz};
 
@@ -52,6 +56,8 @@ pub enum Tuning {
     Tet7,
     Harmonic,
     Drunk,
+    /// A different tuning every phrase, a bit drunk. Resolved per note by [`Medley`].
+    Medley,
 }
 
 /// Wendy Carlos α: cents per chromatic step.
@@ -83,8 +89,47 @@ pub const DRUNK_CENTS: f64 = 40.0;
 pub const WOBBLE_CENTS: f64 = 15.0;
 pub const WOBBLE_HZ: f64 = 0.5;
 
+/// Medley: bars of 4/4 per phrase (phrases are counted from the song's start).
+pub const MEDLEY_PHRASE_BARS: usize = 4;
+/// Medley: beats per phrase.
+pub const MEDLEY_PHRASE_BEATS: f64 = MEDLEY_PHRASE_BARS as f64 * 4.0;
+/// Medley: the tunings the phrases cycle through (shuffled, see [`Medley`]).
+pub const MEDLEY_TUNINGS: [Tuning; 5] =
+    [Tuning::Just, Tuning::Harmonic, Tuning::Tet7, Tuning::CarlosAlpha, Tuning::BohlenPierce];
+/// Medley: max random offset per note, in cents (a drop less drunk than [`DRUNK_CENTS`]).
+pub const MEDLEY_DRUNK_CENTS: f64 = 14.0;
+/// Medley: wobble depth in cents (a drop less than [`WOBBLE_CENTS`]), at about [`WOBBLE_HZ`].
+pub const MEDLEY_WOBBLE_CENTS: f64 = 7.0;
+
+/// A slow sinusoidal pitch wobble over the whole pitched mix.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Wobble {
+    /// Depth, in cents.
+    pub cents: f64,
+    /// Rate, in Hz.
+    pub hz: f64,
+}
+
+impl Wobble {
+    pub const DRUNK: Wobble = Wobble { cents: WOBBLE_CENTS, hz: WOBBLE_HZ };
+    pub const MEDLEY: Wobble = Wobble { cents: MEDLEY_WOBBLE_CENTS, hz: WOBBLE_HZ };
+
+    /// Frequency multiplier at `t` seconds into the song.
+    pub fn at(self, t: f64) -> f64 {
+        let cents = self.cents * (std::f64::consts::TAU * self.hz * t).sin();
+        2f64.powf(cents / 1200.0)
+    }
+
+    /// The same wobble with its rate nudged so a whole number of cycles (at least one) fit in
+    /// `loop_secs`: it's at the same point of its cycle when the loop comes round.
+    pub fn fitted(self, loop_secs: f64) -> Wobble {
+        let cycles = (self.hz * loop_secs).round().max(1.0);
+        Wobble { hz: cycles / loop_secs, ..self }
+    }
+}
+
 impl Tuning {
-    pub const ALL: [Tuning; 7] = [
+    pub const ALL: [Tuning; 8] = [
         Tuning::Equal,
         Tuning::Just,
         Tuning::CarlosAlpha,
@@ -92,6 +137,7 @@ impl Tuning {
         Tuning::Tet7,
         Tuning::Harmonic,
         Tuning::Drunk,
+        Tuning::Medley,
     ];
 
     /// Lower-case name for files.
@@ -104,12 +150,15 @@ impl Tuning {
             Tuning::Tet7 => "tet7",
             Tuning::Harmonic => "harmonic",
             Tuning::Drunk => "drunk",
+            Tuning::Medley => "medley",
         }
     }
 
     /// Frequency of MIDI `note`, given the voice's `anchor` (a MIDI note on the song's tonic, which
     /// keeps its equal-tempered pitch; only its pitch class matters for octave-equivalent tunings)
-    /// and a `salt` that identifies the note-on (only [`Tuning::Drunk`] uses it).
+    /// and a `salt` that identifies the note-on (only [`Tuning::Drunk`] and [`Tuning::Medley`] use
+    /// it). A [`Tuning::Medley`] note's tuning depends on its phrase, which this doesn't know: here
+    /// it's 12-TET with the medley's per-note offset; [`Medley::hz`] is the real thing.
     pub fn hz(self, note: u8, anchor: u8, salt: u64) -> f64 {
         let d = note as i32 - anchor as i32;
         let (oct, pc) = (d.div_euclid(12), d.rem_euclid(12) as usize);
@@ -127,22 +176,126 @@ impl Tuning {
             Tuning::Tet7 => tonic_below() * 2f64.powf(TET7_STEPS[pc] as f64 / 7.0),
             Tuning::Harmonic => tonic_below() * HARMONIC_RATIOS[pc],
             Tuning::Drunk => et_hz(note as f64) * 2f64.powf(drunk_cents(salt) / 1200.0),
+            Tuning::Medley => et_hz(note as f64) * 2f64.powf(medley_cents(salt) / 1200.0),
         }
     }
 
     /// Does this tuning wobble over time (see [`Tuning::wobble`])?
     pub fn wobbles(self) -> bool {
-        self == Tuning::Drunk
+        self.wobble_shape().is_some()
+    }
+
+    /// The wobble, if any. (A looping [`Medley`] fits its rate to the loop, see [`Medley::wobble`].)
+    pub fn wobble_shape(self) -> Option<Wobble> {
+        match self {
+            Tuning::Drunk => Some(Wobble::DRUNK),
+            Tuning::Medley => Some(Wobble::MEDLEY),
+            _ => None,
+        }
     }
 
     /// Frequency multiplier at `t` seconds into the song (1.0 unless [`Tuning::wobbles`]).
     pub fn wobble(self, t: f64) -> f64 {
-        if !self.wobbles() {
-            return 1.0;
-        }
-        let cents = WOBBLE_CENTS * (std::f64::consts::TAU * WOBBLE_HZ * t).sin();
-        2f64.powf(cents / 1200.0)
+        self.wobble_shape().map_or(1.0, |w| w.at(t))
     }
+}
+
+/// [`Tuning::Medley`] for one song: which tuning each phrase plays in, and the wobble.
+///
+/// - A note plays in the tuning of the phrase it *starts* in ([`Medley::phrase_of`] its start
+///   beat), so held notes never bend at a phrase boundary, and every tone of an arpeggio follows
+///   its event's start.
+/// - Picks are a shuffle bag over [`MEDLEY_TUNINGS`]: phrases `5b..5b+5` are a permutation of all
+///   five (seeded by the song hash and the bag index `b`), so every tuning is heard before any
+///   repeats, and the first of a bag is never the last of the one before.
+/// - Phrases are counted within one loop of the song (a partial last phrase is a phrase like any
+///   other) and the loop replays the same picks. Across the loop seam the last phrase's tuning
+///   differs from the first's whenever the loop has more than one phrase.
+/// - On top: a per-note offset of ±[`MEDLEY_DRUNK_CENTS`] and a ±[`MEDLEY_WOBBLE_CENTS`] wobble
+///   whose rate is fitted to the loop length ([`Wobble::fitted`]), so the loop seam is seamless.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Medley {
+    picks: Vec<Tuning>,
+    wobble: Wobble,
+}
+
+impl Medley {
+    /// `song_hash` = [`hash_str`] of the title; `loop_beats` = the song's (loop) length in beats;
+    /// `loop_secs` = its loop length in seconds if it loops (`None` for one-shots).
+    pub fn new(song_hash: u64, loop_beats: f64, loop_secs: Option<f64>) -> Self {
+        let phrases = ((loop_beats - 1e-6) / MEDLEY_PHRASE_BEATS).ceil().max(1.0) as usize;
+        let wobble = match loop_secs {
+            Some(s) if s > 0.0 => Wobble::MEDLEY.fitted(s),
+            _ => Wobble::MEDLEY,
+        };
+        Medley { picks: medley_picks(song_hash, phrases), wobble }
+    }
+
+    /// Phrase index of a beat time (beats from the song's start).
+    pub fn phrase_of(beat: f64) -> usize {
+        ((beat + 1e-6) / MEDLEY_PHRASE_BEATS).floor().max(0.0) as usize
+    }
+
+    /// Phrases per loop.
+    pub fn phrases(&self) -> usize {
+        self.picks.len()
+    }
+
+    /// The tuning of phrase `k` (counted within the loop: `k` wraps).
+    pub fn tuning(&self, phrase: usize) -> Tuning {
+        self.picks[phrase % self.picks.len()]
+    }
+
+    /// The tuning of a note starting at `beat`.
+    pub fn tuning_at(&self, beat: f64) -> Tuning {
+        self.tuning(Self::phrase_of(beat))
+    }
+
+    /// Frequency of MIDI `note` starting at `start` beats (see [`Tuning::hz`] for `anchor` and
+    /// `salt`): its phrase's tuning, then the per-note drunk offset.
+    pub fn hz(&self, note: u8, anchor: u8, start: f64, salt: u64) -> f64 {
+        self.tuning_at(start).hz(note, anchor, salt) * 2f64.powf(medley_cents(salt) / 1200.0)
+    }
+
+    pub fn wobble(&self) -> Wobble {
+        self.wobble
+    }
+}
+
+/// The shuffle-bag tuning sequence for `phrases` phrases (see [`Medley`]).
+pub fn medley_picks(song_hash: u64, phrases: usize) -> Vec<Tuning> {
+    const N: usize = MEDLEY_TUNINGS.len();
+    let mut picks: Vec<Tuning> = Vec::with_capacity(phrases.div_ceil(N) * N);
+    for bag in 0..phrases.div_ceil(N) {
+        // Fisher–Yates, seeded per bag.
+        let mut b = MEDLEY_TUNINGS;
+        let mut x = splitmix(song_hash ^ splitmix(bag as u64 ^ 0x6d65_646c_6579));
+        for i in (1..N).rev() {
+            x = splitmix(x);
+            b.swap(i, (x % (i as u64 + 1)) as usize);
+        }
+        // Never the same tuning twice in a row across bags.
+        if picks.last() == Some(&b[0]) {
+            b.swap(0, 1 + (x >> 32) as usize % (N - 1));
+        }
+        picks.extend(b);
+    }
+    // The loop seam: the last phrase (maybe the first of a partial bag) runs into phrase 0.
+    let last = phrases - 1;
+    if phrases > 1 && picks[last] == picks[0] {
+        let bag_start = last - last % N;
+        // Swap in another tuning of the same bag, so it stays a permutation: an unused one of a
+        // partial bag, or else an earlier one (not the bag's first, which faces the bag before).
+        // Inside a permutation neighbours always differ; only the phrase before `last` and
+        // phrase 0 need checking.
+        let j = (last + 1..bag_start + N)
+            .chain(bag_start + 1..last)
+            .find(|&j| picks[j] != picks[0] && picks[j] != picks[last - 1])
+            .expect("five tunings leave a choice");
+        picks.swap(last, j);
+    }
+    picks.truncate(phrases);
+    picks
 }
 
 /// The MIDI note on tonic pitch class `key` nearest to `center` (ties go down).
@@ -158,6 +311,11 @@ pub fn drunk_cents(salt: u64) -> f64 {
     let x = splitmix(salt);
     let unit = (x >> 11) as f64 / (1u64 << 53) as f64; // [0, 1)
     (unit * 2.0 - 1.0) * DRUNK_CENTS
+}
+
+/// Medley detune for a note-on: like [`drunk_cents`], within ±[`MEDLEY_DRUNK_CENTS`].
+pub fn medley_cents(salt: u64) -> f64 {
+    drunk_cents(salt) * (MEDLEY_DRUNK_CENTS / DRUNK_CENTS)
 }
 
 /// A note-on's salt from the song (`song` = e.g. [`hash_str`] of its title), channel, event index
@@ -194,7 +352,7 @@ mod tests {
 
     #[test]
     fn the_anchor_never_moves() {
-        for t in Tuning::ALL.into_iter().filter(|&t| t != Tuning::Drunk) {
+        for t in Tuning::ALL.into_iter().filter(|&t| t != Tuning::Drunk && t != Tuning::Medley) {
             for anchor in [48, 60, 65, 70] {
                 assert!(close(c(t, anchor, anchor), 0.0), "{t:?}");
             }
@@ -339,6 +497,83 @@ mod tests {
             let f = freq(&x[34_000..60_000]);
             assert!((f - want).abs() / want < 0.003, "{t:?}: {f} vs {want}");
         }
+    }
+
+    #[test]
+    fn medley_picks_are_a_deterministic_shuffle_bag_without_repeats() {
+        let n = MEDLEY_TUNINGS.len();
+        for title in ["Sweet Georgia Brown", "Muskrat Ramble", "The Entertainer", "x", ""] {
+            let h = hash_str(title);
+            for phrases in 1..=23 {
+                let p = medley_picks(h, phrases);
+                assert_eq!(p.len(), phrases);
+                assert_eq!(p, medley_picks(h, phrases), "deterministic");
+                assert!(p.iter().all(|t| MEDLEY_TUNINGS.contains(t)));
+                assert!(p.windows(2).all(|w| w[0] != w[1]), "{title} {phrases}: repeat in {p:?}");
+                // Round the loop, too.
+                if phrases > 1 {
+                    assert_ne!(p[0], p[phrases - 1], "{title} {phrases}: loop seam repeat in {p:?}");
+                }
+                // Shuffle bag: each run of five is all five; a partial bag has no repeats.
+                for bag in p.chunks(n) {
+                    let mut seen: Vec<_> = bag.to_vec();
+                    seen.sort_by_key(|t| *t as u8);
+                    seen.dedup();
+                    assert_eq!(seen.len(), bag.len(), "{title} {phrases}: {p:?}");
+                }
+            }
+        }
+        // Songs get different orders.
+        let orders: std::collections::HashSet<_> =
+            (0..40).map(|i| medley_picks(hash_str(&format!("song {i}")), 5)).collect();
+        assert!(orders.len() > 10, "{}", orders.len());
+    }
+
+    #[test]
+    fn a_medley_note_uses_the_tuning_of_the_phrase_it_starts_in() {
+        let m = Medley::new(hash_str("Sweet Georgia Brown"), 7.0 * MEDLEY_PHRASE_BEATS + 8.0, Some(70.0));
+        assert_eq!(m.phrases(), 8); // the half phrase at the end counts
+        assert_eq!(Medley::phrase_of(0.0), 0);
+        assert_eq!(Medley::phrase_of(15.999), 0);
+        assert_eq!(Medley::phrase_of(16.0 - 1e-9), 1); // float fuzz on a bar line
+        assert_eq!(Medley::phrase_of(16.0), 1);
+        assert_eq!(Medley::phrase_of(119.5), 7);
+        for k in 0..m.phrases() {
+            let t = m.tuning(k);
+            assert!(MEDLEY_TUNINGS.contains(&t));
+            for start in [k as f64 * 16.0, k as f64 * 16.0 + 7.25, k as f64 * 16.0 + 15.9] {
+                assert_eq!(m.tuning_at(start), t);
+                for (note, salt) in [(62, 1), (67, 99), (73, 12345)] {
+                    // Exactly the phrase's tuning, times the per-note medley offset.
+                    let want = t.hz(note, 60, salt) * 2f64.powf(medley_cents(salt) / 1200.0);
+                    assert_eq!(m.hz(note, 60, start, salt), want, "phrase {k} at {start}");
+                    let off = cents(t.hz(note, 60, salt), m.hz(note, 60, start, salt));
+                    assert!(off.abs() <= MEDLEY_DRUNK_CENTS + 1e-9, "{off}");
+                }
+            }
+        }
+        // Phrases count within the loop.
+        assert_eq!(m.tuning(8), m.tuning(0));
+        // The per-note offset uses its whole (smaller) range.
+        let offs: Vec<f64> = (0..2000).map(medley_cents).collect();
+        assert!(offs.iter().all(|o| o.abs() <= MEDLEY_DRUNK_CENTS));
+        assert!(offs.iter().any(|&o| o < -12.0) && offs.iter().any(|&o| o > 12.0));
+    }
+
+    #[test]
+    fn the_medley_wobble_is_shallower_and_fits_the_loop() {
+        let m = Medley::new(1, 64.0, Some(37.3));
+        let w = m.wobble();
+        assert_eq!(w.cents, MEDLEY_WOBBLE_CENTS);
+        let cycles = w.hz * 37.3;
+        assert!((cycles - cycles.round()).abs() < 1e-9 && (w.hz - WOBBLE_HZ).abs() < 0.02, "{w:?}");
+        assert!((w.at(0.0) - w.at(37.3)).abs() < 1e-12);
+        assert!(close(1200.0 * w.at(0.25 / w.hz).log2(), MEDLEY_WOBBLE_CENTS));
+        // A one-shot keeps the plain rate; a very short loop still gets one cycle.
+        assert_eq!(Medley::new(1, 64.0, None).wobble(), Wobble::MEDLEY);
+        assert_eq!(Medley::new(1, 4.0, Some(0.5)).wobble().hz, 2.0);
+        // Drunk is unchanged.
+        assert_eq!(Tuning::Drunk.wobble_shape(), Some(Wobble { cents: 15.0, hz: 0.5 }));
     }
 
     #[test]

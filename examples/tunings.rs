@@ -6,9 +6,10 @@
 //! ```
 //!
 //! Files: `<piece>_<tuning>.wav` for piece in `title` (Sweet Georgia Brown), `world1` (The
-//! Entertainer), `world3` (Muskrat Ramble), `scale` (C major up and down, then a ii–V–I), and
-//! tuning in `equal ji alpha bp tet7 harmonic drunk` (see [`audio::tuning`]). Songs play their
-//! original harmony, one loop each.
+//! Entertainer), `world3` (Muskrat Ramble), `scale` (C major up and down, then a ii–V–I, five
+//! times: one phrase each, so `scale_medley` plays it in every medley tuning), and tuning in
+//! `equal ji alpha bp tet7 harmonic drunk medley` (see [`audio::tuning`]; `medley` is what the
+//! laughing band plays). Songs play their original harmony, one loop each.
 
 use std::path::Path;
 
@@ -20,9 +21,10 @@ fn scale_demo() -> Song {
         bpm: 120.0,
         swing: 0.0,
         looping: false,
-        pulse1: "v12 @2 o4 c8 d8 e8 f8 g8 a8 b8 > c8 | o5 c8 < b8 a8 g8 f8 e8 d8 c8 | o5 c1 | o4 b1 | o4 b1&b1 |",
-        pulse2: "v9 @1 r1 | r1 | o4 f1 | o4 f1 | o4 e1&e1 |",
-        triangle: "r1 | r1 | o2 d1 | o2 g1 | o2 c1&c1 |",
+        // One 4-bar phrase (= one medley phrase, `tuning::MEDLEY_PHRASE_BARS`), five times.
+        pulse1: "v12 @2 [o4 c8 d8 e8 f8 g8 a8 b8 > c8 | o5 c8 < b8 a8 g8 f8 e8 d8 c8 | o5 c2 o4 b2 | o4 b1 |]5",
+        pulse2: "v9 @1 [r1 | r1 | o4 f2 f2 | o4 e1 |]5",
+        triangle: "[r1 | r1 | o2 d2 g2 | o2 c1 |]5",
         noise: "",
         key: 0,
         chords: "",
