@@ -15,7 +15,12 @@ pub(super) fn plugin(app: &mut App) {
         PostUpdate,
         (
             follow_player,
-            (spawn_backdrop, spawn_margins)
+            // Once per load (a reload despawns them first): a splat stain changes the level too,
+            // and must not stack up another backdrop and margin.
+            (
+                spawn_backdrop.run_if(not(any_with_component::<Backdrop>)),
+                spawn_margins.run_if(not(any_with_component::<MarginTile>)),
+            )
                 .run_if(resource_exists::<Sprites>.and_then(resource_exists_and_changed::<ActiveLevel>)),
             scroll_backdrop,
         )
@@ -57,6 +62,9 @@ const WOBBLE_HZ: f32 = 2.3;
 
 #[derive(Component)]
 struct Backdrop(usize);
+
+#[derive(Component)]
+struct MarginTile;
 
 fn spawn_camera(mut commands: Commands) {
     commands.spawn((
@@ -162,6 +170,7 @@ fn spawn_margins(mut commands: Commands, sprites: Res<Sprites>, active: Res<Acti
         let y = (h - 1 - row) as f32 * TILE + TILE / 2.0;
         commands.spawn((
             Name::new("MarginTile"),
+            MarginTile,
             LevelEntity,
             Sprite::from_image(fill.clone()),
             Transform::from_xyz(x, y, -1.0),
