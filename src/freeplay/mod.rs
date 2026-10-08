@@ -11,6 +11,8 @@
 //! - [`generate`]: a plan becomes a room: seeded dice draw it, the level validator
 //!   ([`crate::level::validate::check_room`]) checks it on its own (every gate, reachability
 //!   start to end, the teaching rule, the deaths it needs), and a failure re-rolls.
+//! - [`offload`]: on web, rooms are validated in a Web Worker (the `roomgen` wasm) so the game
+//!   never hitches; elsewhere, or if the worker fails, on the task pool as before.
 //! - [`course`]: rooms stitched pipe to pipe into one growing level.
 //! - [`run`]: the run in the game: the adaptive engine picks each next room
 //!   ([`crate::adapt::next_room`]) as Nat enters the one before it, rooms are generated an
@@ -25,6 +27,7 @@ pub mod canvas;
 pub mod course;
 pub mod dice;
 pub mod generate;
+pub mod offload;
 pub mod run;
 pub mod templates;
 pub mod ui;

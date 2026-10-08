@@ -12,7 +12,7 @@ use super::dice::{Dice, stream};
 use super::templates::{Built, Dressing, TEMPLATES, Template, for_skill};
 use crate::adapt::{AssistLevers, RoomRequest, Skill};
 use crate::level::validate::{Physics, Report, Strategy, check_room};
-use crate::level::{Level, TILE};
+use crate::level::{GateMark, Level, TILE};
 
 /// Rooms wider than this get their template's mid-room checkpoint.
 pub const LONG_ROOM: usize = 80;
@@ -142,6 +142,60 @@ pub struct Room {
     pub micros: u64,
 }
 
+/// What validating a room found, without the room: enough to rebuild it ([`Room::rebuild`]),
+/// since drawing is cheap and seeded. The free-play worker sends this back
+/// ([`super::offload`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Verdict {
+    /// Attempts it took (the room is attempt `attempts - 1`), and whether that's at the
+    /// fallback plan.
+    pub attempts: u32,
+    pub fallback: bool,
+    /// Deaths the validator found the room needs.
+    pub deaths: u32,
+    /// The marks the validator found its gates by.
+    pub marks: Vec<GateMark>,
+    pub micros: u64,
+}
+
+impl Room {
+    /// The validated room from its drawn level and the validator's verdict on it.
+    fn finish(plan: RoomPlan, mut level: Level, v: Verdict) -> Room {
+        level.deaths = Some(v.deaths);
+        // The marks the validator found its gates by: the game's Han reads them.
+        level.gates = v.marks;
+        let par_secs = level.width as f32 * TILE / 70.0 + 4.0 + 3.0 * v.deaths as f32;
+        Room {
+            plan,
+            level,
+            expected_deaths: v.deaths,
+            par_secs,
+            attempts: v.attempts,
+            fallback: v.fallback,
+            micros: v.micros,
+        }
+    }
+
+    /// What validating it found (see [`Room::rebuild`]).
+    pub fn verdict(&self) -> Verdict {
+        Verdict {
+            attempts: self.attempts,
+            fallback: self.fallback,
+            deaths: self.expected_deaths,
+            marks: self.level.gates.clone(),
+            micros: self.micros,
+        }
+    }
+
+    /// The room a [`Job`] for `plan` found, from its [`Verdict`] (validated elsewhere): the
+    /// winning attempt drawn again.
+    pub fn rebuild(seed: u32, plan: RoomPlan, v: Verdict) -> Room {
+        let plan = if v.fallback { fallback_plan(&plan) } else { plan };
+        let level = draw(seed, &plan, v.attempts.saturating_sub(1));
+        Room::finish(plan, level, v)
+    }
+}
+
 /// Draw attempt `attempt` of `plan` (no validation).
 pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
     let mut d = Dice::new(stream(seed, ROOM_STREAM, plan.index as u64 * 1024 + attempt as u64));
@@ -198,20 +252,14 @@ impl Job {
         self.attempt += 1;
         self.micros += t0.elapsed().as_micros() as u64;
         if report.errs.is_empty() {
-            let mut level = level;
-            level.deaths = Some(report.deaths);
-            // The marks the validator found its gates by: the game's Han reads them.
-            level.gates = report.marks.clone();
-            let par_secs = level.width as f32 * TILE / 70.0 + 4.0 + 3.0 * report.deaths as f32;
-            return Some(Room {
-                plan: self.plan.clone(),
-                level,
-                expected_deaths: report.deaths,
-                par_secs,
+            let verdict = Verdict {
                 attempts: self.attempt,
                 fallback: self.fallback,
+                deaths: report.deaths,
+                marks: report.marks,
                 micros: self.micros,
-            });
+            };
+            return Some(Room::finish(self.plan.clone(), level, verdict));
         }
         if self.attempt >= MAX_ATTEMPTS {
             if self.fallback {
