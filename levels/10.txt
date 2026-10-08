@@ -6,9 +6,10 @@ intro: The Golden Throne awaits, Nat! One last flush of courage!
 3: dx=0 dy=6 period=4.5 kind=plunger
 4: dx=9 dy=0 period=5 kind=duck
 5: dx=6 dy=0 period=4 kind=tp
-say: Tightrope time! Don't worry, I'll catch you. Probably.
-say: The moat. Ducks, rolls, plungers... my whole career!
-say: Throne's up high! Toot 5 times, then Giant Steps up!
+deaths: 0
+say@62,15: Tightrope time! Don't worry, I'll catch you. Probably.
+say@126,15: The moat. Ducks, rolls, plungers... my whole career!
+say@190,15: Throne's up high! Toot 5 times, then Giant Steps up!
 ---
 ................................................#############.......................................................................................................................................................................................................
 ................................................#############.......................................................................................................................................................................................................

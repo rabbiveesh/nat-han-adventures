@@ -2,10 +2,12 @@ name: Septic Tank
 world: 4
 intro: Septic Tank, Nat! Those spray cans puff. Wait, then go!
 1: dx=8 dy=0 period=5 kind=tp
-// says are in parser order: top-to-bottom
-say: Jump-jump-jump, even beats: the band waltzes! GO after ONE!
-say: Halfway! I'd stay and chat, but... the smell. You know.
-say: Count the puffs: pssht... wait... GO! Easy peasy.
+deaths: 0
+hint@6,43 spray: Spray can! Wait till the pssht stops, then go.
+hint@40,10 waltz: Hop-hop-hop, even beats: the band waltzes! GO after ONE!
+say@44,10: Tunnel ahead. Those cans are touchy. Mind the pssht!
+say@5,25: Halfway! I'd stay and chat, but... the smell. You know.
+say@57,43: Count the puffs: pssht... wait... GO! Easy peasy.
 ---
 ##..####################......................................##
 ##..####################......................................##

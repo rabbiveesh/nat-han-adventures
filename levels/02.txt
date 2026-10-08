@@ -3,9 +3,10 @@ world: 1
 intro: Uh-oh, Nat, you fell in the bowl! Climb out before a flush!
 1: dx=11 dy=0 period=6 kind=tp
 2: dx=0 dy=7 period=5 kind=tp
-// says are in parser order: top-to-bottom, so the upper checkpoint first
-say: Almost out! Don't look down. Seriously. Gross.
-say: Halfway up! Back in my day bowls had no lid. Wild times.
+deaths: 0
+hint@8,28 platform: Floating TP! Hop on, it carries you. Free ride!
+say@25,12: Almost out! Don't look down. Seriously. Gross.
+say@6,28: Halfway up! Back in my day bowls had no lid. Wild times.
 ---
 ............................................................
 ............................................................
