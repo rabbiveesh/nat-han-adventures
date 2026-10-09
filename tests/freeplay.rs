@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::adapt::{AdaptEvent, AssistLevers, RoomRequest, Skill};
-use nat_han_adventures::freeplay::canvas::STAND;
+use nat_han_adventures::freeplay::course::COURSE_STAND as STAND;
 use nat_han_adventures::freeplay::dice::{parse_seed, seed_text};
 use nat_han_adventures::freeplay::generate::{Job, RoomPlan, draw, generate, physics, validate};
 use nat_han_adventures::freeplay::run::begin;
@@ -24,7 +24,7 @@ const BANDS: [u8; 3] = [1, 5, 10];
 
 fn plan(template: usize, band: u8, seed: u32, hint: bool) -> RoomPlan {
     let request = RoomRequest { skill: TEMPLATES[template].skill, band, assists: AssistLevers::NONE };
-    RoomPlan { template, hint, ..RoomPlan::new(seed, 3, request, 1 + (seed % 5) as u8, false, false) }
+    RoomPlan { template, hint, ..RoomPlan::new(seed, 3, request, 1 + (seed % 5) as u8, false, false, 10) }
 }
 
 #[test]
@@ -187,6 +187,65 @@ fn seeds_round_trip() {
 fn unlocks_follow_the_story() {
     assert_eq!(unlocked_skills(1), vec![Skill::Precision, Skill::HazardTiming, Skill::MovingPlatforms, Skill::GiantSteps]);
     assert_eq!(unlocked_skills(10).len(), Skill::COUNT);
+    // Han's gates share a skill: each is served once its own story level is unlocked.
+    assert!(!unlocked_skills(2).contains(&Skill::Buddy));
+    assert!(unlocked_skills(3).contains(&Skill::Buddy));
+    let request = RoomRequest { skill: Skill::Buddy, band: 5, assists: AssistLevers::NONE };
+    let served = |levels: usize| -> Vec<&str> {
+        let mut names: Vec<&str> =
+            (0..200).map(|seed| RoomPlan::new(seed, 0, request, 1, false, false, levels).template().name).collect();
+        names.sort();
+        names.dedup();
+        names
+    };
+    assert_eq!(served(3), ["buddy ledge"]);
+    assert_eq!(served(5), ["buddy ledge", "buddy raft pool"]);
+    assert_eq!(served(10), ["buddy ledge", "buddy raft pool", "chain chasm", "shield row"]);
+}
+
+/// A climb is taller than the other rooms: the course is as tall as it, every room sits on its
+/// bottom, so the pipes line up and everything in a short room moves down with it, under a
+/// ceiling.
+#[test]
+fn tall_rooms_stitch_on_the_course_floor() {
+    use nat_han_adventures::freeplay::course::{COURSE_H, Course};
+    let climb = TEMPLATES.iter().position(|t| t.name == "shelf climb").unwrap();
+    let flat = draw(1, &plan(0, 1, 1, true), 0);
+    let tall = draw(1, &plan(climb, 5, 1, true), 0);
+    assert!(tall.height > flat.height);
+    let (mut course, mut level) = Course::new(1, 3);
+    assert_eq!(level.height, COURSE_H);
+    let (a, _) = course.add(&mut level, &flat, false);
+    let (b, _) = course.add(&mut level, &tall, false);
+    let (c, _) = course.add(&mut level, &flat, true);
+    for seam in [b.col0, c.col0] {
+        for col in seam - 2..seam + 2 {
+            assert!(!level.tile(col as i32, STAND as i32).is_solid(), "the pipes line up at column {col}");
+            assert!(level.tile(col as i32, STAND as i32 + 1).is_solid(), "pipe floor at column {col}");
+        }
+    }
+    let dr = COURSE_H - flat.height;
+    // Over a short room the course is solid: its ceiling, as at the top of its own grid.
+    for col in a.cols().chain(c.cols()) {
+        assert!((0..dr).all(|r| level.tile(col as i32, r as i32).is_solid()), "ceiling over column {col}");
+    }
+    assert_eq!(level.start, (flat.start.0, flat.start.1 + dr));
+    assert_eq!(level.goal.1, STAND);
+    let say = &level.say_at[0];
+    assert_eq!((say.col, say.row), (flat.say_at[0].col + a.col0, flat.say_at[0].row + dr));
+    let hint = &level.hints[0];
+    assert_eq!((hint.col, hint.row), (tall.hints[0].col + b.col0, tall.hints[0].row));
+    let n = |l: &nat_han_adventures::level::Level, cols: std::ops::Range<usize>| {
+        let mut v: Vec<_> = l.things.iter().filter(|t| cols.contains(&t.col)).map(|t| (t.col, t.row)).collect();
+        v.sort();
+        v
+    };
+    let mut shifted: Vec<_> = n(&flat, 0..flat.width).into_iter().map(|(x, y)| (x + c.col0, y + dr)).collect();
+    shifted.sort();
+    assert_eq!(n(&level, c.cols()), shifted);
+    let mut climbed: Vec<_> = n(&tall, 0..tall.width).into_iter().map(|(x, y)| (x + b.col0, y)).collect();
+    climbed.sort();
+    assert_eq!(n(&level, b.cols()), climbed);
 }
 
 // ─── A headless run ──────────────────────────────────────────────────────────

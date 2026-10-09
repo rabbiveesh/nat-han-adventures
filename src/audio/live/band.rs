@@ -15,6 +15,13 @@
 //!   bossa, samba, rock or funk section the band picked for itself; see [`super::feel`]),
 //!   with a fill into it and out of it and a crash on each side.
 //!
+//! - **chorus**: what this loop pass is ([`super::chorus::Chorus`]: the head, two-feel,
+//!   blowing, stop-time, breaks, riffs, strolling, soli, a shout chorus, maybe a half step up),
+//!   and what it asks of the bar: stop-time hits ([`HitKind::Stop`]), a break (the band out,
+//!   [`BandPlan::tacet`]), louder or softer ([`BandPlan::swell`]);
+//! - **intro / ending**: a bar of the tune's intro or ending ([`super::chorus`]), on its own
+//!   changes (as [`SubKind::Arranged`] substitutions over the whole bar).
+//!
 //! Every choice is a pure function of the seed, the bar, the dials and the cues, so it's
 //! deterministic, and the musicians' own plans can show the same choices ahead of time.
 //!
@@ -28,6 +35,7 @@ use crate::audio::accomp::Rng;
 use crate::audio::chart::{Chord, Family, Quality};
 use crate::audio::tuning;
 
+use super::chorus::{self, Chorus, EndBar, EndStep, Intro};
 use super::feel::{self, Feel};
 use super::musician::{BarSlot, PhrasePlan, Target};
 use super::ornament::{self, Harm};
@@ -78,6 +86,9 @@ pub enum HitKind {
     Anticipation,
     /// Stop-time / ending figure: hits, then the band rests (the lead plays on).
     Ending,
+    /// A stop-time chorus's (or a break's) hits on the ONE: the band hits and lays out, the
+    /// drums keep the hats on 2 and 4.
+    Stop,
 }
 
 /// The band's reharmonization of part of a bar.
@@ -96,6 +107,8 @@ pub enum SubKind {
     Tritone,
     /// A dominant into the tonic replaced by the backdoor ii-V (iv-7, bVII7).
     Backdoor,
+    /// An intro's or an ending's own changes ([`super::chorus::harmony`]).
+    Arranged,
 }
 
 /// The shared plan of one bar.
@@ -119,12 +132,49 @@ pub struct BandPlan {
     pub feel: Feel,
     /// The bar the feel started in (two-bar patterns count from it).
     pub feel_since: u64,
+    /// The chorus this bar's pass is ([`super::chorus`]), and whether it's a half step up.
+    pub chorus: Chorus,
+    pub key_up: bool,
+    /// A bar of the tune's intro, or of its ending.
+    pub intro: Option<Intro>,
+    pub ending: Option<EndBar>,
+    /// Comp, bass and drums rest the whole bar (a break's second bar; a Basie ending's plinks
+    /// are the comp's alone).
+    pub tacet: bool,
+    /// The lead's solo break (this bar and the next).
+    pub solo_break: bool,
+    /// Louder (> 0) or softer, as a fraction of the volume: a shout chorus, a vamp-out.
+    pub swell: f32,
 }
 
 impl BandPlan {
     /// The substitute chord at `beat` (from the bar line), if any.
     pub fn sub_at(&self, beat: f64) -> Option<&Sub> {
         self.subs.iter().flatten().find(|s| beat >= s.from - 1e-9 && beat < s.to - 1e-9)
+    }
+
+    /// Is the bar arranged beyond the written parts in a way every player must follow, even at
+    /// freedom 0 (a forced chorus, an ending)?
+    pub fn arranged(&self) -> bool {
+        self.chorus != Chorus::Head || self.key_up || self.intro.is_some() || self.ending.is_some() || self.tacet || self.hit_kind == HitKind::Stop
+    }
+
+    /// What the HUD's band readout says about the bar: an ending or the intro, the feel, the
+    /// chorus ("" for the plain head).
+    pub fn label(&self) -> &'static str {
+        if let Some(e) = self.ending {
+            return e.kind.label();
+        }
+        if self.intro.is_some() {
+            return "INTRO";
+        }
+        if self.feel != Feel::Swing {
+            return self.feel.label();
+        }
+        if self.key_up {
+            return "SHOUT KEY-UP";
+        }
+        self.chorus.label()
     }
 
     /// Hit positions as beats from the bar line.
@@ -161,6 +211,18 @@ pub struct BandInput<'a> {
     pub looping: bool,
     /// The editor's override of the band's feel (`Some(Feel::Swing)`: none).
     pub force_feel: Option<Feel>,
+    /// The editor's override of the chorus (every pass plays it).
+    pub force_chorus: Option<chorus::Call>,
+    /// The bar is in the tune's intro, or its ending.
+    pub intro: Option<Intro>,
+    pub ending: Option<EndBar>,
+}
+
+impl BandInput<'_> {
+    /// The chorus of loop pass `pass`.
+    pub fn chorus(&self, pass: u64) -> chorus::Call {
+        self.force_chorus.unwrap_or_else(|| chorus::auto(self.seed, pass, chorus::dial(self.freedom)))
+    }
 }
 
 /// 0 below `lo`, 1 above `hi`, linear between: how far a dial is into a tier.
@@ -245,21 +307,76 @@ impl BandPlan {
         let entered = contiguous && plan.feel != input.prev.feel;
         // The bar before a change of feel: a fill (and no ending figure or trade in its way).
         let transition = call.next != plan.feel;
+        let bb = input.bar_beats;
+        let sixteenths = (bb * 4.0).round() as u32;
+
+        // The arrangement: the chorus, an intro or ending bar and its changes, what the
+        // chorus asks of the bar. Even at freedom 0 (a forced chorus, an ending).
+        (plan.intro, plan.ending) = (input.intro, input.ending);
+        let arranged_bar = plan.intro.is_some() || plan.ending.is_some();
+        if !arranged_bar {
+            let c = input.chorus(slot.pass);
+            (plan.chorus, plan.key_up) = (c.chorus, c.key_up);
+        }
+        if let Some((chords, half)) = chorus::harmony(input.key, bb, plan.intro, plan.ending) {
+            plan.subs = if chords[0] == chords[1] {
+                [Some(Sub { from: 0.0, to: bb, chord: chords[0], kind: SubKind::Arranged }), None]
+            } else {
+                [
+                    Some(Sub { from: 0.0, to: half, chord: chords[0], kind: SubKind::Arranged }),
+                    Some(Sub { from: half, to: bb, chord: chords[1], kind: SubKind::Arranged }),
+                ]
+            };
+        }
+        let swing = plan.feel == Feel::Swing;
+        match plan.chorus {
+            Chorus::StopTime if swing && chorus::stop_bar(slot.song_bar, input.bars) => {
+                // ONE; every other bar the Charleston (1, the "and" of 2).
+                plan.hits = if slot.song_bar % 2 == 1 && sixteenths >= 16 { 1 | 1 << 6 } else { 1 };
+                plan.hit_kind = HitKind::Stop;
+            }
+            Chorus::Breaks if swing => match chorus::break_bar(slot.song_bar, input.bars) {
+                Some(0) => {
+                    plan.hits = 1;
+                    plan.hit_kind = HitKind::Stop;
+                    plan.solo_break = true;
+                }
+                Some(_) => {
+                    plan.tacet = true;
+                    plan.solo_break = true;
+                }
+                None => {}
+            },
+            Chorus::TwoFeel => plan.swell = -0.12,
+            Chorus::Strolling => plan.swell = -0.1,
+            Chorus::Shout => plan.swell = 0.15,
+            _ => {}
+        }
+        if let Some(e) = plan.ending {
+            plan.swell = -e.fade();
+            match e.step() {
+                EndStep::Plinks => plan.tacet = true,
+                EndStep::Final => plan.crash = true,
+                EndStep::Time => {}
+            }
+        }
+        // Back in after the band was out (a break, the plinks), or after the intro.
+        let back_in = contiguous && (input.prev.tacet || input.prev.intro.is_some_and(|i| i.last()));
+        plan.crash |= back_in && !plan.tacet;
         if input.freedom.iter().all(|f| *f <= 0.0) {
-            plan.crash = entered;
+            plan.crash |= entered;
             return plan;
         }
         let mut r = rng(input.seed, 5, slot.index, 0);
-        let bb = input.bar_beats;
-        let sixteenths = (bb * 4.0).round() as u32;
         let phrase_last = input.phrase.last_bar() == slot.index;
         let loop_end = slot.song_bar + 1 == input.bars;
 
-        plan.trade = if plan.feel == Feel::Swing { trade_for(input.seed, slot.pass, slot.song_bar, input.bars, lead, drums) } else { Trade::None };
+        let may_trade = swing && !arranged_bar && plan.chorus.allows_trades();
+        plan.trade = if may_trade { trade_for(input.seed, slot.pass, slot.song_bar, input.bars, lead, drums) } else { Trade::None };
 
         // Fills, and the crash after one.
         plan.fill = fill_for(input.seed, slot.index, slot.song_bar, input.bars, phrase_last, drums);
-        plan.crash = drums > 0.0 && input.prev.bar + 1 == slot.index && input.prev.fill != Fill::None && mid(drums) + low(drums) > 0.5;
+        plan.crash |= drums > 0.0 && contiguous && input.prev.fill != Fill::None && mid(drums) + low(drums) > 0.5;
         if plan.trade == Trade::Drums {
             // The drums' four: solo bars; one crash, into it.
             plan.fill = Fill::Full;
@@ -269,17 +386,45 @@ impl BandPlan {
             plan.fill = Fill::Full;
         }
         plan.crash |= entered;
+        // The arrangement's own: a shout chorus fills every four bars and crashes into each
+        // section; the intro rolls into the head; an ending fills into its last chord (or the
+        // plinks); the band is out for a break.
+        if plan.chorus == Chorus::Shout {
+            if (slot.song_bar + 1).is_multiple_of(4) && plan.fill == Fill::None {
+                plan.fill = Fill::Full;
+            }
+            plan.crash |= slot.song_bar.is_multiple_of(8);
+        }
+        if let Some(i) = plan.intro {
+            plan.fill = if i.last() { Fill::PressRoll } else { Fill::None };
+            plan.crash = false;
+        }
+        if let Some(e) = plan.ending {
+            let next = EndBar { k: e.k + 1, ..e };
+            plan.fill = match e.step() {
+                EndStep::Time if next.step() != EndStep::Time => Fill::Full,
+                EndStep::Time if e.k % 2 == 1 => Fill::Short,
+                _ => Fill::None,
+            };
+        }
+        if plan.tacet || plan.hit_kind == HitKind::Stop {
+            plan.fill = Fill::None;
+        }
+        // (The crash a fill earned waits for the band to come back in.)
+        plan.crash &= !plan.tacet;
 
         // Flourishes.
         if input.switched && drums > 0.0 {
             plan.flourish = Flourish::Summon;
             plan.crash = true;
-            plan.fill = Fill::Full;
+            if !plan.tacet {
+                plan.fill = Fill::Full;
+            }
         } else if input.death && lead > 0.0 {
             plan.flourish = Flourish::Death;
         } else if input.checkpoint && drums > 0.0 {
             plan.flourish = Flourish::Checkpoint;
-            if plan.fill == Fill::None {
+            if plan.fill == Fill::None && !plan.tacet && plan.hit_kind != HitKind::Stop {
                 plan.fill = Fill::Short;
             }
         }
@@ -291,7 +436,10 @@ impl BandPlan {
             (Some(a), Some(b)) => a.chord != b.chord,
             _ => false,
         };
-        if comp > 0.0 && plan.trade != Trade::Drums && !loop_end && !transition {
+        // (Not under a soli or a riff: the comp has its own line there.)
+        let free_bar =
+            plan.hit_kind == HitKind::None && !plan.tacet && !arranged_bar && !plan.solo_break && !matches!(plan.chorus, Chorus::Soli | Chorus::Riffs);
+        if comp > 0.0 && plan.trade != Trade::Drums && !loop_end && !transition && free_bar && plan.chorus != Chorus::Strolling {
             let ending = phrase_last && matches!(input.phrase.target, Target::SectionEnd | Target::Cadence);
             let p_end = 0.55 * mid(comp.min(bass.max(drums)));
             let p_ant = 0.3 * low(comp) * if changes { 1.0 } else { 0.3 };
@@ -311,7 +459,7 @@ impl BandPlan {
         }
 
         // The band's reharmonization: comp and bass together, high freedom.
-        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums {
+        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet && plan.chorus != Chorus::Soli {
             let p = 0.5 * high(comp);
             if let Some(h) = harm_now
                 && h.chord.family() == Family::Dominant

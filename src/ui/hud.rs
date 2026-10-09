@@ -342,7 +342,7 @@ mod tests {
             filters: Filters { harmony: Harmony::Waltz, just_intonation: false },
             reason: crate::audio::director::REASON_WALTZ,
             tuning_now: None,
-            feel_now: "",
+            band_now: "",
         };
         assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JUMP ON ONE".to_string()));
         let laughing = NowPlaying { filters: Filters { harmony: Harmony::Original, just_intonation: true }, reason: "", ..now };
@@ -396,7 +396,7 @@ pub fn band_readout_text(now: &crate::audio::NowPlaying) -> String {
         (None, true) => "LAUGHING",
         (None, false) => "",
     };
-    [mode, laughing, now.feel_now].into_iter().filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
+    [mode, laughing, now.band_now].into_iter().filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
 }
 
 fn update_band_readout(
@@ -430,7 +430,7 @@ mod readout_tests {
         assert_eq!(band_readout_text(&now), "GIANT STEPS!\nLAUGHING");
         now.tuning_now = Some(Tuning::Tet7);
         assert_eq!(band_readout_text(&now), "GIANT STEPS!\nSEASICK");
-        now.feel_now = "BOSSA NOVA";
+        now.band_now = "BOSSA NOVA";
         assert_eq!(band_readout_text(&now), "GIANT STEPS!\nSEASICK\nBOSSA NOVA");
         now.filters = Filters { harmony: Harmony::Original, just_intonation: false };
         now.tuning_now = None;

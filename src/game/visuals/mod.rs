@@ -52,6 +52,8 @@ pub(super) fn plugin(app: &mut App) {
     .add_observer(player_sprite)
     .add_observer(han_sprite)
     .add_observer(gate_markers)
+    .init_resource::<MarkersDrawn>()
+    .add_systems(Update, new_gate_markers.run_if(resource_exists::<Sprites>))
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
     .add_systems(
         PostUpdate,
@@ -324,12 +326,17 @@ fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Co
 
 /// What a gate mark looks like, and where (world center of the overlay, z): giant walls get
 /// gold music-staff trim on their face and a note emblem; waltz rows the same gold staff
-/// under their low ceiling, a quarter note a beat, and a 3/4 emblem at each end; buddy ledges red plunger-handle
-/// notches on their face and Han's yellow plumber's tape along the top; shield rows a
-/// "PLUMBERS ONLY" sign over their start.
+/// under their low ceiling, a quarter note a beat, and a 3/4 emblem at each end; buddy ledges
+/// red plunger-handle notches on their face and Han's yellow plumber's tape along the top;
+/// shield rows a "PLUMBERS ONLY" sign over their start.
 pub fn gate_decor(level: &Level) -> Vec<(SpriteId, Vec2, f32)> {
+    marks_decor(level, &level.gates)
+}
+
+/// [`gate_decor`] for some of `level`'s marks.
+fn marks_decor(level: &Level, marks: &[crate::level::GateMark]) -> Vec<(SpriteId, Vec2, f32)> {
     let mut out = Vec::new();
-    for m in &level.gates {
+    for m in marks {
         // The faces: solid cells in the mark with open air beside them, inside the mark.
         let mut faces = Vec::new();
         for c in m.c0..=m.c1 + 1 {
@@ -408,19 +415,50 @@ mod tests {
     }
 }
 
+/// Gate marks of the loaded level that have their markers.
+#[derive(Resource, Default)]
+struct MarkersDrawn(usize);
+
 /// Gate markers, drawn when a level's Han arrives (once per level load).
 fn gate_markers(
     _add: On<Add, Han>,
     active: Option<Res<super::ActiveLevel>>,
     sprites: Option<Res<Sprites>>,
+    mut drawn: ResMut<MarkersDrawn>,
     mut commands: Commands,
 ) {
     let (Some(active), Some(sprites)) = (active, sprites) else { return };
-    for (id, at, z) in gate_decor(&active.level) {
+    spawn_markers(&mut commands, &sprites, gate_decor(&active.level));
+    drawn.0 = active.level.gates.len();
+}
+
+/// ...and for the marks added since (free play's rooms, stitched in as Nat goes; once this
+/// level's Han is here, so the count is this level's).
+fn new_gate_markers(
+    active: Option<Res<super::ActiveLevel>>,
+    run: Option<Res<crate::freeplay::FreePlayRun>>,
+    han: Query<(), With<Han>>,
+    sprites: Res<Sprites>,
+    mut drawn: ResMut<MarkersDrawn>,
+    mut commands: Commands,
+) {
+    let (Some(active), Some(_)) = (active, run) else { return };
+    if han.is_empty() {
+        return;
+    }
+    let marks = &active.level.gates;
+    if marks.len() > drawn.0 {
+        spawn_markers(&mut commands, &sprites, marks_decor(&active.level, &marks[drawn.0..]));
+        drawn.0 = marks.len();
+    }
+}
+
+fn spawn_markers(commands: &mut Commands, sprites: &Sprites, decor: Vec<(SpriteId, Vec2, f32)>) {
+    for (id, at, z) in decor {
         commands.spawn((
             Name::new("GateMarker"),
             LevelEntity,
-            sprite(&sprites, id),
+            sprite(sprites, id),
             Transform::from_translation(at.extend(z)),
         ));
     }

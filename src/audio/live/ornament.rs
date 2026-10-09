@@ -62,6 +62,7 @@ pub enum Orn {
     BassFill,
     Ostinato,
     SlipWalk,
+    SlipBass,
     // Drums.
     Ghost,
     OpenHat,
@@ -87,10 +88,19 @@ pub enum Orn {
     Backbeat,
     FunkGroove,
     Cuica,
+    // Arranging ([`super::chorus`]): choruses, intros, endings.
+    LastChord,
+    Break,
+    ShoutLine,
+    Riff,
+    Soli,
+    ShoutStabs,
+    Plinks,
+    Stop,
 }
 
 impl Orn {
-    pub const ALL: [Orn; 66] = [
+    pub const ALL: [Orn; 75] = [
         Orn::Grace,
         Orn::Vibrato,
         Orn::FallOff,
@@ -134,6 +144,7 @@ impl Orn {
         Orn::BassFill,
         Orn::Ostinato,
         Orn::SlipWalk,
+        Orn::SlipBass,
         Orn::Ghost,
         Orn::OpenHat,
         Orn::Fill,
@@ -157,6 +168,14 @@ impl Orn {
         Orn::Backbeat,
         Orn::FunkGroove,
         Orn::Cuica,
+        Orn::LastChord,
+        Orn::Break,
+        Orn::ShoutLine,
+        Orn::Riff,
+        Orn::Soli,
+        Orn::ShoutStabs,
+        Orn::Plinks,
+        Orn::Stop,
     ];
 
     pub fn name(self) -> &'static str {
@@ -204,6 +223,7 @@ impl Orn {
             Orn::BassFill => "bass fill",
             Orn::Ostinato => "ostinato",
             Orn::SlipWalk => "side-slip walk",
+            Orn::SlipBass => "side-slip anticipation",
             Orn::Ghost => "ghost snare",
             Orn::OpenHat => "open hat",
             Orn::Fill => "fill",
@@ -227,6 +247,14 @@ impl Orn {
             Orn::Backbeat => "rock backbeat",
             Orn::FunkGroove => "funk groove",
             Orn::Cuica => "cuica",
+            Orn::LastChord => "last chord",
+            Orn::Break => "solo break",
+            Orn::ShoutLine => "shout line",
+            Orn::Riff => "riff backgrounds",
+            Orn::Soli => "soli",
+            Orn::ShoutStabs => "shout stabs",
+            Orn::Plinks => "basie plinks",
+            Orn::Stop => "stop-time",
         }
     }
 

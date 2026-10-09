@@ -19,6 +19,29 @@
         });
         const resume = () => contexts.forEach((c) => { if (c.state !== "running") c.resume(); });
         for (const ev of ["pointerdown", "keydown", "touchend"]) document.addEventListener(ev, resume, true);
+        // The beat clock (src/audio/plugin.rs, `web_output_lead`): seconds from now until the
+        // last sample the game scheduled is heard. The audio backend plays buffer after buffer
+        // through AudioBufferSourceNode.start(when); remember where the latest one ends.
+        const ends = new WeakMap(); // context -> end of the last scheduled buffer (context time)
+        const Source = window.AudioBufferSourceNode;
+        if (Source) {
+          const start = Source.prototype.start;
+          Source.prototype.start = function (when, ...rest) {
+            const c = this.context;
+            const end = Math.max(when || 0, c.currentTime) + (this.buffer ? this.buffer.duration : 0);
+            ends.set(c, Math.max(ends.get(c) || 0, end));
+            return start.call(this, when, ...rest);
+          };
+        }
+        window.nathanAudioContexts = contexts; // for the `?debug=1` lag line
+        window.nathanAudioLead = () => {
+          for (let i = contexts.length - 1; i >= 0; i--) {
+            const c = contexts[i], end = ends.get(c);
+            if (end === undefined || c.state !== "running") continue;
+            return end - c.currentTime + (c.baseLatency || 0) + (c.outputLatency || 0);
+          }
+          return null;
+        };
       })();
     </script>
     <style>
@@ -193,6 +216,28 @@
       }
       // Never leave a key stuck if the page loses focus mid-touch.
       window.addEventListener("blur", () => { for (const code of [...held.keys()]) { held.set(code, 1); release(code); } sticks.clear(); ring.style.display = "none"; });
+      // `?debug=1`: an on-screen debug overlay, for phones (no console). Anything can add a
+      // line: `nathanDebug.line(label, () => text)`; each is redrawn four times a second.
+      window.nathanDebug = { on: new URLSearchParams(location.search).get("debug") === "1", lines: [], line(label, text) { this.lines.push([label, text]); } };
+      if (nathanDebug.on) {
+        const box = document.createElement("pre");
+        box.style.cssText = "position:fixed;top:4px;left:50%;transform:translateX(-50%);z-index:20;margin:0;" +
+          "pointer-events:none;font:12px/1.4 ui-monospace,monospace;color:#ffc72e;background:#1a120ccc;padding:2px 8px";
+        document.body.appendChild(box);
+        setInterval(() => {
+          box.textContent = nathanDebug.lines.map(([label, text]) => {
+            try { return `${label} ${text()}`; } catch (e) { return `${label} (${e.message})`; }
+          }).join("\n");
+        }, 250);
+      }
+      // The audio lag the beat clock steps back by (`nathanAudioLead()`), with its device and
+      // browser parts: is the headset's delay reported?
+      nathanDebug.line("lag", () => {
+        const lead = window.nathanAudioLead ? window.nathanAudioLead() : null;
+        const c = (window.nathanAudioContexts || []).at(-1);
+        return lead === null ? "no audio yet"
+          : `${(lead * 1000).toFixed(0)} ms (device ${((c.outputLatency || 0) * 1000).toFixed(0)}, browser ${((c.baseLatency || 0) * 1000).toFixed(0)})`;
+      });
       document.addEventListener("contextmenu", (e) => { if (touchy) e.preventDefault(); });
     </script>
   </body>

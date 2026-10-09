@@ -13,7 +13,12 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   Four musicians (lead/comp/bass/drums) with freedom dials and a full ornament vocabulary
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
   flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and
-  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`).
+  musician-chosen feels at high freedom (bossa, samba, rock, funk; music only; `src/audio/live/feel.rs`),
+  and an arrangement across choruses (`src/audio/live/chorus.rs`: head, two-feel, blowing,
+  stop-time, breaks, riff backgrounds, strolling, soli, shout chorus with a key-up), pedal/vamp
+  intros on the level tunes, and endings (Basie on the level-clear jingle, I–VI–ii–V tag, vamp-out).
+  The world's beat follows the ear: on the web it steps back by the browser's buffering and
+  output latency (`index.html` reports it; `web_output_lead` in `src/audio/plugin.rs`).
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
   | Mode | Summon / cause | Physics | Gates |
@@ -40,7 +45,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
-- **Free play** (`src/freeplay/`): procedural rooms from 8 templates, validated as they're
+- **Free play** (`src/freeplay/`): procedural rooms from 13 templates (Han's four gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
   On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
   so a new room never hitches the game; the main thread takes over if the worker fails.
@@ -55,14 +60,8 @@ kills while firing; Han's plug covers it; free-play waltz rows are floor cans wi
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 
 ## Planned (agreed, not started)
-- **Web beat-clock latency**: add the browser's output latency to the beat clock (the world's beat
-  runs a few tens of ms ahead of the ear on web).
-- **Han's gates in free play**: buddy ledges, shield rows, chain chasms, buddy raft pools as room
-  templates (extension point in `src/freeplay/templates.rs`), with a `Buddy` adaptive skill.
-- **More band behaviours** (offered, the user hasn't picked yet): arranging across choruses
-  (two-feel → walking, shout chorus with backgrounds), endings/tags (I–VI–ii–V tag, Basie ending
-  on the jingle, vamp-outs), stop-time choruses, call-and-response comping, pedal/vamp intros,
-  real dynamics (drop out under quiet phrases, build into the bridge).
+- **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics
+  (drop out under quiet phrases, build into the bridge).
 
 ## Known limits / follow-ups
 - Validator: Giant Steps reaching an otherwise unreachable ledge and then crossing from it isn't

@@ -52,12 +52,13 @@ use crate::audio::{Filters, Harmony};
 
 use super::arrange::{Arrangement, Shape};
 use super::band::{BandInput, BandPlan};
+use super::chorus;
 use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
 use super::ornament::Orns;
 use super::song::SongFile;
-use super::voice::{MAX_SEGMENT, NoteEvent, VoiceBank};
+use super::voice::{MAX_SEGMENT, NoteEvent, Sound, VoiceBank};
 
 /// Something that happened, or a dial that moved.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -86,6 +87,12 @@ pub enum Input {
     /// Override the band's feel ([`super::feel`]; `None`: the band picks, `Some(Feel::Swing)`:
     /// never). A dev override (the editor's chips); it lands on the next bar committed.
     ForceFeel(Option<Feel>),
+    /// Override the chorus ([`super::chorus`]; `None`: the band arranges): every pass plays it,
+    /// from the next bar committed. A dev override (the editor's chips).
+    ForceChorus(Option<chorus::Call>),
+    /// End the song: the band plays an ending ([`chorus::EndKind`], picked by the dials) from
+    /// the next bar committed, and the engine is [`Engine::finished`] after it.
+    End,
     /// Each musician's freedom, and the dynamics, 0..1.
     SetFreedom { lead: f32, comp: f32, bass: f32, drums: f32, dynamics: f32 },
     /// Each channel's level (pulse 1, pulse 2, triangle, noise): 1 as written, 0 muted. A mixer
@@ -102,11 +109,14 @@ pub struct EngineConfig {
     pub commit_lead_beats: f64,
     /// Run the director inside the engine (for an editor without a game; see the module docs).
     pub self_directed: bool,
+    /// Start with an intro ([`chorus`]: a four-bar vamp or pedal before the head) when the band
+    /// is loose enough at the first bar and the tune starts from the top (the game's levels).
+    pub intro: bool,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false }
     }
 }
 
@@ -220,6 +230,11 @@ pub struct EngineState {
     pub forced_feel: Option<Feel>,
     /// The feel sounding at the playhead.
     pub feel: Feel,
+    pub forced_chorus: Option<chorus::Call>,
+    /// The chorus at the playhead (and a key-up).
+    pub chorus: chorus::Call,
+    /// What the HUD's band readout says about the bar at the playhead ([`BandPlan::label`]).
+    pub label: &'static str,
     pub freedom: Freedom,
     pub stats: PlayStats,
     /// Committed bars from the one at the playhead on.
@@ -241,6 +256,9 @@ impl Default for EngineState {
             forced_tuning: None,
             forced_feel: None,
             feel: Feel::Swing,
+            forced_chorus: None,
+            chorus: chorus::Call::default(),
+            label: "",
             freedom: Freedom::default(),
             stats: PlayStats::default(),
             upcoming: Vec::with_capacity(8),
@@ -275,6 +293,8 @@ pub struct Span {
     pub pass: u64,
     /// Absolute bar number of bar `entry`.
     pub first_bar: u64,
+    /// The intro: the end of a pass played before the first (its loop end doesn't count a pass).
+    pub intro: bool,
 }
 
 impl Span {
@@ -286,6 +306,22 @@ impl Span {
 
 /// Spans kept (the playhead's to the committed horizon's: a few).
 const SPANS: usize = 8;
+
+/// An ending the band was told to play (or a one-shot's own).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Ending {
+    kind: chorus::EndKind,
+    /// Its first bar (absolute), and how many.
+    from: u64,
+    n: u8,
+    tail: bool,
+}
+
+impl Ending {
+    fn end(&self) -> u64 {
+        self.from + self.n as u64
+    }
+}
 
 /// The live engine.
 pub struct Engine {
@@ -306,6 +342,10 @@ pub struct Engine {
     forced_harmony: Option<Harmony>,
     forced_tuning: Option<Tuning>,
     forced_feel: Option<Feel>,
+    forced_chorus: Option<chorus::Call>,
+    /// The intro the tune started with, if any.
+    intro: Option<chorus::IntroKind>,
+    ending: Option<Ending>,
     freedom: Freedom,
     stats: PlayStats,
     /// [`EngineConfig::self_directed`]: the director, on the engine's clock.
@@ -357,7 +397,7 @@ impl Engine {
         let medley = Medley::new(shape.song_hash, shape.beats, secs(&shape));
         let waltz_medley = waltz.as_ref().map_or_else(|| medley.clone(), |w| Medley::new(shape.song_hash, shape.beats, secs(w)));
         let mut spans = VecDeque::with_capacity(SPANS);
-        spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0 });
+        spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0, intro: false });
         // The song's instruments and the feels' (appended: the song's own numbers don't move).
         let instruments = feel::equip(&song.instruments);
         Ok(Engine {
@@ -375,6 +415,9 @@ impl Engine {
             forced_harmony: None,
             forced_tuning: None,
             forced_feel: None,
+            forced_chorus: None,
+            intro: None,
+            ending: None,
             freedom: Freedom::default(),
             stats: PlayStats::default(),
             band: director::Band::default(),
@@ -511,6 +554,9 @@ impl Engine {
     /// The next bar to commit, in the current shape (`None` past a one-shot's end). At a loop's
     /// end it's bar 0 of the next pass (a meter switch may still move it: see [`Engine::commit`]).
     fn next_slot(&self) -> Option<BarSlot> {
+        if self.ending.is_some_and(|e| self.next_bar >= e.end()) {
+            return None;
+        }
         let sp = self.spans.back().expect("a span");
         let sh = self.shape_of(sp.waltz);
         let b = self.next_song_bar;
@@ -524,9 +570,11 @@ impl Engine {
                 loop_start: sp.start,
             });
         }
-        sh.looping.then(|| BarSlot {
+        // A one-shot carries on into its ending.
+        (sh.looping || self.ending.is_some()).then(|| BarSlot {
             index: self.next_bar,
-            pass: sp.pass + 1,
+            // The intro's loop end starts the first pass.
+            pass: if sp.intro { sp.pass } else { sp.pass + 1 },
             song_bar: 0,
             start: sp.end,
             end: sp.end + sh.bar_starts[1],
@@ -557,6 +605,9 @@ impl Engine {
     /// bar `2k`, the first of a pair, where the 4/4 downbeat lands); a waltz bar line is one
     /// only if it's the first of a pair. Otherwise the bar stays in the waltz, as a waltz bar.
     fn commit(&mut self) {
+        if self.config.intro && self.next_bar == 0 && self.committed.is_empty() {
+            self.start_intro();
+        }
         let Some(slot) = self.next_slot() else { return };
         let (mut harmony, tuning) = self.current_filters();
         let sp = *self.spans.back().expect("a span");
@@ -564,7 +615,7 @@ impl Engine {
         if slot.song_bar == 0 && slot.loop_start != sp.start {
             // A new loop pass.
             let len = self.shape_of(sp.waltz).len;
-            self.push_span(Span { start: slot.start, entry: 0, end: slot.start + len, pass: slot.pass, first_bar: slot.index, ..sp });
+            self.push_span(Span { start: slot.start, entry: 0, end: slot.start + len, pass: slot.pass, first_bar: slot.index, intro: false, ..sp });
             self.next_song_bar = 0;
         }
         let cur = *self.spans.back().expect("a span");
@@ -577,7 +628,7 @@ impl Engine {
                 let end = slot.start + to.len - to.bar_starts[entry];
                 // The span in progress ends at this bar line.
                 self.spans.back_mut().expect("a span").end = slot.start;
-                self.push_span(Span { waltz: want_waltz, start: slot.start, entry, end, pass: slot.pass, first_bar: slot.index });
+                self.push_span(Span { waltz: want_waltz, start: slot.start, entry, end, pass: slot.pass, first_bar: slot.index, intro: cur.intro });
                 self.next_song_bar = entry;
                 replan = true;
             } else {
@@ -586,7 +637,8 @@ impl Engine {
             }
         }
         let slot = self.next_slot().expect("a bar to commit");
-        let waltz = self.spans.back().expect("a span").waltz;
+        let span = *self.spans.back().expect("a span");
+        let waltz = span.waltz;
         if self.config.self_directed {
             self.direct(director::Events::default());
         }
@@ -622,6 +674,13 @@ impl Engine {
         let intent = |r: Role| self.musicians[r as usize].current_plan().map(|p| p.intent(slot.index)).unwrap_or_default();
         let phrase = self.musicians[Role::Drums as usize].current_plan().copied().unwrap_or_else(|| PhrasePlan::shape_from(slot, shape, chart));
         let harm = |b: f64| arrangement.harm_at(slot.song_bar as f64 * shape.bar_beats + b);
+        // An intro bar (not once the waltz cut in), an ending bar.
+        let intro = self.intro.filter(|_| span.intro && !waltz).map(|kind| {
+            let n = chorus::INTRO_BARS;
+            chorus::Intro { kind, k: (slot.song_bar + n as usize).saturating_sub(shape.bars) as u8, n }
+        });
+        let ending =
+            self.ending.filter(|e| slot.index >= e.from).map(|e| chorus::EndBar { kind: e.kind, k: (slot.index - e.from) as u8, n: e.n, tail: e.tail });
         let band = BandPlan::decide(&BandInput {
             seed: self.config.seed ^ shape.song_hash,
             slot,
@@ -638,6 +697,9 @@ impl Engine {
             waltz,
             looping: shape.looping,
             force_feel: self.forced_feel,
+            force_chorus: self.forced_chorus,
+            intro,
+            ending,
         });
         ctx.band = &band;
         self.scratch.clear();
@@ -646,6 +708,16 @@ impl Engine {
             *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
         let events = self.scratch.len() as u32;
+        // The arrangement on top: louder or softer, a half step up.
+        for e in &mut self.scratch {
+            if band.swell != 0.0 {
+                e.gain *= 1.0 + band.swell;
+            }
+            if band.key_up && e.ch < 3 {
+                e.sound = transpose(e.sound, 1, musician::range(e.ch as usize).1);
+                e.anchor = e.anchor.saturating_add(1);
+            }
+        }
         for mut e in self.scratch.drain(..) {
             e.seq = self.seq;
             self.seq += 1;
@@ -659,6 +731,35 @@ impl Engine {
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
         self.next_song_bar += 1;
+        // A one-shot the band is loose enough to play with gets a Basie ending after its last
+        // bar; the last bar of an ending ends the timeline.
+        if !shape.looping && self.ending.is_none() && slot.song_bar + 1 == shape.bars && chorus::dial(freedom) >= chorus::END_DIAL {
+            let kind = chorus::EndKind::Basie;
+            self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, true), tail: true });
+        }
+        if self.ending.is_some_and(|e| self.next_bar == e.end()) {
+            self.spans.back_mut().expect("a span").end = slot.end;
+        }
+    }
+
+    /// [`EngineConfig::intro`]: start the first pass with the intro, played as the song's last
+    /// bars (a span ending at the loop's end, which starts pass 0), if the tune starts from the
+    /// top in its own meter and the band is loose enough.
+    fn start_intro(&mut self) {
+        let n = chorus::INTRO_BARS as usize;
+        let sh = &self.shape;
+        let top = self.t == 0 && self.next_song_bar == 0 && self.spans.len() == 1 && self.spans[0].entry == 0;
+        if !top || !sh.looping || sh.bars < 2 * n || self.current_filters().0 == Harmony::Waltz {
+            return;
+        }
+        let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
+        let Some(kind) = chorus::intro_for(self.config.seed ^ sh.song_hash, chorus::dial(freedom)) else {
+            return;
+        };
+        let entry = sh.bars - n;
+        self.spans[0] = Span { waltz: false, start: 0, entry, end: sh.len - sh.bar_starts[entry], pass: 0, first_bar: 0, intro: true };
+        self.next_song_bar = entry;
+        self.intro = Some(kind);
     }
 
     fn push_span(&mut self, s: Span) {
@@ -736,6 +837,18 @@ impl Engine {
             }
             Input::ForceFeel(f) => {
                 self.forced_feel = f;
+                None
+            }
+            Input::ForceChorus(c) => {
+                self.forced_chorus = c;
+                None
+            }
+            Input::End => {
+                if self.ending.is_none() && self.next_slot().is_some() {
+                    let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
+                    let kind = chorus::ending_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom));
+                    self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, false), tail: false });
+                }
                 None
             }
             Input::SetFreedom { lead, comp, bass, drums, dynamics } => {
@@ -825,6 +938,9 @@ impl Engine {
         s.forced_tuning = self.forced_tuning;
         s.forced_feel = self.forced_feel;
         s.feel = self.bar_at_playhead().map_or(Feel::Swing, |b| b.band.feel);
+        s.forced_chorus = self.forced_chorus;
+        s.chorus = self.bar_at_playhead().map_or_else(chorus::Call::default, |b| chorus::Call { chorus: b.band.chorus, key_up: b.band.key_up });
+        s.label = self.bar_at_playhead().map_or("", |b| b.band.label());
         s.freedom = self.freedom;
         s.stats = self.stats;
         s.upcoming.clear();
@@ -842,7 +958,27 @@ impl Engine {
 
     /// A one-shot that has played out.
     pub fn finished(&self) -> bool {
-        !self.shape.looping && self.next_slot().is_none() && self.t >= self.spans.back().expect("a span").end && self.bank.idle()
+        (!self.shape.looping || self.ending.is_some()) && self.next_slot().is_none() && self.t >= self.spans.back().expect("a span").end && self.bank.idle()
+    }
+}
+
+/// A sound moved up by `semis` (drums as they are), an octave lower where it would go past `hi`.
+fn transpose(s: Sound, semis: i32, hi: i32) -> Sound {
+    let up = |n: u8| {
+        let x = n as i32 + semis;
+        (if x > hi { x - 12 } else { x }).clamp(0, 127) as u8
+    };
+    match s {
+        Sound::Note(n) => Sound::Note(up(n)),
+        Sound::Arp(a) => {
+            let mut notes = [0u8; crate::audio::mml::Arp::MAX];
+            let src = a.notes();
+            for (d, &n) in notes.iter_mut().zip(src) {
+                *d = up(n);
+            }
+            Sound::Arp(crate::audio::mml::Arp::new(&notes[..src.len()]))
+        }
+        d => d,
     }
 }
 

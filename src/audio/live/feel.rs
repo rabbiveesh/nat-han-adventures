@@ -6,7 +6,8 @@
 //! The band itself, in its shared plan ([`super::band::BandPlan::feel`]), decided bar by bar
 //! like the trading fours, as a pure function of the seed, the bar and the dials ([`auto`]):
 //! - the dial is the rhythm section's mean freedom ([`dial`]: comp, bass, drums): no feels up
-//!   to [`MIN_DIAL`] (0.4), so freedom 0 and the game's neutral 0.35 never change;
+//!   to [`MIN_DIAL`] (0.3), so freedom 0 and a struggling player's band never change (the
+//!   game's neutral mood, ~0.32, gets the odd one; a clean run, ~0.48, one every minute or two);
 //! - the timeline is cut into 8-bar sections, counted across loop passes, and those into slots
 //!   of three ([`SLOT_SECTIONS`]): a slot's first section is always the tune's own feel (so the
 //!   very first section is, and there's a section of it between two feels); with probability
@@ -20,6 +21,9 @@
 //! - [`super::engine::Input::ForceFeel`] (the editor's FORCE FEEL chips) overrides it:
 //!   `Some(Swing)` never feels, `Some(feel)` plays it from the next bar committed, at any
 //!   freedom (at freedom 0 each player realizes it plainly).
+//!
+//! - only in the choruses that take one ([`super::chorus::Chorus::allows_feel`]: the head and
+//!   solo choruses), never in an intro or an ending.
 //!
 //! # The waltz
 //! No feels in the waltz: a 3/4 bossa is a different tune. A bar in the waltz's shape is always
@@ -125,7 +129,7 @@ impl Feel {
 }
 
 /// No feels at or below this dial.
-pub const MIN_DIAL: f32 = 0.4;
+pub const MIN_DIAL: f32 = 0.3;
 /// Sections (8 bars) per slot: the first always the tune's own feel.
 pub const SLOT_SECTIONS: u64 = 3;
 
@@ -187,11 +191,14 @@ pub struct Call {
 /// the waltz; a force overrides the band).
 pub fn decide(input: &BandInput) -> Call {
     let s = input.slot;
-    if input.waltz {
+    if input.waltz || input.intro.is_some() || input.ending.is_some() {
         return Call { feel: Feel::Swing, since: s.index, next: Feel::Swing };
     }
     let d = dial(input.freedom);
-    let want = |pass: u64, bar: usize| input.force_feel.unwrap_or_else(|| auto(input.seed, pass, bar, input.bars, d));
+    // The band's own feels only in the choruses that take one.
+    let want = |pass: u64, bar: usize| {
+        input.force_feel.unwrap_or_else(|| if input.chorus(pass).chorus.allows_feel() { auto(input.seed, pass, bar, input.bars, d) } else { Feel::Swing })
+    };
     let now = want(s.pass, s.song_bar);
     let before = if s.song_bar > 0 {
         Some(want(s.pass, s.song_bar - 1))
@@ -475,13 +482,13 @@ mod tests {
     #[test]
     fn feels_choose_themselves_deterministically() {
         // The first section, and each slot's first, never feel; more dial, more feels (a
-        // superset); none at all to 0.4.
+        // superset); none at all to 0.3.
         let bars = 32;
         let count = |seed: u64, d: f32| (0..8).flat_map(|pass| (0..bars).map(move |b| (pass, b))).filter(|&(p, b)| auto(seed, p, b, bars, d) != Feel::Swing).count();
         for seed in 0..30 {
             assert!((0..8).all(|b| auto(seed, 0, b, bars, 1.0) == Feel::Swing));
-            assert_eq!(count(seed, 0.4), 0);
-            assert_eq!(count(seed, 0.35), 0);
+            assert_eq!(count(seed, 0.3), 0);
+            assert_eq!(count(seed, 0.25), 0);
             for (pass, b) in (0..8).flat_map(|pass| (0..bars).map(move |b| (pass, b))) {
                 let lo = auto(seed, pass, b, bars, 0.6);
                 if lo != Feel::Swing {

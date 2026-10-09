@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 
 use bevy::platform::time::Instant;
 
-use super::canvas::{Canvas, ENTRY, STAND};
+use super::canvas::{Canvas, ENTRY};
 use super::dice::{Dice, stream};
 use super::templates::{Built, Dressing, TEMPLATES, Template, for_skill};
 use crate::adapt::{AssistLevers, RoomRequest, Skill};
@@ -105,12 +105,25 @@ pub struct RoomPlan {
 
 impl RoomPlan {
     /// The plan for `request` as room `index` of the run with `seed`: picks the template (by
-    /// seed, among the skill's) and the dressing. `seen` says whether the run already had a room
-    /// of this skill (the first one gets Han's hint).
-    pub fn new(seed: u32, index: u32, request: RoomRequest, world: u8, seen: bool, calibrating: bool) -> RoomPlan {
+    /// seed, among the skill's unlocked with `unlocked_levels` story levels playable) and the
+    /// dressing. `seen` says whether the run already had a room of this skill (the first one
+    /// gets Han's hint).
+    pub fn new(
+        seed: u32,
+        index: u32,
+        request: RoomRequest,
+        world: u8,
+        seen: bool,
+        calibrating: bool,
+        unlocked_levels: usize,
+    ) -> RoomPlan {
         let mut d = Dice::new(stream(seed, PICK_STREAM, index as u64));
-        let choices: Vec<usize> =
-            TEMPLATES.iter().enumerate().filter(|(_, t)| t.skill == request.skill).map(|(i, _)| i).collect();
+        let choices: Vec<usize> = TEMPLATES
+            .iter()
+            .enumerate()
+            .filter(|(_, t)| t.skill == request.skill && t.unlocked(unlocked_levels))
+            .map(|(i, _)| i)
+            .collect();
         let template = if choices.is_empty() { 0 } else { d.pick(&choices) };
         let line = if calibrating {
             CALIBRATION_LINES[(index as usize).min(CALIBRATION_LINES.len() - 1)]
@@ -199,13 +212,14 @@ impl Room {
 /// Draw attempt `attempt` of `plan` (no validation).
 pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
     let mut d = Dice::new(stream(seed, ROOM_STREAM, plan.index as u64 * 1024 + attempt as u64));
-    let mut c = Canvas::new();
+    let mut c = Canvas::with_height(plan.template().height);
     let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal };
     let built: Built = (plan.template().build)(&mut c, &mut d, plan.request.band, &dress);
     if plan.hint
         && let Some((topics, text)) = built.hint
     {
-        c.hint(ENTRY + 1, STAND - 1, topics, text);
+        let row = c.stand() - 1;
+        c.hint(ENTRY + 1, row, topics, text);
     }
     // An extra checkpoint when assists ask for one, and in long rooms (respawn points must be
     // at most `MAX_SEGMENT` apart).

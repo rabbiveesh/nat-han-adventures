@@ -3,17 +3,16 @@
 //! it drew and re-rolls on failure, so templates may be bold.
 //!
 //! # Adding templates
-//! [`TEMPLATES`] is the registry. A new kind of room (e.g. Han's buddy rooms: buddy ledges,
-//! shield rows, chain chasms, buddy raft puzzles) is a [`BuildFn`] plus an entry naming the
+//! [`TEMPLATES`] is the registry. A new kind of room is a [`BuildFn`] plus an entry naming the
 //! [`Skill`] it exercises (add the skill to `crate::adapt::Skill` first) and the story level
-//! that must be unlocked before free play serves it. Several templates may share a skill: the
-//! generator picks among them by seed. Its gates are checked by `crate::level::validate` like
+//! that must be unlocked before free play serves it. Several templates may share a skill (Han's
+//! four gates are all [`Skill::Buddy`]): the generator picks among the unlocked ones by seed. Its gates are checked by `crate::level::validate` like
 //! any other room's, so a new gate kind needs only the validator to know it.
 
 use super::canvas::*;
 use super::dice::{Dice, t};
 use crate::adapt::{Band, Skill};
-use crate::level::validate::{WaltzRow, waltz_row_timing};
+use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN, SHIELD_ROW_MIN, WaltzRow, waltz_row_timing};
 use crate::level::{PlatformKind, Topic};
 
 /// Room dressing from the assist levers (`crate::adapt::AssistLevers`), built into the room.
@@ -41,19 +40,27 @@ pub struct Template {
     /// Story levels `0..=unlock` must be unlocked (`crate::save::Progress::unlocked`) before
     /// free play serves this room: the mechanic has been taught.
     pub unlock: usize,
+    /// Rows in its canvas: [`H`], or more for a tall room ([`CLIMB_H`] for a climb,
+    /// [`CHASM_H`] for a chain chasm's headroom).
+    pub height: usize,
     pub build: BuildFn,
 }
 
 /// Every template.
 pub const TEMPLATES: &[Template] = &[
-    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, build: gauntlet },
-    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, build: hazards },
-    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, build: platforms },
-    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, build: giant_wall },
-    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, build: long_gap },
-    Template { name: "waltz row", skill: Skill::Waltz, unlock: 6, build: waltz_row },
-    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, build: stain_pit },
-    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, build: grease_chute },
+    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, height: H, build: gauntlet },
+    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, height: CLIMB_H, build: shelf_climb },
+    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, height: H, build: hazards },
+    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, height: H, build: platforms },
+    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, height: H, build: giant_wall },
+    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, height: H, build: long_gap },
+    Template { name: "waltz row", skill: Skill::Waltz, unlock: 6, height: H, build: waltz_row },
+    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, height: H, build: stain_pit },
+    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
+    Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, height: H, build: buddy_ledge },
+    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
+    Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
+    Template { name: "chain chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: chain_chasm },
 ];
 
 /// The templates for a skill.
@@ -61,11 +68,18 @@ pub fn for_skill(skill: Skill) -> impl Iterator<Item = &'static Template> {
     TEMPLATES.iter().filter(move |t| t.skill == skill)
 }
 
+impl Template {
+    /// Free play may serve it with `unlocked_levels` story levels playable.
+    pub fn unlocked(&self, unlocked_levels: usize) -> bool {
+        self.unlock < unlocked_levels.max(1)
+    }
+}
+
 /// Skills free play can serve with `unlocked` story levels playable.
 pub fn unlocked_skills(unlocked_levels: usize) -> Vec<Skill> {
     let mut out: Vec<Skill> = Vec::new();
     for t in TEMPLATES {
-        if t.unlock < unlocked_levels.max(1) && !out.contains(&t.skill) {
+        if t.unlocked(unlocked_levels) && !out.contains(&t.skill) {
             out.push(t.skill);
         }
     }
@@ -222,6 +236,68 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     }
     c.ground(3, FLOOR);
     Built { hint: None, checkpoint }
+}
+
+// ─── Precision, tall: a shelf climb ──────────────────────────────────────────
+
+/// How far a climb rises: the tower top is this many rows above the floor.
+pub const CLIMB_RISE: usize = 20;
+
+/// Up a shaft of one-way shelves, zigzagging [`CLIMB_RISE`] tiles up beside a tower (the toilet
+/// climb of level 2), across its top and a drop down the far side. Rungs 3 tiles apart (a
+/// jump) and from band 6 sometimes 4 (a toot); shelves 4 → 2 wide with a wider gap between the
+/// sides; from band 5 sewage floods the shaft floor. (No flies: a fly in the shaft sits on
+/// every jump's path.)
+fn shelf_climb(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
+    let summit = floor - CLIMB_RISE;
+    c.ground(3, floor);
+    let w = lerpi(band, 4.0, 2.0);
+    let shaft = 2 * w + lerpi(band, 1.0, 3.0) + d.int(0, 1) as usize;
+    let x0 = c.width();
+    let landing = w.min(2);
+    for k in 0..shaft {
+        if band >= 5 && k >= landing {
+            c.pool(1);
+        } else {
+            c.ground(1, floor);
+        }
+    }
+    // Rungs bottom up, alternating sides; the last is flush with the tower.
+    let mut rungs = Vec::new();
+    let mut r = floor;
+    let mut right = false;
+    loop {
+        let step = if band >= 6 && d.chance(0.4) { 4 } else { 3 };
+        r -= step;
+        let last = r <= summit + step;
+        let sx = if last || right { shaft - w - if last { 0 } else { d.int(0, 1) as usize } } else { d.int(0, 1) as usize };
+        rungs.push((x0 + sx, r.max(summit + 1)));
+        right = !right;
+        if last {
+            break;
+        }
+    }
+    for &(x, r) in &rungs {
+        for k in 0..w {
+            c.set(x + k, r, b'=');
+        }
+        c.nugget(x + w / 2, r - 1);
+    }
+    let checkpoint = Some((c.width() + 1, summit - 1));
+    let x = c.width();
+    let top = (lerpi(band, 5.0, 3.0) + d.int(0, 1) as usize).max(3);
+    c.ground(top, summit);
+    for k in 0..top {
+        c.nugget(x + k, summit - 1);
+    }
+    // Over the edge: nuggets down the drop, and the floor.
+    let x = c.width();
+    c.ground(5, floor);
+    for k in (summit + 2..floor - 1).step_by(4) {
+        c.nugget(x + 1, k);
+    }
+    Built { hint: Some((&[], "Shelves all the way up! Hop, hop, hop... don't look down!")), checkpoint }
 }
 
 // ─── HazardTiming: flies and sprays ──────────────────────────────────────────
@@ -508,4 +584,141 @@ fn grease_chute(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built
         hint: Some((&[Topic::Grease, Topic::Grip], "Grease! Can't stop or jump. Splat a few: band gets nervous.")),
         checkpoint: None,
     }
+}
+
+// ─── Buddy: Han's gates ──────────────────────────────────────────────────────
+//
+// Each needs Han, so each keeps its gate at least `HAN_BERTH` columns from the room's ends: in
+// the course, a neighbouring room's band gate must not put it in a band zone (where Han's
+// boost is the weak one and his head holds Nat only while he stands).
+
+/// Columns of floor from the entry pipe before a Han gate's approach.
+const HAN_LEAD: usize = 6;
+/// Columns of floor after a Han gate before the room closes.
+const HAN_TAIL: usize = 8;
+
+/// Floor from the entry pipe to the approach of a Han gate; returns the room's checkpoint.
+fn han_lead(c: &mut Canvas) -> Option<(usize, usize)> {
+    let floor = c.floor();
+    c.ground(2, floor);
+    let checkpoint = Some((c.width(), floor - 1));
+    c.ground(HAN_LEAD - 2, floor);
+    checkpoint
+}
+
+/// A buddy ledge: a 9-tile mesa (out of Giant Steps' reach, in the plunger boost's) after a
+/// flat approach (6 → 4 tiles; a hop on the way from band 4); the top narrows (6 → 2 tiles)
+/// and from band 6 has a hop along it.
+fn buddy_ledge(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let checkpoint = han_lead(c);
+    if band >= 4 {
+        c.pit(d.int(2, 3) as usize);
+        c.ground(3, FLOOR);
+    }
+    c.ground(lerpi(band, 6.0, 4.0) + d.int(0, 1) as usize, FLOOR);
+    let top = FLOOR - 9;
+    let x = c.width();
+    let thick = (lerpi(band, 6.0, 2.0) + d.int(0, 1) as usize).max(2);
+    c.ground(thick, top);
+    for k in 0..thick {
+        c.nugget(x + k, top - 1);
+    }
+    if band >= 6 {
+        let g = d.int(2, 3) as usize;
+        let x = c.width();
+        c.pit(g);
+        arc(c, x, g, top - 1, 1);
+        c.ground(lerpi(band, 3.0, 2.0), top);
+    }
+    // Down the far side in steps.
+    c.ground(2, top + 4);
+    c.ground(HAN_TAIL, FLOOR);
+    Built { hint: Some((&[Topic::Boost], "Need a lift? Land on my head and JUMP! Oof, my back.")), checkpoint }
+}
+
+/// Where a buddy raft pool starts (column in the room, from the entry checkpoint near 0).
+const RAFT_POOL_AT: usize = 40;
+
+/// A buddy raft pool: sewage (16 → 19 wide) under ceiling spikes, too far from the checkpoint
+/// for Nat's own rafts; Han's rafts are the way. A hop on the way there from band 3, and one
+/// after it from band 6.
+fn buddy_raft_pool(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    han_lead(c);
+    // A long way from the checkpoint: Nat's rafts sink before the walk back for the next.
+    if band >= 3 {
+        c.ground(10, FLOOR);
+        c.pit(d.int(2, 3) as usize);
+    }
+    let pool_at = RAFT_POOL_AT + d.int(0, 3) as usize;
+    c.ground(pool_at.saturating_sub(c.width()).max(6), FLOOR);
+    let w = (d.scaled(band, 16.0, 18.0, 1) as usize).max(BUDDY_POOL_MIN);
+    let x = c.width();
+    for _ in 0..w {
+        c.column(|r| match r {
+            r if r < FLOOR - 3 => b'#',
+            r if r == FLOOR - 3 => b'v',
+            r if (FLOOR..=FLOOR + 2).contains(&r) => b'~',
+            r if r > FLOOR + 2 => b'#',
+            _ => b'.',
+        });
+    }
+    for k in (1..w - 1).step_by(3) {
+        c.nugget(x + k, STAND);
+    }
+    c.ground(4, FLOOR);
+    if band >= 6 {
+        c.pit(d.int(2, 3) as usize);
+        c.ground(3, FLOOR);
+    }
+    c.ground(HAN_TAIL, FLOOR);
+    // No mid-room checkpoint: one near the pool would let Nat's own rafts bridge it.
+    Built { hint: Some((&[Topic::BuddyRaft], "Spikes up top! Stand still: I'll make us a raft.")), checkpoint: None }
+}
+
+/// A shield row: a run of adjacent cans (24 → 32) under a grating with a low roof, too long
+/// for any mode, the waltz included: Nat walks it behind Han. From band 5 a hop on the way.
+fn shield_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let checkpoint = han_lead(c);
+    if band >= 5 {
+        c.pit(d.int(2, 3) as usize);
+        c.ground(3, FLOOR);
+    }
+    c.ground(lerpi(band, 5.0, 3.0) + d.int(0, 1) as usize, FLOOR);
+    let n = SHIELD_ROW_MIN + lerpi(band, 0.0, 6.0) + d.int(0, 2) as usize;
+    let x = c.width();
+    for _ in 0..n {
+        c.column(|r| match r {
+            r if r <= PIPE_ROOF => b'#',
+            FLOOR => b'=',
+            r if r == FLOOR + 1 => b'S',
+            r if r > FLOOR + 1 => b'#',
+            _ => b'.',
+        });
+    }
+    for k in (2..n).step_by(4) {
+        c.nugget(x + k, STAND);
+    }
+    c.ground(HAN_TAIL, FLOOR);
+    Built { hint: Some((&[Topic::Shield], "Plumbers only! Wait, I go first. Stay behind me!")), checkpoint }
+}
+
+/// A chain chasm room's rows: a chain climbs about 20 tiles above the floor, and the top of
+/// the room is a ceiling.
+pub const CHASM_H: usize = H + 10;
+
+/// A chain chasm: a bottomless gap (14 → 17 wide) between floors at one height, crossed only by
+/// a jump, a toot, a boost off Han in mid-air and another toot.
+fn chain_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
+    let checkpoint = han_lead(c);
+    c.ground(lerpi(band, 6.0, 4.0) + d.int(0, 1) as usize, floor);
+    let w = (d.scaled(band, CHASM_MIN as f32, 16.0, 1) as usize).max(CHASM_MIN);
+    c.pit(w);
+    // Nuggets on the far side (the validator follows the chain across, not each arc of it).
+    let x = c.width();
+    c.ground(HAN_TAIL, floor);
+    for k in (1..HAN_TAIL - 1).step_by(2) {
+        c.nugget(x + k, floor - 1);
+    }
+    Built { hint: Some((&[Topic::Chain], "Big chasm! Jump, toot, land on my head, JUMP, toot!")), checkpoint }
 }

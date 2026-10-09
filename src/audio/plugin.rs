@@ -26,7 +26,8 @@
 //! On the web the manager's cpal backend makes the page's one `AudioContext` at startup,
 //! through `window.AudioContext`, which `index.html` wraps to resume it on the first gesture
 //! (autoplay policy); until then nothing renders and the music starts from the top when it
-//! unlocks.
+//! unlocks. The page also reports how far ahead of the ear the browser's audio runs, so the
+//! beat clock steps back by the browser's buffering and output latency (`web_output_lead`).
 
 use bevy::prelude::*;
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
@@ -39,7 +40,7 @@ use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel, PlayState};
 
-use super::live::engine::{BeatClock, Engine, Input};
+use super::live::engine::{BeatClock, Engine, EngineConfig, Input};
 use super::live::library;
 use super::live::playback::{ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData};
 use super::tuning::{Tuning, Wobble};
@@ -139,14 +140,15 @@ pub struct NowPlaying {
     /// [`Tuning::Just`], [`Tuning::Tet7`], ...); `None` otherwise. Follows the phrases as they
     /// change (read it every frame; it never fires a message).
     pub tuning_now: Option<Tuning>,
-    /// The feel the band is in, if it's left the tune's own ("BOSSA NOVA";
-    /// [`crate::audio::live::feel::Feel::label`]), else "". The band's own choice: music only.
-    pub feel_now: &'static str,
+    /// What the band's arranging beyond the tune, else "": a feel ("BOSSA NOVA"), a chorus
+    /// ("STOP-TIME"), the intro, an ending ([`crate::audio::live::band::BandPlan::label`]).
+    /// The band's own choice: music only.
+    pub band_now: &'static str,
 }
 
 impl Default for NowPlaying {
     fn default() -> Self {
-        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None, feel_now: "" }
+        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None, band_now: "" }
     }
 }
 
@@ -330,7 +332,9 @@ fn setup(world: &mut World) {
 /// the song can take it).
 fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'static str, Filters), String> {
     let (title, file) = library::song(music)?;
-    let engine = Engine::new(file, ENGINE_RATE)?;
+    // A level's tune starts with an intro (when the band's loose enough: see `chorus`).
+    let config = EngineConfig { intro: matches!(music, Music::World(_)), ..EngineConfig::default() };
+    let engine = Engine::with_config(file, ENGINE_RATE, config)?;
     let mut filters = match overrides.0 {
         Some(f) if music != Music::LevelClear => f,
         _ => Filters::default(),
@@ -371,7 +375,9 @@ fn follow_state(
         }
     };
     engine.post(Input::SetFilters(filters));
-    if let (Music::World(_), Some(f)) = (want, player.freedom) {
+    // The band plays the levels' tunes, and the level-clear jingle (a Basie ending on it,
+    // if it's loose).
+    if let (Music::World(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
         engine.post(set_freedom(f));
     }
     // The fanfare cuts in quickly; everything else crossfades.
@@ -383,7 +389,7 @@ fn follow_state(
         h.play(engine, fade_in, fade_out);
     }
     let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
-    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None, feel_now: "" };
+    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None, band_now: "" };
     // The physics follow the music the moment it starts.
     if let Some(g) = groove.as_deref_mut() {
         set_groove(g, filters);
@@ -574,9 +580,13 @@ fn sync(
     }
     let filters = Filters { harmony: p.state.harmony, just_intonation: p.state.tuning == Tuning::Medley };
     // The clock as heard: the engine is `ahead_secs` ahead of the output, and time has passed
-    // since it published. Stepping back stops at the playhead's bar line, so the beat and the
-    // physics turn together when a new meter comes in.
-    let mut dt = now - player.seen.1 - p.ahead_secs;
+    // since it published (on the web, the browser says how far off the last sample it was
+    // handed is: [`web_output_lead`]). Stepping back stops at the playhead's bar line, so the
+    // beat and the physics turn together when a new meter comes in.
+    let mut dt = match web_output_lead() {
+        Some(lead) => -(lead + p.ahead_secs),
+        None => now - player.seen.1 - p.ahead_secs,
+    };
     if dt < 0.0 {
         dt = dt.max(-p.clock.position.beat * 60.0 / p.clock.bpm.max(1.0) as f64);
     }
@@ -586,9 +596,9 @@ fn sync(
     if now_playing.tuning_now != tuning_now {
         now_playing.tuning_now = tuning_now;
     }
-    let feel_now = p.state.feel.label();
-    if now_playing.feel_now != feel_now {
-        now_playing.feel_now = feel_now;
+    let band_now = p.state.label;
+    if now_playing.band_now != band_now {
+        now_playing.band_now = band_now;
     }
     let sounding = (filters, p.state.tuning);
     if player.sounding != Some(sounding) {
@@ -623,6 +633,29 @@ fn sync(
             0.0
         };
     }
+}
+
+/// On the web: seconds from now until the last sample the game handed the browser reaches the
+/// ear. cpal's WebAudio host renders a whole buffer (2048 frames, ~43 ms) per callback and
+/// schedules it a buffer ahead of the context's clock, and the browser adds its own pipeline
+/// (`baseLatency`) and the device's (`outputLatency`, often tens of ms, Bluetooth far more):
+/// about 0.1 s that a native stream doesn't have. `index.html` tracks when the last scheduled
+/// buffer ends and answers `nathanAudioLead()`; the publish and that buffer's scheduling happen
+/// in the same callback on the main thread, so the lead lines up with what was published.
+/// `None` natively, or when the page doesn't know (no audio yet).
+#[cfg(target_arch = "wasm32")]
+fn web_output_lead() -> Option<f64> {
+    use wasm_bindgen::JsCast;
+    let w = web_sys::window()?;
+    let f = js_sys::Reflect::get(w.as_ref(), &"nathanAudioLead".into()).ok()?.dyn_into::<js_sys::Function>().ok()?;
+    let lead = f.call0(w.as_ref()).ok()?.as_f64()?;
+    // Never trust a wild value (a suspended context, a clock hiccup) with the physics.
+    lead.is_finite().then(|| lead.clamp(0.0, 1.0))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn web_output_lead() -> Option<f64> {
+    None
 }
 
 /// Pending Han blips: seconds until each plays.
