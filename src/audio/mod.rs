@@ -100,6 +100,6 @@ pub mod waltz;
 
 pub use music::{Filters, Harmony, Music, Sfx};
 pub use plugin::{
-    AudioOutput, Director, LiveClock, LivePlayer, MusicChanged, MusicOverride, MusicStarted, NowPlaying, SfxCount, desired_music,
+    AudioOutput, Calibrating, Director, LiveClock, LivePlayer, MusicChanged, MusicOverride, MusicStarted, NowPlaying, SfxCount, desired_music,
     land_db, plugin,
 };

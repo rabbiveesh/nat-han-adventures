@@ -18,7 +18,9 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   stop-time, breaks, riff backgrounds, strolling, soli, shout chorus with a key-up), pedal/vamp
   intros on the level tunes, and endings (Basie on the level-clear jingle, I–VI–ii–V tag, vamp-out).
   The world's beat follows the ear: on the web it steps back by the browser's buffering and
-  output latency (`index.html` reports it; `web_output_lead` in `src/audio/plugin.rs`).
+  output latency (`index.html` reports it; `web_output_lead` in `src/audio/plugin.rs`), and by
+  the player's AUDIO DELAY (pause menu: tap Jump on the beat or nudge; saved), for Bluetooth
+  headsets the browser under-reports. `?debug=1` shows the measured lag on screen.
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
   | Mode | Summon / cause | Physics | Gates |

@@ -185,6 +185,9 @@ pub struct LiveClock {
     pub tuning: Tuning,
 }
 
+/// See [`LivePlayer::shape`].
+type Shape = (f32, f64, f64, Filters, Tuning);
+
 /// The music's bookkeeping.
 #[derive(Resource, Default)]
 pub struct LivePlayer {
@@ -196,6 +199,9 @@ pub struct LivePlayer {
     ducked: Option<bool>,
     /// Last published chunk count, and when we saw it change.
     seen: (u64, f64),
+    /// What's playing (tempo, meter, loop, filters, tuning), and the first bar played with it:
+    /// stepping back to what's heard crosses a bar line only when nothing changed there.
+    shape: Option<(Shape, u64)>,
     /// The band's freedom, as last decided by the adaptive engine (re-sent to each new level
     /// engine).
     freedom: Option<BandFreedom>,
@@ -367,6 +373,7 @@ fn follow_state(
     player.sounding = None;
     player.decided = None;
     player.ducked = None;
+    player.shape = None;
     let (mut engine, title, filters) = match start_engine(want, &overrides) {
         Ok(x) => x,
         Err(e) => {
@@ -518,8 +525,17 @@ fn direct(
     }
 }
 
-fn duck(play_state: Option<Res<State<PlayState>>>, mut player: ResMut<LivePlayer>, mut audio: NonSendMut<Audio>) {
-    let duck = play_state.is_some_and(|s| *s.get() == PlayState::Paused);
+/// The pause menu's audio delay check is on: the music plays at full volume while paused.
+#[derive(Resource, Debug, Default)]
+pub struct Calibrating;
+
+fn duck(
+    play_state: Option<Res<State<PlayState>>>,
+    calibrating: Option<Res<Calibrating>>,
+    mut player: ResMut<LivePlayer>,
+    mut audio: NonSendMut<Audio>,
+) {
+    let duck = play_state.is_some_and(|s| *s.get() == PlayState::Paused) && calibrating.is_none();
     if player.ducked == Some(duck) {
         return;
     }
@@ -568,6 +584,7 @@ fn sync(
     mut groove: Option<ResMut<Groove>>,
     mut now_playing: ResMut<NowPlaying>,
     mut changed: MessageWriter<MusicChanged>,
+    progress: Option<Res<crate::save::Progress>>,
 ) {
     let Some(h) = audio.handle.as_ref() else { return };
     let p = h.published();
@@ -581,14 +598,26 @@ fn sync(
     let filters = Filters { harmony: p.state.harmony, just_intonation: p.state.tuning == Tuning::Medley };
     // The clock as heard: the engine is `ahead_secs` ahead of the output, and time has passed
     // since it published (on the web, the browser says how far off the last sample it was
-    // handed is: [`web_output_lead`]). Stepping back stops at the playhead's bar line, so the
-    // beat and the physics turn together when a new meter comes in.
+    // handed is: [`web_output_lead`]), and the player's speakers may lag more than the
+    // platform says (their AUDIO DELAY). Stepping back crosses the playhead's bar line only
+    // when the bar before it played the same way; where a new meter, harmony or tuning comes
+    // in it stops there, so the beat and the physics turn together.
+    let delay = progress.map_or(0.0, |p| p.audio_delay_ms as f64 / 1000.0);
     let mut dt = match web_output_lead() {
         Some(lead) => -(lead + p.ahead_secs),
         None => now - player.seen.1 - p.ahead_secs,
+    } - delay;
+    let c = &p.clock;
+    let shape = (c.bpm, c.beats_per_bar, c.loop_beats, filters, p.state.tuning);
+    let bar = c.position.bar;
+    let first_bar = match player.shape {
+        Some((s, first)) if s == shape && first <= bar => first,
+        _ => bar,
     };
+    player.shape = Some((shape, first_bar));
     if dt < 0.0 {
-        dt = dt.max(-p.clock.position.beat * 60.0 / p.clock.bpm.max(1.0) as f64);
+        let back_beats = c.position.beat + if bar > first_bar { c.beats_per_bar } else { 0.0 };
+        dt = dt.max(-back_beats * 60.0 / c.bpm.max(1.0) as f64);
     }
     let heard = p.clock.advanced(dt);
     *clock = LiveClock { clock: heard, filters, tuning: p.state.tuning };
