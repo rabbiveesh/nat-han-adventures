@@ -107,7 +107,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
    landscape phone size with touch emulation (live Pages build with `?touch=1` by default) and
    saves screenshots of title → level select → level 1 with the stick and jump zone in use.
    `?touch=1`/`?touch=0` force touch mode on or off in any browser; `NATHAN_TOUCH=1 cargo run`
-   does it natively.
+   does it natively. `?lag=1` shows the audio lag the beat clock compensates (`nathanAudioLead()`).
 6. F9 in the game writes a debug dump (every reflected resource, Nat/Han state, director, raw
    save, recent events): a download on web, a file next to the save on native.
 
