@@ -91,10 +91,10 @@ fn touch_checkpoints(
         }
         cp.active = true;
         at_risk.0.clear();
-        // Later checkpoints win; touching an earlier one after a later one doesn't send you back.
-        if run.checkpoint.is_none_or(|c| c < cp.index) {
-            run.checkpoint = Some(cp.index);
-        }
+        // The newest checkpoint wins: the one you got to last (each counts once). Not the
+        // highest index: indices are reading order, top row first, so in a level you climb
+        // (Septic Tank) the first checkpoint you reach has the highest index.
+        run.checkpoint = Some(cp.index);
         reached.write(CheckpointReached { index: cp.index, pos: floor });
         let text = active.level.checkpoint_line(cp.index).map_or_else(
             || CHECKPOINT_QUIPS[cp.index % CHECKPOINT_QUIPS.len()].to_string(),

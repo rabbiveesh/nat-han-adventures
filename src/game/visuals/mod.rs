@@ -325,9 +325,10 @@ fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Co
 }
 
 /// What a gate mark looks like, and where (world center of the overlay, z): giant walls get
-/// gold music-staff trim on their face and a note emblem; buddy ledges red plunger-handle
-/// notches on their face and Han's yellow plumber's tape along the top; shield rows a
-/// "PLUMBERS ONLY" sign over their start.
+/// gold music-staff trim on their face and a note emblem; waltz rows the same gold staff
+/// under their low ceiling, a quarter note a beat, and a 3/4 emblem at each end; buddy ledges
+/// red plunger-handle notches on their face and Han's yellow plumber's tape along the top;
+/// shield rows a "PLUMBERS ONLY" sign over their start.
 pub fn gate_decor(level: &Level) -> Vec<(SpriteId, Vec2, f32)> {
     marks_decor(level, &level.gates)
 }
@@ -356,6 +357,22 @@ fn marks_decor(level: &Level, marks: &[crate::level::GateMark]) -> Vec<(SpriteId
                     out.push((SpriteId::GiantEmblem, at(mid), 0.45));
                 }
             }
+            Topic::Waltz => {
+                // The ceiling over the walk: the lowest solid tile 1..=2 above it.
+                let ceiling: Vec<(i32, i32)> = (m.c0..=m.c1)
+                    .flat_map(|c| (m.r0..=m.r1).map(move |r| (c, r)))
+                    .filter_map(|(c, r)| {
+                        (1..=2).map(|k| (c, r - k)).find(|&(c, r)| r >= 0 && level.tile(c, r).is_solid())
+                    })
+                    .collect();
+                for &f in &ceiling {
+                    out.push((SpriteId::WaltzTrim, at(f), 0.4));
+                }
+                if let (Some(&first), Some(&last)) = (ceiling.first(), ceiling.last()) {
+                    out.push((SpriteId::WaltzEmblem, at(first), 0.45));
+                    out.push((SpriteId::WaltzEmblem, at(last), 0.45));
+                }
+            }
             Topic::Boost => {
                 for &(c, r) in &faces {
                     out.push((SpriteId::LedgeNotch, at((c, r)), 0.4));
@@ -372,6 +389,30 @@ fn marks_decor(level: &Level, marks: &[crate::level::GateMark]) -> Vec<(SpriteId
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn waltz_rows_are_marked_like_giant_walls() {
+        let levels = crate::level::Levels::default();
+        for level in &levels.0 {
+            for m in level.gates.iter().filter(|g| g.topic == Topic::Waltz) {
+                let decor = gate_decor(level);
+                let inside = |id: SpriteId| {
+                    decor.iter().filter(|(d, at, _)| {
+                        let (c, _) = level.cell_at(*at);
+                        *d == id && (m.c0..=m.c1).contains(&c)
+                    }).count()
+                };
+                let cans = (m.c0..=m.c1).count() - 2;
+                assert!(inside(SpriteId::WaltzTrim) >= cans, "{}: waltz row at col {} has no staff", level.name, m.c0);
+                assert_eq!(inside(SpriteId::WaltzEmblem), 2, "{}: a 3/4 emblem at each end", level.name);
+            }
+        }
+    }
 }
 
 /// Gate marks of the loaded level that have their markers.

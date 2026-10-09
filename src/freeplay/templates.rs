@@ -40,7 +40,8 @@ pub struct Template {
     /// Story levels `0..=unlock` must be unlocked (`crate::save::Progress::unlocked`) before
     /// free play serves this room: the mechanic has been taught.
     pub unlock: usize,
-    /// Rows in its canvas: [`H`], or [`CLIMB_H`] for a tall room.
+    /// Rows in its canvas: [`H`], or more for a tall room ([`CLIMB_H`] for a climb,
+    /// [`CHASM_H`] for a chain chasm's headroom).
     pub height: usize,
     pub build: BuildFn,
 }
@@ -59,7 +60,7 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, height: H, build: buddy_ledge },
     Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
     Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
-    Template { name: "chain chasm", skill: Skill::Buddy, unlock: 7, height: H, build: chain_chasm },
+    Template { name: "chain chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: chain_chasm },
 ];
 
 /// The templates for a skill.
@@ -598,9 +599,10 @@ const HAN_TAIL: usize = 8;
 
 /// Floor from the entry pipe to the approach of a Han gate; returns the room's checkpoint.
 fn han_lead(c: &mut Canvas) -> Option<(usize, usize)> {
-    c.ground(2, FLOOR);
-    let checkpoint = Some((c.width(), STAND));
-    c.ground(HAN_LEAD - 2, FLOOR);
+    let floor = c.floor();
+    c.ground(2, floor);
+    let checkpoint = Some((c.width(), floor - 1));
+    c.ground(HAN_LEAD - 2, floor);
     checkpoint
 }
 
@@ -700,18 +702,23 @@ fn shield_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     Built { hint: Some((&[Topic::Shield], "Plumbers only! Wait, I go first. Stay behind me!")), checkpoint }
 }
 
+/// A chain chasm room's rows: a chain climbs about 20 tiles above the floor, and the top of
+/// the room is a ceiling.
+pub const CHASM_H: usize = H + 10;
+
 /// A chain chasm: a bottomless gap (14 → 17 wide) between floors at one height, crossed only by
 /// a jump, a toot, a boost off Han in mid-air and another toot.
 fn chain_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
     let checkpoint = han_lead(c);
-    c.ground(lerpi(band, 6.0, 4.0) + d.int(0, 1) as usize, FLOOR);
+    c.ground(lerpi(band, 6.0, 4.0) + d.int(0, 1) as usize, floor);
     let w = (d.scaled(band, CHASM_MIN as f32, 16.0, 1) as usize).max(CHASM_MIN);
     c.pit(w);
     // Nuggets on the far side (the validator follows the chain across, not each arc of it).
     let x = c.width();
-    c.ground(HAN_TAIL, FLOOR);
+    c.ground(HAN_TAIL, floor);
     for k in (1..HAN_TAIL - 1).step_by(2) {
-        c.nugget(x + k, STAND);
+        c.nugget(x + k, floor - 1);
     }
     Built { hint: Some((&[Topic::Chain], "Big chasm! Jump, toot, land on my head, JUMP, toot!")), checkpoint }
 }

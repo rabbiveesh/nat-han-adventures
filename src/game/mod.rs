@@ -205,7 +205,8 @@ pub struct Nugget;
 #[reflect(Component)]
 pub struct GhostNugget;
 
-/// Toilet-paper-holder checkpoint number `index` (level order). `active` once touched.
+/// Toilet-paper-holder checkpoint number `index` (reading order, top row first: not
+/// necessarily the order you reach them). `active` once touched.
 #[derive(Component, Debug, Clone, Copy, Reflect)]
 #[reflect(Component)]
 pub struct Checkpoint {

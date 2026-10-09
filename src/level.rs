@@ -78,11 +78,14 @@
 //! - **Chain-jump chasms** (`chain`) have no overuse limit: Han boosts you as often as it takes
 //!   while you're in the mark's columns ([`Level::in_chasm`]).
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
-//!   emblem, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
+//!   emblem, waltz rows the same gold staff under their low ceiling (a quarter note a beat)
+//!   and a 3/4 emblem at each end, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
 //!   "PLUMBERS ONLY" sign at their start.
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
-//! wall, above is open sky, below is a bottomless pit (death).
+//! wall, above is a solid ceiling (the top of the screen: the camera never shows above row 0, so
+//! nobody may go there, or a wall reaching row 0 could be walked over on its roof, unseen),
+//! below is a bottomless pit (death).
 //!
 //! # Splat stains
 //! Death leaves a mark. Splatting on spikes (`^`/`v`) turns that spike tile into a *stain*
@@ -433,10 +436,12 @@ impl Level {
         self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
     }
 
+    /// The tile at (col, row); outside the grid: solid walls left, right and above (the
+    /// ceiling at the top of the screen), empty below (the pit).
     pub fn tile(&self, col: i32, row: i32) -> Tile {
-        if col < 0 || col >= self.width as i32 {
+        if col < 0 || col >= self.width as i32 || row < 0 {
             Tile::Solid
-        } else if row < 0 || row >= self.height as i32 {
+        } else if row >= self.height as i32 {
             Tile::Empty
         } else {
             self.tiles[row as usize * self.width + col as usize]

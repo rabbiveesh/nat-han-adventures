@@ -49,11 +49,14 @@ pub enum SpriteId {
     HanRoll,
     /// Han's big raft: frames 0/1/2 are its left, middle and right segments. 16x16.
     HanRaft,
-    /// Gate markers: gold music-staff trim on a giant wall's face, its note emblem, a buddy
-    /// ledge's red plunger-handle notches and yellow plumber's tape (16x16 overlays), and the
-    /// "PLUMBERS ONLY" sign at a shield row (36x16).
+    /// Gate markers: gold music-staff trim on a giant wall's face, its note emblem, the staff
+    /// under a waltz row's ceiling and its 3/4 emblem, a buddy ledge's red plunger-handle
+    /// notches and yellow plumber's tape (16x16 overlays), and the "PLUMBERS ONLY" sign at a
+    /// shield row (36x16).
     GiantTrim,
     GiantEmblem,
+    WaltzTrim,
+    WaltzEmblem,
     LedgeNotch,
     PlumberTape,
     PlumbersOnly,
@@ -135,7 +138,7 @@ impl SpriteId {
         let mut v = vec![
             PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, HanBraced, HanIntercept,
             HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
-            LedgeNotch, PlumberTape, PlumbersOnly, Nugget,
+            WaltzTrim, WaltzEmblem, LedgeNotch, PlumberTape, PlumbersOnly, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
@@ -189,6 +192,8 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         HanRaft => buddy::han_raft(),
         GiantTrim => buddy::giant_trim(),
         GiantEmblem => buddy::giant_emblem(),
+        WaltzTrim => buddy::waltz_trim(),
+        WaltzEmblem => buddy::waltz_emblem(),
         LedgeNotch => buddy::ledge_notches(),
         PlumberTape => buddy::plumber_tape(),
         PlumbersOnly => buddy::plumbers_only(),
