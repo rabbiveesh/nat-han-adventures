@@ -33,11 +33,18 @@ pub struct Progress {
     pub best_time: [Option<f32>; LEVEL_COUNT],
     /// The seed of the last free-play run (offered as "LAST" between visits).
     pub last_seed: Option<u32>,
+    /// How late the player's speakers or headphones sound beyond what the platform reports
+    /// (Bluetooth on a phone often hides 150+ ms): the beat clock steps back by it. Set in the
+    /// pause menu's AUDIO DELAY (tap along, or nudge). 0..=[`MAX_AUDIO_DELAY_MS`].
+    pub audio_delay_ms: u32,
 }
+
+/// The largest audio delay the player can set.
+pub const MAX_AUDIO_DELAY_MS: u32 = 500;
 
 impl Default for Progress {
     fn default() -> Self {
-        Self { unlocked: 1, best_nuggets: [None; LEVEL_COUNT], best_time: [None; LEVEL_COUNT], last_seed: None }
+        Self { unlocked: 1, best_nuggets: [None; LEVEL_COUNT], best_time: [None; LEVEL_COUNT], last_seed: None, audio_delay_ms: 0 }
     }
 }
 
@@ -86,8 +93,10 @@ impl Progress {
     /// nat-han-adventures-progress 1
     /// unlocked 3
     /// level 1 12 63.250
+    /// audio-delay 180
     /// ```
-    /// (`level <index> <best nuggets> <best time secs>`, only for completed levels.)
+    /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
+    /// `audio-delay <ms>` only when set.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -97,6 +106,9 @@ impl Progress {
         }
         if let Some(seed) = self.last_seed {
             s.push_str(&format!("freeplay-seed {seed}\n"));
+        }
+        if self.audio_delay_ms > 0 {
+            s.push_str(&format!("audio-delay {}\n", self.audio_delay_ms));
         }
         s
     }
@@ -127,6 +139,7 @@ impl Progress {
                     }
                 }
                 ["freeplay-seed", seed] => p.last_seed = seed.parse().ok(),
+                ["audio-delay", ms] => p.audio_delay_ms = ms.parse::<u32>().map_or(0, |ms| ms.min(MAX_AUDIO_DELAY_MS)),
                 _ => {}
             }
         }
@@ -350,6 +363,8 @@ mod tests {
         assert_eq!(Progress::from_text(&Progress::default().to_text()), Some(Progress::default()));
         let seeded = Progress { last_seed: Some(424242), ..Progress::default() };
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
+        let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
+        assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
     }
 
     #[test]
@@ -366,6 +381,8 @@ mod tests {
         assert_eq!(p.best_nuggets[3], None);
         let p = Progress::from_text("nat-han-adventures-progress 1\nunlocked 0\n").unwrap();
         assert_eq!(p.unlocked, 1);
+        let p = Progress::from_text("nat-han-adventures-progress 1\naudio-delay 9000\n").unwrap();
+        assert_eq!(p.audio_delay_ms, MAX_AUDIO_DELAY_MS);
     }
 
     #[test]

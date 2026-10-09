@@ -372,6 +372,7 @@ mod plugin {
         events::{CheckpointReached, Jumped},
         game::{Groove, LevelRun},
         level::Levels,
+        save::Progress,
         state::{AppState, CurrentLevel},
     };
 
@@ -462,6 +463,33 @@ mod plugin {
         let clock = app.world().resource::<LiveClock>().clock;
         assert!(clock.bpm > 100.0 && clock.position.sample > 0, "{clock:?}");
         assert_eq!(app.world().resource::<LivePlayer>().filters(), Some(Filters::default()));
+    }
+
+    /// The player's AUDIO DELAY steps the beat back by exactly that much, all the way through
+    /// the bar: no freezing at the bar line while the music before it is still being heard.
+    #[test]
+    fn the_audio_delay_steps_the_heard_beat_back() {
+        let mut plain = app();
+        let mut delayed = app();
+        delayed.world_mut().resource_mut::<Progress>().audio_delay_ms = 250;
+        let mut checked = 0;
+        for frame in 0..60 * 6 {
+            plain.update();
+            delayed.update();
+            if frame < 60 {
+                continue;
+            }
+            let (a, b) = (plain.world().resource::<LiveClock>().clock, delayed.world().resource::<LiveClock>().clock);
+            assert!(a.bpm > 0.0 && a.bpm == b.bpm);
+            let want = 0.25 * a.bpm as f64 / 60.0;
+            let mut lag = a.position.song_beat - b.position.song_beat;
+            if a.loop_beats > 0.0 {
+                lag = lag.rem_euclid(a.loop_beats);
+            }
+            assert!((lag - want).abs() < 1e-6, "frame {frame}: heard {lag} beats behind, want {want} ({a:?} vs {b:?})");
+            checked += 1;
+        }
+        assert!(checked > 200);
     }
 
     /// 5 toots then a checkpoint: Coltrane changes, played from a bar line without restarting
