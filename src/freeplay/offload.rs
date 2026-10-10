@@ -9,8 +9,14 @@
 //! only if the fingerprint matches; anything else (no worker, a worker error, a stale cached
 //! worker from an older deploy) and the room is generated on the main thread as before.
 //!
+//! The worker says [`READY`] once its wasm is running: a message posted before then would be
+//! dropped unanswered (the worker has no handler yet), so jobs wait in the [`Link`]'s outbox
+//! until it does. A worker that stays silent past [`PATIENCE_SECS`] is retired the same way.
+//!
 //! The protocol is pure and checked natively (tests below, `tests/freeplay.rs`); [`send`] and
 //! [`recv`] are the browser glue (no-ops elsewhere), [`worker_main`] the worker's side.
+
+use std::collections::VecDeque;
 
 use super::generate::{CALIBRATION_LINES, CHECKPOINT_LINES, Job, Room, RoomPlan, Verdict};
 use crate::adapt::{AssistLevers, RoomRequest, Skill};
@@ -18,6 +24,48 @@ use crate::level::{GateMark, Level, Topic};
 
 /// First word of every message; bump it when the format changes.
 pub const PROTOCOL: &str = "nh1";
+
+/// The worker's hello, once it can take jobs.
+pub const READY: &str = "nh1 ready";
+
+/// How long a job may go unanswered (the worker never started, or hung) before the game gives
+/// up on the worker and generates the room itself. A whole job takes a few seconds at worst
+/// on a slow phone; Nat needs the room by the end of the one he's in.
+pub const PATIENCE_SECS: f32 = 6.0;
+
+/// The game's end of the worker link: jobs are held until the worker is [`READY`].
+#[derive(Debug, Default)]
+pub struct Link {
+    ready: bool,
+    outbox: VecDeque<String>,
+    inbox: VecDeque<String>,
+}
+
+impl Link {
+    /// A job to send: what to post to the worker now (nothing yet if it isn't ready).
+    pub fn send(&mut self, text: String) -> Option<String> {
+        if self.ready {
+            return Some(text);
+        }
+        self.outbox.push_back(text);
+        None
+    }
+
+    /// A message from the worker: what to post to it now (the jobs held until it was ready).
+    pub fn heard(&mut self, text: String) -> Vec<String> {
+        if text == READY {
+            self.ready = true;
+            return self.outbox.drain(..).collect();
+        }
+        self.inbox.push_back(text);
+        Vec::new()
+    }
+
+    /// The worker's next answer.
+    pub fn next(&mut self) -> Option<String> {
+        self.inbox.pop_front()
+    }
+}
 
 /// A stable fingerprint of a room (FNV-1a over its debug form): the worker's room and the
 /// game's redraw of it must be the same room, field for field.
@@ -175,10 +223,11 @@ pub fn accept(id: u64, seed: u32, plan: &RoomPlan, text: &str) -> Option<Room> {
     (fingerprint(&room.level) == fp).then_some(room)
 }
 
-/// Check on job `id`: answers to older jobs are dropped; an unreadable or mismatched answer,
-/// or a worker that broke, is [`Outcome::Failed`] and retires the worker (later rooms are
-/// generated on the main thread).
-pub fn poll(id: u64, seed: u32, plan: &RoomPlan) -> Outcome {
+/// Check on job `id`, sent `waited` seconds ago: answers to older jobs are dropped; an
+/// unreadable or mismatched answer, a worker that broke, or no answer within
+/// [`PATIENCE_SECS`] is [`Outcome::Failed`] and retires the worker (later rooms are generated
+/// on the main thread).
+pub fn poll(id: u64, seed: u32, plan: &RoomPlan, waited: f32) -> Outcome {
     while let Some(text) = recv() {
         if decode_verdict(&text).is_some_and(|(got, ..)| got != id) {
             continue;
@@ -191,7 +240,14 @@ pub fn poll(id: u64, seed: u32, plan: &RoomPlan) -> Outcome {
             }
         };
     }
-    if web::broken() { Outcome::Failed } else { Outcome::Pending }
+    if web::broken() {
+        return Outcome::Failed;
+    }
+    if waited > PATIENCE_SECS {
+        web::retire(&format!("no answer in {waited:.1} s"));
+        return Outcome::Failed;
+    }
+    Outcome::Pending
 }
 
 /// Hand a job to the worker (started on first use). False if there's no worker to take it.
@@ -221,7 +277,6 @@ mod web {
 #[cfg(target_arch = "wasm32")]
 mod web {
     use std::cell::RefCell;
-    use std::collections::VecDeque;
     use std::rc::Rc;
 
     use wasm_bindgen::JsCast;
@@ -234,7 +289,7 @@ mod web {
     struct State {
         started: bool,
         worker: Option<web_sys::Worker>,
-        inbox: Rc<RefCell<VecDeque<String>>>,
+        link: Rc<RefCell<super::Link>>,
         broken: Rc<RefCell<bool>>,
     }
 
@@ -252,10 +307,13 @@ mod web {
                 return;
             }
         };
-        let inbox = s.inbox.clone();
+        let link = s.link.clone();
+        let to = worker.clone();
         let on_message = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
-            if let Some(text) = e.data().as_string() {
-                inbox.borrow_mut().push_back(text);
+            let Some(text) = e.data().as_string() else { return };
+            // Jobs held until the worker was ready go now.
+            for job in link.borrow_mut().heard(text) {
+                let _ = to.post_message(&JsValue::from_str(&job));
             }
         });
         let broken = s.broken.clone();
@@ -281,12 +339,15 @@ mod web {
                 return false;
             }
             let Some(w) = &s.worker else { return false };
-            w.post_message(&JsValue::from_str(text)).is_ok()
+            match s.link.borrow_mut().send(text.to_string()) {
+                Some(now) => w.post_message(&JsValue::from_str(&now)).is_ok(),
+                None => true,
+            }
         })
     }
 
     pub fn recv() -> Option<String> {
-        STATE.with_borrow(|s| s.inbox.borrow_mut().pop_front())
+        STATE.with_borrow(|s| s.link.borrow_mut().next())
     }
 
     pub fn broken() -> bool {
@@ -313,6 +374,8 @@ mod web {
         });
         scope.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
         on_message.forget();
+        // Jobs posted before this point were dropped: the game holds them until it hears this.
+        let _ = scope.post_message(&JsValue::from_str(super::READY));
     }
 }
 
@@ -349,6 +412,24 @@ mod tests {
         assert_eq!(decode_job("nh0 job 1 2"), None);
         assert_eq!(decode_job(&(encode_job(1, 2, &plan(Skill::Grease, 3, 1)).unwrap() + " 9")), None);
         assert!(answer("garbage").ends_with(" error"));
+    }
+
+    /// The first room's job used to go out the moment the worker was created, before its wasm
+    /// had loaded: the worker dropped it, never answered, and free play waited forever behind
+    /// room 1's capped pipe. Jobs now wait for the worker's hello.
+    #[test]
+    fn jobs_wait_for_the_worker_to_be_ready() {
+        let mut link = Link::default();
+        assert_eq!(link.send("a".into()), None);
+        assert_eq!(link.send("b".into()), None);
+        assert_eq!(link.next(), None);
+        assert_eq!(link.heard(READY.into()), vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(link.send("c".into()), Some("c".into()));
+        assert_eq!(link.heard("nh1 room 1".into()), Vec::<String>::new());
+        assert_eq!(link.next().as_deref(), Some("nh1 room 1"));
+        assert_eq!(link.next(), None);
+        // The hello is never mistaken for an answer.
+        assert!(decode_verdict(READY).is_none());
     }
 
     #[test]
