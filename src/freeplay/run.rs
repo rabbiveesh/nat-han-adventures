@@ -176,6 +176,8 @@ struct WorkerGen {
     id: u64,
     seed: u32,
     plan: RoomPlan,
+    /// Seconds since it was sent.
+    waited: f32,
 }
 
 /// Generate `plan`'s room: in the web worker if there is one, else an attempt at a time on the
@@ -187,7 +189,7 @@ fn start_generation(commands: &mut Commands, seed: u32, plan: RoomPlan) {
     if let Some(text) = offload::encode_job(id, seed, &plan)
         && offload::send(&text)
     {
-        commands.insert_resource(WorkerGen { id, seed, plan });
+        commands.insert_resource(WorkerGen { id, seed, plan, waited: 0.0 });
     } else {
         spawn_attempt(commands, Job::new(seed, plan));
     }
@@ -468,7 +470,8 @@ fn finish_run(
 #[allow(clippy::too_many_arguments)]
 fn poll_generation(
     mut commands: Commands,
-    worker: Option<Res<WorkerGen>>,
+    time: Res<Time<Real>>,
+    worker: Option<ResMut<WorkerGen>>,
     task: Option<ResMut<GenTask>>,
     mut run: ResMut<FreePlayRun>,
     mut active: ResMut<ActiveLevel>,
@@ -476,8 +479,9 @@ fn poll_generation(
     tiles: Query<(Entity, &LevelTile)>,
     mut goal: Query<&mut Transform, With<Goal>>,
 ) {
-    let room = if let Some(w) = worker {
-        match offload::poll(w.id, w.seed, &w.plan) {
+    let room = if let Some(mut w) = worker {
+        w.waited += time.delta_secs();
+        match offload::poll(w.id, w.seed, &w.plan, w.waited) {
             Outcome::Pending => return,
             Outcome::Done(room) => {
                 commands.remove_resource::<WorkerGen>();
