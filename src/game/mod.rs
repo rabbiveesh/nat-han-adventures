@@ -262,6 +262,8 @@ pub struct Raft {
 pub struct HintSpot {
     pub center: Vec2,
     pub text: String,
+    /// What it teaches (the band's counters are taught here: `ui::lesson`).
+    pub topics: Vec<crate::level::Topic>,
     pub said: bool,
 }
 

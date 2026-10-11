@@ -35,7 +35,7 @@ use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, Playbac
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-use crate::events::{BandFreedom, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
+use crate::events::{BandFreedom, CallBand, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
 use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel, PlayState};
@@ -59,6 +59,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<LiveClock>()
         .init_resource::<NowPlaying>()
         .init_resource::<Director>()
+        .init_resource::<BandMeters>()
         .init_resource::<HanBabble>()
         .init_resource::<SfxCount>()
         .init_resource::<SfxRng>()
@@ -237,6 +238,11 @@ pub struct Director {
     pub band: director::Band,
     was_playing: bool,
 }
+
+/// The band's counters for the HUD strip (`ui::hud`), as of this frame: what each counter
+/// holds, which is full, the one a call plays, the called mode's timer.
+#[derive(Resource, Debug, Default, Clone, Copy, PartialEq)]
+pub struct BandMeters(pub director::Meters);
 
 /// Sound effects played (or, headless, that would have been).
 #[derive(Resource, Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -448,7 +454,7 @@ fn forward(
 }
 
 /// Feed the director what happened this frame; it decides at level start, death, checkpoints,
-/// summons and every [`director::MUSIC_CHECK_SECS`] of play.
+/// calls and every [`director::MUSIC_CHECK_SECS`] of play.
 #[allow(clippy::too_many_arguments)]
 fn direct(
     state: Res<State<AppState>>,
@@ -462,6 +468,8 @@ fn direct(
     mut nuggets: MessageReader<NuggetCollected>,
     mut died: MessageReader<PlayerDied>,
     mut checkpoints: MessageReader<CheckpointReached>,
+    mut calls: MessageReader<CallBand>,
+    mut meters: ResMut<BandMeters>,
     mut groove_for_grip: Option<ResMut<Groove>>,
 ) {
     let playing = *state.get() == AppState::Playing;
@@ -477,6 +485,7 @@ fn direct(
     ev.nuggets = nuggets.read().count() as u32;
     ev.deaths = died.read().count() as u32;
     ev.checkpoints = checkpoints.read().count() as u32;
+    ev.calls = calls.read().count() as u32;
     // Play time (pause excluded): the director's clock.
     let now = run.as_ref().map_or(0.0, |r| r.time);
     let d = &mut *director;
@@ -496,6 +505,7 @@ fn direct(
         decision = Some(decided);
     }
     let stats = d.band.stats;
+    meters.set_if_neq(BandMeters(d.band.meters(now)));
     if let Some(g) = groove_for_grip.as_deref_mut() {
         let nervous = stats.level_deaths >= director::NERVOUS_DEATHS;
         if g.nervous != nervous {

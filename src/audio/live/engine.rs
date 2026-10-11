@@ -35,8 +35,8 @@
 //! where it is and sends its decisions as [`Input::SetFilters`]; [`Input::ForceHarmony`] /
 //! [`Input::ForceTuning`] override them (dev overrides, the editor's dials). An editor without
 //! a game can set [`EngineConfig::self_directed`]: the engine then runs the director's
-//! [`director::Band`] itself on the gameplay inputs, on its own clock (summons, holds, the jump
-//! in threes spotted in [`Input::Jump`]s, [`Input::WaltzStep`] counting as one, a check every
+//! [`director::Band`] itself on the gameplay inputs, on its own clock (charges, [`Input::Call`]s,
+//! holds, the jump in threes spotted in [`Input::Jump`]s, [`Input::WaltzStep`] counting as one, a check every
 //! [`director::MUSIC_CHECK_SECS`]), and [`director::choose_filters`] on every
 //! [`Input::SetStats`] (stats dials).
 
@@ -74,6 +74,8 @@ pub enum Input {
     /// A jump in threes (the director spotted one; the game sends it). Self-directed, it counts
     /// toward the waltz like the director's own.
     WaltzStep,
+    /// The player calls the band (self-directed only: the game's director hears it itself).
+    Call,
     LevelStart,
     Restart,
     /// The director's rolling-window stats.
@@ -809,6 +811,7 @@ impl Engine {
                 Some(ev(|e| e.waltz_steps = 1))
             }
             Input::Jump { on_ground: true } => Some(ev(|e| e.ground_jumps = 1)),
+            Input::Call => Some(ev(|e| e.calls = 1)),
             Input::LevelStart | Input::Restart => {
                 self.energy = 0.0;
                 if self.config.self_directed {

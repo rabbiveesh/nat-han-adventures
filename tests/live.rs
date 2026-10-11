@@ -636,8 +636,8 @@ fn the_medley_follows_the_tune_through_the_waltz() {
 }
 
 /// Without a game, the engine's own director hears a jump in threes (three evenly spaced ground
-/// jumps) and waltzes at the next bar line, as the game's does; a waltz step from an editor
-/// does the same.
+/// jumps) and a call, and waltzes at the next bar line, as the game's does; a waltz step from
+/// an editor does the same.
 #[test]
 fn a_self_directed_engine_waltzes_on_a_jump_in_threes() {
     let file = library::load(library::stem(Music::World(1))).unwrap();
@@ -654,6 +654,9 @@ fn a_self_directed_engine_waltzes_on_a_jump_in_threes() {
             }
             e.post(*i);
         }
+        e.fill(&mut []);
+        assert_eq!(e.state().filters.harmony, Harmony::Original, "charged, not called: {steps:?}");
+        e.post(Input::Call);
         e.fill(&mut []);
         assert_eq!(e.state().filters.harmony, Harmony::Waltz, "{steps:?}");
         let bar = e.shape().bar_starts[1];

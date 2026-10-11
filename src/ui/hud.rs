@@ -274,7 +274,8 @@ fn band_toast(
             Toast { ttl: BAND_SECS },
             Node {
                 position_type: PositionType::Absolute,
-                top: px(28.0),
+                // Under the band's counter strip and its CALL arrow.
+                top: px(46.0),
                 width: percent(100.0),
                 justify_content: JustifyContent::Center,
                 ..default()

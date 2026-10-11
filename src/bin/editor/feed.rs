@@ -26,11 +26,13 @@ pub enum Button {
     Jump,
     Land,
     WaltzStep,
+    /// Call the band (the game's Down): play the full counter ticked last.
+    Call,
     Restart,
 }
 
 impl Button {
-    pub const ALL: [Button; 8] = [
+    pub const ALL: [Button; 9] = [
         Button::Toot,
         Button::Nugget,
         Button::Death,
@@ -38,6 +40,7 @@ impl Button {
         Button::Jump,
         Button::Land,
         Button::WaltzStep,
+        Button::Call,
         Button::Restart,
     ];
 
@@ -50,6 +53,7 @@ impl Button {
             Button::Jump => "JUMP",
             Button::Land => "LAND",
             Button::WaltzStep => "WALTZ",
+            Button::Call => "CALL",
             Button::Restart => "RESTART",
         }
     }
@@ -64,6 +68,7 @@ impl Button {
             Button::Jump => 'J',
             Button::Land => 'L',
             Button::WaltzStep => 'W',
+            Button::Call => 'K',
             Button::Restart => 'R',
         }
     }
@@ -77,7 +82,7 @@ impl Button {
             Button::Checkpoint => Some(Sfx::Checkpoint),
             Button::Jump => Some(Sfx::Jump),
             Button::Land => Some(Sfx::Land),
-            Button::WaltzStep | Button::Restart => None,
+            Button::WaltzStep | Button::Call | Button::Restart => None,
         }
     }
 }
@@ -127,6 +132,8 @@ impl Gameplay {
             }
             // The director counts it as a jump in threes; `tick` sends the waltz step.
             Button::WaltzStep => self.frame.waltz_steps += 1,
+            // The director plays the ready mode; `tick` sends its decision.
+            Button::Call => self.frame.calls += 1,
             Button::Restart => {
                 out.push(Input::Restart);
                 self.restarted = true;
@@ -139,7 +146,7 @@ impl Gameplay {
     }
 
     /// `dt` seconds of play: the director hears this frame's events and decides, as the game's
-    /// `direct` system does (level start, summons, deaths, checkpoints, every 20 s).
+    /// `direct` system does (level start, calls, deaths, checkpoints, every 20 s).
     pub fn tick(&mut self, dt: f32, out: &mut Vec<Input>) {
         self.now += dt.max(0.0);
         let now = self.now;
@@ -176,7 +183,7 @@ impl Gameplay {
         (self.band.next_check() - self.now).max(0.0)
     }
 
-    /// The summon being held, and for how much longer.
+    /// The called mode being held, and for how much longer.
     pub fn holding(&self) -> Option<(nat_han_adventures::audio::Harmony, f32)> {
         let h = self.band.held(self.now)?;
         Some((h, self.band.hold.map_or(0.0, |(_, until)| until - self.now)))
@@ -234,6 +241,8 @@ impl AutoNat {
             (Button::Nugget, 0.12 + 0.25 * c),
             (Button::Death, 0.004 + 0.12 * c * c),
             (Button::Checkpoint, 1.0 / 35.0),
+            // Calls whenever something's charged, now and then.
+            (Button::Call, 0.3),
         ];
         for (b, rate) in rates {
             if self.unit() < rate * dt {
@@ -298,12 +307,16 @@ mod tests {
         g.tick(0.016, &mut out);
         assert!(out.contains(&Input::WaltzStep), "{out:?}");
         assert!(out.iter().any(|i| matches!(i, Input::SetStats(_))));
-        // The restart re-ran the level start: the waltz step summoned the waltz on top of it.
+        // The restart re-ran the level start; the waltz step charged the waltz, and a call plays it.
+        assert!(!out.contains(&Input::SetFilters(Filters { harmony: Harmony::Waltz, just_intonation: false })), "{out:?}");
+        assert!(press(&mut g, Button::Call).is_empty());
+        let mut out = Vec::new();
+        g.tick(0.016, &mut out);
         assert!(out.contains(&Input::SetFilters(Filters { harmony: Harmony::Waltz, just_intonation: false })), "{out:?}");
     }
 
-    /// Five toots summon Giant Steps, and a headless engine fed the inputs plays it from the
-    /// next bar line; two deaths since the checkpoint set the band laughing.
+    /// Five toots and a call summon Giant Steps, and a headless engine fed the inputs plays it
+    /// from the next bar line; two deaths since the checkpoint set the band laughing.
     #[test]
     fn the_feed_drives_a_headless_engine() {
         let song = library::load("sweet_georgia_brown").unwrap();
@@ -332,6 +345,7 @@ mod tests {
             g.press(Button::Toot, &mut inputs);
         }
         assert_eq!(inputs, [Input::Toot; 5]);
+        g.press(Button::Call, &mut inputs);
         run(&mut g, &mut engine, inputs, 0.05);
         assert_eq!(engine.state().filters.harmony, Harmony::Coltrane);
         assert_eq!(engine.state().stats.last_summon, Some(Harmony::Coltrane));
@@ -351,7 +365,7 @@ mod tests {
     fn auto_nat_plays_like_its_dial() {
         let count = |chaos: f32| {
             let mut a = AutoNat { on: true, chaos, ..AutoNat::default() };
-            let mut n = [0u32; 8];
+            let mut n = [0u32; Button::ALL.len()];
             for k in 0..60 * 60 {
                 for b in a.tick(k as f32 / 60.0, 1.0 / 60.0) {
                     n[Button::ALL.iter().position(|x| *x == b).unwrap()] += 1;

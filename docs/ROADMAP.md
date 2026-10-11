@@ -23,14 +23,16 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   headsets the browser under-reports. `?debug=1` shows the measured lag on screen.
 - **The band reacts to play** (`src/audio/director.rs`), and its mode changes the physics
   (`src/game/groove.rs`):
-  | Mode | Summon / cause | Physics | Gates |
+  | Mode | Charge (then Down calls it) / cause | Physics | Gates |
   |---|---|---|---|
   | Giant Steps (Coltrane changes) | 5 toots | low gravity, slower run | 6-tall giant walls |
   | Fired up (quartal) | 4 quick nuggets | run ×1.35 | 11-tile long gaps |
   | Waltz (3/4) | 3 evenly spaced plain hops | world on the beat; jump on ONE ×1.15 + weak toot | waltz rows (spray tunnels) |
   | Nervous (melodic minor) | 3+ deaths (grip is a level-long layer) | slow-mo; **sweaty grip** on grease | grease chutes |
   | Laughing band (tuning medley) | 2+ deaths since checkpoint; wears off 1 death / 10 s | bouncy landings, a nudge per phrase (below) | — |
-  A summon resets progress toward every other summon; summons hold 20 s with keep-alive.
+  Charge, then call: a full counter holds its charge until Down calls the band, which plays
+  the full counter ticked last; a called mode holds 20 s, refilled by its own move (HUD strip:
+  `src/ui/strip.rs`).
   The laughing band's medley nudges the physics phrase by phrase (`Groove::nudge`; nickname in
   the band readout, what it does on the groove badge): Just = sober (no bounce, no sway, "SOBER FOR A SEC"); Harmonic = toot up to
   ×11/8, never past a perfectly timed toot's apex ("OVERTONES!"); 7-TET = slippery landings +

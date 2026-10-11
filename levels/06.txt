@@ -4,7 +4,7 @@ intro: Rat Kingdom. Low ceilings, Nat. Little hops, big heart!
 deaths: 3
 hint@64,10 grease grip: Grease! Can't stop or jump. Splat a few: band gets nervous.
 say@70,14: Nervous band, sweaty grip: stop AND jump on grease!
-say@138,14: Rat King's wall! Toot 5 times in the open, then leap.
+say@138,14: Rat King's wall! Toot 5 times in the open, DOWN, leap.
 gate: grip 90,14 97,17
 gate: giant 202,8 208,14
 hint@143,14 boost: Need a lift? Land on my head and JUMP! Oof, my back.

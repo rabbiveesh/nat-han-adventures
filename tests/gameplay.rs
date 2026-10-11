@@ -1641,3 +1641,25 @@ fn respawn_at_the_newest_checkpoint_in_a_climb() {
     assert_eq!(run(&app).checkpoint, Some(0));
     assert_eq!(counted::<CheckpointReached>(&app), 2);
 }
+
+/// Down calls the band (the audio plugin's director hears it); only while playing.
+#[test]
+fn down_calls_the_band() {
+    let mut app = app(FLAT);
+    #[derive(Resource, Default)]
+    struct Calls(usize);
+    app.init_resource::<Calls>().add_systems(Last, |mut r: MessageReader<CallBand>, mut c: ResMut<Calls>| c.0 += r.read().count());
+    hold(&mut app, KeyCode::ArrowDown);
+    app.update();
+    release(&mut app, KeyCode::ArrowDown);
+    app.update();
+    assert_eq!(app.world().resource::<Calls>().0, 1);
+    // Paused: Down moves the menu cursor, it doesn't call.
+    app.world_mut().resource_mut::<NextState<PlayState>>().set(PlayState::Paused);
+    app.update();
+    hold(&mut app, KeyCode::ArrowDown);
+    app.update();
+    release(&mut app, KeyCode::ArrowDown);
+    app.update();
+    assert_eq!(app.world().resource::<Calls>().0, 1);
+}

@@ -443,7 +443,7 @@ fn giant_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         c.pit(d.int(2, 3) as usize);
     }
     c.ground(4, FLOOR);
-    Built { hint: Some((&[Topic::Giant], "Big wall! Toot 5 times: the band plays Giant Steps!")), checkpoint }
+    Built { hint: Some((&[Topic::Giant], "Big wall! Toot 5 times, then DOWN: Giant Steps!")), checkpoint }
 }
 
 // ─── FiredUp: a long gap with a nugget line ──────────────────────────────────
@@ -476,7 +476,7 @@ fn long_gap(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built
         c.ground(3, FLOOR);
     }
     c.ground(2, FLOOR);
-    Built { hint: Some((&[Topic::Gap], "Big gap! Grab nuggets fast, band fires up. Then RUN!")), checkpoint }
+    Built { hint: Some((&[Topic::Gap], "Big gap! Grab nuggets fast, DOWN to fire up. Then RUN!")), checkpoint }
 }
 
 // ─── Waltz: a waltz row ──────────────────────────────────────────────────────
@@ -521,7 +521,7 @@ fn waltz_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     for k in 0..3 {
         c.nugget(past + k, STAND);
     }
-    Built { hint: Some((&[Topic::Waltz], "Hop-hop-hop, even beats: the band waltzes! GO!")), checkpoint }
+    Built { hint: Some((&[Topic::Waltz], "Hop-hop-hop on the beat, then DOWN: waltz! GO!")), checkpoint }
 }
 
 // ─── Stains: a stain pit ─────────────────────────────────────────────────────

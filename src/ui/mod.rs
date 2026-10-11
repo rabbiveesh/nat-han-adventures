@@ -1,5 +1,6 @@
-//! Menus and HUD: title, level select, HUD (+ level intro card, toasts), pause, results,
-//! victory credits, and Han's world-space speech bubble.
+//! Menus and HUD: title, level select, HUD (+ level intro card, toasts, the band's counter
+//! strip and its lesson cards), pause, results, victory credits, and Han's world-space speech
+//! bubble.
 //!
 //! All screens are bevy_ui laid out in *virtual pixels*: [`UiScale`] maps 216 virtual px to the
 //! window height, like the game camera. Text is Press Start 2P at multiples of 8px.
@@ -14,11 +15,15 @@ use crate::events::PlaySfx;
 
 mod bubble;
 mod hud;
+mod lesson;
 mod level_select;
 mod pause;
 mod results;
+mod strip;
 mod title;
 mod victory;
+
+pub use lesson::{Lesson, Lessons, LessonsOff};
 
 /// The game's name ("Nat Han Adventures"), shown on the title screen and in the credits,
 /// split in two lines so it fits the 24px title font.
@@ -78,6 +83,8 @@ pub fn plugin(app: &mut App) {
             title::plugin,
             level_select::plugin,
             hud::plugin,
+            strip::plugin,
+            lesson::plugin,
             pause::plugin,
             results::plugin,
             victory::plugin,

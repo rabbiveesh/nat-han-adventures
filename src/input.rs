@@ -16,6 +16,7 @@ pub enum Action {
     Right,
     /// Menus only (gameplay jump is [`Action::Jump`]).
     Up,
+    /// Menus, and in a level: call the band (`events::CallBand`).
     Down,
     Jump,
     /// Restart the level from the start (R).

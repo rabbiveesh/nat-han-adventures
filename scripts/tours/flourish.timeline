@@ -1,18 +1,19 @@
 # Level 1 flourish tour, for `scripts/record-run --capture` (format: src/capture/timeline.rs).
-# Summon Giant Steps (5 toots), hop right through the nugget line (fired up; the even hops
+# Summon Giant Steps (5 toots, then Down calls the band), hop right through the nugget line (fired up; the even hops
 # may also start a waltz), then into the pit a few times (wah-wah; the laughing band; the
 # nervous band). ~60 s at any frame rate.
 
 # Han's intro.
 wait 4
 
-# Five toots (jump, double-jump) summon Giant Steps.
+# Five toots (jump, double-jump) charge Giant Steps; Down calls it.
 repeat 5
   hold Space 140ms
   wait 120ms
   hold Space 140ms
   wait 0.9
 end
+tap Down
 wait 4
 
 # Hop right through the nugget line, up to the tall pillar.

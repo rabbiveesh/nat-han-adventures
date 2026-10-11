@@ -61,7 +61,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `index.html`): only the plan and the verdict cross as text, the game redraws the room and
   checks its fingerprint, and falls back to the main thread on any mismatch or worker error.
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
-- `src/ui/` title, level select, HUD, pause, results, victory, Han's speech bubble. `src/save.rs` progress.
+- `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
+  calls the band) and its lesson cards (`lesson.rs`, `NATHAN_LESSONS=0` turns them off; off in
+  capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 - `src/capture/` deterministic video capture (native dev, the `capture` feature): frame-stepped
   time, screenshots, lockstep audio, the input timeline (Dev loop 4).
 - `src/bin/editor/` the native music editor (`cargo run --bin editor`; the `editor` feature, in
@@ -118,13 +120,13 @@ you can never summon, grip that never comes) are caught before a player finds th
 - **Tier 1** (`tests/formal.rs`, every `cargo test` / `cargo nextest run`, ≤ 2 s CPU, enforced by
   `tier1_director_properties_within_budget`): the real `director::Band` (driven as
   `audio::plugin` does, physics via `Groove` + the grip layer) explored breadth-first over
-  toots, nuggets, deaths, checkpoints, ground jumps, restarts and waits on a 0.25 s grid
+  toots, nuggets, deaths, checkpoints, ground jumps, calls, restarts and waits on a 0.25 s grid
   (depth 5, ~35k distinct states, deduplicated by an abstraction of the band that a test
   proves sound). From every state: (a) deaths always reach grip (also with ghost nuggets
-  re-grabbed every lap); (b) 5 toots / 4 quick nuggets / 3 even ground jumps get their mode at
-  once; (c) with no input the harmony changes at most once; (d) holds expire without
+  re-grabbed every lap); (b) 5 toots / 4 quick nuggets / 3 even ground jumps put their mode on
+  the call (the full counter ticked last) and a call plays it at once; (c) with no input the harmony changes at most once; (d) holds expire without
   keep-alive input; (e) restart returns to the initial state; (f) the laughing band never
-  blocks grip. Mutants (the old chute soft-lock, a leaky restart, lazy summons) must be caught.
+  blocks grip. Mutants (the old chute soft-lock, a leaky restart, lazy calls) must be caught.
 - **Tier 2** (`tests/deep.rs`, `#[ignore]`d: `scripts/check-deep`, or `cargo nextest run --test
   deep --run-ignored only --no-capture`): the director deeper and with two events per frame;
   every campaign band gate crossable from every tier-1 music state with the level's own runway

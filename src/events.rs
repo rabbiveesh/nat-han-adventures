@@ -14,6 +14,7 @@ pub fn plugin(app: &mut App) {
         .add_message::<PlaySfx>()
         .add_message::<LevelStarted>()
         .add_message::<BandFreedom>()
+        .add_message::<CallBand>()
         .add_message::<crate::audio::MusicStarted>()
         .add_message::<crate::audio::MusicChanged>();
 }
@@ -70,6 +71,11 @@ pub struct LevelCompleted {
 pub struct HanSays {
     pub text: String,
 }
+
+/// The player calls the band (Down): it plays the mode whose counter is full and was ticked
+/// last (`audio::director::Band::ready`), if any.
+#[derive(Message, Debug, Clone, Copy)]
+pub struct CallBand;
 
 /// Play a one-shot sound effect (menus etc.; gameplay sounds are driven by the messages above).
 #[derive(Message, Debug, Clone, Copy)]

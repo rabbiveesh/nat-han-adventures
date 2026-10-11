@@ -57,7 +57,8 @@
       /* Touch controls: phones only (see `isPhone` below; `?touch=1` / `?touch=0` overrides).
          The small buttons sit just under the HUD row (nuggets / level / timer).
          The left side is an invisible floating stick (thumb down anywhere, slide left/right);
-         the right side is one big jump zone. Labels fade once you've started playing. */
+         the right side is one big jump zone; the band's counter strip calls the band. Labels
+         fade once you've started playing. */
       body { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
       #touch { display: none; position: fixed; inset: 0; pointer-events: none; z-index: 5;
         font: bold 13px ui-monospace, monospace; color: rgba(255, 238, 200, 0.7); }
@@ -65,6 +66,8 @@
       .zone { position: absolute; pointer-events: auto; touch-action: none; }
       #stick-zone { left: 0; top: 96px; bottom: 0; width: 45%; }
       #jump-zone { right: 0; top: 96px; bottom: 0; width: 45%; }
+      /* The band's counter strip (top centre, under the level name): tap it to call the band. */
+      #call-zone { left: 50%; transform: translateX(-50%); top: 8vh; height: 13vh; width: 40vw; }
       .hint { position: absolute; bottom: 18px; padding: 6px 10px; border-radius: 10px;
         border: 2px dashed rgba(255, 199, 46, 0.4); transition: opacity 1.2s; }
       #stick-zone .hint { left: 18px; } #jump-zone .hint { right: 18px; }
@@ -97,12 +100,13 @@
     <div id="start">
       <div>
         <span id="start-msg">loading&hellip;</span>
-        <small id="start-help">arrows to move &middot; space to jump (twice to toot) &middot; esc to pause</small>
+        <small id="start-help">arrows to move &middot; space to jump (twice to toot) &middot; down to call the band &middot; esc to pause</small>
       </div>
     </div>
     <div id="touch" aria-hidden="true">
       <div class="zone" id="stick-zone"><span class="hint">&#9664; slide &#9654;</span></div>
       <div class="zone" id="jump-zone" data-key="Space"><span class="hint">tap: JUMP &middot; again: TOOT</span></div>
+      <div class="zone" id="call-zone" data-key="ArrowDown"></div>
       <div class="btn" id="up" data-key="ArrowUp">&#9650;</div>
       <div class="btn" id="down" data-key="ArrowDown">&#9660;</div>
       <div class="btn" id="ok" data-key="Enter">OK</div>

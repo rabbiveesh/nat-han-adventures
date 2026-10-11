@@ -11,7 +11,7 @@
 //!
 //! Options (for scripts and screenshots):
 //! `--song <stem>`, `--view tracker|piano|text`, `--play`, `--from-bar <n>`, `--toots <n>`
-//! (press TOOT n times at the start), `--force <harmony>`, `--feel swing|bossa|samba|rock|funk`
+//! (press TOOT n times at the start, then CALL), `--force <harmony>`, `--feel swing|bossa|samba|rock|funk`
 //! (force the band's feel), `--chorus head|two-feel|blowing|stop-time|breaks|riffs|strolling|soli|shout`
 //! (force the chorus), `--auto <chaos 0..1>`,
 //! `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
@@ -215,6 +215,9 @@ fn script(
         *stage = 2;
         for _ in 0..args.toots {
             ed.press(feed::Button::Toot);
+        }
+        if args.toots > 0 {
+            ed.press(feed::Button::Call);
         }
     }
     if let Some(path) = &args.screenshot {

@@ -6,7 +6,7 @@ intro: The U-bend, Nat! Down, along, and back up. Like a smile!
 deaths: 1
 hint@5,13 stain: Too wide to jump! Splat mid-spikes: your stain's a step!
 say@28,27: Ride the ducks, Nat. They don't bite. Much.
-hint@61,26 gap: Big gap! Grab nuggets fast, band fires up. Then RUN!
+hint@61,26 gap: Big gap! Grab nuggets fast, DOWN to fire up. Then RUN!
 say@101,27: Fun fact: the U-bend traps water so smells stay down.
 gate: stain 5,13 23,13
 gate: gap 67,26 79,26
