@@ -33,15 +33,17 @@ funk.pulse1 = brass
 bossa.pulse2 = pluck
 
 [pulse1]
+; The refrain's rhythm as Gershwin wrote it: each "I got ..." enters a beat late (on 2) and
+; lands its last note on the and of 2; "who could" rushes in on the offbeats of 3 and 4.
 v12 @1 o5 b-4. f8 b-4 o6 d4 | o6 e-4. d8 c4 o5 b-4 | o5 b-8 b-8 b-8 r8 f8 f8 f8 r8 | o5 c2 o4 a4 r4 | ; 1-4
-o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 5-8
-o4 f4 g4 b-4 o5 c4& | c4 r4 e-4 g-4 | o5 f4 d4 c4 o4 a4 | o4 b-2 r2 |    ; 9-12
-o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 13-16
-o4 f4 g4 b-4 o5 c4& | c4 r4 e-4 g-4 | o5 f4 d4 c4 o4 a4 | o4 b-2 r2 |    ; 17-20
-o5 f+4. f+8 r8 e8 d4 | o5 c4 o4 a4 f+4 r4 | o5 b4. b8 r8 a8 g4 | o5 f4 d4 o4 b4 r4 | ; 21-24
-o5 e4. e8 r8 d8 c4 | o4 b-4 g4 e4 r4 | o5 a4. a8 r8 g8 f4 | o5 e-4 c4 o4 a4 r4 | ; 25-28
-o4 f4 g4 b-4 o5 c4& | c2 r2 | o5 c4 o4 b-4 g4 f4& | f2 r2 |              ; 29-32
-o4 f4 g4 b-4 o5 c4& | c4 r4 e-4 g-4 | o5 f4 d4 c4 o4 a4 | o4 b-4 o5 d4 f4 b-4 | ; 33-36
+o4 r4 f4. g4. | o4 b-4. o5 c8& c2 | o4 r4 o5 c4. o4 b-4. | o4 g4. f8& f2 | ; 5-8
+o4 r4 f4. g4. | o4 b-4. o5 c8& c8 e-4 c8 | o5 d4 d4 c8 d8 c4 | o4 b-2 r2 | ; 9-12
+o4 r4 f4. g4. | o4 b-4. o5 c8& c2 | o4 r4 o5 c4. o4 b-4. | o4 g4. f8& f2 | ; 13-16
+o4 r4 f4. g4. | o4 b-4. o5 c8& c8 e-4 c8 | o5 d4 d4 c8 d8 c4 | o4 b-2 r2 | ; 17-20
+o5 r4 d4. d4. | o5 d4. e8& e2 | o5 r4 d4. d4. | o5 d4. o4 g8& g2 | ; 21-24
+o5 r4 c4. c4. | o5 c4. d8& d2 | o5 r4 c4. c4. | o5 c4. o4 f8& f2 | ; 25-28
+o4 r4 f4. g4. | o4 b-4. o5 c8& c2 | o4 r4 o5 c4. o4 b-4. | o4 g4. f8& f2 | ; 29-32
+o4 r4 f4. g4. | o4 b-4. o5 c8& c8 e-4 c8 | o5 d4 d4 c8 d8 c4 | o4 b-4 o5 d4 f4 b-4 | ; 33-36
 
 [pulse2]
 v7 @2 o5 d4. o4 b-8 o5 d4 f4 | o5 g4. f8 e-4 d4 | o5 f8 f8 f8 r8 d8 d8 d8 r8 | o4 a2 f4 r4 | ; 1-4
