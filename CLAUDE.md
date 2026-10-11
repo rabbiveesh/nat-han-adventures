@@ -64,6 +64,11 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `index.html`): only the plan and the verdict cross as text, the game redraws the room and
   checks its fingerprint, and falls back to the main thread on any mismatch or worker error.
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
+- `src/game/sideb.rs` SIDE B, a hidden prototype: Nat's off screen, Han walks
+  `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
+  header; Left/Right pick, Down call; `melt` holds the laughing band on its melting phrase and
+  shrinks Han). A wrong call and Han comically dies, the level rewinds. Ways in: Up Up Down Down on
+  the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`, `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

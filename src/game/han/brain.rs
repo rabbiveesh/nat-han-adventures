@@ -30,23 +30,37 @@ pub struct HanNav {
     pub normal: Nav,
     pub giant: Option<Nav>,
     pub fired: Option<Nav>,
+    /// Side B (`game::sideb`): Han alone, with Nat's physics ([`HanPhys::side_b`]).
+    pub side_b: bool,
 }
 
 impl Default for HanNav {
     fn default() -> Self {
-        HanNav { normal: Nav::new(Mode::Normal), giant: None, fired: None }
+        HanNav { normal: Nav::new(Mode::Normal), giant: None, fired: None, side_b: false }
     }
 }
 
 impl HanNav {
-    fn for_groove(&mut self, groove: &Groove) -> &mut Nav {
+    /// Side B's graphs: Nat's physics, one toot.
+    pub fn side_b() -> Self {
+        HanNav { normal: Nav::side_b(Mode::Normal), giant: None, fired: None, side_b: true }
+    }
+
+    pub fn for_groove(&mut self, groove: &Groove) -> &mut Nav {
+        let side_b = self.side_b;
+        let make = move |mode| if side_b { Nav::side_b(mode) } else { Nav::new(mode) };
         if groove.giant_steps() {
-            self.giant.get_or_insert_with(|| Nav::new(Mode::GiantSteps))
+            self.giant.get_or_insert_with(|| make(Mode::GiantSteps))
         } else if groove.fired_up() {
-            self.fired.get_or_insert_with(|| Nav::new(Mode::FiredUp))
+            self.fired.get_or_insert_with(|| make(Mode::FiredUp))
         } else {
             &mut self.normal
         }
+    }
+
+    /// Han's physics under `groove` (Side B: Nat's).
+    pub fn phys(&self, groove: &Groove) -> HanPhys {
+        if self.side_b { HanPhys::side_b(groove) } else { HanPhys::of(groove) }
     }
 
     fn invalidate(&mut self) {
@@ -153,6 +167,9 @@ pub struct HanBrain {
     pub behind: f32,
     /// How far (px, sideways) Nat was last step.
     pub gap: f32,
+    /// Side B (`game::sideb`): no route on, so he charges this way regardless, jumping (and
+    /// tooting at the top) at whatever's in front of him. Brave, and often fatal.
+    pub charge: Option<f32>,
 }
 
 impl Default for HanBrain {
@@ -185,6 +202,7 @@ impl Default for HanBrain {
             reroute: false,
             behind: 0.0,
             gap: 0.0,
+            charge: None,
         }
     }
 }
@@ -401,7 +419,8 @@ pub(super) fn think(
     let Ok((_, npos, nbody, nctl, nat_dead)) = player.single() else { return };
     let brain = &mut *brain;
     let e = assists.han_eagerness;
-    let phys = HanPhys::of(&groove);
+    let phys = nav.phys(&groove);
+    let side_b = nav.side_b;
     let gs = groove.harmony == Harmony::Coltrane;
     let nat = Kin { pos: npos.0, vel: nbody.vel, grounded: nbody.on_ground };
     let nat_on_han = nbody.riding == Some(han_e);
@@ -472,7 +491,8 @@ pub(super) fn think(
         HanMode::Gone { t } => {
             *head = HanHead::default();
             body.vel = Vec2::ZERO;
-            if t - dt <= 0.0 && !nat_dead {
+            // (Side B: no coming back; the level rewinds, `game::sideb`.)
+            if t - dt <= 0.0 && !nat_dead && !side_b {
                 start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, true);
             } else {
                 brain.mode = HanMode::Gone { t: t - dt };
@@ -531,7 +551,8 @@ pub(super) fn think(
     }
 
     let me = Kin { pos: pos.0, vel: body.vel, grounded: body.on_ground };
-    let gap = if groove.grip() { NERVOUS_GAP } else { FOLLOW_GAP };
+    // (Side B: "Nat" is where he's heading, `game::sideb`: right there, not behind it.)
+    let gap = if side_b { 0.0 } else if groove.grip() { NERVOUS_GAP } else { FOLLOW_GAP };
     if nbody.on_ground && !nat_on_han {
         let cell = feet_cell(level, nat.pos);
         // Nat landed somewhere new while Han has nothing left to do: re-plan right away.
@@ -583,7 +604,7 @@ pub(super) fn think(
     }
 
     // --- "Lemme check that": Nat standing still, facing a hazard.
-    if brain.mode == HanMode::Follow && !nat_dead && nat.grounded && !nat_on_han && nbody.vel.x.abs() < 5.0 {
+    if brain.mode == HanMode::Follow && !side_b && !nat_dead && nat.grounded && !nat_on_han && nbody.vel.x.abs() < 5.0 {
         let cell = feet_cell(level, nat.pos);
         let behind = (pos.0.x - nat.pos.x) * nctl.facing <= 8.0;
         if hazard_ahead(level, cell, nctl.facing) && behind && body.on_ground && (pos.0 - nat.pos).length() < 6.0 * TILE && !in_zone {
@@ -660,8 +681,15 @@ pub(super) fn think(
         input.dir = 0.0;
         input.jump = false;
     }
+    // Side B: charging at what he can't cross (`game::sideb`).
+    if side_b
+        && brain.mode == HanMode::Follow
+        && let Some(dir) = brain.charge
+    {
+        input = charge(level, &pos.0, &body, &brain.ctl, dir);
+    }
     // Keep off a chute's grease (on foot).
-    if !parachute && input.dir != 0.0 && body.on_ground {
+    if !side_b && !parachute && input.dir != 0.0 && body.on_ground {
         let here = level.han_keeps_out(feet_cell(level, pos.0));
         let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
         if !here && next {
@@ -710,7 +738,7 @@ pub(super) fn think(
     };
     // Lost and out of sight: parachute in.
     let lost = brain.lost || brain.behind > FALL_BEHIND_SECS;
-    if lost && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
+    if lost && !side_b && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
     // --- His head: a perch for Nat (standing, or, fired up, in mid-air not too high up and not
@@ -785,6 +813,23 @@ fn cling_wall(level: &Level, nat: (i32, i32), side: f32) -> Option<(f32, f32)> {
     None
 }
 
+/// Side B's charge: run `dir`; jump at a wall or an edge (or nothing under him ahead), hold it,
+/// and toot at the top. No looking where he's going.
+fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> HanInput {
+    // (His own size: melting shrinks him.)
+    let half = body.half;
+    let ahead = |dy: f32| {
+        let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 3.0), dy));
+        level.tile(c, r).is_solid()
+    };
+    let wall = ahead(0.0) || ahead(-half.y + 2.0);
+    let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 2.0), -half.y - 2.0));
+    let edge = !floor_at(level, c, r);
+    let jump = body.on_ground && (wall || edge);
+    let toot = !body.on_ground && body.vel.y <= 0.0 && ctl.toots_left > 0;
+    HanInput { dir, speed: 1.0, jump, hold: true, toot }
+}
+
 fn set_anim(anim: &mut HanAnim, pose: HanPose, facing_left: bool, groove: &Groove, hidden: bool) {
     let new = HanAnim { pose, facing_left, tremble: groove.grip(), wobble: anim.wobble, hidden };
     if *anim != new {
@@ -835,6 +880,7 @@ fn follow(
     dt: f32,
     _says: &mut MessageWriter<HanSays>,
 ) -> HanInput {
+    let top_speed = nav.phys(groove).speed;
     let nav = nav.for_groove(groove);
     let my_cell = if body.riding.is_some() { feet_cell(level, me.pos) } else { nav_cell(level, me.pos) };
     brain.replan -= dt;
@@ -905,7 +951,7 @@ fn follow(
         // intercept, or the route to where Nat lands) rather than brake in the old slot.
         let behind_nat = (nat.pos.x - me.pos.x) * me.vel.x > 0.0;
         if !nat.grounded && nat.vel.x * me.vel.x > 0.0 && me.vel.x.abs() > 30.0 && behind_nat && body.riding.is_none() {
-            let top = HanPhys::of(groove).speed;
+            let top = top_speed;
             let on = HanInput { dir: me.vel.x.signum(), speed: (me.vel.x.abs() / top).min(1.0), ..default() };
             return careful(level, me, body, on);
         }
@@ -918,7 +964,7 @@ fn follow(
                 // it: where the chain proofs put him. Not when the nervous band has him clinging
                 // close: no overshooting into Nat when he stops.)
                 if !groove.grip() {
-                    return careful(level, me, body, pace(nat.vel.x, slot_x - me.pos.x, HanPhys::of(groove).speed));
+                    return careful(level, me, body, pace(nat.vel.x, slot_x - me.pos.x, top_speed));
                 }
                 return careful(level, me, body, arrive(slot_x - me.pos.x, 2.0));
             }

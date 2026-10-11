@@ -193,12 +193,16 @@ fn update_hud(
     levels: Res<Levels>,
     current: Res<CurrentLevel>,
     free: Option<Res<crate::freeplay::FreePlayRun>>,
+    side_b: Option<Res<crate::game::GeneratedLevel>>,
+    is_side_b: Option<Res<crate::game::sideb::SideB>>,
     mut q: Query<(&HudText, &mut Text)>,
 ) {
+    let side_b = side_b.filter(|_| is_side_b.is_some()).map(|g| g.0.name.to_uppercase());
     for (h, mut text) in &mut q {
         let s = match h {
             HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),
             // Free play: the room counter (never a difficulty).
+            HudText::Name if side_b.is_some() => side_b.clone().unwrap_or_default(),
             HudText::Name => free.as_ref().map_or_else(|| level_name(&levels, current.0), |f| f.room_label()),
             HudText::Time => format_time(run.time),
             HudText::Splats if run.deaths == 0 => String::new(),
@@ -216,12 +220,15 @@ fn spawn_intro(
     levels: Res<Levels>,
     current: Res<CurrentLevel>,
     free: Option<Res<crate::freeplay::FreePlayRun>>,
+    side_b: Option<Res<crate::game::sideb::SideB>>,
+    generated: Option<Res<crate::game::GeneratedLevel>>,
 ) {
     let f = &*font;
     let world = free.as_ref().map_or_else(|| levels.0.get(current.0).map_or(1, |l| l.world), |r| r.world);
-    let (title, name) = match &free {
-        Some(r) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
-        None => (format!("LEVEL {}", current.0 + 1), level_name(&levels, current.0)),
+    let (title, name) = match (&free, &side_b, &generated) {
+        (Some(r), _, _) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
+        (None, Some(s), Some(g)) => (format!("SIDE B {}", s.level + 1), g.0.name.to_uppercase()),
+        _ => (format!("LEVEL {}", current.0 + 1), level_name(&levels, current.0)),
     };
     commands
         .spawn((
