@@ -12,8 +12,8 @@
 //! his physics, built lazily and cached) to a follow slot [`FOLLOW_GAP`] behind Nat on the side
 //! Nat came from, re-planning a few times a second when Nat moves on, and steers his body along
 //! the walks, jumps and toots (with corrections), waiting for moving platforms to come round.
-//! He follows Nat right up to the band's gates (the level's `gate:` marks), keeping out only of
-//! a waltz row and a grease chute's grease ([`Level::han_keeps_out`](crate::level::Level)).
+//! He follows Nat right up to the band's gates (the level's `gate:` marks), keeping off only a grease
+//! chute's grease ([`Level::han_keeps_out`](crate::level::Level)).
 //! He takes off on the run when the jump still lands right from there at that speed (else he
 //! stops at the take-off point, as planned). **Lost** (no route, or stuck for [`STUCK_SECS`]),
 //! or left behind for [`FALL_BEHIND_SECS`], and out of sight, he

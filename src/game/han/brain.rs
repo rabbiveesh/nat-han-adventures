@@ -270,7 +270,7 @@ fn slot_cell(map: &Map, level: &Level, nat: (i32, i32), x: f32) -> Option<(i32, 
 }
 
 /// Where Han's parachute opens: above Nat's area (behind him, as high as the ceiling allows,
-/// up to [`PARACHUTE_HEIGHT`]), not over a waltz row or a chute's grease.
+/// up to [`PARACHUTE_HEIGHT`]), not over a chute's grease.
 pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
     let mut best: Option<(f32, Vec2)> = None;
     // Behind Nat (the way he came) first: the first spot there with room to float down wins;
@@ -608,7 +608,7 @@ pub(super) fn think(
         input.dir = 0.0;
         input.jump = false;
     }
-    // Keep out of a waltz row and a chute's grease (on foot).
+    // Keep off a chute's grease (on foot).
     if !parachute && input.dir != 0.0 && body.on_ground {
         let here = level.han_keeps_out(feet_cell(level, pos.0));
         let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));

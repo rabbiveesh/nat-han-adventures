@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use formal_model::*;
-use nat_han_adventures::audio::{Harmony, director};
+use nat_han_adventures::audio::{Harmony, director, waltz::WALTZ_BPM};
 use nat_han_adventures::game::tuning::*;
 use nat_han_adventures::game::{Groove, SIDE_STAIN_LIFE};
 use nat_han_adventures::level::buddy::{Chasm, ChasmMarks, GsSwitch, chain_plays, chain_try};
@@ -336,10 +336,11 @@ fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     out
 }
 
-/// Recipes for a waltz row: three even ground jumps (as quick as the hop in `g` allows), a
-/// call with the third, then walk to the row and dash through (`dash` s); or first wait out
-/// what's held.
-fn waltz_recipes(g: &Groove, dash: f32) -> Vec<Recipe> {
+/// Recipes for a glide launch: three even ground jumps (as quick as the hop in `g` allows),
+/// a call with the third, then the walk onto the platform (2.5 s) and a wait of up to a round
+/// of its path (`wait` s) for the glide that sweeps its fast middle, and the jump on a glide:
+/// the waltz must play for the bar after (its ONE). Or first wait out what's held.
+fn waltz_recipes(g: &Groove, wait: f32) -> Vec<Recipe> {
     let hop = air_time(g, 0.05, None);
     let mut out = Vec::new();
     for pre in [0, HOLD_TICKS + director::MUSIC_CHECK_SECS as i32 * 4] {
@@ -347,26 +348,39 @@ fn waltz_recipes(g: &Groove, dash: f32) -> Vec<Recipe> {
             if gap < hop {
                 continue;
             }
-            let p = pre as f32 * TICK;
-            let ev = [
-                (p, Act::JUMP),
-                (p + gap, Act::JUMP),
-                (p + 2.0 * gap, Act::JUMP),
-                (p + 2.0 * gap, Act::CALL),
-                (p + 2.0 * gap + 2.5, Act::Wait(0)),
-            ];
-            let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
-            out.push(Recipe {
-                name: format!(
-                    "{}3 jumps {gap}s apart (hop {hop:.2}s), 2.5s to the row",
-                    if pre > 0 { "wait 40s, " } else { "" }
-                ),
-                acts,
-                cross: ticks(dash) + 1,
-            });
+            for w in [0.0, wait] {
+                let p = pre as f32 * TICK;
+                let ev = [
+                    (p, Act::JUMP),
+                    (p + gap, Act::JUMP),
+                    (p + 2.0 * gap, Act::JUMP),
+                    (p + 2.0 * gap, Act::CALL),
+                    (p + 2.0 * gap + 2.5 + w, Act::Wait(0)),
+                ];
+                let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
+                out.push(Recipe {
+                    name: format!(
+                        "{}3 jumps {gap}s apart (hop {hop:.2}s), 2.5s to the platform, {w}s for the glide",
+                        if pre > 0 { "wait 40s, " } else { "" }
+                    ),
+                    acts,
+                    cross: ticks(3.0 * 60.0 / WALTZ_BPM) + 1,
+                });
+            }
         }
     }
     out
+}
+
+/// The longest period of the platforms a glide launch at `m` takes off from (a round of
+/// glides: the wait for the one that sweeps the fast middle of the path).
+fn glide_wait(level: &Level, m: &GateMark) -> f32 {
+    level
+        .platforms
+        .iter()
+        .filter(|p| p.dx != 0.0 && (m.c0..=m.c1).contains(&(p.col as i32)) && (m.r0..=m.r1 + 1).contains(&(p.row as i32)))
+        .map(|p| p.period)
+        .fold(0.0, f32::max)
 }
 
 /// Recipes for a grease chute: `laps` × (splat, respawn, walk back `walk` s grabbing
@@ -458,7 +472,7 @@ fn band_gates(level: &Level) -> Vec<(GateMark, Need, &'static str)> {
             let (need, what) = match m.topic {
                 Topic::Giant => (Need::Band(Harmony::Coltrane), "giant wall"),
                 Topic::Gap => (Need::Band(Harmony::Quartal), "long gap"),
-                Topic::Waltz => (Need::Band(Harmony::Waltz), "waltz row"),
+                Topic::Waltz => (Need::Band(Harmony::Waltz), "glide launch"),
                 Topic::Grip => (Need::Grip, "grease chute"),
                 _ => return None,
             };
@@ -475,7 +489,7 @@ fn recipes(level: &Level, m: &GateMark, g: &Groove) -> Vec<Recipe> {
             let (line, run_up) = nugget_line(level, m);
             gap_recipes(g, &line, run_up)
         }
-        Topic::Waltz => waltz_recipes(g, (m.c1 - m.c0 + 1) as f32 * TILE / (RUN_SPEED * g.speed_scale * 0.9)),
+        Topic::Waltz => waltz_recipes(g, glide_wait(level, m)),
         _ => {
             let (walk, ghosts) = chute_lap(level, m);
             chute_recipes(walk, ghosts)

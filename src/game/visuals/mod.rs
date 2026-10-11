@@ -325,8 +325,8 @@ fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Co
 }
 
 /// What a gate mark looks like, and where (world center of the overlay, z): giant walls get
-/// gold music-staff trim on their face and a note emblem; waltz rows the same gold staff
-/// under their low ceiling, a quarter note a beat, and a 3/4 emblem at each end; buddy ledges
+/// gold music-staff trim on their face and a note emblem; glide launches a 3/4 emblem in the
+/// ground at each end; buddy ledges
 /// red plunger-handle notches on their face and Han's yellow plumber's tape along the top;
 /// shield rows a "PLUMBERS ONLY" sign over their start.
 pub fn gate_decor(level: &Level) -> Vec<(SpriteId, Vec2, f32)> {
@@ -358,19 +358,12 @@ fn marks_decor(level: &Level, marks: &[crate::level::GateMark]) -> Vec<(SpriteId
                 }
             }
             Topic::Waltz => {
-                // The ceiling over the walk: the lowest solid tile 1..=2 above it.
-                let ceiling: Vec<(i32, i32)> = (m.c0..=m.c1)
-                    .flat_map(|c| (m.r0..=m.r1).map(move |r| (c, r)))
-                    .filter_map(|(c, r)| {
-                        (1..=2).map(|k| (c, r - k)).find(|&(c, r)| r >= 0 && level.tile(c, r).is_solid())
-                    })
-                    .collect();
-                for &f in &ceiling {
-                    out.push((SpriteId::WaltzTrim, at(f), 0.4));
-                }
-                if let (Some(&first), Some(&last)) = (ceiling.first(), ceiling.last()) {
-                    out.push((SpriteId::WaltzEmblem, at(first), 0.45));
-                    out.push((SpriteId::WaltzEmblem, at(last), 0.45));
+                // A glide launch: a 3/4 emblem in the ground at each end, under the take-off
+                // side and the landing (the first solid tile below the mark's ends).
+                for c in [m.c0, m.c1] {
+                    if let Some(f) = (m.r0..=m.r1 + 4).map(|r| (c, r)).find(|&(c, r)| r >= 0 && level.tile(c, r).is_solid()) {
+                        out.push((SpriteId::WaltzEmblem, at(f), 0.45));
+                    }
                 }
             }
             Topic::Boost => {
@@ -396,7 +389,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn waltz_rows_are_marked_like_giant_walls() {
+    fn glide_launches_are_marked() {
         let levels = crate::level::Levels::default();
         for level in &levels.0 {
             for m in level.gates.iter().filter(|g| g.topic == Topic::Waltz) {
@@ -407,9 +400,7 @@ mod tests {
                         *d == id && (m.c0..=m.c1).contains(&c)
                     }).count()
                 };
-                let cans = (m.c0..=m.c1).count() - 2;
-                assert!(inside(SpriteId::WaltzTrim) >= cans, "{}: waltz row at col {} has no staff", level.name, m.c0);
-                assert_eq!(inside(SpriteId::WaltzEmblem), 2, "{}: a 3/4 emblem at each end", level.name);
+                assert!(inside(SpriteId::WaltzEmblem) >= 1, "{}: glide launch at col {} has no 3/4 emblem", level.name, m.c0);
             }
         }
     }

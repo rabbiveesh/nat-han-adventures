@@ -12,7 +12,7 @@
 use super::canvas::*;
 use super::dice::{Dice, t};
 use crate::adapt::{Band, Skill};
-use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN, SHIELD_ROW_MIN, WaltzRow, waltz_row_timing};
+use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN, SHIELD_ROW_MIN};
 use crate::level::{PlatformKind, Topic};
 
 /// Room dressing from the assist levers (`crate::adapt::AssistLevers`), built into the room.
@@ -54,7 +54,7 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, height: H, build: platforms },
     Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, height: H, build: giant_wall },
     Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, height: H, build: long_gap },
-    Template { name: "waltz row", skill: Skill::Waltz, unlock: 6, height: H, build: waltz_row },
+    Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, height: H, build: glide_launch },
     Template { name: "stain pit", skill: Skill::Stains, unlock: 2, height: H, build: stain_pit },
     Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
     Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, height: H, build: buddy_ledge },
@@ -479,50 +479,39 @@ fn long_gap(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built
     Built { hint: Some((&[Topic::Gap], "Big gap! Grab nuggets fast, DOWN to fire up. Then RUN!")), checkpoint }
 }
 
-// ─── Waltz: a waltz row ──────────────────────────────────────────────────────
+// ─── Waltz: a glide launch ───────────────────────────────────────────────────
 
-/// Spray cans a waltz needs, by length: every row the validator accepts (shortest first). The
-/// cans stand on the floor you walk on (deadly while they fire, like their jets; the can is
-/// no wider than its jet), so a row's danger zone, and so the lengths, are the same as the
-/// campaign's grated tunnels: 20 or 21 cans.
-pub fn waltz_cans() -> Vec<usize> {
-    (crate::level::validate::WALTZ_ROW_MIN..48)
-        .filter(|&n| {
-            waltz_row_timing(&WaltzRow { row: STAND as i32, c0: 0, c1: n as i32 - 1, grated: false }).is_empty()
-        })
-        .collect()
-}
-
-/// A runway (9 → 7 tiles) and a row of adjacent cans on the floor, no grating, under a low
-/// roof (so nobody hops over the cans in the off-beats and hangs above them while they fire):
-/// longer rows (the valid range, shortest to longest) as the band rises.
-fn waltz_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
-    use std::sync::OnceLock;
-    static CANS: OnceLock<Vec<usize>> = OnceLock::new();
-    let cans = CANS.get_or_init(waltz_cans);
+/// A runway (9 → 7 tiles) and a pit with a toilet-roll platform sliding out over it, too wide
+/// to cross from the platform at its everyday speed: in the waltz the platform glides on ONE,
+/// and a jump off it then is a long launch. Wider gaps as the band rises.
+fn glide_launch(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(2, FLOOR);
     let n = lead_in(d);
     hills(c, d, band, n);
     let checkpoint = Some((c.width(), STAND));
     c.ground(lerpi(band, 9.0, 7.0) + d.int(0, 1) as usize, FLOOR);
-    let k = ((cans.len() - 1) as f32 * t(band) * 0.8).round() as usize + d.int(0, 1) as usize;
-    let n = cans[k.min(cans.len() - 1)];
-    for _ in 0..n {
-        c.column(|r| match r {
-            r if r <= PIPE_ROOF => b'#',
-            STAND => b'S',
-            r if r >= FLOOR => b'#',
-            _ => b'.',
-        });
-    }
-    // The prize past the row.
+    let (pw, dx) = (2, 8);
+    let gap = lerpi(band, GLIDE_GAP.0 as f32, GLIDE_GAP.1 as f32);
+    let x = c.width();
+    c.pit(pw + dx + gap);
+    c.platform(x, FLOOR, pw, dx as f32, 0.0, GLIDE_PERIOD, d.u(), PlatformKind::Tp);
+    // The prize past it.
     let past = c.width();
     c.ground(4, FLOOR);
     for k in 0..3 {
         c.nugget(past + k, STAND);
     }
-    Built { hint: Some((&[Topic::Waltz], "Hop-hop-hop on the beat, then DOWN: waltz! GO!")), checkpoint }
+    Built { hint: Some((&[Topic::Waltz], "Hop-hop-hop, DOWN: waltz! Jump off the roll as it glides!")), checkpoint }
 }
+
+/// A glide launch's platform period (s): 8 tiles in 4.5 s, 89 px/s at its fastest (the most
+/// any other mode keeps from it), ×4.5 gliding in the waltz (a jump keeps up to
+/// `game::LAUNCH_MAX`)...
+const GLIDE_PERIOD: f32 = 4.5;
+/// ...and the gap past its path (tiles), band 1 → 10: the validator passes 17-19 (narrower
+/// leaks to fired up and Giant Steps); `tests/gameplay.rs` clears 18 with the real physics at
+/// every phase of the platform.
+const GLIDE_GAP: (usize, usize) = (17, 18);
 
 // ─── Stains: a stain pit ─────────────────────────────────────────────────────
 
