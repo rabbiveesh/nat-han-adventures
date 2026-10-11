@@ -336,6 +336,30 @@ fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     out
 }
 
+/// Recipes for a fired-up chasm: the level's nugget line, a call with the last nugget, the
+/// run-up to the edge, a wait there for Han (`wait` s), a hop onto his head, and the throw off
+/// it (the take-off): the band must still be fired up for the throw's flight.
+fn chasm_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
+    let speed = RUN_SPEED * g.speed_scale * 0.9;
+    let hop = air_time(g, f32::INFINITY, None);
+    let mut out = Vec::new();
+    for wait in [0.5, 1.5, 3.0] {
+        let mut ev: Vec<(f32, Act)> = nuggets.iter().map(|&d| (d * TILE / speed, Act::NUGGET)).collect();
+        let last = ev.last().map_or(0.0, |e| e.0);
+        ev.push((last, Act::CALL));
+        let hop_at = last + run_up * TILE / speed + wait;
+        ev.push((hop_at, Act::JUMP));
+        let mut acts = timeline(&ev);
+        acts.push(Act::Wait(ticks(hop).max(1) as u16));
+        out.push(Recipe {
+            name: format!("{} nuggets at {:.0} px/s, hop onto Han after {wait}s, the throw", nuggets.len(), speed),
+            acts,
+            cross: ticks(1.5) + 1,
+        });
+    }
+    out
+}
+
 /// Recipes for a glide launch: three even ground jumps (as quick as the hop in `g` allows),
 /// a call with the third, then the walk onto the platform (2.5 s) and a wait of up to a round
 /// of its path (`wait` s) for the glide that sweeps its fast middle, and the jump on a glide:
@@ -474,6 +498,7 @@ fn band_gates(level: &Level) -> Vec<(GateMark, Need, &'static str)> {
                 Topic::Gap => (Need::Band(Harmony::Quartal), "long gap"),
                 Topic::Waltz => (Need::Band(Harmony::Waltz), "glide launch"),
                 Topic::Grip => (Need::Grip, "grease chute"),
+                Topic::Chain => (Need::Band(Harmony::Quartal), "fired-up chasm"),
                 _ => return None,
             };
             Some((*m, need, what))
@@ -490,6 +515,10 @@ fn recipes(level: &Level, m: &GateMark, g: &Groove) -> Vec<Recipe> {
             gap_recipes(g, &line, run_up)
         }
         Topic::Waltz => waltz_recipes(g, glide_wait(level, m)),
+        Topic::Chain => {
+            let (line, run_up) = nugget_line(level, m);
+            chasm_recipes(g, &line, run_up)
+        }
         _ => {
             let (walk, ghosts) = chute_lap(level, m);
             chute_recipes(walk, ghosts)
@@ -603,7 +632,7 @@ fn deep_boost_chains_cant_bypass_band_gates() {
         let mut tried = 0;
         for (li, level) in levels.iter().enumerate() {
             let map = Map::new(level);
-            for (m, _, what) in band_gates(level) {
+            for (m, _, what) in band_gates(level).into_iter().filter(|g| g.0.topic != Topic::Chain) {
                 // Heading the way you come to it from the start; take-offs on the mark's rows
                 // up to two chasms' width (28 tiles) before it; landing past its far side.
                 let dir = if (level.start.0 as i32) < m.c0 { 1 } else { -1 };

@@ -1,9 +1,11 @@
-//! Lesson cards: the band's counters teach themselves. The first time a counter matters (Nat
+//! Lesson cards: the band's counters teach themselves, and Han's tricks are taught the same way
+//! (a [`HanTrick`]'s card comes up at its first hint spot). The first time a counter matters (Nat
 //! reaches the hint spot of its gate, or the counter fills or, for the sweat drop, the band gets
 //! nervous) the game freezes ([`PlayState::Lesson`]), dims, and a card explains it, the strip
 //! still lit above. The first full counter also gets "press Down to call the band". Jump (a
 //! tap on touch) dismisses a card, after [`ARM_SECS`] so a jump in flight doesn't skip it.
-//! Each card shows once per save ([`Progress::taught`], [`Progress::taught_call`]); the pause
+//! Each card shows once per save ([`Progress::taught`], [`Progress::taught_call`],
+//! [`Progress::taught_tricks`]); the pause
 //! menu's BAND LESSONS shows the taught ones again. `NATHAN_LESSONS=0` turns them off
 //! ([`LessonsOff`]).
 
@@ -17,7 +19,7 @@ use crate::audio::{BandMeters, Harmony, director::SUMMON_ORDER};
 use crate::game::HintSpot;
 use crate::input::Action;
 use crate::level::Topic;
-use crate::save::{BandCounter, Progress};
+use crate::save::{BandCounter, HanTrick, Progress};
 use crate::state::{AppState, PlayState};
 use crate::touch::TouchMode;
 
@@ -50,6 +52,8 @@ pub enum Lesson {
     Counter(BandCounter),
     /// A counter is full: press Down to call the band (its mode named).
     Call(BandCounter),
+    /// One of Han's tricks.
+    Trick(HanTrick),
 }
 
 /// The cards waiting, and the one up.
@@ -73,6 +77,11 @@ impl Lessons {
             let first = BandCounter::ALL[..3].iter().copied().find(|c| progress.taught[c.index()]).unwrap_or(BandCounter::Horn);
             self.queue.push_back(Lesson::Call(first));
         }
+        for t in HanTrick::ALL {
+            if progress.taught_tricks[t.index()] {
+                self.queue.push_back(Lesson::Trick(t));
+            }
+        }
     }
 }
 
@@ -87,12 +96,20 @@ pub fn counter_of(topic: Topic) -> Option<BandCounter> {
     }
 }
 
+/// The Han trick a gate's hint teaches.
+pub fn trick_of(topic: Topic) -> Option<HanTrick> {
+    match topic {
+        Topic::Chain => Some(HanTrick::Throw),
+        _ => None,
+    }
+}
+
 fn counter_of_harmony(h: Harmony) -> Option<BandCounter> {
     SUMMON_ORDER.iter().position(|&s| s == h).map(|i| BandCounter::ALL[i])
 }
 
-/// The lessons now due: counters taught by hint spots just heard, full counters, a nervous
-/// band, and the first call. Marks them taught (once per save).
+/// The lessons now due: counters and Han's tricks taught by hint spots just heard, full
+/// counters, a nervous band, and the first call. Marks them taught (once per save).
 pub fn due(progress: &mut Progress, heard: &[Topic], meters: &crate::audio::director::Meters) -> Vec<Lesson> {
     let mut out = Vec::new();
     let mut teach = |c: BandCounter, out: &mut Vec<Lesson>| {
@@ -104,6 +121,14 @@ pub fn due(progress: &mut Progress, heard: &[Topic], meters: &crate::audio::dire
     for &t in heard {
         if let Some(c) = counter_of(t) {
             teach(c, &mut out);
+        }
+    }
+    for &t in heard {
+        if let Some(t) = trick_of(t)
+            && !progress.taught_tricks[t.index()]
+        {
+            progress.taught_tricks[t.index()] = true;
+            out.push(Lesson::Trick(t));
         }
     }
     for (i, m) in meters.summons.iter().enumerate() {
@@ -209,6 +234,10 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
             let call = if touch { format!("TAP THE {} TO CALL THE BAND.", c.name().to_uppercase()) } else { "PRESS DOWN TO CALL THE BAND.".into() };
             ("CHARGED!", vec![call, format!("THEY PLAY {mode}"), does.into()])
         }
+        Lesson::Trick(HanTrick::Throw) => (
+            "HAN'S TRICK: THE THROW",
+            vec!["BAND FIRED UP? HAN RUNS FAST.".into(), "HOP ON HIS HEAD AND JUMP:".into(), "HE THROWS YOU FAR!".into()],
+        ),
     };
     (title.into(), lines)
 }
@@ -280,6 +309,9 @@ mod tests {
         assert_eq!(due(&mut p, &[], &nervous), [Lesson::Counter(BandCounter::Sweat)]);
         assert_eq!(p.taught, [true, true, false, true]);
         assert!(p.taught_call);
+        // Han's chasm hint teaches his throw.
+        assert_eq!(due(&mut p, &[Topic::Chain], &none), [Lesson::Trick(HanTrick::Throw)]);
+        assert_eq!(due(&mut p, &[Topic::Chain], &none), []);
         let mut l = Lessons::default();
         l.replay(&p);
         assert_eq!(
@@ -288,14 +320,17 @@ mod tests {
                 Lesson::Counter(BandCounter::Horn),
                 Lesson::Counter(BandCounter::Nugget),
                 Lesson::Counter(BandCounter::Sweat),
-                Lesson::Call(BandCounter::Horn)
+                Lesson::Call(BandCounter::Horn),
+                Lesson::Trick(HanTrick::Throw)
             ]
         );
     }
 
     #[test]
     fn cards_fit_the_screen() {
-        for l in BandCounter::ALL.map(Lesson::Counter).into_iter().chain(BandCounter::ALL[..3].iter().map(|&c| Lesson::Call(c))) {
+        for l in BandCounter::ALL.map(Lesson::Counter).into_iter().chain(BandCounter::ALL[..3].iter().map(|&c| Lesson::Call(c)))
+            .chain(HanTrick::ALL.map(Lesson::Trick))
+        {
             for touch in [false, true] {
                 let (title, lines) = card_text(l, touch);
                 for s in std::iter::once(&title).chain(&lines) {

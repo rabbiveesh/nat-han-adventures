@@ -260,6 +260,11 @@ impl Groove {
         self.harmony == Harmony::Coltrane
     }
 
+    /// The band's fired up (quartal): Nat runs faster, and Han throws him off his head.
+    pub fn fired_up(&self) -> bool {
+        self.harmony == Harmony::Quartal
+    }
+
     pub fn waltz(&self) -> bool {
         self.harmony == Harmony::Waltz
     }

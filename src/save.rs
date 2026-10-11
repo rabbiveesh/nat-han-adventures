@@ -42,6 +42,30 @@ pub struct Progress {
     pub taught: [bool; 4],
     /// The "press Down to call the band" lesson has been shown.
     pub taught_call: bool,
+    /// Han's tricks the player has been shown on a lesson card, per [`HanTrick`].
+    pub taught_tricks: [bool; HanTrick::ALL.len()],
+}
+
+/// Han's tricks, each taught by a lesson card at its first hint spot (`ui::lesson`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum HanTrick {
+    /// Fired up, a jump off his head is a running throw.
+    Throw,
+}
+
+impl HanTrick {
+    pub const ALL: [HanTrick; 1] = [HanTrick::Throw];
+
+    /// Its word in the save file.
+    pub fn name(self) -> &'static str {
+        match self {
+            HanTrick::Throw => "throw",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
 }
 
 /// The band's counters on the HUD strip, in its order: toots (Giant Steps), nuggets (fired
@@ -85,6 +109,7 @@ impl Default for Progress {
             audio_delay_ms: 0,
             taught: [false; 4],
             taught_call: false,
+            taught_tricks: [false; HanTrick::ALL.len()],
         }
     }
 }
@@ -137,10 +162,11 @@ impl Progress {
     /// audio-delay 180
     /// taught horn nugget
     /// taught-call
+    /// tricks throw
     /// ```
     /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
     /// `audio-delay <ms>` only when set; `taught` the band counters taught, `taught-call` the
-    /// call lesson seen, only when any.)
+    /// call lesson seen, `tricks` Han's tricks taught, only when any.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -160,6 +186,10 @@ impl Progress {
         }
         if self.taught_call {
             s.push_str("taught-call\n");
+        }
+        let tricks: Vec<&str> = HanTrick::ALL.iter().filter(|t| self.taught_tricks[t.index()]).map(|t| t.name()).collect();
+        if !tricks.is_empty() {
+            s.push_str(&format!("tricks {}\n", tricks.join(" ")));
         }
         s
     }
@@ -199,6 +229,13 @@ impl Progress {
                     }
                 }
                 ["taught-call"] => p.taught_call = true,
+                ["tricks", words @ ..] => {
+                    for w in words {
+                        if let Some(t) = HanTrick::ALL.iter().find(|t| t.name() == *w) {
+                            p.taught_tricks[t.index()] = true;
+                        }
+                    }
+                }
                 _ => {}
             }
         }
@@ -424,8 +461,8 @@ mod tests {
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
         let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
         assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
-        let taught = Progress { taught: [true, false, true, false], taught_call: true, ..Progress::default() };
-        assert!(taught.to_text().contains("taught horn note\ntaught-call\n"), "{}", taught.to_text());
+        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true], ..Progress::default() };
+        assert!(taught.to_text().contains("taught horn note\ntaught-call\ntricks throw\n"), "{}", taught.to_text());
         assert_eq!(Progress::from_text(&taught.to_text()), Some(taught));
     }
 

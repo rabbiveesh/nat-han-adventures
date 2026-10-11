@@ -19,7 +19,9 @@
 //! ([`PlayerControl`]: input, jumps, toots, grease, bounces) wraps it; Han's AI wraps it with
 //! his own (`game::han`). Han's head is a one-way carrier for Nat ([`HanHead`]); jumping off it
 //! is the plunger boost ([`BOOST_SPEED`], [`HanBoosted`]; in a band zone the weak one,
-//! [`WEAK_BOOST_SPEED`]).
+//! [`WEAK_BOOST_SPEED`]). While the band's fired up it's the **running throw** instead:
+//! flatter ([`THROW_SPEED`]) and far, Nat keeping [`THROW_CARRY`] on top of his run the way he
+//! keeps a platform's speed ([`Body::launch`]), towards where he's facing.
 //!
 //! # Platform carry
 //! Jumping (or stepping) off a moving platform keeps its horizontal speed ([`Body::launch`],
@@ -367,12 +369,13 @@ pub struct HanHead {
     pub weak: bool,
 }
 
-/// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone). Not a
-/// [`Jumped`] (the band doesn't count it).
+/// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone;
+/// `throw`: the fired-up band's running throw). Not a [`Jumped`] (the band doesn't count it).
 #[derive(Message, Debug, Clone, Copy)]
 pub struct HanBoosted {
     pub pos: Vec2,
     pub weak: bool,
+    pub throw: bool,
 }
 
 /// Upward speed of the weak boost, Han's in a band zone (px/s): Nat's feet rise 300²/2800 ≈ 32
@@ -388,6 +391,13 @@ pub const WEAK_BOOST_SPEED: f32 = 300.0;
 /// tiles with ideal timing, ≥ 9.3 for a human. A *buddy ledge* is 9 tiles: out of Giant
 /// Steps' reach (a perfect GS double jump tops out at ~8.7 tiles) yet a comfortable boost.
 pub const BOOST_SPEED: f32 = 560.0;
+
+/// Upward speed of the fired-up band's running throw off Han's head (px/s): flatter than the
+/// boost, about a jump...
+pub const THROW_SPEED: f32 = 380.0;
+/// ...and the horizontal speed it adds on top of Nat's run (px/s, kept like a platform's speed
+/// until he lands or hits a wall: [`Body::launch`]).
+pub const THROW_CARRY: f32 = 120.0;
 
 /// Han's head as a carrier, if it's solid (`pos` is his box center).
 pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<Carrier> {
@@ -477,13 +487,20 @@ fn player_step(
             body.vel.y = WEAK_BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: true });
+            boosted.write(HanBoosted { pos: pos.0, weak: true, throw: false });
+        } else if on_han.is_some_and(|h| h.boost) && groove.fired_up() {
+            // The running throw: flat and far, and the toot's fresh again.
+            body.vel.y = THROW_SPEED;
+            body.launch = ctl.facing * THROW_CARRY;
+            ctl.has_toot = true;
+            ctl.weak_toot = false;
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true });
         } else if on_han.is_some_and(|h| h.boost) {
             // The plunger boost: way up, and the toot's fresh again.
             body.vel.y = BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: false });
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false });
         } else {
             body.vel.y = JUMP_SPEED * groove.jump_scale();
             if groove.on_the_one() {

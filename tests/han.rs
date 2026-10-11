@@ -363,51 +363,50 @@ fn boost_and_toot_climb_a_buddy_ledge() {
     assert!(p.y > standing(9.0 * TILE) - 1.0 && p.x > 25.0 * TILE, "on the ledge: {p}");
 }
 
-// --- Intercept: a mid-air chain -----------------------------------------------------------------
+// --- Fired up: the running throw ---------------------------------------------------------------
 
-/// A 16-tile chasm (marked: no overuse limit): run, jump at the edge, toot; Han dives under
-/// Nat; jump off his head (the boost), toot; land on the far side.
-#[test]
-fn mid_air_intercept_chain_crosses_a_chasm() {
+/// A 16-tile chasm: Han at its edge, Nat on his head. Fired up, jumping off him is the throw
+/// (flat, far): with a toot, across. The plain boost (the band not fired up) goes up, not far:
+/// into the chasm.
+fn throw_across(fired: bool) -> (Vec2, usize) {
     let mut rows = vec![".".repeat(70); 14];
     rows.push(format!("{}{}{}", "#".repeat(30), ".".repeat(16), "#".repeat(24)));
     rows[13].replace_range(2..3, "P");
     rows[13].replace_range(66..67, "G");
     let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
-    let lvl = level("gate: chain 28,13 49,13\n", &rows);
+    let lvl = level("gate: chain 25,13 49,13\n", &rows);
     let mut app = app(&lvl);
-    step(&mut app, 0.5);
-    press(&mut app, RIGHT);
-    // Run to the edge.
-    while nat(&mut app).x < 30.0 * TILE - 6.0 {
-        app.update();
-        trace(&mut app);
+    if fired {
+        set_groove(&mut app, Harmony::Quartal, false);
     }
+    put::<Han>(&mut app, Vec2::new(29.0 * TILE + 8.0, standing(TILE)));
+    step(&mut app, 0.2);
+    let h = han(&mut app);
+    put::<Player>(&mut app, h + Vec2::new(0.0, 2.0 * TILE));
+    step(&mut app, 0.5);
+    assert_eq!(nat_body(&mut app).riding, Some(single::<Han>(&mut app)), "standing on Han's head");
+    press(&mut app, RIGHT);
     tap(&mut app);
-    step(&mut app, 0.32);
+    step(&mut app, 0.35);
     tap(&mut app); // toot
-    let han_e = single::<Han>(&mut app);
-    let mut boosted = false;
-    let mut chased = false;
     for _ in 0..240 {
         app.update();
         trace(&mut app);
-        chased |= brain(&mut app).mode == HanMode::Intercept;
-        if !boosted && nat_body(&mut app).riding == Some(han_e) {
-            tap(&mut app); // boost
-            boosted = true;
-            step(&mut app, 0.4);
-            tap(&mut app); // toot
-        }
-        if nat_body(&mut app).on_ground && nat_body(&mut app).riding.is_none() {
+        let b = nat_body(&mut app);
+        if (b.on_ground && b.riding.is_none()) || nat(&mut app).y < 0.0 {
             break;
         }
     }
-    let p = nat(&mut app);
-    assert!(chased, "Han went for the intercept");
-    assert!(boosted, "Nat landed on Han in mid-air");
-    assert_eq!(heard(&app).died, 0);
-    assert!(p.x > 46.0 * TILE, "across the chasm: {p}");
+    (nat(&mut app), heard(&app).died)
+}
+
+#[test]
+fn fired_up_han_throws_nat_across_a_chasm() {
+    let (p, died) = throw_across(true);
+    assert_eq!(died, 0);
+    assert!(p.x > 46.0 * TILE && p.y > 0.0, "across the chasm: {p}");
+    let (p, _) = throw_across(false);
+    assert!(p.x < 46.0 * TILE, "the plain boost doesn't cross: {p}");
 }
 
 // --- Lemme check that ----------------------------------------------------------------------------
@@ -862,15 +861,15 @@ fn han_per_mode_physics() {
     // Giant Steps: floatier than Nat.
     let gs = HanPhys::of(&Groove::of(Harmony::Coltrane));
     assert!(gs.fall.gravity < Fall::of(&Groove::of(Harmony::Coltrane)).gravity);
-    // Fired up: Nat runs faster, Han doesn't.
+    // Fired up: Han speeds up too, and keeps up.
     let q = HanPhys::of(&Groove::of(Harmony::Quartal));
-    assert!(q.speed < tuning::RUN_SPEED * FIRED_UP_SPEED);
+    assert!(q.speed > tuning::RUN_SPEED * FIRED_UP_SPEED);
     let mut app = app(FLAT);
     set_groove(&mut app, Harmony::Quartal, false);
     press(&mut app, RIGHT);
     step(&mut app, 2.5);
     let behind = nat(&mut app).x - han(&mut app).x;
-    assert!(behind > 3.0 * TILE, "Han can't keep up: {behind}");
+    assert!(behind < 3.0 * TILE, "Han keeps up: {behind}");
     // Waltz: steps only on the beat.
     let mut app = self::app(FLAT);
     let secs = 60.0 / nat_han_adventures::audio::waltz::WALTZ_BPM as f64;

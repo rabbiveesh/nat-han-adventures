@@ -190,7 +190,7 @@ fn unlocks_follow_the_story() {
     };
     assert_eq!(served(3), ["buddy ledge"]);
     assert_eq!(served(5), ["buddy ledge", "buddy raft pool"]);
-    assert_eq!(served(10), ["buddy ledge", "buddy raft pool", "chain chasm", "shield row"]);
+    assert_eq!(served(10), ["buddy ledge", "buddy raft pool", "fired-up chasm", "shield row"]);
 }
 
 /// A climb is taller than the other rooms: the course is as tall as it, every room sits on its

@@ -34,7 +34,7 @@
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
 //!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `boost`
-//!   (buddy ledge), `shield` (shield row), `chain` (chain-jump chasm), `buddyraft` (buddy raft
+//!   (buddy ledge), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
 //! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
@@ -75,8 +75,9 @@
 //!   So no boost, and no chain of boosts, ever opens them: they always need their mode (the
 //!   validator proves it: full boosts from everywhere outside the zones Han may be, weak ones
 //!   from everywhere inside them Nat may get to).
-//! - **Chain-jump chasms** (`chain`) have no overuse limit: Han boosts you as often as it takes
-//!   while you're in the mark's columns ([`Level::in_chasm`]).
+//! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
+//!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
+//!   catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
 //!   emblem, glide launches a 3/4 emblem in the ground at each end, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
 //!   "PLUMBERS ONLY" sign at their start.
@@ -217,7 +218,8 @@ pub enum Topic {
     Boost,
     /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
     Shield,
-    /// Chain-jump chasms: boost off Han in mid-air, toot, again (`chain`).
+    /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
+    /// (`chain`).
     Chain,
     /// Buddy raft pools: Han wades in and leaves a big raft (`buddyraft`).
     BuddyRaft,
@@ -426,7 +428,8 @@ impl Level {
         self.gates.iter().any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
     }
 
-    /// Is column `col` inside a chain-jump chasm mark (no overuse limit there)?
+    /// Is column `col` inside a fired-up chasm mark (no overuse limit there, and Han catches
+    /// Nat in mid-air)?
     pub fn in_chasm(&self, col: i32) -> bool {
         self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
     }

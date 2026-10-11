@@ -41,7 +41,7 @@ pub struct Template {
     /// free play serves this room: the mechanic has been taught.
     pub unlock: usize,
     /// Rows in its canvas: [`H`], or more for a tall room ([`CLIMB_H`] for a climb,
-    /// [`CHASM_H`] for a chain chasm's headroom).
+    /// [`CHASM_H`] for a fired-up chasm's headroom).
     pub height: usize,
     pub build: BuildFn,
 }
@@ -60,7 +60,7 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, height: H, build: buddy_ledge },
     Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
     Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
-    Template { name: "chain chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: chain_chasm },
+    Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
 ];
 
 /// The templates for a skill.
@@ -691,23 +691,26 @@ fn shield_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     Built { hint: Some((&[Topic::Shield], "Plumbers only! Wait, I go first. Stay behind me!")), checkpoint }
 }
 
-/// A chain chasm room's rows: a chain climbs about 20 tiles above the floor, and the top of
-/// the room is a ceiling.
-pub const CHASM_H: usize = H + 10;
+/// A fired-up chasm room's rows: a throw stays well under the room's top (a ceiling).
+pub const CHASM_H: usize = H + 4;
 
-/// A chain chasm: a bottomless gap (14 → 17 wide) between floors at one height, crossed only by
-/// a jump, a toot, a boost off Han in mid-air and another toot.
-fn chain_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+/// A fired-up chasm: a nugget line (4, spaced 2) on a flat run-up, then a bottomless gap
+/// (15 → 18 wide) between floors at one height: past the fired-up band's own reach, in the
+/// running throw's off Han at the edge.
+fn fired_up_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     let floor = c.floor();
     let checkpoint = han_lead(c);
-    c.ground(lerpi(band, 6.0, 4.0) + d.int(0, 1) as usize, floor);
-    let w = (d.scaled(band, CHASM_MIN as f32, 16.0, 1) as usize).max(CHASM_MIN);
+    let x = c.width();
+    c.ground(4 * 2 + 5, floor);
+    for k in 0..4 {
+        c.nugget(x + 1 + k * 2, floor - 1);
+    }
+    let w = d.scaled(band, 15.0, 18.0, 1).clamp(CHASM_MIN as i32 + 1, 18) as usize;
     c.pit(w);
-    // Nuggets on the far side (the validator follows the chain across, not each arc of it).
     let x = c.width();
     c.ground(HAN_TAIL, floor);
     for k in (1..HAN_TAIL - 1).step_by(2) {
         c.nugget(x + k, floor - 1);
     }
-    Built { hint: Some((&[Topic::Chain], "Big chasm! Jump, toot, land on my head, JUMP, toot!")), checkpoint }
+    Built { hint: Some((&[Topic::Chain], "Hop on! I'll throw you!")), checkpoint }
 }

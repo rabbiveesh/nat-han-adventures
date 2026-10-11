@@ -494,6 +494,8 @@ fn validator_knows_platform_carry() {
 }
 
 /// A bottomless chasm `width` wide from col 30.
+/// A fired-up chasm: `width` bottomless columns from col 30, a nugget line before it (to fire
+/// the band up).
 fn chasm_level(width: usize, header: &str) -> Level {
     floor_level(30 + width + 20, header, |rows| {
         for r in 10..14 {
@@ -501,35 +503,54 @@ fn chasm_level(width: usize, header: &str) -> Level {
                 rows[r][c] = '.';
             }
         }
+        for c in [14, 17, 20, 23] {
+            rows[9][c] = 'o';
+        }
     })
 }
 
-/// Chain-jump chasms: too wide for any mode and for one boost, crossed by a mid-air chain.
+/// Fired-up chasms: too wide for any mode and for a plunger boost, crossed by the fired-up
+/// band's running throw off Han at the edge.
 #[test]
-fn validator_knows_chain_chasms() {
-    // A chain climbs higher than the test levels' 10 rows of sky (as in the campaign's chasms).
+fn validator_knows_fired_up_chasms() {
     const SKY: usize = 10;
-    let mark = |w: usize| format!("gate: chain 28,9 {},9\n", 33 + w);
-    for w in [16, 18] {
+    let mark = |w: usize| format!("gate: chain 25,9 {},9\n", 33 + w);
+    for w in [15, 18] {
         let r = run(&with_sky(chasm_level(w, &mark(w)), SKY));
         assert!(r.errs.is_empty(), "{w}-wide chasm: {:?}", r.errs);
         assert_eq!(gates(&r), [Gate::ChainChasm], "{w}");
         assert!(r.gated_goal);
         assert_eq!(r.deaths, 0, "Han falling in isn't Nat's death");
-        let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chain lesson");
+        let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chasm lesson");
         assert!(!lesson.taught(), "no hint yet");
     }
-    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Jump, toot, land on my head!\n", mark(16))), SKY));
+    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Fired up? Hop on my head and JUMP!\n", mark(16))), SKY));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
     assert!(taught.lessons.iter().any(|l| l.topic == Topic::Chain && l.taught()));
-    // Too wide even for a chain (Han's three toots only keep him up so long).
-    let wide = run(&with_sky(chasm_level(22, &mark(22)), SKY));
+    // Too wide even for a throw.
+    let wide = run(&with_sky(chasm_level(21, &mark(21)), SKY));
     assert!(wide.errs.iter().any(|e| e.contains("goal")), "{:?}", wide.errs);
     // Unmarked: an error (Han's overuse limit would apply in it).
     let bare = run(&with_sky(chasm_level(16, ""), SKY));
     assert!(bare.errs.iter().any(|e| e.contains("`gate: chain")), "{:?}", bare.errs);
-    // Narrower than a chasm: one boost off Han at the edge does it (a buddy ledge, not a chain).
-    let gap = run(&with_sky(chasm_level(11, "gate: boost 20,9 50,9\n"), SKY));
+    // A checkpoint between the nugget line and the edge: a splat there loses the nuggets, so
+    // the band may not be fired up at the edge, and nothing else crosses.
+    let cp = floor_level(66, &format!("{}say@26,9: hi\n", mark(16)), |rows| {
+        for r in 10..14 {
+            for c in 30..46 {
+                rows[r][c] = '.';
+            }
+        }
+        for c in [14, 17, 20, 23] {
+            rows[9][c] = 'o';
+        }
+        rows[9][26] = 'C';
+    });
+    let cp = with_sky(cp, SKY);
+    let cp = run(&cp);
+    assert!(cp.errs.iter().any(|e| e.contains("goal")), "{:?} {:?}", cp.errs, gates(&cp));
+    // Narrower than a chasm: a long gap (the fired-up band alone).
+    let gap = run(&with_sky(chasm_level(11, "gate: gap 20,9 50,9\n"), SKY));
     assert!(!gates(&gap).contains(&Gate::ChainChasm), "{:?}", gates(&gap));
 }
 
