@@ -148,6 +148,13 @@ impl Nav {
         Nav { mode, env: Env::han(mode), moves: han_moves(), cache: HashMap::new(), expanded: 0, buf: Vec::new() }
     }
 
+    /// Side B (Han alone): Nat's physics and one toot ([`Env::han_side_b`]), so only the moves
+    /// with at most one toot.
+    pub fn side_b(mode: Mode) -> Nav {
+        let moves = han_moves().into_iter().filter(|m| m.toot_count() <= 1).collect();
+        Nav { mode, env: Env::han_side_b(mode), moves, cache: HashMap::new(), expanded: 0, buf: Vec::new() }
+    }
+
     pub fn moves(&self) -> &[HanMove] {
         &self.moves
     }
@@ -239,11 +246,18 @@ impl Nav {
 
     /// A* from `from` to `to`, simulating at most `budget` new cells.
     pub fn route(&mut self, map: &Map, from: Cell, to: Cell, budget: usize) -> Route {
+        self.route_or_nearest(map, from, to, budget).0
+    }
+
+    /// [`Nav::route`], and the reachable cell nearest `to` it saw (fewest columns away, then
+    /// fewest rows, then quickest): with [`Route::NoRoute`] the search saw every cell reachable
+    /// from `from`, so that's as close as Han can get (Side B's frontier).
+    pub fn route_or_nearest(&mut self, map: &Map, from: Cell, to: Cell, budget: usize) -> (Route, Cell) {
         if from == to {
-            return Route::Found(Vec::new());
+            return (Route::Found(Vec::new()), from);
         }
         if !Nav::node(map, map.level, to) || !Nav::node(map, map.level, from) {
-            return Route::NoRoute;
+            return (Route::NoRoute, from);
         }
         let h = |c: Cell| ((c.0 - to.0).abs() as f32) * WALK_SECS;
         #[derive(PartialEq)]
@@ -265,6 +279,7 @@ impl Nav {
         best.insert(from, (0.0, None));
         heap.push(Open(h(from), from));
         let mut spent = 0;
+        let mut nearest = ((i32::MAX, i32::MAX, f32::INFINITY), from);
         while let Some(Open(_, c)) = heap.pop() {
             if c == to {
                 let mut path = Vec::new();
@@ -274,14 +289,18 @@ impl Nav {
                     at = *prev;
                 }
                 path.reverse();
-                return Route::Found(path);
+                return (Route::Found(path), to);
             }
             if !closed.insert(c) {
                 continue;
             }
+            let key = ((c.0 - to.0).abs(), (c.1 - to.1).abs(), best[&c].0);
+            if key.0 < nearest.0.0 || (key.0 == nearest.0.0 && (key.1 < nearest.0.1 || (key.1 == nearest.0.1 && key.2 < nearest.0.2))) {
+                nearest = (key, c);
+            }
             if !self.cached(c) {
                 if spent >= budget {
-                    return Route::Budget;
+                    return (Route::Budget, nearest.1);
                 }
                 spent += 1;
             }
@@ -295,6 +314,6 @@ impl Nav {
                 }
             }
         }
-        Route::NoRoute
+        (Route::NoRoute, nearest.1)
     }
 }

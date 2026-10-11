@@ -55,6 +55,7 @@ pub(super) fn plugin(app: &mut App) {
     .init_resource::<MarkersDrawn>()
     .add_systems(Update, new_gate_markers.run_if(resource_exists::<Sprites>))
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
+    .add_systems(PostUpdate, hide_nat.after(VisualSet::Animate).run_if(resource_exists::<crate::game::sideb::SideB>))
     .add_systems(
         PostUpdate,
         (
@@ -74,6 +75,13 @@ pub(super) fn plugin(app: &mut App) {
     particles::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
+}
+
+/// Side B: Nat's off screen (he stays in the world as Han's beacon, `game::sideb`).
+fn hide_nat(mut nat: Query<&mut Visibility, With<Player>>) {
+    for mut v in &mut nat {
+        v.set_if_neq(Visibility::Hidden);
+    }
 }
 
 /// Dev shortcut: `NATHAN_LEVEL=3 cargo run` starts straight in level 3.

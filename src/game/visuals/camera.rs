@@ -87,9 +87,16 @@ fn follow_player(
     touch: Option<Res<TouchMode>>,
     active: Option<Res<ActiveLevel>>,
     player: Query<(&Transform, &PlayerControl, Ref<Player>), Without<GameCamera>>,
+    han: Query<(&Transform, &crate::game::Body), (With<crate::game::Han>, Without<GameCamera>, Without<Player>)>,
+    side_b: Option<Res<crate::game::sideb::SideB>>,
     mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
 ) {
     let (Some(active), Ok((ptf, ctl, added))) = (active, player.single()) else { return };
+    // Side B: Nat's off screen; the camera's on Han.
+    let (ptf, facing) = match (side_b, han.single()) {
+        (Some(_), Ok((htf, hb))) => (htf, if hb.vel.x < -1.0 { -1.0 } else { 1.0 }),
+        _ => (ptf, ctl.facing),
+    };
     let Ok((mut tf, mut gc, proj)) = cam.single_mut() else { return };
     let half = match proj {
         Projection::Orthographic(o) if o.area.width() > 0.0 => o.area.half_size(),
@@ -99,7 +106,7 @@ fn follow_player(
     let dt = time.delta_secs();
     let k = |rate: f32| if snap { 1.0 } else { 1.0 - (-dt * rate).exp() };
 
-    gc.look += (ctl.facing * LOOK_AHEAD - gc.look) * k(2.5);
+    gc.look += (facing * LOOK_AHEAD - gc.look) * k(2.5);
     let touch = touch.is_some_and(|t| t.0);
     let lift = if touch { 16.0 + TOUCH_LIFT } else { 16.0 };
     let target = ptf.translation.truncate() + Vec2::new(gc.look, lift);

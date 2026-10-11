@@ -262,6 +262,9 @@ pub struct Events {
     pub waltz_steps: u32,
     /// Calls to the band (Down): play the [`Band::ready`] mode.
     pub calls: u32,
+    /// A call for this mode by name (Side B's set list, `game::sideb`): plays it, charged or
+    /// not.
+    pub call_mode: Option<Harmony>,
 }
 
 /// One counter of the HUD's strip ([`Band::meters`]).
@@ -452,7 +455,7 @@ impl Band {
             }
         }
         // A call plays the ready mode.
-        let called = if ev.calls > 0 { self.ready() } else { None };
+        let called = ev.call_mode.filter(|&h| summonable(h)).or(if ev.calls > 0 { self.ready() } else { None });
         if let Some(h) = called {
             self.begin(h, now);
         }
@@ -608,7 +611,7 @@ mod tests {
     const SLIP: Events = Events { deaths: 1, slips: 1, ..NOTHING };
     const CHECKPOINT: Events = Events { checkpoints: 1, ..NOTHING };
     const CALL: Events = Events { calls: 1, ..NOTHING };
-    const NOTHING: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, slips: 0, checkpoints: 0, waltz_steps: 0, calls: 0 };
+    const NOTHING: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, slips: 0, checkpoints: 0, waltz_steps: 0, calls: 0, call_mode: None };
 
     fn harmony(d: Option<(Filters, &'static str)>) -> Option<Harmony> {
         d.map(|d| d.0.harmony)

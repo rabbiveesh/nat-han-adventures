@@ -96,6 +96,7 @@ impl Act {
             ground_jumps: n(JUMP),
             waltz_steps: 0,
             calls: n(CALL),
+            call_mode: None,
         }
     }
 

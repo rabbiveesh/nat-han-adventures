@@ -469,6 +469,7 @@ fn direct(
     mut died: MessageReader<PlayerDied>,
     mut checkpoints: MessageReader<CheckpointReached>,
     mut calls: MessageReader<CallBand>,
+    mut named_calls: MessageReader<crate::game::sideb::CallMode>,
     mut meters: ResMut<BandMeters>,
     mut groove_for_grip: Option<ResMut<Groove>>,
 ) {
@@ -489,6 +490,7 @@ fn direct(
     }
     ev.checkpoints = checkpoints.read().count() as u32;
     ev.calls = calls.read().count() as u32;
+    ev.call_mode = named_calls.read().last().map(|c| c.0);
     // Play time (pause excluded): the director's clock.
     let now = run.as_ref().map_or(0.0, |r| r.time);
     let d = &mut *director;

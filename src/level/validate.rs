@@ -306,6 +306,16 @@ impl Env {
             grip: true,
         }
     }
+
+    /// Han on Side B ([`HanPhys::side_b`]: Nat's physics, one toot), for his navigation there.
+    pub fn han_side_b(mode: Mode) -> Env {
+        let p = HanPhys::side_b(&mode.groove());
+        Env { vx: p.speed, ..Env::han(mode) }.with_fall(p)
+    }
+
+    fn with_fall(self, p: HanPhys) -> Env {
+        Env { gravity: p.fall.gravity, max_fall: p.fall.max_fall, air_accel: p.air_accel, toot: p.toot_speed, ..self }
+    }
 }
 
 // Cell flags.

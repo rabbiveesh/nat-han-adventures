@@ -57,6 +57,8 @@ pub struct HanPhys {
     pub bounce: bool,
     /// Moves only on the beat (the waltz).
     pub on_the_beat: bool,
+    /// Toots he gets back on every landing.
+    pub toots: u8,
 }
 
 impl HanPhys {
@@ -79,6 +81,24 @@ impl HanPhys {
             toot_speed: DOUBLE_JUMP_SPEED,
             bounce: groove.bouncy(),
             on_the_beat: groove.waltz(),
+            toots: HAN_TOOTS,
+        }
+    }
+
+    /// Side B (Han alone, `game::sideb`): Nat's physics exactly, one toot and all, so every
+    /// band gate needs its mode for Han just as the validator proves it does for Nat.
+    pub fn side_b(groove: &Groove) -> HanPhys {
+        let g = groove;
+        HanPhys {
+            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale() },
+            speed: RUN_SPEED * g.speed_scale,
+            ground_accel: GROUND_ACCEL * g.speed_scale,
+            air_accel: AIR_ACCEL * g.speed_scale,
+            jump_speed: JUMP_SPEED,
+            toot_speed: DOUBLE_JUMP_SPEED,
+            bounce: g.bouncy(),
+            on_the_beat: g.waltz(),
+            toots: 1,
         }
     }
 
@@ -153,7 +173,7 @@ pub fn drive(
         };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
     if body.on_ground {
-        ctl.toots_left = HAN_TOOTS;
+        ctl.toots_left = phys.toots;
     }
     if input.jump && body.on_ground {
         body.vel.y = phys.jump_speed;
@@ -176,7 +196,7 @@ pub fn drive(
     }
     let contact = step_body(level, pos, body, phys.fall, carriers, &[], dt);
     if contact.ground {
-        ctl.toots_left = HAN_TOOTS;
+        ctl.toots_left = phys.toots;
         if phys.bounce && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
             body.vel.y = (contact.fall_speed * crate::game::BOUNCE_RESTITUTION).min(crate::game::BOUNCE_SPEED * HAN_ROLL_BOUNCE);
             body.on_ground = false;

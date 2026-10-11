@@ -1,0 +1,23 @@
+# Side B level 1 (NATHAN_SIDE_B=1), for `scripts/record-run --capture`: Han walks it alone,
+# the player only calls the band from the set list (Left/Right picks, Down calls).
+
+# Try 1: fired up at the giant wall (wrong call), then Giant Steps over it, and nothing left
+# for the long gap: Han gives up, the level rewinds.
+wait 3
+tap Right
+wait 200ms
+tap Down
+wait 3
+tap Left
+wait 200ms
+tap Down
+wait 27
+
+# Try 2: Giant Steps at the wall, fired up at the gap (it takes over from Giant Steps).
+wait 3
+tap Down
+wait 4
+tap Right
+wait 200ms
+tap Down
+wait 8
