@@ -142,4 +142,6 @@ pub enum Sfx {
     MenuSelect,
     /// Han talking: a little "blip blip" babble.
     HanBlip,
+    /// The laughing band's boing boost: Han's head is a spring.
+    Boing,
 }

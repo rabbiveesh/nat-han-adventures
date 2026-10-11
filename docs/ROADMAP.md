@@ -67,7 +67,7 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
   chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up),
   the Giant Steps mega-boost (buddy ledges became 11-tile mega walls), the nervous
   wall-cling (cling shafts; level 9 has one after its chute), and the waltz trapeze (level 10).
-  Each trick gets a freeze-frame lesson card at its first hint spot. Next: the laughing boing boost, shield rows out, Han nearly silent.
+  Each trick gets a freeze-frame lesson card at its first hint spot. The laughing band's boing boost is in too (no gate). Next: shield rows out, Han nearly silent.
 
 ## Planned (agreed, not started)
 - **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics

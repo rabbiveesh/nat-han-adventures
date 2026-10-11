@@ -475,7 +475,7 @@ fn han_fx(
     mut was_sinking: Local<bool>,
 ) {
     for b in boosted.read() {
-        sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Jump));
+        sfx.write(crate::events::PlaySfx(if b.boing { crate::audio::Sfx::Boing } else { crate::audio::Sfx::Jump }));
         commands.spawn((
             LevelEntity,
             Particle { vel: Vec2::new(0.0, -30.0), gravity: 0.0, life: 0.4, max_life: 0.4, fade: true },
