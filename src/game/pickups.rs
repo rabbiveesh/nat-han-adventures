@@ -27,13 +27,7 @@ pub const CHECKPOINT_WIDTH: f32 = 12.0;
 pub const GOAL_WIDTH: f32 = 10.0;
 
 /// Han's lines for checkpoints that have no `say:` in the level file.
-pub const CHECKPOINT_QUIPS: &[&str] = &[
-    "Two-ply! We're livin' in luxury now, Nat.",
-    "Checkpoint! Tight as a fresh pipe fitting.",
-    "Roll with it, Nat. Roll with it.",
-    "Every roll's a checkpoint if you believe, Nat.",
-    "Smells... fine here. Let's keep movin'.",
-];
+pub const CHECKPOINT_QUIPS: &[&str] = &["Two-ply!", "Checkpoint!", "Roll with it!", "Fresh roll!", "Smells... fine."];
 
 /// Nuggets picked up since the last checkpoint (where they were). Dying puts them back, so a
 /// nugget line that fires up the band for a long gap is there again after a failed try.

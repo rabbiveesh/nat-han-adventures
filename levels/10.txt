@@ -7,13 +7,13 @@ intro: The Golden Throne awaits, Nat! One last flush of courage!
 4: dx=9 dy=0 period=5 kind=duck
 5: dx=6 dy=0 period=4 kind=tp
 deaths: 0
-say@90,15: Tightrope time! Don't worry, I'll catch you. Probably.
-say@154,15: The moat. Ducks, rolls, plungers... my whole career!
-say@218,15: Throne's up high! Toot 5 times, DOWN, Giant Steps up!
-hint@277,15 trapeze: Waltzing? I swing up top! Ride me, jump on ONE!
+say@90,15: Tightrope!
+say@154,15: The moat!
+say@218,15: Throne's up!
+hint@277,15 trapeze: Swing time!
 gate: trapeze 280,9 304,15
 gate: giant 325,9 331,15
-hint@19,15 chain: Hop on! I'll throw you!
+hint@19,15 chain: Hop on!
 gate: chain 21,15 42,15
 ---
 ............................................................................#############...................................................................................................................................................########################...............###########..................................................................

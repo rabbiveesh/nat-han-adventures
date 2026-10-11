@@ -13,6 +13,7 @@ pub fn plugin(app: &mut App) {
         .add_message::<CheckpointReached>()
         .add_message::<LevelCompleted>()
         .add_message::<HanSays>()
+        .add_message::<HintRepeated>()
         .add_message::<PlaySfx>()
         .add_message::<LevelStarted>()
         .add_message::<BandFreedom>()
@@ -97,6 +98,13 @@ pub struct LevelCompleted {
 #[derive(Message, Debug, Clone)]
 pub struct HanSays {
     pub text: String,
+}
+
+/// Han repeats a hint after repeated deaths near it (the adaptive `han_hint` lever): its
+/// lesson cards come up again (`ui::lesson`), since his bark alone teaches nothing.
+#[derive(Message, Debug, Clone)]
+pub struct HintRepeated {
+    pub topics: Vec<crate::level::Topic>,
 }
 
 /// The player calls the band (Down): it plays the mode whose counter is full and was ticked

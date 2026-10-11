@@ -77,7 +77,7 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
-use super::{CLING_ROWS, GateMark, Granted, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
+use super::{CLING_ROWS, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
     ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, DRUNK_SWAY, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
@@ -2748,6 +2748,18 @@ fn line_errors(level: &Level) -> Vec<String> {
     for line in all {
         if line.chars().count() > MAX_LINE {
             errs.push(format!("line longer than {MAX_LINE} chars: {line:?}"));
+        }
+    }
+    // Han barks; the lesson cards teach. Only the intro is a sentence.
+    let barks = level.says.iter().chain(level.say_at.iter().map(|s| &s.text)).chain(level.hints.iter().map(|s| &s.text));
+    for line in barks {
+        if !super::is_bark(line) {
+            errs.push(format!("Han barks at most {MAX_BARK_WORDS} words: {line:?}"));
+        }
+    }
+    for h in &level.hints {
+        if h.topics.is_empty() {
+            errs.push(format!("hint@{},{} names no topic: its lesson card teaches it, not Han", h.col, h.row));
         }
     }
     errs

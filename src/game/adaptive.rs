@@ -216,16 +216,16 @@ pub const RAFT_LIFE_PER_DIAL: f32 = 1.0;
 const RECENT_SEGMENTS: usize = 8;
 
 /// What Han says when the player seems frustrated (the encourage cue). Rotates, no repeats
-/// until the list wraps. PG, warm, plumber humour, ≤ 60 characters.
+/// until the list wraps. PG, warm, a bark (≤ 3 words).
 pub const ENCOURAGE_LINES: &[&str] = &[
-    "Deep breath, Nat. No clog lasts forever.",
-    "Rome wasn't plumbed in a day, buddy.",
-    "Take your time. The meter's not running.",
-    "We'll snake through this one together, Nat.",
-    "You're doin' great. I've seen pipes quit sooner.",
-    "Slow and steady, Nat. Like a good drain.",
-    "Every pro started with a leaky first job.",
-    "Shake it off. Then wash your hands. Then GO!",
+    "Deep breath, Nat.",
+    "No rush, buddy.",
+    "Meter's off!",
+    "Together, Nat!",
+    "Doin' great!",
+    "Slow and steady.",
+    "You got this!",
+    "Shake it off!",
 ];
 
 // ─── Mappings ────────────────────────────────────────────────────────────────
@@ -400,6 +400,7 @@ fn feed_story(
     mut checkpoints: MessageReader<CheckpointReached>,
     mut completed: MessageReader<LevelCompleted>,
     mut says: MessageWriter<HanSays>,
+    mut repeated: MessageWriter<crate::events::HintRepeated>,
 ) {
     let story_mode = *mode == AssistMode::Story;
     let now = run.as_ref().map_or(0.0, |r| r.time);
@@ -468,6 +469,7 @@ fn feed_story(
             if let Some(h) = nearest {
                 t.repeated.push(h.center);
                 says.write(HanSays { text: h.text.clone() });
+                repeated.write(crate::events::HintRepeated { topics: h.topics.clone() });
             }
         }
     }
@@ -786,9 +788,9 @@ mod tests {
     }
 
     #[test]
-    fn encourage_lines_are_short() {
+    fn encourage_lines_are_barks() {
         for l in ENCOURAGE_LINES {
-            assert!(l.chars().count() <= crate::level::MAX_LINE, "{l}");
+            assert!(crate::level::is_bark(l), "{l}");
         }
     }
 

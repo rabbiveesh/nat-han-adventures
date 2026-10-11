@@ -5,15 +5,15 @@ intro: Festival time! Spray cans puff to the beat. Feel it, Nat!
 2: dx=6 dy=0 period=4 kind=tp phase=0.5
 3: dx=7 dy=0 period=4 kind=tp
 4: dx=8 dy=0 period=4.5 kind=tp
-say@88,12: Pssht... and GO! You've got rhythm, kid. Smelly rhythm.
+say@88,12: Smelly rhythm!
 deaths: 2
-hint@91,12 stain: Spike pit! Splat twice and hop your stains across.
-say@182,12: Big finish ahead: waltz, then Giant Steps. Go Nat!
-say@274,12: Hop in threes, DOWN: waltz! Jump off the roll as it glides!
+hint@91,12 stain: Spike pit!
+say@182,12: Big finish!
+say@274,12: Waltz time!
 gate: stain 93,12 120,12
 gate: waltz 280,11 310,12
 gate: giant 312,6 324,12
-hint@18,12 chain: Hop on! I'll throw you!
+hint@18,12 chain: Hop on!
 gate: chain 20,12 41,12
 ---
 ................................................................................................................................................................................................########################

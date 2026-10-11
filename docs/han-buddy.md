@@ -60,8 +60,11 @@ Status: built (see "As built" at the end for the decisions and numbers).
 ## Readable behaviour (so players can learn the AI)
 - Distinct poses: **braced** (plunger up, feet planted), **intercepting** (arms out like a
   goalkeeper), going-ahead (determined march), parachuting, winded.
-- Simple, predictable rules above; Han **teaches every one of his mechanics** himself via hint
-  spots at first use ("Need a lift? Land on my head and JUMP! Oof, my back.").
+- Simple, predictable rules above. Han is **nearly silent**: poses plus barks of 1-3 words
+  ("Hop on!", "Lemme check.", "BOING!"); only a level's intro is a sentence. Every mechanic,
+  his tricks included, is taught by a freeze-frame **lesson card** at its first hint spot
+  (`ui::lesson`), shown again when he repeats that hint after repeated deaths. The validator
+  enforces the barks and that every hint names its topic.
 
 ## Adaptive coupling
 Han's helpfulness follows the adaptive assist dial: struggling → he intercepts more eagerly,
