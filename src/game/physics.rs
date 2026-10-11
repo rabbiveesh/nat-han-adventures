@@ -19,7 +19,16 @@
 //! ([`PlayerControl`]: input, jumps, toots, grease, bounces) wraps it; Han's AI wraps it with
 //! his own (`game::han`). Han's head is a one-way carrier for Nat ([`HanHead`]); jumping off it
 //! is the plunger boost ([`BOOST_SPEED`], [`HanBoosted`]; in a band zone the weak one,
-//! [`WEAK_BOOST_SPEED`]).
+//! [`WEAK_BOOST_SPEED`]). While the band's fired up it's the **running throw** instead:
+//! flatter ([`THROW_SPEED`]) and far, Nat keeping [`THROW_CARRY`] on top of his run the way he
+//! keeps a platform's speed ([`Body::launch`]), towards where he's facing.
+//!
+//! # Platform carry
+//! Jumping (or stepping) off a moving platform keeps its horizontal speed ([`Body::launch`],
+//! at most [`LAUNCH_MAX`]) until Nat lands or hits a wall: air control steers on top of it.
+//! In the waltz the platforms glide on ONE, fast, so a jump off one then is a long launch
+//! (the waltz's gate, `level::validate`). Han's head gives none, and Han himself keeps none
+//! (his AI plans his jumps without it).
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -56,6 +65,9 @@ pub struct Body {
     pub on_ground: bool,
     /// The moving platform stood on, if any.
     pub riding: Option<Entity>,
+    /// Horizontal speed (px/s) kept from the moving platform jumped or stepped off, on top of
+    /// `vel.x` until landing or a wall (see "Platform carry" above).
+    pub launch: f32,
 }
 
 impl Body {
@@ -65,6 +77,7 @@ impl Body {
             half: Vec2::new(PLAYER_SIZE.0, PLAYER_SIZE.1) / 2.0,
             on_ground: false,
             riding: None,
+            launch: 0.0,
         }
     }
 }
@@ -169,6 +182,9 @@ pub struct Carrier {
     pub prev_top: f32,
     /// How far it moved this step (riders move with it).
     pub carry: Vec2,
+    /// Leaving it keeps its horizontal speed ([`Contact::launch`]): moving platforms, not
+    /// Han's head.
+    pub launches: bool,
 }
 
 impl Carrier {
@@ -181,6 +197,7 @@ impl Carrier {
             top: pos.y + TILE / 2.0,
             prev_top: prev.y + TILE / 2.0,
             carry: pos - prev,
+            launches: true,
         }
     }
 }
@@ -212,6 +229,9 @@ pub struct Contact {
     pub fall_speed: f32,
     /// Ran into a wall (or a blocker) this step.
     pub blocked_x: bool,
+    /// Left a moving platform into the air this step: its horizontal speed (px/s), for the
+    /// caller to keep as [`Body::launch`] (Nat does, Han doesn't).
+    pub launch: Option<f32>,
 }
 
 /// One fixed step of the shared body physics (Nat and Han): gravity, being carried by the
@@ -219,7 +239,8 @@ pub struct Contact {
 /// then the carriers (one-way, from above). `blockers` are extra boxes (min, max) that stop
 /// horizontal motion into them (a body already overlapping one isn't pushed). Sets
 /// `body.on_ground`/`riding` and zeroes the vertical speed on landing; landing effects (events,
-/// toot refresh, bounces) are the caller's.
+/// toot refresh, bounces) are the caller's. [`Body::launch`] moves the body too, and is
+/// dropped on landing or against a wall.
 pub fn step_body(
     level: &Level,
     pos: &mut Vec2,
@@ -233,7 +254,8 @@ pub fn step_body(
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
 
     // --- Carried by what we stood on.
-    let carry = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e)).map_or(Vec2::ZERO, |c| c.carry);
+    let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
+    let carry = carrier.map_or(Vec2::ZERO, |c| c.carry);
 
     let half = body.half;
     let was_on_ground = body.on_ground;
@@ -241,7 +263,7 @@ pub fn step_body(
     let mut blocked_x = false;
 
     // --- X.
-    let dx = body.vel.x * dt + carry.x;
+    let dx = (body.vel.x + body.launch) * dt + carry.x;
     let x_before = pos.x;
     pos.x += dx;
     if dx != 0.0 {
@@ -257,6 +279,7 @@ pub fn step_body(
                     pos.x = pos.x.max((i + 1) as f32 * TILE + half.x);
                 }
                 body.vel.x = 0.0;
+                body.launch = 0.0;
                 blocked_x = true;
             }
         }
@@ -268,6 +291,7 @@ pub fn step_body(
             }
             pos.x = if dx > 0.0 { min.x - half.x } else { max.x + half.x };
             body.vel.x = 0.0;
+            body.launch = 0.0;
             blocked_x = true;
         }
     }
@@ -323,10 +347,12 @@ pub fn step_body(
     }
     if ground {
         body.vel.y = 0.0;
+        body.launch = 0.0;
     }
+    let launch = (!ground && !blocked_x).then_some(carrier).flatten().filter(|c| c.launches).map(|c| c.carry.x / dt);
     body.on_ground = ground;
     body.riding = riding;
-    Contact { ground, riding, was_on_ground, fall_speed, blocked_x }
+    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch }
 }
 
 /// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;
@@ -343,12 +369,13 @@ pub struct HanHead {
     pub weak: bool,
 }
 
-/// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone). Not a
-/// [`Jumped`] (the band doesn't count it).
+/// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone;
+/// `throw`: the fired-up band's running throw). Not a [`Jumped`] (the band doesn't count it).
 #[derive(Message, Debug, Clone, Copy)]
 pub struct HanBoosted {
     pub pos: Vec2,
     pub weak: bool,
+    pub throw: bool,
 }
 
 /// Upward speed of the weak boost, Han's in a band zone (px/s): Nat's feet rise 300²/2800 ≈ 32
@@ -365,6 +392,13 @@ pub const WEAK_BOOST_SPEED: f32 = 300.0;
 /// Steps' reach (a perfect GS double jump tops out at ~8.7 tiles) yet a comfortable boost.
 pub const BOOST_SPEED: f32 = 560.0;
 
+/// Upward speed of the fired-up band's running throw off Han's head (px/s): flatter than the
+/// boost, about a jump...
+pub const THROW_SPEED: f32 = 380.0;
+/// ...and the horizontal speed it adds on top of Nat's run (px/s, kept like a platform's speed
+/// until he lands or hits a wall: [`Body::launch`]).
+pub const THROW_CARRY: f32 = 120.0;
+
 /// Han's head as a carrier, if it's solid (`pos` is his box center).
 pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<Carrier> {
     head.solid.then(|| Carrier {
@@ -374,6 +408,7 @@ pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<
         top: pos.y + PLAYER_SIZE.1 / 2.0,
         prev_top: prev.y + PLAYER_SIZE.1 / 2.0,
         carry: pos - prev,
+        launches: false,
     })
 }
 
@@ -452,13 +487,20 @@ fn player_step(
             body.vel.y = WEAK_BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: true });
+            boosted.write(HanBoosted { pos: pos.0, weak: true, throw: false });
+        } else if on_han.is_some_and(|h| h.boost) && groove.fired_up() {
+            // The running throw: flat and far, and the toot's fresh again.
+            body.vel.y = THROW_SPEED;
+            body.launch = ctl.facing * THROW_CARRY;
+            ctl.has_toot = true;
+            ctl.weak_toot = false;
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true });
         } else if on_han.is_some_and(|h| h.boost) {
             // The plunger boost: way up, and the toot's fresh again.
             body.vel.y = BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: false });
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false });
         } else {
             body.vel.y = JUMP_SPEED * groove.jump_scale();
             if groove.on_the_one() {
@@ -474,8 +516,9 @@ fn player_step(
         ctl.cut_armed = true;
         ctl.uncut = 0.0;
         ctl.bouncing = false;
+        // Still riding for this step: `step_body` carries the jump off with the platform and
+        // hands over its speed.
         body.on_ground = false;
-        body.riding = None;
     } else if pressed && ctl.has_toot && !slipping {
         let base = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
         // Letting go of jump to toot cut the rise: the overtones count the rise he'd have had
@@ -512,6 +555,9 @@ fn player_step(
         }
     }
     let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, dt);
+    if let Some(v) = contact.launch {
+        body.launch = v.clamp(-LAUNCH_MAX, LAUNCH_MAX);
+    }
     let mut ground = contact.ground;
     let on_grease = ground && contact.riding.is_none() && grease_underfoot(level, pos.0, body.half);
     ctl.on_grease = on_grease;

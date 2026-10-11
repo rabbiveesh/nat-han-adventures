@@ -1,8 +1,8 @@
 //! Han's navigation graph: the validator's reachability graph (standable cells and simulated
 //! jump arcs) with Han's own physics ([`Env::han`]: his run speed, his 3 toots), on his view of
 //! the level ([`Map::for_han`]: flies and spray jets don't hurt him, spikes and sewage he steers
-//! clear of), minus the few cells he keeps out of ([`Level::han_keeps_out`]: a waltz row, a
-//! grease chute's grease).
+//! clear of), minus the few cells he keeps out of ([`Level::han_keeps_out`]: a grease
+//! chute's grease).
 //!
 //! Built lazily: a cell's out-edges are simulated the first time a route search reaches it
 //! (and kept for the level visit), so a level load costs nothing and a route costs a few
@@ -112,6 +112,7 @@ pub(crate) fn flight(map: &Map, env: &Env, cell: Cell, m: &HanMove) -> Option<Fl
         cut: !m.jump,
         toots: m.toots,
         toot_speed: env.toot,
+        carry: 0.0,
     })
 }
 
@@ -126,7 +127,7 @@ const TOOT_COST: f32 = 0.08;
 pub enum Route {
     /// The edges to take, in order (empty: already there).
     Found(Vec<Edge>),
-    /// No way there (with Han's physics, keeping out of a waltz row and a chute's grease).
+    /// No way there (with Han's physics, keeping off a chute's grease).
     NoRoute,
     /// Ran out of the simulation budget: ask again next time (the cache keeps the work).
     Budget,

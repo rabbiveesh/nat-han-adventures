@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use formal_model::*;
-use nat_han_adventures::audio::{Harmony, director};
+use nat_han_adventures::audio::{Harmony, director, waltz::WALTZ_BPM};
 use nat_han_adventures::game::tuning::*;
 use nat_han_adventures::game::{Groove, SIDE_STAIN_LIFE};
 use nat_han_adventures::level::buddy::{Chasm, ChasmMarks, GsSwitch, chain_plays, chain_try};
@@ -336,10 +336,35 @@ fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     out
 }
 
-/// Recipes for a waltz row: three even ground jumps (as quick as the hop in `g` allows), a
-/// call with the third, then walk to the row and dash through (`dash` s); or first wait out
-/// what's held.
-fn waltz_recipes(g: &Groove, dash: f32) -> Vec<Recipe> {
+/// Recipes for a fired-up chasm: the level's nugget line, a call with the last nugget, the
+/// run-up to the edge, a wait there for Han (`wait` s), a hop onto his head, and the throw off
+/// it (the take-off): the band must still be fired up for the throw's flight.
+fn chasm_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
+    let speed = RUN_SPEED * g.speed_scale * 0.9;
+    let hop = air_time(g, f32::INFINITY, None);
+    let mut out = Vec::new();
+    for wait in [0.5, 1.5, 3.0] {
+        let mut ev: Vec<(f32, Act)> = nuggets.iter().map(|&d| (d * TILE / speed, Act::NUGGET)).collect();
+        let last = ev.last().map_or(0.0, |e| e.0);
+        ev.push((last, Act::CALL));
+        let hop_at = last + run_up * TILE / speed + wait;
+        ev.push((hop_at, Act::JUMP));
+        let mut acts = timeline(&ev);
+        acts.push(Act::Wait(ticks(hop).max(1) as u16));
+        out.push(Recipe {
+            name: format!("{} nuggets at {:.0} px/s, hop onto Han after {wait}s, the throw", nuggets.len(), speed),
+            acts,
+            cross: ticks(1.5) + 1,
+        });
+    }
+    out
+}
+
+/// Recipes for a glide launch: three even ground jumps (as quick as the hop in `g` allows),
+/// a call with the third, then the walk onto the platform (2.5 s) and a wait of up to a round
+/// of its path (`wait` s) for the glide that sweeps its fast middle, and the jump on a glide:
+/// the waltz must play for the bar after (its ONE). Or first wait out what's held.
+fn waltz_recipes(g: &Groove, wait: f32) -> Vec<Recipe> {
     let hop = air_time(g, 0.05, None);
     let mut out = Vec::new();
     for pre in [0, HOLD_TICKS + director::MUSIC_CHECK_SECS as i32 * 4] {
@@ -347,26 +372,39 @@ fn waltz_recipes(g: &Groove, dash: f32) -> Vec<Recipe> {
             if gap < hop {
                 continue;
             }
-            let p = pre as f32 * TICK;
-            let ev = [
-                (p, Act::JUMP),
-                (p + gap, Act::JUMP),
-                (p + 2.0 * gap, Act::JUMP),
-                (p + 2.0 * gap, Act::CALL),
-                (p + 2.0 * gap + 2.5, Act::Wait(0)),
-            ];
-            let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
-            out.push(Recipe {
-                name: format!(
-                    "{}3 jumps {gap}s apart (hop {hop:.2}s), 2.5s to the row",
-                    if pre > 0 { "wait 40s, " } else { "" }
-                ),
-                acts,
-                cross: ticks(dash) + 1,
-            });
+            for w in [0.0, wait] {
+                let p = pre as f32 * TICK;
+                let ev = [
+                    (p, Act::JUMP),
+                    (p + gap, Act::JUMP),
+                    (p + 2.0 * gap, Act::JUMP),
+                    (p + 2.0 * gap, Act::CALL),
+                    (p + 2.0 * gap + 2.5 + w, Act::Wait(0)),
+                ];
+                let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
+                out.push(Recipe {
+                    name: format!(
+                        "{}3 jumps {gap}s apart (hop {hop:.2}s), 2.5s to the platform, {w}s for the glide",
+                        if pre > 0 { "wait 40s, " } else { "" }
+                    ),
+                    acts,
+                    cross: ticks(3.0 * 60.0 / WALTZ_BPM) + 1,
+                });
+            }
         }
     }
     out
+}
+
+/// The longest period of the platforms a glide launch at `m` takes off from (a round of
+/// glides: the wait for the one that sweeps the fast middle of the path).
+fn glide_wait(level: &Level, m: &GateMark) -> f32 {
+    level
+        .platforms
+        .iter()
+        .filter(|p| p.dx != 0.0 && (m.c0..=m.c1).contains(&(p.col as i32)) && (m.r0..=m.r1 + 1).contains(&(p.row as i32)))
+        .map(|p| p.period)
+        .fold(0.0, f32::max)
 }
 
 /// Recipes for a grease chute: `laps` × (splat, respawn, walk back `walk` s grabbing
@@ -458,8 +496,9 @@ fn band_gates(level: &Level) -> Vec<(GateMark, Need, &'static str)> {
             let (need, what) = match m.topic {
                 Topic::Giant => (Need::Band(Harmony::Coltrane), "giant wall"),
                 Topic::Gap => (Need::Band(Harmony::Quartal), "long gap"),
-                Topic::Waltz => (Need::Band(Harmony::Waltz), "waltz row"),
+                Topic::Waltz => (Need::Band(Harmony::Waltz), "glide launch"),
                 Topic::Grip => (Need::Grip, "grease chute"),
+                Topic::Chain => (Need::Band(Harmony::Quartal), "fired-up chasm"),
                 _ => return None,
             };
             Some((*m, need, what))
@@ -475,7 +514,11 @@ fn recipes(level: &Level, m: &GateMark, g: &Groove) -> Vec<Recipe> {
             let (line, run_up) = nugget_line(level, m);
             gap_recipes(g, &line, run_up)
         }
-        Topic::Waltz => waltz_recipes(g, (m.c1 - m.c0 + 1) as f32 * TILE / (RUN_SPEED * g.speed_scale * 0.9)),
+        Topic::Waltz => waltz_recipes(g, glide_wait(level, m)),
+        Topic::Chain => {
+            let (line, run_up) = nugget_line(level, m);
+            chasm_recipes(g, &line, run_up)
+        }
         _ => {
             let (walk, ghosts) = chute_lap(level, m);
             chute_recipes(walk, ghosts)
@@ -589,7 +632,7 @@ fn deep_boost_chains_cant_bypass_band_gates() {
         let mut tried = 0;
         for (li, level) in levels.iter().enumerate() {
             let map = Map::new(level);
-            for (m, _, what) in band_gates(level) {
+            for (m, _, what) in band_gates(level).into_iter().filter(|g| g.0.topic != Topic::Chain) {
                 // Heading the way you come to it from the start; take-offs on the mark's rows
                 // up to two chasms' width (28 tiles) before it; landing past its far side.
                 let dir = if (level.start.0 as i32) < m.c0 { 1 } else { -1 };

@@ -27,7 +27,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   |---|---|---|---|
   | Giant Steps (Coltrane changes) | 5 toots | low gravity, slower run | 6-tall giant walls |
   | Fired up (quartal) | 4 quick nuggets | run ×1.35 | 11-tile long gaps |
-  | Waltz (3/4) | 3 evenly spaced plain hops | world on the beat; jump on ONE ×1.15 + weak toot | waltz rows (spray tunnels) |
+  | Waltz (3/4) | 3 evenly spaced plain hops | world on the beat; jump on ONE ×1.15 + weak toot | glide launches (a jump off a platform gliding on ONE) |
   | Nervous (melodic minor) | 3+ deaths (grip is a level-long layer) | slow-mo; **sweaty grip** on grease | grease chutes |
   | Laughing band (tuning medley) | a slip: a death at a skill the profile finds easy (never a stain pit or chute); wears off 10 s after the last | bouncy landings, a nudge per phrase (below) | — |
   Charge, then call: a full counter holds its charge until Down calls the band, which plays
@@ -39,13 +39,14 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   camera roll ("SEASICK"); Carlos alpha = Nat drawn at 85%, jumps ×0.95 ("MELTING");
   Bohlen–Pierce = gravity ×1.05 pulses on every third beat ("ALIEN"); and run speed staggers down
   to −8% with the pitch wobble (never faster). Nothing adds reach past normal physics (the gate
-  margins are a few px: +8% run speed opens waltz rows), and the campaign stays beatable with the
+  margins are a few px: +8% run speed opens gates meant for other modes), and the campaign stays beatable with the
   melting jump or the alien gravity in force all along (`Physics::laughing`).
 - **Death as a mechanic**: splat stains on spikes (standable), rafts in sewage, side splats that
   fade at grease-chute ends; stain pits and chutes in the levels.
 - **Han** (`docs/han-buddy.md`): graph navigation, plunger boost (refreshes the toot), mid-air
   intercepts, shield escort through sprays, sewage rafts, per-mode physics, weak boost + grumbles
-  near band gates, overuse limit; buddy ledges, shield rows, chain chasms, buddy raft pools.
+  near band gates, overuse limit, the fired-up running throw; buddy ledges, shield rows,
+  fired-up chasms, buddy raft pools.
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
@@ -60,8 +61,12 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 
 ## In flight
 Nothing: everything from the original session is merged. Deadly spray cans landed (a can's tile
-kills while firing; Han's plug covers it; free-play waltz rows are floor cans with a low roof),
+kills while firing; Han's plug covers it; free-play waltz rooms are now glide launches),
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
+- **Buddy vs band, step 4** (Han's per-mode tricks): the fired-up running throw is in (chain
+  chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up).
+  Next: the Giant Steps mega-boost (replacing buddy ledges), the nervous wall-cling, the
+  waltz trapeze, the laughing boing boost, shield rows out, Han nearly silent.
 
 ## Planned (agreed, not started)
 - **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics

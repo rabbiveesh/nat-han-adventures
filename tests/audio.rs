@@ -240,24 +240,32 @@ fn melodies_follow_the_reharmonization() {
                     notes.push((a, x, y));
                 }
             }
-            // Contour: direction kept for (almost) every step; no interval changes wildly.
-            let mut kept = 0;
-            let mut worst = 0;
-            for w in notes.windows(2) {
-                let (d_new, d_old) = (w[1].1 - w[0].1, w[1].2 - w[0].2);
-                kept += (d_new.signum() == d_old.signum()) as usize;
-                worst = worst.max((d_new - d_old).abs());
-            }
-            let share = kept as f64 / (notes.len() - 1) as f64;
-            println!("{name} {h:?}: contour kept {:.1}%, worst interval change {worst}", share * 100.0);
-            assert!(share >= 0.9, "{name} {h:?}: contour kept only {:.0}%", share * 100.0);
-            assert!(worst <= 12, "{name} {h:?}: an interval changed by {worst}");
             let seg = |e: &mml::Event| melody::sounding(&slots, beats, e.start, e.dur);
             let new = match h {
                 Harmony::Coltrane => theory::coltrane(&c).merged(),
                 _ => slots.clone(),
             };
             let new_seg = |e: &mml::Event| melody::sounding(&new, beats, e.start, e.dur);
+            // Contour: direction kept for (almost) every step; no interval changes wildly. A
+            // written repeat over two different new chords is two degrees of two chords, so it
+            // need not stay a repeat (a syncopated tune like I Got Rhythm repeats notes across
+            // the changes); repeats over one chord are checked below.
+            let mut kept = 0;
+            let mut steps = 0;
+            let mut worst = 0;
+            for w in notes.windows(2) {
+                let (d_new, d_old) = (w[1].1 - w[0].1, w[1].2 - w[0].2);
+                worst = worst.max((d_new - d_old).abs());
+                if d_old == 0 && new_seg(w[0].0) != new_seg(w[1].0) {
+                    continue;
+                }
+                steps += 1;
+                kept += (d_new.signum() == d_old.signum()) as usize;
+            }
+            let share = kept as f64 / steps as f64;
+            println!("{name} {h:?}: contour kept {:.1}%, worst interval change {worst}", share * 100.0);
+            assert!(share >= 0.9, "{name} {h:?}: contour kept only {:.0}%", share * 100.0);
+            assert!(worst <= 12, "{name} {h:?}: an interval changed by {worst}");
             for w in notes.windows(2) {
                 // Repeated notes over one chord (old and new) stay repeated.
                 if w[0].2 == w[1].2 && seg(w[0].0) == seg(w[1].0) && new_seg(w[0].0) == new_seg(w[1].0) {

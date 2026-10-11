@@ -1,9 +1,8 @@
 //! Han's body and reflexes, pure (no Bevy app): his per-mode physics ([`HanPhys`]), the
 //! controller that turns an intent ([`HanInput`]) into motion with the shared body step
 //! ([`drive`]), and the goalkeeper reflex that gets him under a falling Nat ([`intercept`]).
-//! The game's Han (`game::han`) runs exactly this code every step, and the level validator
-//! runs it to prove chain-jump chasms crossable ([`chain_cross`]), so what the validator
-//! proves is what Han does.
+//! The game's Han (`game::han`) runs exactly this code every step, and the tier 2 checks run
+//! it (a fired-up chain over a chasm, [`chain_try`]), so what they prove is what Han does.
 //!
 //! Coordinates here are the game's: world pixels, y up.
 
@@ -12,7 +11,7 @@ use bevy::prelude::*;
 use super::{Level, TILE};
 use crate::audio::Harmony;
 use crate::game::{
-    BOOST_SPEED, Body, Carrier, Contact, Fall, WEAK_BOOST_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, han_carrier, move_towards,
+    BOOST_SPEED, Body, Carrier, Contact, FIRED_UP_SPEED, Fall, WEAK_BOOST_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, THROW_CARRY, THROW_SPEED, han_carrier, move_towards,
     step_body, tuning::*, HanHead,
 };
 
@@ -28,19 +27,18 @@ pub const HAN_GS_FLOAT: f32 = 0.8;
 pub const HAN_DIVE: f32 = 1.4;
 /// The laughing band: Han rolls along, bouncier than Nat (bounce speed × this).
 pub const HAN_ROLL_BOUNCE: f32 = 1.3;
-/// In mid-air Han's head holds Nat only while his feet are at most this far (px) above where
-/// he last stood (he's a plumber, not a crane): it bounds how high a chain of boosts can
-/// launch from, which the validator's proof relies on. Catches over a drop are mostly below
-/// it anyway.
-pub const HAN_CATCH_RISE: f32 = 2.0 * TILE;
-/// ...and over a chain-jump chasm (in its mark's columns), where chains are the point.
+/// In mid-air Han's head holds Nat only over a fired-up chasm (in its mark's columns), and
+/// only while his feet are at most this far (px) above where he last stood (he's a plumber,
+/// not a crane): it bounds how high a chain of throws can launch from, which the validator's
+/// proof relies on.
 pub const HAN_CHASM_CATCH_RISE: f32 = 5.0 * TILE;
 
-/// Does Han's head hold Nat (is it a carrier)? Standing: always. In mid-air: only outside the
-/// band zones (no weak-boost chains there), and only [`HAN_CATCH_RISE`] above his last floor
-/// (`rise`: px his feet are above it; [`HAN_CHASM_CATCH_RISE`] over a chasm).
-pub fn head_holds(grounded: bool, rise: f32, in_zone: bool, in_chasm: bool) -> bool {
-    grounded || (!in_zone && rise <= if in_chasm { HAN_CHASM_CATCH_RISE } else { HAN_CATCH_RISE })
+/// Does Han's head hold Nat (is it a carrier)? Standing: always. In mid-air: only while the
+/// band's fired up (`fired`: catching Nat in the air to throw him again is the fired-up
+/// chain), over a fired-up chasm (`in_chasm`), outside the band zones, and only
+/// [`HAN_CHASM_CATCH_RISE`] above his last floor (`rise`: px his feet are above it).
+pub fn head_holds(grounded: bool, rise: f32, in_zone: bool, in_chasm: bool, fired: bool) -> bool {
+    grounded || (fired && in_chasm && !in_zone && rise <= HAN_CHASM_CATCH_RISE)
 }
 
 /// Han's physics under the music.
@@ -64,14 +62,21 @@ pub struct HanPhys {
 impl HanPhys {
     /// Han's physics for the band's mood:
     /// - Giant Steps: floatier than Nat (gravity × [`HAN_GS_FLOAT`] more), paddling;
-    /// - fired up (quartal): Han does *not* speed up: he can't keep up, wheezes;
+    /// - fired up (quartal): Han speeds up as Nat does ([`FIRED_UP_SPEED`]), so he can run
+    ///   back under a thrown Nat;
     /// - waltz: he moves only on the beat (see [`waltz_step`]);
     /// - nervous: normal (he clings close and trembles: that's the brain and the art);
     /// - laughing band: he rolls and bounces.
     pub fn of(groove: &Groove) -> HanPhys {
         let gs = groove.harmony == Harmony::Coltrane;
         let gravity = if gs { GRAVITY * GIANT_STEPS_GRAVITY * HAN_GS_FLOAT } else { GRAVITY };
-        let speed = if gs { GIANT_STEPS_SPEED } else { 1.0 };
+        let speed = if gs {
+            GIANT_STEPS_SPEED
+        } else if groove.fired_up() {
+            FIRED_UP_SPEED
+        } else {
+            1.0
+        };
         HanPhys {
             fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt() },
             speed: HAN_RUN_SPEED * speed,
@@ -241,7 +246,9 @@ pub fn intercept(han: &Kin, nat: &Kin, toots_left: u8, gravity: f32, floor_ahead
     let t = time_to_fall_to(nat, head, gravity).unwrap_or(0.0).min(0.6);
     let x_to = nat.pos.x + nat.vel.x * t;
     let dx = x_to - han.pos.x;
-    let dir = if dx.abs() > 1.5 { dx.signum() } else { 0.0 };
+    // On the ground, brake in time to stop under him (a fired-up Han dives fast).
+    let stopping = han.grounded && han.vel.x * dx > 0.0 && dx.abs() < han.vel.x * han.vel.x / (2.0 * GROUND_DECEL);
+    let dir = if dx.abs() > 1.5 && !stopping { dx.signum() } else { 0.0 };
     let running_off = han.grounded && dir != 0.0 && !floor_ahead;
     let high = above > 2.5 * TILE && dx.abs() < 2.5 * TILE && nat.vel.y < 60.0;
     let jump = han.grounded && (running_off || high);
@@ -264,7 +271,7 @@ pub fn intercept(han: &Kin, nat: &Kin, toots_left: u8, gravity: f32, floor_ahead
     HanInput { dir, speed: HAN_DIVE, jump, hold, toot }
 }
 
-/// A chain-jump chasm: walk row `row`, open (bottomless) columns `c0..=c1`.
+/// A fired-up chasm: walk row `row`, open (bottomless) columns `c0..=c1`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Chasm {
     pub row: i32,
@@ -294,18 +301,6 @@ pub enum GsSwitch {
     After { nth: u32, delay: f32 },
 }
 
-/// The ways the band might switch to Giant Steps during a chain (every number of earlier toots,
-/// at once or a bar later).
-pub fn gs_switches() -> Vec<GsSwitch> {
-    let mut v = vec![GsSwitch::Never];
-    for nth in 1..=5 {
-        for delay in [0.0, 1.0, 2.0] {
-            v.push(GsSwitch::After { nth, delay });
-        }
-    }
-    v
-}
-
 /// The plays a human might use for a chain.
 pub fn chain_plays() -> Vec<ChainPlay> {
     let mut v = Vec::new();
@@ -323,8 +318,8 @@ pub fn stand(level: &Level, (c, r): (i32, i32)) -> Vec2 {
     Vec2::new(center.x, center.y - TILE / 2.0 + HALF.y)
 }
 
-/// Which columns count as a chain-jump chasm's (Han's head holds Nat [`HAN_CHASM_CATCH_RISE`]
-/// up over them, not just [`HAN_CATCH_RISE`]) in a [`chain_try`].
+/// Which columns count as a fired-up chasm's (Han's head holds Nat in mid-air over them, up to
+/// [`HAN_CHASM_CATCH_RISE`], and nowhere else) in a [`chain_try`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChasmMarks {
     /// The level's `chain` marks; in a level without any, the chasm tried is taken as marked
@@ -332,19 +327,21 @@ pub enum ChasmMarks {
     /// them).
     AsFound,
     /// The level's `chain` marks only, exactly as the game reads them (a chain tried anywhere
-    /// else, e.g. towards a band gate, gets the plain catch height).
+    /// else, e.g. towards a band gate, gets no mid-air catches).
     Level,
 }
 
-/// Simulate one chain over `chasm` from its edge (heading `dir`), Nat playing `play`, Han
-/// following with the [`intercept`] reflex from [`FOLLOW_GAP`] behind, the band switching to
-/// Giant Steps per `gs`. Returns the cell Nat lands in past the chasm, if he does.
+/// Simulate one fired-up chain over `chasm` from its edge (heading `dir`), the band fired up,
+/// Nat playing `play`, Han following with the [`intercept`] reflex from [`FOLLOW_GAP`] behind,
+/// the band switching to Giant Steps per `gs`. Returns the cell Nat lands in past the chasm, if
+/// he does.
 ///
-/// Han's head follows the game's rules (`game::han`): in a band zone ([`Level::in_band_zone`],
-/// at his feet or a row up) it holds Nat only while he stands, and the boost off it is the
-/// weak one ([`WEAK_BOOST_SPEED`]); in mid-air it holds Nat only [`HAN_CATCH_RISE`] above
-/// his last floor ([`HAN_CHASM_CATCH_RISE`] over a chasm, per `marks`); and never where he
-/// keeps out ([`Level::han_keeps_out`]).
+/// Han's head follows the game's rules (`game::han`, [`head_holds`]): in a band zone
+/// ([`Level::in_band_zone`], at his feet or a row up) it holds Nat only while he stands, and
+/// the boost off it is the weak one ([`WEAK_BOOST_SPEED`]); fired up, jumping off it is the
+/// running throw ([`THROW_SPEED`], [`THROW_CARRY`]); in mid-air it holds Nat only while the
+/// band's fired up, over a chasm (per `marks`), [`HAN_CHASM_CATCH_RISE`] above his last
+/// floor; and never where he keeps out ([`Level::han_keeps_out`]).
 pub fn chain_try(
     level: &Level,
     chasm: &Chasm,
@@ -360,18 +357,18 @@ pub fn chain_try(
     // Nat runs from two tiles back and jumps 4 px before the edge's end.
     let edge_x = start.x + d * (TILE / 2.0);
     let mut nat = start - Vec2::new(d * 2.0 * TILE, 0.0);
+    let mut groove = Groove::of(Harmony::Quartal);
     let mut nb = Body::player();
     nb.on_ground = true;
-    nb.vel.x = d * RUN_SPEED;
+    nb.vel.x = d * RUN_SPEED * groove.speed_scale;
     let mut han = nat - Vec2::new(d * FOLLOW_GAP, 0.0);
     let mut hb = Body::player();
     hb.on_ground = true;
-    hb.vel.x = d * RUN_SPEED;
+    hb.vel.x = nb.vel.x;
     let mut hctl = HanCtl::default();
     let han_id = Entity::from_raw_u32(1).unwrap_or(Entity::PLACEHOLDER);
     let mut head = HanHead { solid: true, boost: true, block: false, weak: false };
     let mut han_floor = han.y;
-    let mut groove = Groove::default();
     let (mut jumped, mut has_toot, mut toots, mut t, mut last_launch, mut tooted_since) =
         (false, true, 0u32, 0.0f32, 0.0f32, false);
     let mut gs_at = f32::INFINITY;
@@ -409,7 +406,8 @@ pub fn chain_try(
             || (marks == ChasmMarks::AsFound
                 && (chasm.c0..=chasm.c1).contains(&feet.0)
                 && !level.gates.iter().any(|g| g.topic == super::Topic::Chain));
-        head.solid = head_holds(hb.on_ground, han.y - han_floor, zone, over) && !level.han_keeps_out(feet);
+        head.solid =
+            head_holds(hb.on_ground, han.y - han_floor, zone, over, groove.fired_up()) && !level.han_keeps_out(feet);
         head.weak = zone;
         // --- Nat.
         nb.vel.x = move_towards(nb.vel.x, d * speed, if nb.on_ground { GROUND_ACCEL } else { AIR_ACCEL } * groove.speed_scale * DT);
@@ -420,7 +418,14 @@ pub fn chain_try(
             jumped = true;
             last_launch = t;
         } else if jumped && on_han && nb.on_ground {
-            nb.vel.y = if head.weak { WEAK_BOOST_SPEED } else { BOOST_SPEED };
+            if head.weak {
+                nb.vel.y = WEAK_BOOST_SPEED;
+            } else if groove.fired_up() {
+                nb.vel.y = THROW_SPEED;
+                nb.launch = d * THROW_CARRY;
+            } else {
+                nb.vel.y = BOOST_SPEED;
+            }
             nb.on_ground = false;
             nb.riding = None;
             has_toot = true;
@@ -461,16 +466,3 @@ pub fn chain_try(
 
 /// Han starts this far behind Nat (px): his follow slot, ~1.5 tiles.
 pub const FOLLOW_GAP: f32 = 1.5 * TILE;
-
-/// Can a human chain across `chasm` heading `dir`, whenever the band switches to Giant Steps?
-/// For every [`GsSwitch`], some [`ChainPlay`] must land past it. Returns the landing of the
-/// no-switch case.
-pub fn chain_cross(level: &Level, chasm: &Chasm, dir: i32) -> Option<(i32, i32)> {
-    let plays = chain_plays();
-    let mut first = None;
-    for gs in gs_switches() {
-        let hit = plays.iter().find_map(|&p| chain_try(level, chasm, dir, p, gs, ChasmMarks::AsFound))?;
-        first.get_or_insert(hit);
-    }
-    first
-}

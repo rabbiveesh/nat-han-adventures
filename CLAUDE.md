@@ -26,7 +26,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/input.rs` leafwing `Action`s on one global entity: `Single<&ActionState<Action>>`.
 - `src/events.rs` gameplay messages (NuggetCollected, Jumped, Landed, PlayerDied, ...).
 - `src/level.rs` the ASCII level format (documented at the top of the file, gate marks
-  included) and parser; `src/level/validate.rs` the level validator (reachability, gates,
+  included) and parser; `src/level/validate.rs` the level validator (reachability, platform carry, gates,
   splat stains, grease chutes, Han's gates, teaching hints); `src/level/nav.rs` Han's lazily
   built nav graph; `src/level/buddy.rs` Han's physics and reflexes (shared by the game and the
   validator). Pure and wasm-safe; `tests/levels.rs` runs the validator on the campaign.

@@ -12,8 +12,8 @@
 //! his physics, built lazily and cached) to a follow slot [`FOLLOW_GAP`] behind Nat on the side
 //! Nat came from, re-planning a few times a second when Nat moves on, and steers his body along
 //! the walks, jumps and toots (with corrections), waiting for moving platforms to come round.
-//! He follows Nat right up to the band's gates (the level's `gate:` marks), keeping out only of
-//! a waltz row and a grease chute's grease ([`Level::han_keeps_out`](crate::level::Level)).
+//! He follows Nat right up to the band's gates (the level's `gate:` marks), keeping off only a grease
+//! chute's grease ([`Level::han_keeps_out`](crate::level::Level)).
 //! He takes off on the run when the jump still lands right from there at that speed (else he
 //! stops at the take-off point, as planned). **Lost** (no route, or stuck for [`STUCK_SECS`]),
 //! or left behind for [`FALL_BEHIND_SECS`], and out of sight, he
@@ -22,8 +22,13 @@
 //! **Mechanics.**
 //! - His head is a one-way platform ([`HanHead`]); jumping off it is the **plunger boost**
 //!   ([`BOOST_SPEED`](super::BOOST_SPEED), which also refreshes Nat's toot). He **braces**
-//!   (plunger up) when Nat is coming down for one. In mid-air his head holds Nat only up to
-//!   [`HAN_CATCH_RISE`](crate::level::buddy::HAN_CATCH_RISE) above where he last stood.
+//!   (plunger up) when Nat is coming down for one.
+//! - **Fired up** he runs as fast as Nat does and jumping off his head is the **running
+//!   throw** ([`THROW_SPEED`](super::THROW_SPEED), flat, Nat keeping
+//!   [`THROW_CARRY`](super::THROW_CARRY) on top of his run). Over a fired-up chasm (its
+//!   `chain` mark) he catches Nat in mid-air to throw him again, up to
+//!   [`HAN_CHASM_CATCH_RISE`](crate::level::buddy::HAN_CHASM_CATCH_RISE) above where he last
+//!   stood; nowhere else does his head hold Nat in mid-air.
 //! - **The band zone** ([`HAN_BERTH`](crate::level::HAN_BERTH) columns around a band or death
 //!   gate's mark, `Level::in_band_zone`): his boost is the weak one
 //!   ([`WEAK_BOOST_SPEED`](super::WEAK_BOOST_SPEED), about a normal jump) and he grumbles
@@ -140,7 +145,6 @@ pub fn grumble_line(topic: Option<Topic>, n: u32) -> &'static str {
 
 /// At most one grumble this often (s).
 pub const GRUMBLE_EVERY: f32 = 2.0;
-pub const WHEEZE_LINE: &str = "Wheeze... too fast... go on, Nat!";
 pub const JET_LINES: &[&str] = &["Pssht! Ha! Tickles!", "Smells like... lavender?", "Pssht yourself!"];
 pub const FLY_LINE: &str = "Shoo! Shoo! Union rules!";
 
@@ -213,7 +217,7 @@ pub enum HanPose {
     March,
     /// Floating down on his plunger.
     Parachute,
-    /// Hands on knees: his back (overuse), or wheezing (fired-up band).
+    /// Hands on knees: his back (overuse).
     Winded,
     /// Splatted in sewage, sinking.
     Splat,

@@ -31,7 +31,7 @@
 //! decision that comes out the same as what's playing changes nothing.
 //!
 //! The music also bends the physics (`crate::game::Groove`), and levels have gates that need a
-//! mode: giant walls need Giant Steps, long gaps a fired-up band, waltz rows a waltzing one.
+//! mode: giant walls need Giant Steps, long gaps a fired-up band, glide launches a waltzing one.
 //! A charge never decays and a call always plays, so a gate's mode is always one call away.
 //!
 //! Rules ([`choose_filters`], when nothing is held), harmony first:

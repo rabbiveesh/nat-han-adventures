@@ -17,13 +17,13 @@ pub enum Skill {
     GiantSteps,
     /// Long gaps (jumpable while the band is fired up).
     FiredUp,
-    /// Waltz rows.
+    /// Glide launches (the waltz).
     Waltz,
     /// Death-mechanic rooms: some rooms expect you to die (stains).
     Stains,
     /// Grease chutes with sweaty grip.
     Grease,
-    /// Han's gates: buddy ledges, buddy raft pools, shield rows, chain chasms.
+    /// Han's gates: buddy ledges, buddy raft pools, shield rows, fired-up chasms.
     Buddy,
 }
 

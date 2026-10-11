@@ -12,7 +12,7 @@
 //! | original | – | normal | – |
 //! | Coltrane ("GIANT STEPS!") | 5 toots in 20s | gravity ×[`GIANT_STEPS_GRAVITY`], run ×[`GIANT_STEPS_SPEED`] | giant walls (6 tiles tall) |
 //! | quartal ("FIRED UP") | 4 quick nuggets | run ×[`FIRED_UP_SPEED`] | long gaps (11 tiles) |
-//! | waltz ("THE BAND WALTZES") | 3 evenly spaced ground jumps | the world dances in 3 (below); jump on ONE ×[`WALTZ_ONE_BOOST`] | waltz rows (spray cans) |
+//! | waltz ("THE BAND WALTZES") | 3 evenly spaced ground jumps | the world dances in 3 (below); jump on ONE ×[`WALTZ_ONE_BOOST`] | glide launches (a jump off a gliding platform) |
 //! | melodic minor ("NERVOUS") | 3 deaths | game time ×[`NERVOUS_TIME`] (slow motion); sweaty grip: brakes and jumps on grease ([`Groove::grip`]) | grease chutes |
 //! | + laughing band (tuning medley) | 2 deaths at one checkpoint | landings bounce; each phrase's tuning nudges (below) | none: comedy |
 //!
@@ -25,11 +25,12 @@
 //! - **Spray cans** all fire on *the big ONE* — the downbeat of every other bar, where the
 //!   4/4 downbeat lands and the drummer kicks hardest — for one beat, then hold off for the
 //!   other five ([`Groove::waltz_spray_on`]): 0.5 s on, 2.5 s off, against the normal 1.0 s on,
-//!   1.5 s off. That long breath is what gets you through a *waltz row* (a run of cans under a
-//!   low ceiling, too long to cross in 1.5 s even fired up: see `tests/levels.rs`).
+//!   1.5 s off.
 //! - **Moving platforms** glide on ONE and hold on 2–3 ([`Groove::waltz_glide_rate`]): their
 //!   clock runs three times as fast (eased) during beat ONE and stops for the rest of the bar,
-//!   so the path and the average speed stay the same.
+//!   so the path and the average speed stay the same. A jump off one keeps its speed
+//!   (`game::physics`, "Platform carry"): off a glide, up to 4.5× its everyday speed, that's
+//!   a *glide launch* across a gap nothing else crosses (`level::validate`).
 //! - **Flies** circle once per bar.
 //! - **Jump on ONE**: a ground jump within ±[`WALTZ_ONE_WINDOW`] s of any downbeat gets
 //!   ×[`WALTZ_ONE_BOOST`] jump speed and a golden sparkle, and every
@@ -58,7 +59,7 @@
 //! Small, and never unfair: none of them opens a band gate or closes a way through.
 //! - The harmonic toot only ever reaches the apex a perfectly timed normal toot would from
 //!   the same moment, sooner, so it lands sooner: no higher, no farther (this module's tests).
-//! - The drunk sway only slows Nat (any faster and a fired-up dash gets through a waltz row),
+//! - The drunk sway only slows Nat (any faster and a fired-up run clears a gap meant for another mode),
 //!   and its slowest is still above the validator's human margin (90% of top speed).
 //! - The melting jump and the alien gravity only take reach away (anything that adds some
 //!   opens a gate somewhere: the margins are a few px), and every level stays beatable with
@@ -257,6 +258,11 @@ impl Groove {
 
     pub fn giant_steps(&self) -> bool {
         self.harmony == Harmony::Coltrane
+    }
+
+    /// The band's fired up (quartal): Nat runs faster, and Han throws him off his head.
+    pub fn fired_up(&self) -> bool {
+        self.harmony == Harmony::Quartal
     }
 
     pub fn waltz(&self) -> bool {

@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use super::{
     BACK_WARN_LINE, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
     LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE,
-    WHEEZE_LINE, brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
+    brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
 };
 use crate::audio::Harmony;
 use crate::events::HanSays;
@@ -23,8 +23,8 @@ use crate::level::nav::{Edge, HanMove, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
 use crate::level::{Level, PlatformKind, TILE, ThingKind, Tile};
 
-/// Han's routes for the level visit (one graph per physics he's had: normal, Giant Steps, and
-/// on Side B fired up too).
+/// Han's routes for the level visit (one graph per physics he's had: normal, Giant Steps,
+/// fired up).
 #[derive(Resource)]
 pub struct HanNav {
     pub normal: Nav,
@@ -49,10 +49,12 @@ impl HanNav {
     pub fn for_groove(&mut self, groove: &Groove) -> &mut Nav {
         let side_b = self.side_b;
         let make = move |mode| if side_b { Nav::side_b(mode) } else { Nav::new(mode) };
-        match groove.harmony {
-            Harmony::Coltrane => self.giant.get_or_insert_with(|| make(Mode::GiantSteps)),
-            Harmony::Quartal if self.side_b => self.fired.get_or_insert_with(|| make(Mode::FiredUp)),
-            _ => &mut self.normal,
+        if groove.giant_steps() {
+            self.giant.get_or_insert_with(|| make(Mode::GiantSteps))
+        } else if groove.fired_up() {
+            self.fired.get_or_insert_with(|| make(Mode::FiredUp))
+        } else {
+            &mut self.normal
         }
     }
 
@@ -107,11 +109,6 @@ pub struct Exec {
     pub wait: f32,
 }
 
-/// Lines Han says once per level visit.
-mod once {
-    pub const WHEEZE: u32 = 2;
-}
-
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct HanBrain {
@@ -145,11 +142,11 @@ pub struct HanBrain {
     pub boosts: u32,
     /// Parachute drops this level visit (stats, tests).
     pub drops: u32,
-    pub said: u32,
     /// Braced for Nat this step.
     pub braced: bool,
-    /// Where his feet were (world y) when he last stood on something: in mid-air his head holds
-    /// Nat only [`HAN_CATCH_RISE`](crate::level::buddy::HAN_CATCH_RISE) above it.
+    /// Where his feet were (world y) when he last stood on something: in mid-air (over a
+    /// fired-up chasm) his head holds Nat only
+    /// [`HAN_CHASM_CATCH_RISE`](crate::level::buddy::HAN_CHASM_CATCH_RISE) above it.
     pub floor_y: f32,
     /// Weak boosts given this level visit (stats, tests), grumbles said, and seconds since the
     /// last grumble.
@@ -189,7 +186,6 @@ impl Default for HanBrain {
             winded: 0.0,
             boosts: 0,
             drops: 0,
-            said: 0,
             braced: false,
             floor_y: 0.0,
             weak_boosts: 0,
@@ -290,7 +286,7 @@ fn slot_cell(map: &Map, level: &Level, nat: (i32, i32), x: f32) -> Option<(i32, 
 }
 
 /// Where Han's parachute opens: above Nat's area (behind him, as high as the ceiling allows,
-/// up to [`PARACHUTE_HEIGHT`]), not over a waltz row or a chute's grease.
+/// up to [`PARACHUTE_HEIGHT`]), not over a chute's grease.
 pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
     let mut best: Option<(f32, Vec2)> = None;
     // Behind Nat (the way he came) first: the first spot there with room to float down wins;
@@ -638,7 +634,7 @@ pub(super) fn think(
     {
         input = charge(level, &pos.0, &body, &brain.ctl, dir);
     }
-    // Keep out of a waltz row and a chute's grease (on foot).
+    // Keep off a chute's grease (on foot).
     if !side_b && !parachute && input.dir != 0.0 && body.on_ground {
         let here = level.han_keeps_out(feet_cell(level, pos.0));
         let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
@@ -691,21 +687,16 @@ pub(super) fn think(
     if lost && !side_b && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
-    // Fired up: he can't keep up.
-    if groove.harmony == Harmony::Quartal && !side_b && dx_nat.abs() > 8.0 * TILE && brain.said & once::WHEEZE == 0 {
-        brain.said |= once::WHEEZE;
-        say(&mut says, WHEEZE_LINE);
-    }
-
-    // --- His head: a perch for Nat (standing, or in mid-air not too high up and not in a band
-    // zone, see `head_holds`), the plunger boost, the weak one in a band zone.
+    // --- His head: a perch for Nat (standing, or, fired up, in mid-air not too high up and not
+    // in a band zone, see `head_holds`), the plunger boost (fired up: the throw), the weak one
+    // in a band zone.
     if body.on_ground {
         brain.floor_y = pos.0.y;
     }
     let up = matches!(brain.mode, HanMode::Follow | HanMode::Intercept | HanMode::Ahead { .. });
     let my_cell = feet_cell(level, pos.0);
     let zone = level.in_band_zone(my_cell) || level.in_band_zone((my_cell.0, my_cell.1 - 1));
-    let holds = head_holds(body.on_ground, pos.0.y - brain.floor_y, zone, level.in_chasm(my_cell.0))
+    let holds = head_holds(body.on_ground, pos.0.y - brain.floor_y, zone, level.in_chasm(my_cell.0), groove.fired_up())
         && !level.han_keeps_out(my_cell);
     *head = HanHead {
         solid: up && holds,
@@ -734,7 +725,6 @@ pub(super) fn think(
         }
         HanMode::Follow if running && groove.bouncy() => HanPose::Roll,
         HanMode::Follow if running => HanPose::Run,
-        HanMode::Follow if groove.harmony == Harmony::Quartal && !side_b && dx_nat.abs() > 4.0 * TILE => HanPose::Winded,
         HanMode::Follow => HanPose::Idle,
     };
     let facing_left = if brain.braced || pose == HanPose::Idle {
@@ -944,7 +934,7 @@ fn follow(
                 if brain.path.is_empty() && nat.vel.x.abs() > 30.0 {
                     brain.replan = 0.0;
                 }
-                let speed = catch_up(groove, me.pos.x, slot_x, nat.vel.x);
+                let speed = catch_up(me.pos.x, slot_x, nat.vel.x);
                 return if more { HanInput { dir: dx.signum(), speed, ..default() } } else { arrive(dx, 2.0) };
             }
             Step::Move(k) => {
@@ -1090,9 +1080,9 @@ fn careful(level: &Level, me: &Kin, body: &Body, i: HanInput) -> HanInput {
 
 /// Running along a walk after a Nat running away (at `nat_vx`): faster (up to
 /// [`HAN_CATCH_UP`] × his top speed) the further he is from his slot (at `slot_x`), so he
-/// catches up after a hold-up. Not while the band's fired up: then he just can't keep up.
-fn catch_up(groove: &Groove, x: f32, slot_x: f32, nat_vx: f32) -> f32 {
-    if groove.harmony == Harmony::Quartal || nat_vx * (slot_x - x) <= 0.0 || nat_vx.abs() < 30.0 {
+/// catches up after a hold-up.
+fn catch_up(x: f32, slot_x: f32, nat_vx: f32) -> f32 {
+    if nat_vx * (slot_x - x) <= 0.0 || nat_vx.abs() < 30.0 {
         return 1.0;
     }
     let far = ((slot_x - x).abs() / TILE - 3.0) / 4.0;

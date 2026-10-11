@@ -33,8 +33,8 @@
 //! - `N: ...` (a digit): a moving platform, see below.
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
-//!   (long gap), `waltz` (waltz row), `grip` (grease chute), `stain` (stain pit), `boost`
-//!   (buddy ledge), `shield` (shield row), `chain` (chain-jump chasm), `buddyraft` (buddy raft
+//!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `boost`
+//!   (buddy ledge), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
 //! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
@@ -54,7 +54,7 @@
 //! | `v` | spikes hanging from the ceiling, deadly; top half of the tile |
 //! | `~` | deadly liquid (sewage); the whole tile, surface drawn at the top |
 //! | `F` | fly swarm: hovers in a circle (radius ~1 tile) around its tile, deadly |
-//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans on the floor you walk on, or under a `=` grating you walk on, with a ceiling at most 2 tiles above the walk make a *waltz row* (see `tests/levels.rs`) |
+//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans are too many to time: the validator counts them deadly (24+ are Han's *shield row*) |
 //! | `1`-`9` | moving platform: a horizontal run of the same digit is one platform, configured by its `N:` header line |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -70,16 +70,16 @@
 //!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
 //!   `grip` or `stain` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
 //!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
-//!   holds Nat while he's standing on the ground. He follows normally, but keeps out of a
-//!   waltz row's mark and off the grease in a grease chute's zone ([`Level::han_keeps_out`]).
+//!   holds Nat while he's standing on the ground. He follows normally, but keeps off the
+//!   grease in a grease chute's zone ([`Level::han_keeps_out`]).
 //!   So no boost, and no chain of boosts, ever opens them: they always need their mode (the
 //!   validator proves it: full boosts from everywhere outside the zones Han may be, weak ones
 //!   from everywhere inside them Nat may get to).
-//! - **Chain-jump chasms** (`chain`) have no overuse limit: Han boosts you as often as it takes
-//!   while you're in the mark's columns ([`Level::in_chasm`]).
+//! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
+//!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
+//!   catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
-//!   emblem, waltz rows the same gold staff under their low ceiling (a quarter note a beat)
-//!   and a 3/4 emblem at each end, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
+//!   emblem, glide launches a 3/4 emblem in the ground at each end, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
 //!   "PLUMBERS ONLY" sign at their start.
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
@@ -206,7 +206,7 @@ pub enum Topic {
     Giant,
     /// Long gaps and the fired-up band (`gap`).
     Gap,
-    /// Waltz rows and the waltzing band (`waltz`).
+    /// Glide launches and the waltzing band (`waltz`).
     Waltz,
     /// Stain pits: splat to build stepping stones (`stain`).
     Stain,
@@ -218,7 +218,8 @@ pub enum Topic {
     Boost,
     /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
     Shield,
-    /// Chain-jump chasms: boost off Han in mid-air, toot, again (`chain`).
+    /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
+    /// (`chain`).
     Chain,
     /// Buddy raft pools: Han wades in and leaves a big raft (`buddyraft`).
     BuddyRaft,
@@ -420,18 +421,15 @@ impl Level {
         !self.in_band_zone(cell)
     }
 
-    /// Cells Han won't stand in: a waltz row's mark (his body would plug the jets for Nat), and
-    /// grease in a grease chute's zone (Nat on his head would be jumping off the grease).
+    /// Cells Han won't stand in: grease in a grease chute's zone (Nat on his head would be
+    /// jumping off the grease).
     pub fn han_keeps_out(&self, (c, r): (i32, i32)) -> bool {
         let greasy = self.tile(c, r + 1) == Tile::Grease;
-        self.gates.iter().any(|g| match g.topic {
-            Topic::Waltz => g.contains((c, r)),
-            Topic::Grip => greasy && g.berth().contains((c, r)),
-            _ => false,
-        })
+        self.gates.iter().any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
     }
 
-    /// Is column `col` inside a chain-jump chasm mark (no overuse limit there)?
+    /// Is column `col` inside a fired-up chasm mark (no overuse limit there, and Han catches
+    /// Nat in mid-air)?
     pub fn in_chasm(&self, col: i32) -> bool {
         self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
     }

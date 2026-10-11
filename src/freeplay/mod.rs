@@ -2,8 +2,8 @@
 //! [`run::FIXED_ROOMS`] long, from a 6-digit seed anyone can type in again.
 //!
 //! - [`templates`]: hand-shaped rooms per [`crate::adapt::Skill`] (jump gauntlets, shelf climbs,
-//!   flies and sprays, moving platforms, a giant wall, a long gap, a waltz row, a stain pit, a
-//!   grease chute, and Han's gates: a buddy ledge, a buddy raft pool, a shield row, a chain chasm)
+//!   flies and sprays, moving platforms, a giant wall, a long gap, a glide launch, a stain pit, a
+//!   grease chute, and Han's gates: a buddy ledge, a buddy raft pool, a shield row, a fired-up chasm)
 //!   with parameters scaled by the band, the band's rooms opening on rolling ground (humps and
 //!   dips) and the gauntlets climbing up to 7 tiles; [`templates::TEMPLATES`] is the registry
 //!   new kinds of rooms go in.

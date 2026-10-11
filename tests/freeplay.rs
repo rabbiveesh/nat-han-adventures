@@ -82,29 +82,19 @@ fn every_template_validates_at_every_band() {
     }
 }
 
-/// The waltz row rooms: plain cans on the floor (no grating), deadly while they fire, and the
-/// row is a waltz gate the validator finds and passes.
+/// The waltz rooms: a glide launch the validator finds and passes, never the fallback.
 #[test]
-fn waltz_rows_are_floor_cans_without_a_grating() {
-    use nat_han_adventures::level::Tile;
+fn waltz_rooms_are_glide_launches() {
     use nat_han_adventures::level::validate::Gate;
     let t = TEMPLATES.iter().position(|t| t.skill == Skill::Waltz).unwrap();
-    assert_eq!(nat_han_adventures::freeplay::templates::waltz_cans(), [20, 21], "the dashable lengths");
     for b in BANDS {
         for seed in 0..10 {
             let room = Job::new(seed, plan(t, b, seed, false)).run();
             assert!(!room.fallback, "band {b} seed {seed}");
-            let l = &room.level;
-            let cans: Vec<_> = l.things.iter().filter(|t| t.kind == ThingKind::Spray).collect();
-            assert!(cans.len() >= 20, "band {b} seed {seed}: {} cans", cans.len());
-            for c in &cans {
-                let (col, row) = (c.col as i32, c.row as i32);
-                assert!(l.tile(col, row + 1).is_solid(), "can at {col},{row} stands on the floor");
-                assert_ne!(l.tile(col, row - 1), Tile::OneWay, "no grating over the can at {col},{row}");
-            }
-            let report = validate(l);
+            assert!(!room.level.platforms.is_empty(), "band {b} seed {seed}: a platform to launch from");
+            let report = validate(&room.level);
             assert!(report.errs.is_empty(), "band {b} seed {seed}: {:?}", report.errs);
-            assert!(report.gates.iter().any(|g| g.0 == Gate::WaltzRow), "band {b} seed {seed}: {:?}", report.gates);
+            assert!(report.gates.iter().any(|g| g.0 == Gate::GlideLaunch), "band {b} seed {seed}: {:?}", report.gates);
         }
     }
 }
@@ -200,7 +190,7 @@ fn unlocks_follow_the_story() {
     };
     assert_eq!(served(3), ["buddy ledge"]);
     assert_eq!(served(5), ["buddy ledge", "buddy raft pool"]);
-    assert_eq!(served(10), ["buddy ledge", "buddy raft pool", "chain chasm", "shield row"]);
+    assert_eq!(served(10), ["buddy ledge", "buddy raft pool", "fired-up chasm", "shield row"]);
 }
 
 /// A climb is taller than the other rooms: the course is as tall as it, every room sits on its

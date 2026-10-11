@@ -8,13 +8,12 @@
 //! `+` standable & reachable, `,` passed through by some safe arc, `X` unreachable nugget,
 //! `!` unreachable checkpoint/goal, `@` moving platform (start), `-` its path, `%` a splat
 //! stain the search made, `?` a hint spot, and the take-off of each gate crossing: `W` giant
-//! wall (Giant Steps), `R` long gap (fired up), `Z` waltz row, `Y` grease chute (grip), `K`
+//! wall (Giant Steps), `R` long gap (fired up), `Z` glide launch (waltz), `Y` grease chute (grip), `K`
 //! stain pit (splats), and Han's: `B` buddy ledge (boost), `H` shield row, `N` chain chasm,
 //! `U` buddy raft pool.
 
 use std::time::Instant;
 
-use nat_han_adventures::game::tuning::RUN_SPEED;
 use nat_han_adventures::level::validate::*;
 use nat_han_adventures::level::*;
 
@@ -26,9 +25,9 @@ const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Pipe Maze", 2, &[Gate::GiantWall]),
     ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft]),
     ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::BuddyLedge]),
-    ("Septic Tank", 4, &[Gate::WaltzRow]),
-    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::WaltzRow, Gate::StainPit, Gate::ShieldRow, Gate::ChainChasm]),
-    ("Treatment Plant", 5, &[Gate::LongGap, Gate::WaltzRow, Gate::GreaseChute, Gate::BuddyLedge, Gate::BuddyRaft]),
+    ("Septic Tank", 4, &[Gate::GlideLaunch]),
+    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::GlideLaunch, Gate::StainPit, Gate::ShieldRow, Gate::ChainChasm]),
+    ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::BuddyLedge, Gate::BuddyRaft]),
     ("The Golden Throne", 5, &[Gate::GiantWall, Gate::ShieldRow, Gate::ChainChasm]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).
@@ -325,67 +324,6 @@ fn validator_catches_broken_levels() {
     assert!(errs_of(&fly).iter().any(|e| e.contains("teaches fly")), "{:?}", errs_of(&fly));
 }
 
-/// The waltz row gate: the numbers, and the validator telling good rows from bad ones.
-#[test]
-fn validator_knows_waltz_rows() {
-    // The numbers (see `dash_through`): a row of n adjacent cans is a danger zone of 16n px.
-    // Normal timing leaves 1.5 s to cross it; the waltz 2.5 s (on for the big ONE's beat).
-    let row = |n: usize| WaltzRow { row: 11, c0: 20, c1: 20 + n as i32 - 1, grated: true };
-    for n in [4, 10, 13] {
-        assert!(dash_through(n, RUN_SPEED, Mode::Normal), "{n} cans: time enough at normal timing");
-    }
-    assert!(!dash_through(15, RUN_SPEED, Mode::Normal), "15 cans: 240px take 1.6s > 1.5s");
-    assert!(dash_through(18, RUN_SPEED * 1.35, Mode::FiredUp), "fired up outruns 18 (288px in 1.42s)");
-    assert!(!dash_through(20, RUN_SPEED * 1.35, Mode::FiredUp), "but not 20 (320px in 1.58s)");
-    assert!(dash_through(21, RUN_SPEED * 0.9, Mode::Waltz), "the waltz's 2.5s carries a human 21 cans");
-    assert!(!dash_through(22, RUN_SPEED * 0.9, Mode::Waltz));
-    assert!(!dash_through(20, RUN_SPEED * 0.65, Mode::GiantSteps));
-    assert!(waltz_row_timing(&row(20)).is_empty(), "{:?}", waltz_row_timing(&row(20)));
-    assert!(waltz_row_timing(&row(12)).iter().any(|e| e.contains("Normal")));
-    assert!(waltz_row_timing(&row(18)).iter().any(|e| e.contains("FiredUp")));
-    assert!(waltz_row_timing(&row(25)).iter().any(|e| e.contains("too long")));
-
-    // A tunnel: 20 cans under a grating, a low ceiling (a wall to the sky above it), a runway.
-    let level = |cans: usize, ceiling: bool, runway_spikes: bool| {
-        let (c0, c1) = (20, 20 + cans - 1);
-        let w = 60;
-        let mut rows: Vec<Vec<char>> = vec![vec!['.'; w]; 14];
-        for r in 0..=7 {
-            for c in c0..=c1 {
-                rows[r][c] = if ceiling || r < 6 { '#' } else { '.' };
-            }
-        }
-        for c in 0..w {
-            rows[10][c] = if (c0..=c1).contains(&c) { '=' } else { '#' };
-            rows[11][c] = if (c0..=c1).contains(&c) { 'S' } else { '#' };
-            rows[12][c] = '#';
-            rows[13][c] = '#';
-        }
-        rows[9][2] = 'P';
-        rows[9][8] = 'C';
-        rows[9][w - 2] = 'G';
-        if runway_spikes {
-            // A spike strip right before the row: no room to jump in threes.
-            for c in 15..20 {
-                rows[10][c] = '^';
-            }
-            rows[10][14] = '#';
-        }
-        let rows: Vec<String> = rows.iter().map(|r| r.iter().collect()).collect();
-        run(&level_of("say@8,9: hey\ngate: waltz 15,9 45,9\n", &rows, 9))
-    };
-    let good = level(20, true, false);
-    assert!(good.errs.is_empty(), "{:?}", good.errs);
-    assert_eq!(gates(&good), [Gate::WaltzRow]);
-    assert!(good.gated_goal, "the only way to the goal is the dash");
-    let short = level(12, true, false);
-    assert!(short.errs.iter().any(|e| e.contains("run through with Normal")), "{:?}", short.errs);
-    let open = level(20, false, false);
-    assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
-    let cramped = level(20, true, true);
-    assert!(cramped.errs.iter().any(|e| e.contains("goal")), "no runway, no waltz: {:?}", cramped.errs);
-}
-
 /// A flat walkway (row 9) with a spike pit `width` wide sunk into it (spikes in row 10 from
 /// col 20): stains land level with the walkway.
 #[allow(clippy::needless_range_loop)]
@@ -503,34 +441,61 @@ fn floor_level(w: usize, header: &str, edit: impl Fn(&mut Vec<Vec<char>>)) -> Le
     level_of(&format!("say@8,9: hey\n{header}"), &rows, 9)
 }
 
-/// Waltz rows on the floor (no grating): the cans you walk among are deadly while they fire,
-/// so the row is the same gate with the same lengths, and still needs its low ceiling.
+/// A glide launch: a toilet roll (8 tiles in 4.5 s) sliding out over a bottomless pit from
+/// col 20, `gap` tiles of pit past its path; `spiky`: spikes on the floor before it (no
+/// runway to summon the waltz on).
+fn glide_level(gap: usize, spiky: bool) -> Level {
+    let land = 20 + 2 + 8 + gap;
+    let header = format!("1: dx=8 dy=0 period=4.5\ngate: waltz 19,8 {},9\n", land + 1);
+    floor_level(land + 14, &header, |rows| {
+        for r in 10..14 {
+            for c in 20..land {
+                rows[r][c] = '.';
+            }
+        }
+        rows[10][20] = '1';
+        rows[10][21] = '1';
+        if spiky {
+            for c in 9..20 {
+                rows[10][c] = '^';
+            }
+        }
+    })
+}
+
+/// Glide launches: a gap past a platform's path too wide for any other mode (the platform at
+/// its everyday speed, at most), crossed off the platform gliding on ONE in the waltz.
 #[test]
-fn validator_knows_floor_waltz_rows() {
-    let level = |cans: usize, ceiling: bool| {
-        floor_level(20 + cans + 20, "gate: waltz 15,9 45,9\n", |rows| {
-            let (c0, c1) = (20, 20 + cans - 1);
-            for r in 0..=7 {
-                for c in c0..=c1 {
-                    rows[r][c] = if ceiling || r < 6 { '#' } else { '.' };
-                }
-            }
-            for c in c0..=c1 {
-                rows[9][c] = 'S';
-            }
-        })
-    };
-    let good = run(&level(20, true));
+fn validator_knows_glide_launches() {
+    let good = run(&glide_level(17, false));
     assert!(good.errs.is_empty(), "{:?}", good.errs);
-    assert_eq!(gates(&good), [Gate::WaltzRow]);
-    assert!(good.gated_goal, "the only way past the cans is the waltz dash");
-    let short = run(&level(12, true));
-    assert!(short.errs.iter().any(|e| e.contains("run through with Normal")), "{:?}", short.errs);
-    let open = run(&level(20, false));
-    assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
+    assert_eq!(gates(&good), [Gate::GlideLaunch]);
+    assert!(good.gated_goal, "the only way across is the launch");
+    let narrow = run(&glide_level(14, false));
+    assert!(narrow.errs.iter().any(|e| e.contains("passable with FiredUp")), "{:?}", narrow.errs);
+    let wide = run(&glide_level(21, false));
+    assert!(wide.errs.iter().any(|e| e.contains("goal")), "too far even gliding: {:?}", wide.errs);
+    let cramped = run(&glide_level(17, true));
+    assert!(cramped.errs.iter().any(|e| e.contains("goal")), "no runway, no waltz: {:?}", cramped.errs);
+}
+
+/// A platform's speed carries the jump off it: a gap a jump from the ledge can't clear is
+/// crossed off the platform sliding out over it (a human keeps [`HUMAN_CARRY`] of its speed).
+#[test]
+fn validator_knows_platform_carry() {
+    use nat_han_adventures::game::tuning::LAUNCH_MAX;
+    let map_of = |l: &Level| (Map::new(l).carry((22, 9)), Map::new(l).carry((5, 9)));
+    let l = glide_level(17, false);
+    let (on, off) = map_of(&l);
+    let top = std::f32::consts::PI * 8.0 * 16.0 / 4.5;
+    assert!(on > 0.5 * top && on <= top + 0.01, "the platform's speed over its path: {on} of {top}");
+    assert_eq!(off, 0.0, "none on the ground");
+    assert!(top < LAUNCH_MAX);
 }
 
 /// A bottomless chasm `width` wide from col 30.
+/// A fired-up chasm: `width` bottomless columns from col 30, a nugget line before it (to fire
+/// the band up).
 fn chasm_level(width: usize, header: &str) -> Level {
     floor_level(30 + width + 20, header, |rows| {
         for r in 10..14 {
@@ -538,35 +503,54 @@ fn chasm_level(width: usize, header: &str) -> Level {
                 rows[r][c] = '.';
             }
         }
+        for c in [14, 17, 20, 23] {
+            rows[9][c] = 'o';
+        }
     })
 }
 
-/// Chain-jump chasms: too wide for any mode and for one boost, crossed by a mid-air chain.
+/// Fired-up chasms: too wide for any mode and for a plunger boost, crossed by the fired-up
+/// band's running throw off Han at the edge.
 #[test]
-fn validator_knows_chain_chasms() {
-    // A chain climbs higher than the test levels' 10 rows of sky (as in the campaign's chasms).
+fn validator_knows_fired_up_chasms() {
     const SKY: usize = 10;
-    let mark = |w: usize| format!("gate: chain 28,9 {},9\n", 33 + w);
-    for w in [16, 18] {
+    let mark = |w: usize| format!("gate: chain 25,9 {},9\n", 33 + w);
+    for w in [15, 18] {
         let r = run(&with_sky(chasm_level(w, &mark(w)), SKY));
         assert!(r.errs.is_empty(), "{w}-wide chasm: {:?}", r.errs);
         assert_eq!(gates(&r), [Gate::ChainChasm], "{w}");
         assert!(r.gated_goal);
         assert_eq!(r.deaths, 0, "Han falling in isn't Nat's death");
-        let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chain lesson");
+        let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chasm lesson");
         assert!(!lesson.taught(), "no hint yet");
     }
-    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Jump, toot, land on my head!\n", mark(16))), SKY));
+    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Fired up? Hop on my head and JUMP!\n", mark(16))), SKY));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
     assert!(taught.lessons.iter().any(|l| l.topic == Topic::Chain && l.taught()));
-    // Too wide even for a chain (Han's three toots only keep him up so long).
-    let wide = run(&with_sky(chasm_level(22, &mark(22)), SKY));
+    // Too wide even for a throw.
+    let wide = run(&with_sky(chasm_level(21, &mark(21)), SKY));
     assert!(wide.errs.iter().any(|e| e.contains("goal")), "{:?}", wide.errs);
     // Unmarked: an error (Han's overuse limit would apply in it).
     let bare = run(&with_sky(chasm_level(16, ""), SKY));
     assert!(bare.errs.iter().any(|e| e.contains("`gate: chain")), "{:?}", bare.errs);
-    // Narrower than a chasm: one boost off Han at the edge does it (a buddy ledge, not a chain).
-    let gap = run(&with_sky(chasm_level(11, "gate: boost 20,9 50,9\n"), SKY));
+    // A checkpoint between the nugget line and the edge: a splat there loses the nuggets, so
+    // the band may not be fired up at the edge, and nothing else crosses.
+    let cp = floor_level(66, &format!("{}say@26,9: hi\n", mark(16)), |rows| {
+        for r in 10..14 {
+            for c in 30..46 {
+                rows[r][c] = '.';
+            }
+        }
+        for c in [14, 17, 20, 23] {
+            rows[9][c] = 'o';
+        }
+        rows[9][26] = 'C';
+    });
+    let cp = with_sky(cp, SKY);
+    let cp = run(&cp);
+    assert!(cp.errs.iter().any(|e| e.contains("goal")), "{:?} {:?}", cp.errs, gates(&cp));
+    // Narrower than a chasm: a long gap (the fired-up band alone).
+    let gap = run(&with_sky(chasm_level(11, "gate: gap 20,9 50,9\n"), SKY));
     assert!(!gates(&gap).contains(&Gate::ChainChasm), "{:?}", gates(&gap));
 }
 
@@ -630,8 +614,8 @@ fn validator_knows_shield_rows() {
     let open = run(&level(26, false));
     assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
     // No mode dashes 24 cans, the waltz included; 20 is the waltz's.
-    assert!(shield_row_timing(&WaltzRow { row: 11, c0: 30, c1: 53, grated: true }).is_empty());
-    assert!(shield_row_timing(&WaltzRow { row: 11, c0: 30, c1: 49, grated: true }).iter().any(|e| e.contains("Waltz")));
+    assert!(shield_row_timing(&CanRow { row: 11, c0: 30, c1: 53, grated: true }).is_empty());
+    assert!(shield_row_timing(&CanRow { row: 11, c0: 30, c1: 49, grated: true }).iter().any(|e| e.contains("Waltz")));
 }
 
 /// Buddy raft pools: sewage under ceiling spikes, too wide for Nat's own rafts.

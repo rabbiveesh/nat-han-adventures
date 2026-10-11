@@ -59,7 +59,7 @@ pub fn lean_strategies() -> Vec<Strategy> {
     let inf = f32::INFINITY;
     let mut out = Vec::new();
     for toot in [None, Some(0.27), Some(0.36)] {
-        out.push(Strategy { dir: 0.0, jump: true, hold: inf, vx0: 0.0, toot, edge: false, release: inf });
+        out.push(Strategy { dir: 0.0, jump: true, hold: inf, vx0: 0.0, toot, edge: false, release: inf, carry: 0.0 });
     }
     for dir in [-1.0, 1.0] {
         for toot in [None, Some(0.2), Some(0.36), Some(0.5)] {
@@ -71,18 +71,18 @@ pub fn lean_strategies() -> Vec<Strategy> {
                 (0.12, dir, true),
                 (0.12, 0.0, false),
             ] {
-                out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release: inf });
+                out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release: inf, carry: 0.0 });
             }
             // Running off a ledge.
-            out.push(Strategy { dir, jump: false, hold: inf, vx0: dir, toot, edge: true, release: inf });
+            out.push(Strategy { dir, jump: false, hold: inf, vx0: dir, toot, edge: true, release: inf, carry: 0.0 });
         }
         for toot in [None, Some(0.36)] {
             for release in [0.15, 0.3] {
-                out.push(Strategy { dir, jump: true, hold: inf, vx0: dir, toot, edge: true, release });
+                out.push(Strategy { dir, jump: true, hold: inf, vx0: dir, toot, edge: true, release, carry: 0.0 });
             }
         }
         for edge in [false, true] {
-            out.push(Strategy { dir, jump: true, hold: 0.05, vx0: dir, toot: None, edge, release: inf });
+            out.push(Strategy { dir, jump: true, hold: 0.05, vx0: dir, toot: None, edge, release: inf, carry: 0.0 });
         }
     }
     out
