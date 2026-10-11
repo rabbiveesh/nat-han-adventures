@@ -1,0 +1,42 @@
+# World -1 tour, for `NATHAN_MINUS_ONE=1 scripts/record-run --capture` (format:
+# src/capture/timeline.rs). The arrival crash; picking spikes turns all the ground into
+# toilet brushes (splat); a clean restart; then a mid-toot pause off the ground block that
+# blanks every ground tile, the goal's box with them.
+
+# The arrival crash: the corrupted menu. Pick the spikes entry.
+wait 1.6
+tap Down
+wait 1.2
+tap Enter
+wait 3.5
+
+# Restart (clean), crash again, resume.
+tap R
+wait 1.6
+tap Enter
+wait 1.2
+
+# Over to the ground block, hop on it.
+hold Right 1.3
+hold Right Space 300ms
+hold Right 150ms
+wait 0.6
+
+# Jump, toot, pause mid-toot: the corrupted menu. Pick the blank entry.
+hold Space 140ms
+wait 120ms
+tap Space
+wait 100ms
+tap Esc
+wait 1.0
+repeat 3
+  tap Down
+  wait 0.4
+end
+wait 0.4
+tap Enter
+wait 1.5
+
+# Walk into the goal.
+hold Right 2.5
+wait 3

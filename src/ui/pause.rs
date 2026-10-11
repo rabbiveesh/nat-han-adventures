@@ -24,7 +24,9 @@ fn option(i: usize, free: bool) -> &'static str {
 }
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(PlayState::Paused), spawn)
+    // World -1's corrupted menu (`ui::minus1`) takes a mid-toot pause instead.
+    use crate::game::minus1::GlitchMenu;
+    app.add_systems(OnEnter(PlayState::Paused), spawn.run_if(not(resource_exists::<GlitchMenu>)))
         .add_systems(OnExit(PlayState::Paused), |mut commands: Commands| {
             commands.remove_resource::<Calib>();
             commands.remove_resource::<Calibrating>();
@@ -33,7 +35,7 @@ pub fn plugin(app: &mut App) {
             Update,
             (input.run_if(not(resource_exists::<Calib>)), calibrate.run_if(resource_exists::<Calib>), highlight)
                 .chain()
-                .run_if(in_state(PlayState::Paused)),
+                .run_if(in_state(PlayState::Paused).and_then(not(resource_exists::<GlitchMenu>))),
         );
 }
 

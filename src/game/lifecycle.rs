@@ -91,19 +91,21 @@ fn restart_level(
     current: Res<CurrentLevel>,
     generated: Option<Res<GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    minus_one: Option<Res<super::minus1::MinusOne>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
     if requests.read().count() == 0 {
         return;
     }
     let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
-    // Side B rewinds its own level (free play restarts a room itself).
-    match (generated, side_b) {
-        (Some(g), Some(_)) => {
+    // Side B rewinds its own level, World -1 reloads its clean original (free play restarts
+    // a room itself).
+    match (generated, side_b.is_some() || minus_one.is_some()) {
+        (Some(g), true) => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
-        (Some(_), None) => return,
+        (Some(_), false) => return,
         _ => {}
     }
     load(&mut commands, levels.0[index].clone(), index, &old);
@@ -158,7 +160,13 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
 /// growing level in with this, a few columns at a time.
 pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Range<usize>) {
     let cols = cols.start..cols.end.min(level.width);
-    // Tiles.
+    spawn_tiles(commands, level, cols.clone());
+    spawn_things(commands, level, cols);
+}
+
+/// Spawn the static tiles of `level` in columns `cols` (World -1 redraws them all after a
+/// glitch rewrites the grid: `game::minus1`).
+pub fn spawn_tiles(commands: &mut Commands, level: &Level, cols: std::ops::Range<usize>) {
     for row in 0..level.height {
         for col in cols.clone() {
             let tile = level.tile(col as i32, row as i32);
@@ -180,7 +188,9 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
         }
     }
 
-    // Things.
+}
+
+fn spawn_things(commands: &mut Commands, level: &Level, cols: std::ops::Range<usize>) {
     let mut checkpoint_index = 0;
     for (i, thing) in level.things.iter().enumerate() {
         if !cols.contains(&thing.col) {

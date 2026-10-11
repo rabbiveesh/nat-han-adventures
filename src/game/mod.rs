@@ -16,6 +16,7 @@ mod groove;
 mod han;
 mod hazards;
 mod lifecycle;
+pub mod minus1;
 mod physics;
 mod pickups;
 mod platforms;
@@ -37,7 +38,7 @@ pub use hazards::{SideStain, SIDE_STAIN_LIFE, CAN_HEIGHT, CAN_WIDTH,
     spray_on,
 };
 pub use platforms::platform_pos;
-pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, stand_pos};
+pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, spawn_tiles, stand_pos};
 pub use han::{
     BACK_WARN_LINE, DEATH_LINES, FLY_LINE, FOLLOW_GAP, FlySpin, GRIP_LINE, GRUMBLE_LINES, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
     HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, HAN_TOOTS, HanAnim, HanBrain, HanMode, HanNav, HanPhys,
@@ -120,6 +121,7 @@ pub fn plugin(app: &mut App) {
             han::plugin,
             adaptive::plugin,
             sideb::plugin,
+            minus1::plugin,
         ));
 }
 

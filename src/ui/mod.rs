@@ -20,6 +20,7 @@ mod level_select;
 mod pause;
 mod results;
 mod sideb;
+mod minus1;
 mod strip;
 mod title;
 mod victory;
@@ -86,6 +87,7 @@ pub fn plugin(app: &mut App) {
             hud::plugin,
             strip::plugin,
             sideb::plugin,
+            minus1::plugin,
             lesson::plugin,
             pause::plugin,
             results::plugin,
