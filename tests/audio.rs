@@ -369,7 +369,7 @@ mod plugin {
             AudioOutput, Filters, Harmony, LiveClock, LivePlayer, Music, MusicChanged, MusicOverride, MusicStarted, NowPlaying, SfxCount,
             director, live::library, tuning::Tuning,
         },
-        events::{CheckpointReached, Jumped},
+        events::{CallBand, CheckpointReached, Jumped},
         game::{Groove, LevelRun},
         level::Levels,
         save::Progress,
@@ -492,9 +492,9 @@ mod plugin {
         assert!(checked > 200);
     }
 
-    /// 5 toots then a checkpoint: Coltrane changes, played from a bar line without restarting
-    /// the song. 20s of play later the periodic check finds no toots in the window and goes
-    /// back to the original.
+    /// 5 toots, a call, then a checkpoint: Coltrane changes, played from a bar line without
+    /// restarting the song. 20s of play later its timer runs out (no toots refilled it) and the
+    /// band goes back to the original.
     #[test]
     fn toots_then_checkpoint_switch_to_coltrane_on_a_bar_line() {
         let mut app = app();
@@ -509,6 +509,8 @@ mod plugin {
         for _ in 0..director::GIANT_STEPS_TOOTS {
             app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: true });
         }
+        app.update();
+        app.world_mut().write_message(CallBand);
         app.world_mut().write_message(CheckpointReached { index: 0, pos: Vec2::ZERO });
         app.update();
         let run_time = |app: &App| app.world().resource::<LevelRun>().time;

@@ -11,7 +11,7 @@ intro: The Treatment Plant. Everything at once, Nat. You got this!
 9: dx=4 dy=0 period=3.5 kind=duck
 deaths: 3
 say@202,8: Grease chute! Splat 3 times, get sweaty, grip and hop out.
-say@298,11: Last gap! Grab the nuggets fast, then RUN for it!
+say@298,11: Last gap! Grab nuggets fast, DOWN, then RUN for it!
 say@126,14: Another stage tunnel! Hop-hop-hop, then dash after ONE.
 gate: waltz 133,14 154,14
 gate: grip 227,11 234,14

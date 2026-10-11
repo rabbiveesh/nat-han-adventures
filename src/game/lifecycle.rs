@@ -67,16 +67,19 @@ fn unload_level(mut commands: Commands, old: Query<Entity, With<LevelEntity>>) {
     commands.insert_resource(Groove::default());
 }
 
-/// R restarts, Esc/Backspace pauses.
+/// R restarts, Esc/Backspace pauses, Down calls the band.
 fn level_hotkeys(
     input: Single<&ActionState<Action>>,
     mut restart: MessageWriter<RestartLevel>,
+    mut call: MessageWriter<crate::events::CallBand>,
     mut next: ResMut<NextState<PlayState>>,
 ) {
     if input.just_pressed(&Action::Restart) {
         restart.write(RestartLevel);
     } else if input.just_pressed(&Action::Back) {
         next.set(PlayState::Paused);
+    } else if input.just_pressed(&Action::Down) {
+        call.write(crate::events::CallBand);
     }
 }
 
@@ -224,7 +227,12 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
         commands.spawn((
             Name::new("HintSpot"),
             LevelEntity,
-            super::HintSpot { center: level.tile_center(hint.col, hint.row), text: hint.text.clone(), said: false },
+            super::HintSpot {
+                center: level.tile_center(hint.col, hint.row),
+                text: hint.text.clone(),
+                topics: hint.topics.clone(),
+                said: false,
+            },
         ));
     }
 

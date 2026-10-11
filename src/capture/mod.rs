@@ -134,6 +134,9 @@ impl Plugin for CapturePlugin {
             .add_systems(First, collect_frame)
             .add_systems(PreUpdate, timeline::play_timeline.before(bevy::input::InputSystems).run_if(recording))
             .add_systems(Last, request_frame.run_if(recording));
+        if std::env::var("NATHAN_LESSONS").as_deref() != Ok("1") {
+            app.insert_resource(crate::ui::LessonsOff);
+        }
         info!("capture: {} frames at {} fps into {}", c.timeline.frames, c.fps, c.dir.display());
     }
 }

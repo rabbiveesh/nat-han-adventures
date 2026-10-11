@@ -9,9 +9,9 @@
 //!   waits.
 //! - [`deep_campaign_gates_from_every_music_state`]: music state × physics × level
 //!   reachability: for every campaign gate the band opens, from every director state tier 1
-//!   reaches (the music you might arrive with), the player can summon the gate's mode with the
-//!   level's own runway / nugget line / chute and have it playing (a bar line's latency
-//!   included) from take-off to the far side.
+//!   reaches (the music you might arrive with), the player can charge the gate's mode with the
+//!   level's own runway / nugget line / chute, call it, and have it playing (a bar line's
+//!   latency included) from take-off to the far side.
 //! - [`deep_boost_chains_cant_bypass_band_gates`]: Han's chain boosts near a band gate don't
 //!   carry Nat past it.
 //! - [`deep_han_reaches_his_gates`]: Han's navigation (in every mode the band can be in)
@@ -122,14 +122,7 @@ const DEEP_DEPTH: usize = 5;
 /// now). The search runs twice: with every act (known issues printed with their shortest
 /// counterexample, anything else fails), and without the known issues' frames, where every
 /// property must hold. Remove an entry once the director is fixed.
-const KNOWN: &[(Act, &str, &str)] = &[(
-    Act::Frame(TOOT | NUGGET),
-    "b",
-    "a toot and a nugget in the same frame that complete both summons at once: Giant Steps wins \
-     and the nuggets' counter isn't cleared, so the fired-up rule stays met and 4 more quick \
-     nuggets can't summon it until those nuggets age out (≤ 20 s; then the next check picks it). \
-     Fix in `director::Band::step`/`begin`: clear (or re-arm) every rule met in the frame",
-)];
+const KNOWN: &[(Act, &str, &str)] = &[];
 
 #[test]
 #[ignore = "tier 2 (deep): scripts/check-deep"]
@@ -298,7 +291,7 @@ fn attempt(s: &Sim, r: &Recipe, need: Need) -> Result<(), Failed> {
 }
 
 /// Recipes for a giant wall: five jump-toot cycles on the runway (each `pause` after the
-/// landing), then the wall jump after `wait`.
+/// landing), a call with the last toot, then the wall jump after `wait`.
 fn giant_recipes(g: &Groove) -> Vec<Recipe> {
     // On the grid: the air time rounded up (a moment on the ground before the next jump).
     let cycle = (air_time(g, f32::INFINITY, Some(0.27)) / TICK).ceil() * TICK;
@@ -312,6 +305,7 @@ fn giant_recipes(g: &Groove) -> Vec<Recipe> {
                 ev.push((t + 0.27, Act::TOOT));
                 t += cycle + pause;
             }
+            ev.push((t - cycle - pause + 0.27, Act::CALL));
             ev.push((t - pause + wait, Act::JUMP));
             out.push(Recipe {
                 name: format!("5 jump-toots ({cycle:.2}s + {pause}s), wall jump after {wait}s"),
@@ -323,14 +317,15 @@ fn giant_recipes(g: &Groove) -> Vec<Recipe> {
     out
 }
 
-/// Recipes for a long gap: the level's nugget line (times at a human 90% run in `g`), the
-/// run-up, and the jump after `wait`.
+/// Recipes for a long gap: the level's nugget line (times at a human 90% run in `g`), a call
+/// with the last nugget, the run-up, and the jump after `wait`.
 fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     let speed = RUN_SPEED * g.speed_scale * 0.9;
     let mut out = Vec::new();
     for wait in [0.0, BAR_TICKS as f32 * TICK] {
         let mut ev: Vec<(f32, Act)> = nuggets.iter().map(|&d| (d * TILE / speed, Act::NUGGET)).collect();
         let last = ev.last().map_or(0.0, |e| e.0);
+        ev.push((last, Act::CALL));
         ev.push((last + run_up * TILE / speed + wait, Act::JUMP));
         out.push(Recipe {
             name: format!("{} nuggets at {:.0} px/s, jump after {wait}s", nuggets.len(), speed),
@@ -341,8 +336,9 @@ fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     out
 }
 
-/// Recipes for a waltz row: three even ground jumps (as quick as the hop in `g` allows),
-/// then walk to the row and dash through (`dash` s); or first wait out what's held.
+/// Recipes for a waltz row: three even ground jumps (as quick as the hop in `g` allows), a
+/// call with the third, then walk to the row and dash through (`dash` s); or first wait out
+/// what's held.
 fn waltz_recipes(g: &Groove, dash: f32) -> Vec<Recipe> {
     let hop = air_time(g, 0.05, None);
     let mut out = Vec::new();
@@ -352,8 +348,13 @@ fn waltz_recipes(g: &Groove, dash: f32) -> Vec<Recipe> {
                 continue;
             }
             let p = pre as f32 * TICK;
-            let ev =
-                [(p, Act::JUMP), (p + gap, Act::JUMP), (p + 2.0 * gap, Act::JUMP), (p + 2.0 * gap + 2.5, Act::Wait(0))];
+            let ev = [
+                (p, Act::JUMP),
+                (p + gap, Act::JUMP),
+                (p + 2.0 * gap, Act::JUMP),
+                (p + 2.0 * gap, Act::CALL),
+                (p + 2.0 * gap + 2.5, Act::Wait(0)),
+            ];
             let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
             out.push(Recipe {
                 name: format!(

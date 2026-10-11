@@ -1,5 +1,6 @@
-//! The music bends the physics: the band director summons a mode the moment the player earns
-//! it, the live engine plays it from the next bar line, and `Groove` follows exactly then.
+//! The music bends the physics: the band director plays a mode the moment the player calls
+//! the band with its counter charged, the live engine plays it from the next bar line, and
+//! `Groove` follows exactly then.
 //! The playback plugin runs headless (the music renders as real time passes) on a fixed 60 fps
 //! clock.
 
@@ -8,7 +9,7 @@ use std::time::Duration;
 use bevy::{prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
     audio::{AudioOutput, Filters, Harmony, LivePlayer, Music, MusicChanged, director, live::library, waltz},
-    events::{Jumped, NuggetCollected, PlayerDied},
+    events::{CallBand, Jumped, NuggetCollected, PlayerDied},
     game::{Groove, LevelRun},
     state::{AppState, CurrentLevel},
 };
@@ -72,13 +73,19 @@ fn until_switch(app: &mut App, from: f64) -> (f64, MusicChanged, Groove) {
     (t - from, change, groove)
 }
 
+/// Down: call the band.
+fn call(app: &mut App) {
+    app.world_mut().write_message(CallBand);
+    app.update();
+}
+
 fn toot(app: &mut App) {
     app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: true });
     app.update();
 }
 
-/// The 5th toot summons Giant Steps right away (no waiting for the 20s check), it comes in at
-/// the next bar line or so, and the physics switch with it.
+/// 5 toots charge Giant Steps (nothing plays yet); a call plays it right away (no waiting for
+/// the 20s check), it comes in at the next bar line or so, and the physics switch with it.
 #[test]
 fn five_toots_summon_giant_steps_at_the_next_bar() {
     let mut app = app(0);
@@ -89,6 +96,8 @@ fn five_toots_summon_giant_steps_at_the_next_bar() {
     }
     assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "4 toots: nothing yet");
     toot(&mut app);
+    assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "5 toots: charged, not playing");
+    call(&mut app);
     let player = app.world().resource::<LivePlayer>();
     assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Coltrane), "decided at once");
     let decided = now(&app);
@@ -110,7 +119,7 @@ fn five_toots_summon_giant_steps_at_the_next_bar() {
     }
     assert_eq!(app.world().resource::<Heard>().0.len(), 1, "still Giant Steps");
     assert!(app.world().resource::<Groove>().giant_steps());
-    // ...and without toots it ends at a later check, physics back to normal.
+    // ...and without toots it ends when its timer runs out, physics back to normal.
     let mut frames = 0;
     while app.world().resource::<Heard>().0.len() < 2 {
         app.update();
@@ -123,7 +132,7 @@ fn five_toots_summon_giant_steps_at_the_next_bar() {
 }
 
 /// A nervous band (3+ deaths) still gives way to Giant Steps: a player stuck at a giant wall
-/// can always summon it.
+/// can always call it.
 #[test]
 fn giant_steps_beats_a_nervous_band() {
     let mut app = app(0);
@@ -136,6 +145,7 @@ fn giant_steps_beats_a_nervous_band() {
     for _ in 0..director::GIANT_STEPS_TOOTS {
         toot(&mut app);
     }
+    call(&mut app);
     let player = app.world().resource::<LivePlayer>();
     assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Coltrane));
     let (_, change, groove) = until_switch(&mut app, 0.0);
@@ -143,7 +153,8 @@ fn giant_steps_beats_a_nervous_band() {
     assert!(groove.giant_steps());
 }
 
-/// 4 quick nuggets fire the band up (quartal) right away; the run speeds up at the switch.
+/// 4 quick nuggets charge the fired-up band (quartal), a call plays it right away; the run
+/// speeds up at the switch.
 #[test]
 fn quick_nuggets_fire_up_the_band_at_once() {
     let mut app = app(2);
@@ -158,9 +169,11 @@ fn quick_nuggets_fire_up_the_band_at_once() {
             app.update();
         }
     }
+    assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "charged, not playing");
+    call(&mut app);
     let player = app.world().resource::<LivePlayer>();
     assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Quartal));
-    let decided = now(&app) - 20.0 / 60.0;
+    let decided = now(&app);
     let (after, change, groove) = until_switch(&mut app, decided);
     assert!(after <= 2.0 * bar + 0.8, "took {after:.2}s");
     assert_eq!(change.now.filters.harmony, Harmony::Quartal);
@@ -189,7 +202,7 @@ fn ground_jump(app: &mut App) {
     app.update();
 }
 
-/// Three evenly spaced ground jumps summon the waltz at once; it comes in at the next 4/4 bar
+/// Three evenly spaced ground jumps charge the waltz, a call plays it at once; it comes in at the next 4/4 bar
 /// line (the first of a pair of waltz bars), the song position mapped through the warp, and the
 /// physics and the world's beat clock follow. Waltzing on keeps it; it ends at a later check.
 #[test]
@@ -206,8 +219,9 @@ fn jumping_in_threes_waltzes_at_the_next_bar() {
             }
         }
     }
+    call(&mut app);
     let player = app.world().resource::<LivePlayer>();
-    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Waltz), "decided at the 3rd jump");
+    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Waltz), "decided at the call");
     let decided = now(&app);
     let (after, change, groove) = until_switch(&mut app, decided);
     println!("the waltz came in {after:.2}s after the 3rd jump (a 4/4 bar is {bar:.2}s)");

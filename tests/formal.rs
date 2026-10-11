@@ -62,7 +62,7 @@ fn tier1_director_properties_within_budget() {
 
 /// The mutants and the counterexample tier 1 finds for each (panics if one survives).
 fn mutants_caught() -> Vec<(Mutation, String)> {
-    [Mutation::GripOnlyFromMelodicMinor, Mutation::RestartKeepsBand, Mutation::SummonWaitsForCheck]
+    [Mutation::GripOnlyFromMelodicMinor, Mutation::RestartKeepsBand, Mutation::CallWaitsForCheck]
         .into_iter()
         .map(|m| match explore(&Config::tier1(DEPTH).with(m)) {
             Ok(_) => panic!("mutant {m:?} survived tier 1: the checks have lost their teeth"),
@@ -111,6 +111,8 @@ fn traces_print_and_parse() {
     assert_eq!(s, "t=0 toot ×2 | t=2 death | t=2.5 nugget+death | t=3.25 wait");
     assert_eq!(Trace::parse(&s).unwrap(), t);
     let sim = replay(&Trace::parse("t=0 toot ×5").unwrap(), Mutation::None);
+    assert_eq!(sim.harmony(), Harmony::Original, "charged, not called");
+    let sim = replay(&Trace::parse("t=0 toot ×5 | t=0 call").unwrap(), Mutation::None);
     assert_eq!(sim.harmony(), Harmony::Coltrane);
     assert!(Trace::parse("t=0.1 toot").is_err());
 }
@@ -120,9 +122,11 @@ fn traces_print_and_parse() {
 #[test]
 fn regressions() {
     let regression = |s: &str| check_trace(s).unwrap_or_else(|e| panic!("{e}"));
-    // The grease chute: a quick nugget line summons the fired-up band, the chute kills thrice
-    // while it's held (ghost nuggets keep it alive): grip must still come.
-    regression("t=0 nugget ×4 | t=0 death | t=1.25 nugget | t=1.5 death | t=2.75 nugget | t=3 death | t=4 wait");
-    // Giant Steps held, deaths at a checkpoint (laughing band), the hold running out.
-    regression("t=0 toot ×5 | t=1 death | t=2 death | t=3 death | t=25 wait");
+    // The grease chute: a quick nugget line charges the fired-up band, a call plays it, the
+    // chute kills thrice while it's held (ghost nuggets keep it alive): grip must still come.
+    regression("t=0 nugget ×4 | t=0 call | t=0 death | t=1.25 nugget | t=1.5 death | t=2.75 nugget | t=3 death | t=4 wait");
+    // Giant Steps called, deaths at a checkpoint (laughing band), the hold running out.
+    regression("t=0 toot ×5 | t=0 call | t=1 death | t=2 death | t=3 death | t=25 wait");
+    // Two full counters: the last ticked plays, the other stays charged and a call switches.
+    regression("t=0 toot ×5 | t=0 nugget ×4 | t=1 toot | t=1 call | t=2 call | t=30 wait");
 }

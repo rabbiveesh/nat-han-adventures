@@ -32,6 +32,8 @@ pub enum PlayState {
     #[default]
     Running,
     Paused,
+    /// A lesson card is up (`ui::lesson`): the game is frozen until it's dismissed.
+    Lesson,
 }
 
 /// Index (0-based) into [`crate::level::LEVELS`] of the level being played / selected.

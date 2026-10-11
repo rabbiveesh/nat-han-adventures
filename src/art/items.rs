@@ -117,6 +117,55 @@ pub fn icon_nugget() -> Vec<Pixels> {
     vec![grid(ICON_NUGGET, GOLD_PAL)]
 }
 
+/// The band counters' icons (the HUD strip): the horn (toots), a note (hops in threes), a
+/// sweat drop (deaths). The nugget counter uses [`icon_nugget`].
+const HORN_PAL: Palette =
+    &[('k', OUTLINE), ('g', hex(0xf0be3c)), ('G', hex(0xaa6e14)), ('c', hex(0xfff0cc))];
+const ICON_HORN: &[&str] = &[
+    "........",
+    ".......k",
+    "..c.c.kg",
+    "kkkkkkgg",
+    "gggggGGg",
+    "kkkkkkgg",
+    ".......k",
+    "........",
+];
+const ICON_NOTE_PAL: Palette = &[('k', OUTLINE), ('c', hex(0xfff0cc))];
+const ICON_NOTE: &[&str] = &[
+    "...kk...",
+    "..kcck..",
+    "..kckck.",
+    "..kc.kck",
+    ".kkc..k.",
+    "kcccck..",
+    "kcccck..",
+    ".kkkk...",
+];
+const SWEAT_PAL: Palette = &[('k', OUTLINE), ('b', hex(0x9fd8ff)), ('B', hex(0x5a9ad0)), ('w', hex(0xffffff))];
+const ICON_SWEAT: &[&str] = &[
+    "...k....",
+    "..kbk...",
+    "..kbk...",
+    ".kbbbk..",
+    "kbwbbBk.",
+    "kbbbbBk.",
+    ".kBBBk..",
+    "..kkk...",
+];
+
+pub fn icon_horn() -> Vec<Pixels> {
+    vec![grid(ICON_HORN, HORN_PAL)]
+}
+
+pub fn icon_note() -> Vec<Pixels> {
+    vec![grid(ICON_NOTE, ICON_NOTE_PAL)]
+}
+
+pub fn icon_sweat() -> Vec<Pixels> {
+    vec![grid(ICON_SWEAT, SWEAT_PAL)]
+}
+
 const LOCK_PAL: Palette = &[('k', hex(0x1b1420)), ('g', hex(0xc0c4d0)), ('G', hex(0x707488)), ('w', hex(0xffffff))];
 const ICON_LOCK: &[&str] = &[
     "..kkkk..",

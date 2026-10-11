@@ -8,7 +8,7 @@ intro: The Main Sewer! Mind the flies, Nat. They're buzzkills.
 deaths: 2
 hint@50,11 fly: Flies above? Little hops! Save the big jumps for later.
 say@70,11: Spike pit ahead. Splat, hop, splat, hop. Two should do!
-say@211,11: Big gap ahead! Grab nuggets fast, the band fires up.
+say@211,11: Big gap ahead! Grab nuggets fast, then DOWN: fired up!
 gate: stain 77,11 104,11
 gate: gap 234,11 246,11
 hint@142,11 buddyraft: Spikes up top! Stand still: I'll make us a raft.

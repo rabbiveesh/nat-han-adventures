@@ -12,8 +12,10 @@ use crate::save::{MAX_AUDIO_DELAY_MS, Progress};
 use crate::input::Action;
 use crate::state::{AppState, PlayState};
 
-const OPTIONS: [&str; 4] = ["RESUME", "RESTART", "AUDIO DELAY", "LEVEL SELECT"];
+const OPTIONS: [&str; 5] = ["RESUME", "RESTART", "AUDIO DELAY", "BAND LESSONS", "LEVEL SELECT"];
 const AUDIO_DELAY: usize = 2;
+/// Shows the band's lesson cards the player has seen again (`ui::lesson`).
+const BAND_LESSONS: usize = 3;
 /// Free play's last option: end the run (to its results card).
 const END_RUN: &str = "END RUN";
 
@@ -85,6 +87,7 @@ fn input(
     mut commands: Commands,
     font: Res<UiFont>,
     progress: Res<Progress>,
+    mut lessons: ResMut<super::Lessons>,
 ) {
     let d = nav(&action).y;
     if d != 0 {
@@ -103,6 +106,10 @@ fn input(
                 play.set(PlayState::Running);
             }
             AUDIO_DELAY => open_calibration(&mut commands, &font, progress.audio_delay_ms),
+            BAND_LESSONS => {
+                lessons.replay(&progress);
+                play.set(PlayState::Running);
+            }
             _ if free.is_some() => app_state.set(AppState::LevelComplete),
             _ => app_state.set(AppState::LevelSelect),
         }

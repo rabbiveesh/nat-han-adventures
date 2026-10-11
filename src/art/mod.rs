@@ -105,9 +105,12 @@ pub enum SpriteId {
     Note,
     /// Green "toot" cloud puff for the double jump, frames grow and fade. 16x16.
     TootPuff,
-    /// UI icons: nugget 8x8, lock 8x8.
+    /// UI icons: nugget 8x8, lock 8x8; the band counters' horn, note and sweat drop, 8x8.
     IconNugget,
     IconLock,
+    IconHorn,
+    IconNote,
+    IconSweat,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -142,7 +145,7 @@ impl SpriteId {
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
-            IconLock,
+            IconLock, IconHorn, IconNote, IconSweat,
         ];
         for w in tiles::WORLDS {
             v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
@@ -159,7 +162,7 @@ impl SpriteId {
             HanParachute => (16, 24),
             PlumbersOnly => (36, 16),
             Throne => (32, 32),
-            Fly | IconNugget | IconLock => (8, 8),
+            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
             Backdrop(_) => (backdrops::W as u32, backdrops::H as u32),
@@ -225,6 +228,9 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         TootPuff => items::toot_puff(),
         IconNugget => items::icon_nugget(),
         IconLock => items::icon_lock(),
+        IconHorn => items::icon_horn(),
+        IconNote => items::icon_note(),
+        IconSweat => items::icon_sweat(),
     }
 }
 

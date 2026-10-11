@@ -37,6 +37,39 @@ pub struct Progress {
     /// (Bluetooth on a phone often hides 150+ ms): the beat clock steps back by it. Set in the
     /// pause menu's AUDIO DELAY (tap along, or nudge). 0..=[`MAX_AUDIO_DELAY_MS`].
     pub audio_delay_ms: u32,
+    /// The band's counters the player has been taught (each appears on the HUD from then on),
+    /// per [`BandCounter`].
+    pub taught: [bool; 4],
+    /// The "press Down to call the band" lesson has been shown.
+    pub taught_call: bool,
+}
+
+/// The band's counters on the HUD strip, in its order: toots (Giant Steps), nuggets (fired
+/// up), hops in threes (the waltz), deaths (nervous).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum BandCounter {
+    Horn,
+    Nugget,
+    Note,
+    Sweat,
+}
+
+impl BandCounter {
+    pub const ALL: [BandCounter; 4] = [BandCounter::Horn, BandCounter::Nugget, BandCounter::Note, BandCounter::Sweat];
+
+    /// Its word in the save file.
+    pub fn name(self) -> &'static str {
+        match self {
+            BandCounter::Horn => "horn",
+            BandCounter::Nugget => "nugget",
+            BandCounter::Note => "note",
+            BandCounter::Sweat => "sweat",
+        }
+    }
+
+    pub fn index(self) -> usize {
+        self as usize
+    }
 }
 
 /// The largest audio delay the player can set.
@@ -44,7 +77,15 @@ pub const MAX_AUDIO_DELAY_MS: u32 = 500;
 
 impl Default for Progress {
     fn default() -> Self {
-        Self { unlocked: 1, best_nuggets: [None; LEVEL_COUNT], best_time: [None; LEVEL_COUNT], last_seed: None, audio_delay_ms: 0 }
+        Self {
+            unlocked: 1,
+            best_nuggets: [None; LEVEL_COUNT],
+            best_time: [None; LEVEL_COUNT],
+            last_seed: None,
+            audio_delay_ms: 0,
+            taught: [false; 4],
+            taught_call: false,
+        }
     }
 }
 
@@ -94,9 +135,12 @@ impl Progress {
     /// unlocked 3
     /// level 1 12 63.250
     /// audio-delay 180
+    /// taught horn nugget
+    /// taught-call
     /// ```
     /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
-    /// `audio-delay <ms>` only when set.)
+    /// `audio-delay <ms>` only when set; `taught` the band counters taught, `taught-call` the
+    /// call lesson seen, only when any.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -109,6 +153,13 @@ impl Progress {
         }
         if self.audio_delay_ms > 0 {
             s.push_str(&format!("audio-delay {}\n", self.audio_delay_ms));
+        }
+        let taught: Vec<&str> = BandCounter::ALL.iter().filter(|c| self.taught[c.index()]).map(|c| c.name()).collect();
+        if !taught.is_empty() {
+            s.push_str(&format!("taught {}\n", taught.join(" ")));
+        }
+        if self.taught_call {
+            s.push_str("taught-call\n");
         }
         s
     }
@@ -140,6 +191,14 @@ impl Progress {
                 }
                 ["freeplay-seed", seed] => p.last_seed = seed.parse().ok(),
                 ["audio-delay", ms] => p.audio_delay_ms = ms.parse::<u32>().map_or(0, |ms| ms.min(MAX_AUDIO_DELAY_MS)),
+                ["taught", words @ ..] => {
+                    for w in words {
+                        if let Some(c) = BandCounter::ALL.iter().find(|c| c.name() == *w) {
+                            p.taught[c.index()] = true;
+                        }
+                    }
+                }
+                ["taught-call"] => p.taught_call = true,
                 _ => {}
             }
         }
@@ -365,6 +424,9 @@ mod tests {
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
         let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
         assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
+        let taught = Progress { taught: [true, false, true, false], taught_call: true, ..Progress::default() };
+        assert!(taught.to_text().contains("taught horn note\ntaught-call\n"), "{}", taught.to_text());
+        assert_eq!(Progress::from_text(&taught.to_text()), Some(taught));
     }
 
     #[test]

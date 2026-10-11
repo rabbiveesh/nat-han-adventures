@@ -3,7 +3,7 @@
 //! explored breadth-first, and the properties checked from every one of them.
 //!
 //! - **Play** is a sequence of [`Act`]s on a 0.25 s grid ([`TICK`]): frames of events (a toot,
-//!   a nugget, a death, a checkpoint, a ground jump, or several at once in tier 2) at the
+//!   a nugget, a death, a checkpoint, a ground jump, a call, or several at once in tier 2) at the
 //!   current time, restarts, and waits (each waited tick is one empty frame, so periodic checks
 //!   and hold expiry happen exactly as in the game, a tick late at most).
 //! - **The model** ([`Sim`]) is what `audio::plugin::direct` does with the director: the band
@@ -52,8 +52,9 @@ pub const NUGGET: u8 = 2;
 pub const DEATH: u8 = 4;
 pub const CHECKPOINT: u8 = 8;
 pub const JUMP: u8 = 16;
-const BITS: [(u8, &str); 5] =
-    [(TOOT, "toot"), (NUGGET, "nugget"), (DEATH, "death"), (CHECKPOINT, "checkpoint"), (JUMP, "jump")];
+pub const CALL: u8 = 32;
+const BITS: [(u8, &str); 6] =
+    [(TOOT, "toot"), (NUGGET, "nugget"), (DEATH, "death"), (CHECKPOINT, "checkpoint"), (JUMP, "jump"), (CALL, "call")];
 
 /// One step of play.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -72,6 +73,7 @@ impl Act {
     pub const DEATH: Act = Act::Frame(DEATH);
     pub const CHECKPOINT: Act = Act::Frame(CHECKPOINT);
     pub const JUMP: Act = Act::Frame(JUMP);
+    pub const CALL: Act = Act::Frame(CALL);
 
     fn events(bits: u8) -> Events {
         let n = |b: u8| (bits & b != 0) as u32;
@@ -82,6 +84,7 @@ impl Act {
             checkpoints: n(CHECKPOINT),
             ground_jumps: n(JUMP),
             waltz_steps: 0,
+            calls: n(CALL),
         }
     }
 
@@ -107,8 +110,8 @@ pub enum Mutation {
     GripOnlyFromMelodicMinor,
     /// A restart that only resets the music, not the band's memory.
     RestartKeepsBand,
-    /// Summons wait for the next periodic check instead of switching at once.
-    SummonWaitsForCheck,
+    /// Calls wait for the next periodic check instead of switching at once.
+    CallWaitsForCheck,
 }
 
 /// The director as the game drives it (see the module docs).
@@ -149,8 +152,8 @@ impl Sim {
         let periodic = now >= self.band.next_check();
         let d = self.band.step(now, ev).map(|d| d.0);
         if let Some(f) = d {
-            let summon_only = ev.deaths == 0 && ev.checkpoints == 0 && !periodic;
-            if !(self.mutation == Mutation::SummonWaitsForCheck && summon_only) {
+            let call_only = ev.calls > 0 && ev.deaths == 0 && ev.checkpoints == 0 && !periodic;
+            if !(self.mutation == Mutation::CallWaitsForCheck && call_only) {
                 self.playing = f;
             }
         }
@@ -234,7 +237,7 @@ impl Sim {
                 s.mood_deaths.min(NERVOUS_DEATHS) as u8,
                 s.checkpoint_deaths.min(director::LAUGHING_DEATHS) as u8,
             ],
-            last_summon: s.last_summon,
+            charged: self.band.charged(),
             hold: self.band.hold.filter(|&(_, until)| until > now).map(|(h, until)| (h, rel(until))),
             next_check: rel(self.band.next_check()).max(0),
             since_start: (-rel(self.band.level_start())).min(HORIZON),
@@ -259,7 +262,8 @@ pub struct Key {
     /// Level deaths (saturated at 3: the grip layer), mood deaths (3: nervous), checkpoint
     /// deaths (2: the laughing band).
     counters: [u8; 3],
-    last_summon: Option<Harmony>,
+    /// The full counters, the one a call plays last.
+    charged: Vec<Harmony>,
     /// The held summon and ticks left.
     hold: Option<(Harmony, i32)>,
     /// Ticks to the next periodic check (0: due).
@@ -396,7 +400,7 @@ pub const PROPERTIES: [(&str, &str); 6] = [
     ),
     (
         "b",
-        "each summon input reaches its harmony at once (≤ 1 decision): 5 toots, 4 quick nuggets, 3 even ground jumps",
+        "each summon input (5 toots, 4 quick nuggets, 3 even ground jumps) puts its mode on the call, and a call plays it at once",
     ),
     ("c", "no flip-flop: with no input the harmony changes at most once, then stays"),
     ("d", "holds expire without keep-alive input (no input, or only deaths and checkpoints)"),
@@ -510,13 +514,26 @@ fn prop_b(s: &Sim) -> Result<(), Violation> {
         for &a in seq {
             t.apply_with(a, |_, d| decided.extend(d.map(|f| f.harmony)));
         }
-        let after_target = decided.iter().position(|&h| h == target).map(|i| &decided[i..]);
-        let ok = t.harmony() == target && after_target.is_some_and(|r| r.iter().all(|&h| h == target));
+        let mut witness = seq.clone();
+        let held = t.held() == Some(target);
+        if !held && t.band.ready() != Some(target) {
+            return Err(Violation {
+                prop: "b",
+                witness,
+                detail: format!("charging {target:?}: the call would play {:?} (full: {:?})", t.band.ready(), t.band.charged()),
+            });
+        }
+        if !held {
+            decided.clear();
+            t.apply_with(Act::CALL, |_, d| decided.extend(d.map(|f| f.harmony)));
+            witness.push(Act::CALL);
+        }
+        let ok = t.harmony() == target && (held || decided == [target]);
         if !ok {
             return Err(Violation {
                 prop: "b",
-                witness: seq.clone(),
-                detail: format!("summoning {target:?}: decisions {decided:?}, playing {:?}", t.harmony()),
+                witness,
+                detail: format!("calling {target:?}: decisions {decided:?}, playing {:?}", t.harmony()),
             });
         }
     }

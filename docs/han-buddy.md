@@ -25,8 +25,9 @@ Status: built (see "As built" at the end for the decisions and numbers).
 - **Plunger boost**: land on his head — on the ground *or mid-air* — and press jump: he launches
   you (~6 tiles). **A boost refreshes Nat's toot**, so chains are possible: jump → toot → boost
   → toot → boost… capped by how high/far Han can follow with his 3 toots.
-  - Note: a chain's toots count toward the Giant Steps summon (5 toots), so long chains summon
-    Giant Steps mid-chain and gravity drops mid-combo. The validator must model this.
+  - Note: a chain's toots count toward the Giant Steps counter (5 toots), and a player with
+    it charged may call the band (Down) mid-chain, so gravity can drop mid-combo. The
+    validator models this (`buddy::GsSwitch`).
 - **Intercept**: when Nat is airborne and descending near him, Han tries to get underneath
   (runs/jumps/toots) so you can bounce off him. This is what makes mid-air combos possible.
 - **"Lemme check that"**: if Nat stands still facing a hazard for ~1.5 s, Han **goes ahead** into
