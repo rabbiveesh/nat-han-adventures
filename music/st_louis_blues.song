@@ -11,10 +11,10 @@ meter = 4/4
 
 [chords]
 | G7 | C7 | G7 | G7 | C7 | % | G6 | % |                      ; 1-8
-| D7 | C7 | G6 | D7 | Gm | D7b9 | % | Gm |                   ; 9-16
-| Gm | D7b9 | % | Gm | Gm | D7b9 | % | Gm |                  ; 17-24
-| Cm | Gm | D7b9 | % | G7 | C7 | G7 | G7 |                   ; 25-32
-| C7#9 | C7 | G6 | % | D7 | C7 | G6 | D7 |                   ; 33-40
+| Am7 | D7 | G6 | G6 D7 | Gm | % | D7b9 | % |                ; 9-16
+| D7b9 | % | Gm | % | Gm | % | D7b9 | % |                    ; 17-24
+| D7b9 | % | Gm Eb7 | Am7 D7 | G7 | % | % | % |              ; 25-32
+| C7 | % | G6 | % | Am7 | D7 | G6 | D7 |                      ; 33-40
 
 [instruments]
 ; The band's alternates: each channel's base is `default` (the sound as written); its
@@ -34,40 +34,42 @@ rock.pulse1 = harp
 bossa.pulse2 = pad
 
 [pulse1]
-v12 @2 o4 r8 g8 a8 b-8 b4 b4 | o4 b-4 a8 g8 e8 g8 r4 | o4 g2. r4 | o4 r2 b8 o5 d8 f8 g8 | ; 1-4
-o4 r8 g8 a8 b-8 o5 c4 c4 | o5 e-8 c8 o4 b-8 a8 g4 e4 | o4 g2 r8 b8 o5 d8 e8 | o5 d4 o4 b4 g4 r4 | ; 5-8
-o5 c4 c4 c8 o4 a8 f+8 a8 | o4 b-8 a8 g8 e8 g4 r4 | o4 g4 b-8 b8 o5 d8 e8 d4 | o5 c4 o4 a4 f+4 d4 | ; 9-12
-o4 g8. a16 b-8 o5 d8 d4 r4 | o5 c4 o4 a8 f+8 d4 r4 | o4 f+8. g16 a8 o5 c8 c4 r4 | o4 b-4 g8 d8 g4 r4 | ; 13-16
-o4 g8. a16 b-8 o5 d8 g4 r4 | o5 f+4 e-8 c8 o4 a4 r4 | o4 a8. b-16 o5 c8 e-8 d4 c4 | o4 b-4 a8 b-8 g4 r4 | ; 17-20
-o5 d4 d8. d16 d8 o4 b-8 g4 | o5 c4 c8. c16 c8 o4 a8 f+4 | o4 a4 b-8 a8 g8 f+8 a4 | o4 g2 r4 r8 o5 d8 | ; 21-24
-o5 e-4 d8 c8 e-4 g4 | o5 d4 o4 b-8 g8 b-4 o5 d4 | o5 c4 o4 a8 f+8 a4 o5 c4 | o5 d4 r4 r8 o4 f+8 g8 a8 | ; 25-28
-o5 d4 d8 d8 d8 o4 b8 g4 | o4 b-4 a8 g8 e4 g4 | o4 g8 a8 b-8 b8 o5 d4 g4 | o5 f4 d8 o4 b8 g4 r4 | ; 29-32
-o5 e-4 e-8 e-8 e-8 c8 o4 a4 | o4 b-4 a8 g8 e4 r4 | o4 g8 a8 b-8 b8 o5 d8 e8 d4 | o4 b4 g4 r2 | ; 33-36
-o5 c4 c8 c8 c8 o4 a8 f+4 | o4 b-4 g8 e8 g4 b-4 | o4 g4 b-8 b8 o5 d8 e8 g4 | o5 f+4 d4 c4 o4 a4 | ; 37-40
+; Handy's melody (checked against a lead sheet): the blues strains state each line in the first
+; two bars and leave two bars for the band; the tango strain is an 8-bar phrase played twice.
+v12 @2 o4 b8 o5 d8 o4 b8 g8& g2 | o4 r8 d+8 e8 g8 b-4 a8 g8& | o4 g1& | g2. r4 | ; 1-4
+o4 e8 g4 a8& a2 | o4 r8 e8 g8 a8 b-4 a4 | o4 g1& | g2. r4 | ; 5-8
+o4 f+8 a8 f+8 d8& d2 | o4 r8 b-8 b8 b8 b4 a4 | o4 g1& | g2 r8 o5 d8 d8 o4 b-8 | ; 9-12
+o5 d8 d8& d2. | r8 o5 c8 c8 c+8 d4 o4 b-4 | o4 a1& | a2 r8 o5 c8 c8 o4 a8 | ; 13-16
+o5 c8 c8 o4 a8 o5 c8& c2& | c8 c8 c8 c+8 d4 o4 b-4 | o4 g1 | o4 r2 r8 o5 d8 d8 o4 b-8 | ; 17-20
+o5 d8 d8& d2. | r8 o5 c8 c8 c+8 d4 o4 b-4 | o4 a1& | a2 r8 o5 c8 c8 o4 a8 | ; 21-24
+o5 c8 c8 o4 a8 o5 c8& c2& | c8 c8 c8 c+8 d4 o4 b-4 | o4 g4 r4 a4 r4 | o5 d4 d8 d8& d2 | ; 25-28
+o4 g4 a+8 b8 g4 a+8 b8 | o4 g4 a+8 b8 g8 a+8 b8 g8& | o4 g1& | g2. a8 b-8 | ; 29-32
+o4 a4 g8 e8 g4 a8 b-8 | o4 a4 g8 e8 g8 a8 b-8 g8& | o4 g1& | g2. a+8 b8 | ; 33-36
+o5 d4 o4 a+8 b8 o5 d8 o4 a+8 b8 o5 c8& | c8 o4 a+8 b8 o5 d8& d8 o4 a+8 b8 g8 | o4 g2. r4 | o5 f+4 d4 c4 o4 a4 | ; 37-40
 
 [pulse2]
 v7 @1 o4 r4 b8 r8 r4 b8 r8 | o4 r4 b-8 r8 r4 e8 r8 | o4 r4 d8 e8 g8 b-8 b4 | o4 r4 b8 r8 r4 f8 r8 | ; 1-4
 o4 r4 b-8 r8 r4 e8 r8 | o4 r4 b-8 r8 r4 e8 r8 | o4 r4 b8 r8 r4 b8 r8 | o4 r4 b8 r8 r4 b8 r8 | ; 5-8
-o4 r4 c8 r8 r4 f+8 r8 | o4 r4 b-8 r8 r4 e8 r8 | o4 r4 b8 r8 r4 b8 r8 | o4 r4 c8 r8 r4 f+8 r8 | ; 9-12
-o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | ; 13-16
-o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | ; 17-20
-o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | ; 21-24
-o4 g8. g16 r4 e-8. e-16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+4 r4 | ; 25-28
-o4 r4 b8 r8 r4 b8 r8 | o4 r4 b-8 r8 r4 e8 r8 | o4 r4 d8 e8 g8 b-8 b4 | o4 r4 b8 r8 r4 f8 r8 | ; 29-32
+o4 r4 e8 r8 r4 g8 r8 | o4 r4 c8 r8 r4 f+8 r8 | o4 r4 b8 r8 r4 b8 r8 | o4 r4 b8 r8 r4 f+8 r8 | ; 9-12
+o4 b-8. b-16 r4 g8. g16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | ; 13-16
+o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | ; 17-20
+o4 b-8. b-16 r4 g8. g16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | ; 21-24
+o4 a8. a16 r4 f+8. f+16 r4 | o4 a8. a16 r4 f+8. f+16 r4 | o4 b-8. b-16 r4 g8. g16 r4 | o4 a8. a16 r4 f+4 r4 | ; 25-28
+o4 r4 b8 r8 r4 b8 r8 | o4 r4 b8 r8 r4 f8 r8 | o4 r4 d8 e8 g8 b-8 b4 | o4 r4 b8 r8 r4 f8 r8 | ; 29-32
 o4 r4 b-8 r8 r4 e8 r8 | o4 r4 b-8 r8 r4 e8 r8 | o4 r4 b8 r8 r4 b8 r8 | o4 r4 b8 r8 r4 b8 r8 | ; 33-36
-o4 r4 c8 r8 r4 f+8 r8 | o4 r4 b-8 r8 r4 e8 r8 | o4 r4 b8 r8 r4 b8 r8 | o4 r4 c8 r8 r4 f+8 r8 | ; 37-40
+o4 r4 e8 r8 r4 g8 r8 | o4 r4 c8 r8 r4 f+8 r8 | o4 r4 b8 r8 r4 b8 r8 | o4 r4 c8 r8 r4 f+8 r8 | ; 37-40
 
 [triangle]
 o2 g4 f4 e4 d4 | o2 c4 e4 g4 f+4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f4 e4 d4 | ; 1-4
 o2 c4 e4 g4 e4 | o2 c4 e4 g4 f+4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f+4 e4 e-4 | ; 5-8
-o2 d4 f+4 a4 d-4 | o2 c4 e4 g4 f+4 | o2 g4 b4 a4 e-4 | o2 d4 f+4 a4 f+4 | ; 9-12
-o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | ; 13-16
-o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | ; 17-20
-o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | ; 21-24
-o2 c8. c16 g8 e-8 c8. c16 g8 e-8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d4 f+4 | ; 25-28
-o2 g4 f4 e4 d4 | o2 c4 e4 g4 f+4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f4 e4 d4 | ; 29-32
-o2 c4 e4 g4 e4 | o2 c4 e4 g4 f+4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f+4 e4 e-4 | ; 33-36
-o2 d4 f+4 a4 d-4 | o2 c4 e4 g4 f+4 | o2 g4 b4 a4 e-4 | o2 d4 f+4 a4 f+4 | ; 37-40
+o2 a4 o3 c4 o2 e4 e-4 | o2 d4 f+4 a4 f+4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 b4 d4 f+4 | ; 9-12
+o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | ; 13-16
+o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | ; 17-20
+o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 g8. g16 d8 b-8 g8. g16 d8 b-8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | ; 21-24
+o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 d8. d16 a8 f+8 d8. d16 a8 f+8 | o2 g8. g16 d8 b-8 e-8. e-16 b-8 g8 | o2 a8. a16 e8 c8 d4 f+4 | ; 25-28
+o2 g4 b4 o3 d4 o2 b4 | o2 g4 b4 o3 d4 f4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f4 e4 d4 | ; 29-32
+o2 c4 e4 g4 e4 | o2 c4 e4 g4 f+4 | o2 g4 b4 o3 d4 o2 b4 | o2 g4 f4 e4 g+4 | ; 33-36
+o2 a4 o3 c4 o2 e4 e-4 | o2 d4 f+4 a4 f+4 | o2 g4 b4 a4 e-4 | o2 d4 f+4 a4 f+4 | ; 37-40
 
 [noise]
 v9 H4 s8 h8 h4 s8 h8 | [k4 s8 h8 h4 s8 h8 |]10 k8 s8 s8 s8 s16 s16 s8 k8 s8 | ; 1-12
