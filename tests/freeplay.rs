@@ -192,7 +192,7 @@ fn unlocks_follow_the_story() {
     };
     assert_eq!(served(3), ["mega wall"]);
     assert_eq!(served(5), ["buddy raft pool", "mega wall"]);
-    assert_eq!(served(10), ["buddy raft pool", "cling shaft", "fired-up chasm", "mega wall", "shield row"]);
+    assert_eq!(served(10), ["buddy raft pool", "cling shaft", "fired-up chasm", "mega wall", "shield row", "trapeze"]);
 }
 
 /// A climb is taller than the other rooms: the course is as tall as it, every room sits on its

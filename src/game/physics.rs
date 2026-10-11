@@ -368,8 +368,9 @@ pub struct HanHead {
     /// In a band zone (`Level::in_band_zone`): jumping off him (or off the coyote time after
     /// stepping off him) is the weak boost ([`WEAK_BOOST_SPEED`]), winded or not.
     pub weak: bool,
-    /// Clinging to a wall (a cling shaft, nervous): the way away from it (-1 or 1; 0 when
-    /// not). Jumping off him is then a kick: the boost and [`KICK_CARRY`] that way.
+    /// Horizontal speed a boost off him adds, kept like a platform's (px/s, signed; 0 for
+    /// none): clinging to a wall (a cling shaft, nervous) [`KICK_CARRY`] away from it; on the
+    /// trapeze (the waltz) his swing's speed.
     pub kick: f32,
 }
 
@@ -508,11 +509,11 @@ fn player_step(
             boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true });
         } else if on_han.is_some_and(|h| h.boost) {
             // The plunger boost: way up, and the toot's fresh again (off Han clinging to a wall,
-            // a kick away from it too).
+            // a kick away from it too; off his trapeze, his swing).
             body.vel.y = BOOST_SPEED;
             let kick = on_han.map_or(0.0, |h| h.kick);
             if kick != 0.0 {
-                body.launch = kick * KICK_CARRY;
+                body.launch = kick;
             }
             ctl.has_toot = true;
             ctl.weak_toot = false;

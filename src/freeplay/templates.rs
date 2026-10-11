@@ -62,6 +62,7 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
     Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
     Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, height: MEGA_H, build: cling_shaft },
+    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, height: MEGA_H, build: trapeze },
 ];
 
 /// The templates for a skill.
@@ -669,6 +670,42 @@ fn cling_shaft(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     c.ground(2, top + 8);
     c.ground(HAN_TAIL, floor);
     Built { hint: Some((&[Topic::Shaft], "Splat a few: sweaty band? I climb walls! Hop on, JUMP!")), checkpoint }
+}
+
+/// A trapeze: a runway to waltz on, then a lip under a ceiling that ends over the gap (Han's
+/// plunger sticks in its edge, `TRAPEZE_OUT` past the lip, 5 tiles of handle), a bottomless gap
+/// (15 → 16 tiles) and the far side 3 rows up behind 3 spikes: out of every mode's reach, a
+/// launch off Han's swing on ONE clears it.
+fn trapeze(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
+    let checkpoint = han_lead(c);
+    c.ground(lerpi(band, 9.0, 7.0) + d.int(0, 1) as usize, floor);
+    // The ceiling: over the end of the runway and out over the gap to the anchor.
+    let cb = floor - 8;
+    for _ in 0..4 {
+        c.column(move |r| if r <= cb || r >= floor { b'#' } else { b'.' });
+    }
+    let out = crate::level::buddy::TRAPEZE_OUT as usize;
+    let gap = lerpi(band, 15.0, 16.0);
+    for k in 0..gap {
+        c.column(move |r| if k < out && r <= cb { b'#' } else { b'.' });
+    }
+    let high = floor - 3;
+    for _ in 0..3 {
+        c.column(move |r| match r {
+            r if r == high - 1 => b'^',
+            r if r >= high => b'#',
+            _ => b'.',
+        });
+    }
+    let x = c.width();
+    c.ground(4, high);
+    for k in 1..3 {
+        c.nugget(x + k, high - 1);
+    }
+    c.ground(2, high + 2);
+    c.ground(HAN_TAIL, floor);
+    Built { hint: Some((&[Topic::Trapeze], "Waltzing? I swing up top! Ride me, jump on ONE!")), checkpoint }
 }
 
 /// Where a buddy raft pool starts (column in the room, from the entry checkpoint near 0).

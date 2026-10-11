@@ -1055,3 +1055,100 @@ fn han_keeps_up_with_a_zooming_nat() {
     assert!(max_lag < 8.0 * TILE, "kept up: {} tiles behind at most", max_lag / TILE);
     assert!(mean < 6.0 * TILE, "kept up: {} tiles behind on average", mean / TILE);
 }
+
+// --- The waltz: the trapeze ---------------------------------------------------------------------
+
+/// A 20-tile gap off a lip (col 19, Nat's row 17) under a ceiling ending over the swing's
+/// bottom (col 22, 6 tiles of handle), the far side 3 rows up behind 3 spikes.
+fn trapeze_level() -> String {
+    let rows: Vec<String> = (0..20)
+        .map(|r| {
+            (0..70)
+                .map(|c| match (c, r) {
+                    (2, 17) => 'P',
+                    (66, 14) => 'G',
+                    (8..=22, 0..=9) => '#',
+                    (0..=19, 18..) => '#',
+                    (40..=42, 14) => '^',
+                    (40.., 15..) => '#',
+                    _ => '.',
+                })
+                .collect()
+        })
+        .collect();
+    let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+    level("gate: trapeze 18,9 46,17\n", &rows)
+}
+
+/// Han swinging on the trapeze (the band waltzing or not), Nat put on his head at the back of
+/// the swing, jumping just before ONE (the bottom, swinging forward), a toot near the top:
+/// where Nat ends up, and whether Han ever swung.
+fn trapeze_flight(waltz: bool) -> (Vec2, bool, usize) {
+    let mut app = app(&trapeze_level());
+    let secs = 60.0 / nat_han_adventures::audio::waltz::WALTZ_BPM as f64;
+    let mut frame = 0usize;
+    let mut tick = |app: &mut App| {
+        if waltz {
+            let beats = frame as f64 * DT / secs;
+            *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+        }
+        frame += 1;
+        app.update();
+        trace(app);
+    };
+    let floor = |r: i32| standing((19 - r) as f32 * TILE);
+    put::<Player>(&mut app, Vec2::new(18.5 * TILE, floor(17)));
+    let on = |app: &mut App| matches!(brain(app).mode, HanMode::Trapeze { on: true, .. });
+    for _ in 0..360 {
+        tick(&mut app);
+        if on(&mut app) {
+            break;
+        }
+    }
+    if !on(&mut app) {
+        return (nat(&mut app), false, heard(&app).died);
+    }
+    let bar = |app: &App| {
+        let c = app.world().resource::<Groove>().clock;
+        (c.beat as f32 + c.phase) / c.beats_per_bar as f32
+    };
+    // At the back of the swing: onto his cap.
+    while !(0.74..0.77).contains(&bar(&app)) {
+        tick(&mut app);
+    }
+    let h = han(&mut app);
+    put::<Player>(&mut app, h + Vec2::new(0.0, tuning::PLAYER_SIZE.1 + 0.5));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    assert_eq!(nat_body(&mut app).riding, Some(single::<Han>(&mut app)), "riding Han on the trapeze");
+    while bar(&app) < 0.97 {
+        tick(&mut app);
+    }
+    press(&mut app, RIGHT);
+    release(&mut app, JUMP);
+    tick(&mut app);
+    press(&mut app, JUMP);
+    for _ in 0..20 {
+        tick(&mut app);
+    }
+    release(&mut app, JUMP);
+    tick(&mut app);
+    press(&mut app, JUMP); // the toot
+    for _ in 0..150 {
+        tick(&mut app);
+    }
+    assert!(!matches!(brain(&mut app).mode, HanMode::Trapeze { .. }), "he let go");
+    (nat(&mut app), true, heard(&app).died)
+}
+
+#[test]
+fn waltz_trapeze_launches_nat_across() {
+    let (p, swung, died) = trapeze_flight(true);
+    assert!(swung, "Han got on the trapeze");
+    assert_eq!(died, 0);
+    assert!(p.x > 43.0 * TILE && (p.y - standing(5.0 * TILE)).abs() < 1.0, "across, past the spikes: {p}");
+    // Not waltzing: no trapeze.
+    let (_, swung, _) = trapeze_flight(false);
+    assert!(!swung, "no trapeze out of the waltz");
+}

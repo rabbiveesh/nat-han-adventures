@@ -66,6 +66,8 @@ pub(super) fn plugin(app: &mut App) {
             update_checkpoints,
             update_sprays,
             han_fx,
+            trapeze_handle,
+            trapeze_cup,
         )
             .chain()
             .in_set(VisualSet::Animate)
@@ -489,6 +491,62 @@ fn han_fx(
     *was_sinking = sinking;
 }
 
+/// Han's plunger on the trapeze: the cup stuck in the ceiling, the handle down to his hands.
+#[derive(Component)]
+struct TrapezeHandle;
+
+fn trapeze_handle(
+    mut commands: Commands,
+    han: Query<(&HanBrain, &Transform), With<Han>>,
+    mut handle: Query<(Entity, &mut Transform, &mut Sprite), (With<TrapezeHandle>, Without<Han>)>,
+) {
+    let swing = han.single().ok().and_then(|(b, tf)| match b.mode {
+        HanMode::Trapeze { anchor, on: true, .. } => Some((anchor, tf.translation.truncate())),
+        _ => None,
+    });
+    let Some((anchor, han)) = swing else {
+        for (e, ..) in &handle {
+            commands.entity(e).despawn();
+        }
+        return;
+    };
+    // To the top of his cap, where his hands are.
+    let hands = han + Vec2::new(0.0, crate::game::tuning::PLAYER_SIZE.1 / 2.0);
+    let d = anchor - hands;
+    let tf = Transform::from_translation(((anchor + hands) / 2.0).extend(3.9))
+        .with_rotation(Quat::from_rotation_z(-d.x.atan2(d.y)));
+    let size = Vec2::new(2.0, d.length());
+    if let Ok((_, mut t, mut sprite)) = handle.single_mut() {
+        *t = tf;
+        sprite.custom_size = Some(size);
+    } else {
+        commands.spawn((LevelEntity, TrapezeHandle, Sprite::from_color(Color::srgb(0.62, 0.42, 0.22), size), tf));
+        // The cup (it stays put; it goes with the handle).
+        commands.spawn((
+            LevelEntity,
+            DespawnWithHandle,
+            Sprite::from_color(Color::srgb(0.75, 0.12, 0.12), Vec2::new(8.0, 3.0)),
+            Transform::from_translation((anchor - Vec2::new(0.0, 1.5)).extend(3.95)),
+        ));
+    }
+}
+
+/// Goes when the trapeze handle does.
+#[derive(Component)]
+struct DespawnWithHandle;
+
+fn trapeze_cup(
+    mut commands: Commands,
+    handle: Query<(), With<TrapezeHandle>>,
+    cups: Query<Entity, With<DespawnWithHandle>>,
+) {
+    if handle.is_empty() {
+        for e in &cups {
+            commands.entity(e).despawn();
+        }
+    }
+}
+
 /// Draw simulated entities between their last two fixed-step positions.
 fn interpolate(
     fixed: Res<Time<Fixed>>,
@@ -595,7 +653,7 @@ fn animate_han(
                 HanPose::Run => (SpriteId::HanRun, (t * 12.0) as usize),
                 HanPose::Jump => (SpriteId::HanJump, (t * 10.0) as usize),
                 // (Clinging: braced, plunger up, against the wall.)
-                HanPose::Braced | HanPose::Cling => (SpriteId::HanBraced, (t * 4.0) as usize),
+                HanPose::Braced | HanPose::Cling | HanPose::Trapeze => (SpriteId::HanBraced, (t * 4.0) as usize),
                 HanPose::Intercept => (SpriteId::HanIntercept, (t * 8.0) as usize),
                 HanPose::March => (SpriteId::HanMarch, (t * 9.0) as usize),
                 HanPose::Parachute => (SpriteId::HanParachute, (t * 2.0) as usize),
