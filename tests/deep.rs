@@ -765,7 +765,7 @@ fn deep_han_reaches_his_gates() {
             for m in level
                 .gates
                 .iter()
-                .filter(|g| matches!(g.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Shield | Topic::Chain | Topic::BuddyRaft))
+                .filter(|g| matches!(g.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Chain | Topic::BuddyRaft))
             {
                 // His spots: the mark's cells he can stand in (a mega wall's or a cling shaft's: at
                 // its foot, he boosts or climbs from there).

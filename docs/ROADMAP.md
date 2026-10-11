@@ -46,11 +46,11 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Han** (`docs/han-buddy.md`): graph navigation, plunger boost (refreshes the toot), mid-air
   intercepts, shield escort through sprays, sewage rafts, per-mode physics, weak boost + grumbles
   near band gates, overuse limit, the fired-up running throw, the Giant Steps mega-boost, the nervous wall-cling, the waltz trapeze; mega walls,
-  cling shafts, trapezes, shield rows, fired-up chasms, buddy raft pools.
+  cling shafts, trapezes, fired-up chasms, buddy raft pools.
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
-- **Free play** (`src/freeplay/`): procedural rooms from 15 templates (Han's six gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
+- **Free play** (`src/freeplay/`): procedural rooms from 14 templates (Han's five gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
   On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
   so a new room never hitches the game; the main thread takes over if the worker fails.
@@ -67,7 +67,7 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
   chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up),
   the Giant Steps mega-boost (buddy ledges became 11-tile mega walls), the nervous
   wall-cling (cling shafts; level 9 has one after its chute), and the waltz trapeze (level 10).
-  Each trick gets a freeze-frame lesson card at its first hint spot. The laughing band's boing boost is in too (no gate). Next: shield rows out, Han nearly silent.
+  Each trick gets a freeze-frame lesson card at its first hint spot. The laughing band's boing boost is in too (no gate). Shield rows are out (levels 8 and 10 keep a plain low tunnel there). Next: Han nearly silent.
 
 ## Planned (agreed, not started)
 - **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics
