@@ -515,6 +515,7 @@ fn band_gates(level: &Level) -> Vec<(GateMark, Need, &'static str)> {
                 Topic::Chain => (Need::Band(Harmony::Quartal), "fired-up chasm"),
                 Topic::Mega => (Need::Band(Harmony::Coltrane), "mega wall"),
                 Topic::Shaft => (Need::Grip, "cling shaft"),
+                Topic::Trapeze => (Need::Band(Harmony::Waltz), "trapeze"),
                 _ => return None,
             };
             Some((*m, need, what))
@@ -532,6 +533,8 @@ fn recipes(level: &Level, m: &GateMark, g: &Groove) -> Vec<Recipe> {
             gap_recipes(g, &line, run_up)
         }
         Topic::Waltz => waltz_recipes(g, glide_wait(level, m)),
+        // (Han reels up onto his swing and comes round to its back for Nat: a bar or two.)
+        Topic::Trapeze => waltz_recipes(g, 3.0),
         Topic::Chain => {
             let (line, run_up) = nugget_line(level, m);
             chasm_recipes(g, &line, run_up)
@@ -649,7 +652,7 @@ fn deep_boost_chains_cant_bypass_band_gates() {
         let mut tried = 0;
         for (li, level) in levels.iter().enumerate() {
             let map = Map::new(level);
-            for (m, _, what) in band_gates(level).into_iter().filter(|g| !matches!(g.0.topic, Topic::Chain | Topic::Mega | Topic::Shaft)) {
+            for (m, _, what) in band_gates(level).into_iter().filter(|g| !matches!(g.0.topic, Topic::Chain | Topic::Mega | Topic::Shaft | Topic::Trapeze)) {
                 // Heading the way you come to it from the start; take-offs on the mark's rows
                 // up to two chasms' width (28 tiles) before it; landing past its far side.
                 let dir = if (level.start.0 as i32) < m.c0 { 1 } else { -1 };
@@ -762,11 +765,11 @@ fn deep_han_reaches_his_gates() {
             for m in level
                 .gates
                 .iter()
-                .filter(|g| matches!(g.topic, Topic::Mega | Topic::Shaft | Topic::Shield | Topic::Chain | Topic::BuddyRaft))
+                .filter(|g| matches!(g.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Shield | Topic::Chain | Topic::BuddyRaft))
             {
                 // His spots: the mark's cells he can stand in (a mega wall's or a cling shaft's: at
                 // its foot, he boosts or climbs from there).
-                let r0 = if matches!(m.topic, Topic::Mega | Topic::Shaft) { m.r1 } else { m.r0 };
+                let r0 = if matches!(m.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze) { m.r1 } else { m.r0 };
                 let spots: Vec<(i32, i32)> = (r0..=m.r1)
                     .flat_map(|r| (m.c0..=m.c1).map(move |c| (c, r)))
                     .filter(|&c| Nav::node(&map, level, c))

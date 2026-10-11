@@ -77,8 +77,8 @@
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys};
-use super::{CLING_ROWS, GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
+use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
+use super::{CLING_ROWS, GateMark, Granted, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
     ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
@@ -153,6 +153,11 @@ pub enum Mode {
 pub const MODES: [Mode; 5] = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp, Mode::Waltz, Mode::Nervous];
 
 impl Mode {
+    /// The Han tricks this mode grants in their gates' zones.
+    pub fn granted(self) -> Granted {
+        Granted { giant_steps: self == Mode::GiantSteps, grip: self == Mode::Nervous, waltz: self == Mode::Waltz }
+    }
+
     pub fn groove(self) -> Groove {
         Groove::of(match self {
             Mode::Normal => Harmony::Original,
@@ -195,6 +200,9 @@ pub enum Gate {
     /// Needs the nervous band's grip and Han: he clings to the shaft's wall [`CLING_ROWS`] up,
     /// Nat hops onto his head and kicks off it (a full boost, away from the wall).
     ClingShaft,
+    /// Needs the waltz and Han: he swings from his plunger stuck in the ceiling, Nat rides his
+    /// cap and jumps off it on ONE (a full boost, plus the swing's speed).
+    Trapeze,
     /// Needs Han going ahead into the jets.
     ShieldRow,
     /// Needs the fired-up band and Han: his running throw, and catches in mid-air to throw
@@ -207,12 +215,12 @@ pub enum Gate {
 impl Gate {
     /// Han's gates (he's what crosses them).
     pub fn needs_han(self) -> bool {
-        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
+        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::Trapeze | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
     }
 
     /// Han's gates whose mark is a band zone (his boost weak there but with their mode).
     pub fn zoned_han(self) -> bool {
-        matches!(self, Gate::MegaWall | Gate::ClingShaft)
+        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::Trapeze)
     }
 
     pub fn name(self) -> &'static str {
@@ -224,6 +232,7 @@ impl Gate {
             Gate::StainPit => "stain pit",
             Gate::MegaWall => "mega wall",
             Gate::ClingShaft => "cling shaft",
+            Gate::Trapeze => "trapeze",
             Gate::ShieldRow => "shield row",
             Gate::ChainChasm => "fired-up chasm",
             Gate::BuddyRaft => "buddy raft pool",
@@ -240,6 +249,7 @@ impl Gate {
             Gate::StainPit
             | Gate::MegaWall
             | Gate::ClingShaft
+            | Gate::Trapeze
             | Gate::ShieldRow
             | Gate::ChainChasm
             | Gate::BuddyRaft => None,
@@ -252,6 +262,7 @@ impl Gate {
         match self {
             Gate::MegaWall => Some(Mode::GiantSteps),
             Gate::ClingShaft => Some(Mode::Nervous),
+            Gate::Trapeze => Some(Mode::Waltz),
             _ => self.mode(),
         }
     }
@@ -265,6 +276,7 @@ impl Gate {
             Gate::StainPit => Topic::Stain,
             Gate::MegaWall => Topic::Mega,
             Gate::ClingShaft => Topic::Shaft,
+            Gate::Trapeze => Topic::Trapeze,
             Gate::ShieldRow => Topic::Shield,
             Gate::ChainChasm => Topic::Chain,
             Gate::BuddyRaft => Topic::BuddyRaft,
@@ -280,6 +292,7 @@ impl Gate {
             Gate::StainPit => 'K',
             Gate::MegaWall => 'M',
             Gate::ClingShaft => 'L',
+            Gate::Trapeze => 'T',
             Gate::ShieldRow => 'H',
             Gate::ChainChasm => 'N',
             Gate::BuddyRaft => 'U',
@@ -711,10 +724,10 @@ impl<'a> Map<'a> {
         !self.in_band_zone(cell)
     }
 
-    /// Is Han's boost weak in `cell`, Giant Steps playing or not, with the grip or not (marked,
-    /// or found in a room)? See [`Level::weak_boost`].
-    pub fn weak_boost(&self, cell: Cell, giant_steps: bool, grip: bool) -> bool {
-        self.level.weak_boost(cell, giant_steps, grip) || self.derived.iter().any(|g| g.weakens(cell, giant_steps, grip))
+    /// Is Han's boost weak in `cell`, with what the band plays `granted` (marked, or found in
+    /// a room)? See [`Level::weak_boost`].
+    pub fn weak_boost(&self, cell: Cell, granted: Granted) -> bool {
+        self.level.weak_boost(cell, granted) || self.derived.iter().any(|g| g.weakens(cell, granted))
     }
 
     /// Is `cell` in a band zone (marked, or found in a room)? See [`Level::in_band_zone`].
@@ -1676,6 +1689,9 @@ pub struct Physics {
     /// Kicks off Han clinging to a wall, nervous: a human's, away from a wall on the left
     /// (`[0]`, kicking right) and on the right (`[1]`, kicking left).
     kick: [Arcs; 2],
+    /// Jumps off Han on the trapeze at the bottom of his swing, on ONE: the boost, plus a
+    /// human share of the swing's speed (`[0]` swinging right, `[1]` left).
+    trapeze: [Arcs; 2],
     boost_ideal: Vec<(Mode, Arcs)>,
     /// Weak boosts off Han in a band zone, ideal, in the modes with their own geometry (the
     /// waltz and the nervous band jump like normal).
@@ -1706,6 +1722,12 @@ impl Physics {
                 strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
             )
         });
+        let trapeze = [1.0, -1.0].map(|dir| {
+            Arcs::boost(
+                Env { kick: dir * TRAPEZE_SPEED * HUMAN_CARRY, ..Env::new(Mode::Normal, false) },
+                strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
+            )
+        });
         let boost_ideal = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp]
             .into_iter()
             .map(|m| (m, Arcs::boost(Env::new(m, true), ideal_strategies())))
@@ -1716,7 +1738,7 @@ impl Physics {
             .collect();
         let glide = Arcs::new(Env::glide(false), strategies());
         let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1728,8 +1750,8 @@ impl Physics {
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let glide = Arcs::new(Env::glide(false), human.clone());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, throw, mega, kick, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
+        let Physics { boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -1741,7 +1763,8 @@ impl Physics {
     pub fn laughing() -> [(&'static str, Physics); 2] {
         const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics { human, no_toot, boost, throw, mega, kick, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
+            let Physics { human, no_toot, boost, throw, mega, kick, trapeze, ideal, glide, glide_ideal, boost_ideal, weak_ideal } =
+                Physics::new();
             let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
@@ -1750,8 +1773,9 @@ impl Physics {
             let mega = Arcs::boost(nudge(mega.env), mega.strategies);
             // (From the plain strategies: the kicks' are already carried.)
             let kick = kick.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
+            let trapeze = trapeze.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
             let glide = Arcs::new(nudge(glide.env), glide.strategies);
-            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
         };
         [
             ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
@@ -2109,9 +2133,14 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
             found.extend(cling);
             continue;
         }
+        let trapeze = trapeze_found(map, phys, g, cell, &mut buf);
+        if !trapeze.is_empty() {
+            found.extend(trapeze);
+            continue;
+        }
         // (A generated room has no marks yet: there the mega-boost goes from anywhere, and its
         // mark is derived when it's found.)
-        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, true, false);
+        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { giant_steps: true, ..Granted::NONE });
         if g.reached(cell)
             && mega_at(cell)
             && mega_at((cell.0, cell.1 - 1))
@@ -2188,7 +2217,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
 fn cling_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
     let mut found = Vec::new();
     // (A generated room has no marks yet: there Han clings anywhere, and the mark is derived.)
-    let zone = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, false, true);
+    let zone = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { grip: true, ..Granted::NONE });
     if !g.reached(cell) || !map.standable(cell) || g.deaths.is_empty() || map.han_keeps_out(cell) {
         return found;
     }
@@ -2225,6 +2254,50 @@ fn cling_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<C
                 && l != h
             {
                 found.push((Gate::ClingShaft, cell, l, buf.clone()));
+            }
+        }
+    }
+    found
+}
+
+/// A trapeze off lip cell `cell` (the waltz): Han's plunger stuck in the ceiling over the gap
+/// ([`trapeze_swing`]), Nat hops onto his cap at the bottom of the swing from the floor near
+/// the lip, and jumps off it on ONE: a full boost and the swing's speed.
+fn trapeze_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
+    let mut found = Vec::new();
+    // (A generated room has no marks yet: there Han swings anywhere, and the mark is derived.)
+    let zone = |c: Cell| {
+        (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { waltz: true, ..Granted::NONE })
+    };
+    if !g.reached(cell) || !map.standable(cell) || map.han_keeps_out(cell) || !zone(cell) || !waltz_runway(map, g, cell) {
+        return found;
+    }
+    for (k, dir) in [1, -1].into_iter().enumerate() {
+        let Some((ax, han, _)) = trapeze_swing(|c, r| map.is_solid(c, r), cell, dir) else { continue };
+        let perch = (ax, han - 1);
+        if !zone(perch) || !zone((ax, han)) {
+            continue;
+        }
+        // Nat hops onto his cap (the bottom of the swing) from the floor near the lip.
+        let mut perch_map = map.clone();
+        perch_map.set((ax, han), VIRT, 0);
+        let normal = phys.human(Mode::Normal);
+        let hops = (-2..=0).map(|d| (cell.0 + d * dir, cell.1)).filter(|&c| g.reached(c)).any(|from| {
+            normal.at(&perch_map, from).iter().any(|s| {
+                normal.flight(&perch_map, from, s).is_some_and(|f| fly(&perch_map, &normal.env, &f, buf) == Outcome::Land(perch))
+            })
+        });
+        if !hops {
+            continue;
+        }
+        let arcs = &phys.trapeze[k];
+        for s in &arcs.strategies {
+            let Some(f) = arcs.flight(&perch_map, perch, s) else { continue };
+            if let Outcome::Land(l) = fly(&perch_map, &arcs.env, &f, buf)
+                && !g.reached(l)
+                && l != perch
+            {
+                found.push((Gate::Trapeze, cell, l, buf.clone()));
             }
         }
     }
@@ -2462,11 +2535,8 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     let dir = (c.to.0 - at.0).signum();
     let near_side = |(x, _): Cell| dir == 0 || (x - c.to.0) * dir < 0;
     // (A mega wall's zone is a full boost's while Giant Steps plays, a cling shaft's with the
-    // grip.)
-    let zone = |(x, y): Cell, m: Mode| {
-        let (gs, grip) = (m == Mode::GiantSteps, m == Mode::Nervous);
-        map.weak_boost((x, y), gs, grip) || map.weak_boost((x, y - 1), gs, grip)
-    };
+    // grip, a trapeze's in the waltz.)
+    let zone = |(x, y): Cell, m: Mode| map.weak_boost((x, y), m.granted()) || map.weak_boost((x, y - 1), m.granted());
     let weak_at = |cell: Cell, m: Mode| zone(cell, m) && map.standable(cell) && !map.han_keeps_out(cell);
     let full_at = |cell: Cell, m: Mode| {
         !zone(cell, m) && !map.is_solid(cell.0, cell.1) && !map.deadly_tile(cell.0, cell.1) && !map.han_keeps_out(cell)

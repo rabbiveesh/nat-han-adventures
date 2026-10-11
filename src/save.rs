@@ -55,10 +55,12 @@ pub enum HanTrick {
     Mega,
     /// With a nervous band, in a shaft, he climbs the wall: a jump off his head kicks up.
     Cling,
+    /// In the waltz, by a trapeze, he swings from the ceiling: ride him, jump off on ONE.
+    Trapeze,
 }
 
 impl HanTrick {
-    pub const ALL: [HanTrick; 3] = [HanTrick::Throw, HanTrick::Mega, HanTrick::Cling];
+    pub const ALL: [HanTrick; 4] = [HanTrick::Throw, HanTrick::Mega, HanTrick::Cling, HanTrick::Trapeze];
 
     /// Its word in the save file.
     pub fn name(self) -> &'static str {
@@ -66,6 +68,7 @@ impl HanTrick {
             HanTrick::Throw => "throw",
             HanTrick::Mega => "mega",
             HanTrick::Cling => "cling",
+            HanTrick::Trapeze => "trapeze",
         }
     }
 
@@ -467,7 +470,7 @@ mod tests {
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
         let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
         assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
-        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true, false, false], ..Progress::default() };
+        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true, false, false, false], ..Progress::default() };
         assert!(taught.to_text().contains("taught horn note\ntaught-call\ntricks throw\n"), "{}", taught.to_text());
         assert_eq!(Progress::from_text(&taught.to_text()), Some(taught));
     }

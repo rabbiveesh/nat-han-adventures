@@ -8,20 +8,22 @@
 use bevy::prelude::*;
 
 use super::{
-    BACK_WARN_LINE, CLIMB_SPEED, CLING_SECS, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
+    BACK_WARN_LINE, CLIMB_SPEED, CLING_SECS, REEL_SPEED, TRAPEZE_SECS, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
     LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE,
     brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
 };
 use crate::audio::Harmony;
 use crate::events::HanSays;
 use crate::game::{
-    ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, MovingPlatform, Player,
+    ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, KICK_CARRY, MovingPlatform, Player,
     PlayerControl, Pos, PrevPos, SimClock, move_towards, platform_pos,
 };
-use crate::level::buddy::{HALF, HanCtl, HanInput, HanPhys, Kin, drive, head_holds, intercept, waltz_step};
+use crate::level::buddy::{
+    HALF, HanCtl, HanInput, HanPhys, Kin, TRAPEZE_OUT, drive, head_holds, intercept, trapeze_at, trapeze_swing, waltz_step,
+};
 use crate::level::nav::{Edge, HanMove, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
-use crate::level::{CLING_ROWS, Level, PlatformKind, TILE, ThingKind, Tile};
+use crate::level::{CLING_ROWS, Level, PlatformKind, TILE, ThingKind, Tile, Topic};
 
 /// Han's routes for the level visit (one graph per physics he's had: normal, Giant Steps,
 /// fired up).
@@ -100,6 +102,16 @@ pub enum HanMode {
         wall: f32,
         x: f32,
         top: f32,
+        t: f32,
+    },
+    /// On the trapeze (the waltz): his plunger stuck in the ceiling at `anchor`, the handle
+    /// `len` long, swinging towards `dir` through the bottom on ONE; `on` once he's reeled up
+    /// onto the swing, `t` seconds on it.
+    Trapeze {
+        anchor: Vec2,
+        len: f32,
+        dir: f32,
+        on: bool,
         t: f32,
     },
 }
@@ -432,7 +444,7 @@ pub(super) fn think(
     brain.since_grumble += dt;
     let mut kicked = false;
     for b in boosted.read() {
-        kicked |= matches!(brain.mode, HanMode::Cling { .. }) && !b.weak;
+        kicked |= matches!(brain.mode, HanMode::Cling { .. } | HanMode::Trapeze { .. }) && !b.weak;
         if b.weak {
             // The band zone: a feeble hop and a grumble (not his back's business).
             brain.weak_boosts += 1;
@@ -544,8 +556,48 @@ pub(super) fn think(
             body.vel = Vec2::ZERO;
             body.on_ground = false;
             let up = pos.0.y >= top;
-            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall };
+            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall * KICK_CARRY };
             set_anim(&mut anim, HanPose::Cling, wall < 0.0, &groove, false);
+            return;
+        }
+    }
+
+    // --- A trapeze, the waltz: Nat at its lip, Han up on his plunger swinging for Nat to ride.
+    let waltz = groove.harmony == Harmony::Waltz;
+    if brain.mode == HanMode::Follow
+        && waltz
+        && !nat_dead
+        && body.on_ground
+        && nat.grounded
+        && !nat_on_han
+        && level.in_mark(Topic::Trapeze, nat_cell)
+        && (nat.pos.x - pos.0.x).abs() < 4.0 * TILE
+        && let Some((anchor, len, dir)) = trapeze_near(level, nat_cell, -brain.side)
+    {
+        brain.mode = HanMode::Trapeze { anchor, len, dir, on: false, t: 0.0 };
+        brain.exec = None;
+        brain.path.clear();
+    }
+    if let HanMode::Trapeze { anchor, len, dir, on, t } = brain.mode {
+        let t = t + dt;
+        let bar = (groove.clock.beat as f32 + groove.clock.phase) / groove.clock.beats_per_bar.max(1) as f32;
+        let (swing, vel) = trapeze_at(anchor, len, dir, bar, groove.clock.beat_secs * groove.clock.beats_per_bar as f32);
+        // Nat flew off (or walked off, or gave up and landed back on the lip's side).
+        let nat_left = nat.grounded && !nat_on_han && (on || t > 1.0) && !level.in_mark(Topic::Trapeze, nat_cell);
+        let past = nat.grounded && !nat_on_han && (nat.pos.x - anchor.x) * dir > TILE;
+        if kicked || nat_dead || !waltz || t > TRAPEZE_SECS || nat_left || past {
+            // Let go: he flies off with the swing (and parachutes back).
+            brain.mode = HanMode::Follow;
+            brain.replan = 0.0;
+            body.vel = if on { vel } else { Vec2::ZERO };
+        } else {
+            let on = on || pos.0.distance(swing) < 4.0;
+            brain.mode = HanMode::Trapeze { anchor, len, dir, on, t };
+            pos.0 = if on { swing } else { move_towards_v(pos.0, swing, REEL_SPEED * dt) };
+            body.vel = Vec2::ZERO;
+            body.on_ground = false;
+            *head = HanHead { solid: on, boost: on && brain.winded == 0.0, block: false, weak: false, kick: if on { vel.x } else { 0.0 } };
+            set_anim(&mut anim, HanPose::Trapeze, dir < 0.0, &groove, false);
             return;
         }
     }
@@ -758,8 +810,7 @@ pub(super) fn think(
         block: matches!(brain.mode, HanMode::Ahead { .. }),
         kick: 0.0,
         // (By a mega wall, while Giant Steps plays, the mega-boost: full strength.)
-        weak: level.weak_boost(my_cell, groove.giant_steps(), groove.grip())
-            || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.giant_steps(), groove.grip()),
+        weak: level.weak_boost(my_cell, groove.granted()) || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.granted()),
     };
 
     // --- Pose.
@@ -768,6 +819,7 @@ pub(super) fn think(
     let pose = match brain.mode {
         HanMode::Parachute { .. } => HanPose::Parachute,
         HanMode::Cling { .. } => HanPose::Cling,
+        HanMode::Trapeze { .. } => HanPose::Trapeze,
         HanMode::Ahead { .. } => HanPose::March,
         HanMode::Intercept if !grounded && gs => HanPose::Paddle,
         HanMode::Intercept => HanPose::Intercept,
@@ -811,6 +863,30 @@ fn cling_wall(level: &Level, nat: (i32, i32), side: f32) -> Option<(f32, f32)> {
         }
     }
     None
+}
+
+/// The trapeze for Nat standing in `nat` (a cell of a trapeze mark): a lip within a few
+/// columns, heading `dir` first, with a ceiling over the gap for his plunger. Its anchor (the
+/// ceiling's underside over the swing's bottom), handle length (to his center) and direction.
+fn trapeze_near(level: &Level, nat: (i32, i32), dir: f32) -> Option<(Vec2, f32, f32)> {
+    let solid = |c: i32, r: i32| level.tile(c, r).is_solid();
+    for d in [dir as i32, -dir as i32] {
+        for k in 0..=TRAPEZE_OUT {
+            let lip = (nat.0 + d * k, nat.1);
+            if let Some((ax, han, ceiling)) = trapeze_swing(solid, lip, d) {
+                let top = level.tile_center(ax as usize, ceiling as usize);
+                let anchor = Vec2::new(top.x, top.y - TILE / 2.0);
+                let head = level.tile_center(ax as usize, han as usize).y + TILE / 2.0;
+                return Some((anchor, anchor.y - (head - HALF.y), d as f32));
+            }
+        }
+    }
+    None
+}
+
+fn move_towards_v(from: Vec2, to: Vec2, step: f32) -> Vec2 {
+    let d = to - from;
+    if d.length() <= step { to } else { from + d.normalize() * step }
 }
 
 /// Side B's charge: run `dir`; jump at a wall or an edge (or nothing under him ahead), hold it,

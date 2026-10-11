@@ -86,6 +86,10 @@ pub const STUCK_SECS: f32 = 3.0;
 pub const CLIMB_SPEED: f32 = 120.0;
 /// The longest Han clings to a wall before he slides off (s).
 pub const CLING_SECS: f32 = 8.0;
+/// How fast Han reels himself up his plunger handle onto the trapeze (px/s).
+pub const REEL_SPEED: f32 = 320.0;
+/// Han swings on the trapeze at most this long (s) before he lets go.
+pub const TRAPEZE_SECS: f32 = 15.0;
 /// Running along to catch up, far from his slot, he goes up to this × his top speed.
 pub const HAN_CATCH_UP: f32 = 1.3;
 /// Left behind out of sight (Nat ran on) this long (s): he parachutes in, like when he's lost.
@@ -231,6 +235,8 @@ pub enum HanPose {
     Roll,
     /// Clinging to a wall (a cling shaft): plunger stuck in it, cap up for Nat.
     Cling,
+    /// On the trapeze (the waltz): hanging from his plunger stuck in the ceiling.
+    Trapeze,
 }
 
 /// For visuals: what Han is doing and which way he faces.

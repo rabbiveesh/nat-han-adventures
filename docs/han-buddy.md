@@ -87,12 +87,15 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
   a band gate's, except with the grip. The band gets nervous from deaths anywhere in the level,
   so a shaft after a grease chute needs no splats of its own (level 9); a free-play shaft room
   has a sunken spike strip to splat on.
+- **Trapezes** (need the waltz and Han's swing): a bottomless gap, its far side 3 rows up
+  behind 3 spikes (so no mode alone, fired up included, makes it), under a ceiling that ends
+  over the gap for his plunger. Their zone weakens his boost except in the waltz.
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
 - **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
   inside).
 - Free play gets all of these as rooms (`src/freeplay/templates.rs`: mega wall, buddy raft
-  pool, shield row, fired-up chasm, cling shaft), served once the story level that teaches each is unlocked;
+  pool, shield row, fired-up chasm, cling shaft, trapeze), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
   width from the room's ends, so a neighbouring room's band gate never weakens Han there.
   `tests/han_campaign.rs` plays them with the real Han too.
@@ -120,6 +123,15 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   head; jumping off is the full boost plus `KICK_CARRY` (90 px/s) away from the wall
   (`HanHead::kick`). He lets go once kicked, when Nat leaves the shaft or makes it up, dies, or
   the grip goes. The validator models it as `Gate::ClingShaft` (`cling_found`).
+- **The trapeze** (the waltz): by a trapeze lip (`gate: trapeze`), Nat standing near it, Han
+  reels up his plunger handle (`REEL_SPEED`) into the ceiling's edge `TRAPEZE_OUT` (3) columns
+  past the lip and swings (`HanMode::Trapeze`, `buddy::trapeze_at`): a pendulum a bar long,
+  through the bottom (Nat's feet `TRAPEZE_LIFT` rows above the lip) swinging forward on ONE at
+  `TRAPEZE_SPEED` (240 px/s). Nat rides his cap; a jump off it is the boost plus the swing's
+  speed then (`HanHead::kick`). He lets go (and falls, and parachutes back) once kicked, when
+  Nat lands past the swing or leaves, dies, or the waltz ends. The validator's
+  `Gate::Trapeze` (`trapeze_found`) takes the jump at the bottom with a human share (80%) of
+  the speed.
 - **The running throw** (fired up): `THROW_SPEED` 380 px/s up, `THROW_CARRY` 120 px/s kept
   (`Body::launch`) towards where Nat faces; `HanBoosted { throw: true }`. Han runs at
   165 x 1.35 px/s then (his own nav graph for it, `HanNav::fired`); his goalkeeper dive brakes

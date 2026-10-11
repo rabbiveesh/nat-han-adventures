@@ -117,7 +117,7 @@ pub fn skill_of(topic: Topic) -> Option<Skill> {
         Topic::Waltz => Skill::Waltz,
         Topic::Stain => Skill::Stains,
         Topic::Grease | Topic::Grip => Skill::Grease,
-        Topic::Mega | Topic::Shaft | Topic::Shield | Topic::Chain | Topic::BuddyRaft => Skill::Buddy,
+        Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Shield | Topic::Chain | Topic::BuddyRaft => Skill::Buddy,
     })
 }
 
