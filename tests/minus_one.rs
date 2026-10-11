@@ -3,6 +3,7 @@
 
 use std::time::Duration;
 
+use leafwing_input_manager::prelude::*;
 use bevy::{ecs::system::RunSystemOnce, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
     audio::AudioOutput,
@@ -107,7 +108,8 @@ fn pausing_mid_toot_opens_the_corrupted_menu_aimed_at_the_takeoff_tile() {
     tap(&mut app, KeyCode::Escape);
     steps(&mut app, 2);
     assert!(paused(&app) && menu(&app).is_none());
-    tap(&mut app, KeyCode::Escape);
+    // (The plain menu is UI, not loaded here: resume by hand.)
+    app.world_mut().resource_mut::<NextState<PlayState>>().set(PlayState::Running);
     steps(&mut app, 2);
     assert!(!paused(&app));
 
@@ -126,3 +128,4 @@ fn pausing_mid_toot_opens_the_corrupted_menu_aimed_at_the_takeoff_tile() {
     tap(&mut app, KeyCode::Enter);
     assert_eq!(count(&app, Tile::Solid), 0, "the ground is gone");
 }
+

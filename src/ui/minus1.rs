@@ -32,7 +32,7 @@ pub fn plugin(app: &mut App) {
             Update,
             (
                 (highlight, jitter).run_if(in_state(PlayState::Paused).and_then(resource_exists::<GlitchMenu>)),
-                (flash_on_rewrite, fade_flash, flicker).run_if(resource_exists::<MinusOne>),
+                (flash_on_rewrite, fade_flash, flicker, escaped_card).run_if(resource_exists::<MinusOne>),
             ),
         );
 }
@@ -208,5 +208,24 @@ fn flicker(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &Level
             let k = (t.col as u32).wrapping_mul(7) ^ (t.row as u32).wrapping_mul(13) ^ tick;
             sprite.color = if hash(k) % 3 == 0 { Color::WHITE } else { junk(k) };
         }
+    }
+}
+
+#[derive(Component)]
+struct EscapedCard;
+
+/// On the goal: not "FLUSHED IT!", just a question.
+fn escaped_card(mut commands: Commands, font: Res<UiFont>, minus: Res<MinusOne>, card: Query<(), With<EscapedCard>>) {
+    if minus.escaped.is_some() && card.is_empty() {
+        commands.spawn((
+            Name::new("EscapedCard"),
+            EscapedCard,
+            DespawnOnExit(crate::state::AppState::Playing),
+            fullscreen(),
+            GlobalZIndex(9),
+        ))
+        .with_children(|root| {
+            root.spawn(label(&font, "OUT...?", 16.0, JUNK[1]));
+        });
     }
 }

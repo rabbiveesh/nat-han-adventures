@@ -122,6 +122,7 @@ fn touch_goal(
     run: Res<LevelRun>,
     mut completed: MessageWriter<LevelCompleted>,
     mut next: ResMut<NextState<AppState>>,
+    minus_one: Option<ResMut<super::minus1::MinusOne>>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let Ok(goal) = goal.single() else { return };
@@ -133,6 +134,11 @@ fn touch_goal(
     }
     body.vel = Vec2::ZERO;
     commands.entity(entity).insert(Finished);
+    // World -1 isn't the story: no results, no save (it takes Nat back itself).
+    if let Some(mut m) = minus_one {
+        m.escaped = Some(0.0);
+        return;
+    }
     completed.write(LevelCompleted {
         level: active.index,
         nuggets: run.nuggets,

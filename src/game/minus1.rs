@@ -31,7 +31,9 @@ pub static MINUS_ONE_SOURCES: [&str; 1] = [include_str!("../../levels/minus-1/m1
 /// A pause this long after a toot (still in the air) is a mid-toot pause.
 pub const TOOT_WINDOW: f32 = 0.6;
 /// The arrival crash: this long after a load.
-pub const ARRIVAL_SECS: f32 = 0.4;
+pub const ARRIVAL_SECS: f32 = 0.25;
+/// On the goal this long, then back to the title.
+pub const ESCAPED_SECS: f32 = 3.0;
 
 /// One line of the corrupted menu: its junk text, and the tile it writes (`None`: nothing,
 /// the menu just closes).
@@ -63,11 +65,13 @@ pub struct MinusOne {
     /// The arrival crash happened for this load.
     pub arrived: bool,
     pub writes: u32,
+    /// Seconds since Nat reached the goal (then back to the title, [`ESCAPED_SECS`]).
+    pub escaped: Option<f32>,
 }
 
 impl MinusOne {
     pub fn new(level: usize) -> Self {
-        MinusOne { level, takeoff: Tile::Solid, since_toot: f32::INFINITY, arrived: false, writes: 0 }
+        MinusOne { level, takeoff: Tile::Solid, since_toot: f32::INFINITY, arrived: false, writes: 0, escaped: None }
     }
 }
 
@@ -117,6 +121,7 @@ pub(super) fn plugin(app: &mut App) {
             Update,
             (
                 pause_mid_toot.run_if(in_state(PlayState::Running)),
+                escape,
                 menu_input.run_if(in_state(PlayState::Paused).and_then(resource_exists::<GlitchMenu>)),
             )
                 .run_if(resource_exists::<MinusOne>),
@@ -170,6 +175,15 @@ fn fresh_load(_: On<Add, Player>, minus: Option<ResMut<MinusOne>>, mut commands:
     if let Some(mut m) = minus {
         *m = MinusOne { writes: m.writes, ..MinusOne::new(m.level) };
         commands.remove_resource::<GlitchMenu>();
+    }
+}
+
+fn escape(time: Res<Time>, mut minus: ResMut<MinusOne>, mut next: ResMut<NextState<AppState>>) {
+    if let Some(t) = &mut minus.escaped {
+        *t += time.delta_secs();
+        if *t >= ESCAPED_SECS {
+            next.set(AppState::Title);
+        }
     }
 }
 
