@@ -436,54 +436,6 @@ pub fn plumber_tape() -> Vec<Pixels> {
     vec![grid(TAPE, MARK_PAL)]
 }
 
-/// The "PLUMBERS ONLY" sign at a shield row's start: 36 x 16.
-pub fn plumbers_only() -> Vec<Pixels> {
-    // 3 x 5 letters.
-    fn letter(c: char) -> [&'static str; 5] {
-        match c {
-            'P' => ["kk.", "k.k", "kk.", "k..", "k.."],
-            'L' => ["k..", "k..", "k..", "k..", "kkk"],
-            'U' => ["k.k", "k.k", "k.k", "k.k", "kkk"],
-            'M' => ["k.k", "kkk", "kkk", "k.k", "k.k"],
-            'B' => ["kk.", "k.k", "kk.", "k.k", "kk."],
-            'E' => ["kkk", "k..", "kk.", "k..", "kkk"],
-            'R' => ["kk.", "k.k", "kk.", "k.k", "k.k"],
-            'S' => [".kk", "k..", ".k.", "..k", "kk."],
-            'O' => [".k.", "k.k", "k.k", "k.k", ".k."],
-            'N' => ["k.k", "kkk", "kkk", "kkk", "k.k"],
-            'Y' => ["k.k", "k.k", ".k.", ".k.", ".k."],
-            _ => ["...", "...", "...", "...", "..."],
-        }
-    }
-    let mut p = Pixels::new(36, 16);
-    let frame = MARK_PAL[9].1;
-    let dark = MARK_PAL[10].1;
-    let board = MARK_PAL[8].1;
-    p.fill_rect(0, 0, 36, 14, frame);
-    p.fill_rect(1, 1, 34, 12, board);
-    // Posts.
-    p.fill_rect(5, 14, 2, 2, dark);
-    p.fill_rect(29, 14, 2, 2, dark);
-    let ink = MARK_PAL[3].1;
-    let mut write = |text: &str, y: i32| {
-        let w = text.len() as i32 * 4 - 1;
-        let mut x = (36 - w) / 2;
-        for c in text.chars() {
-            for (dy, row) in letter(c).iter().enumerate() {
-                for (dx, ch) in row.chars().enumerate() {
-                    if ch == 'k' {
-                        p.set(x + dx as i32, y + dy as i32, ink);
-                    }
-                }
-            }
-            x += 4;
-        }
-    };
-    write("PLUMBERS", 1);
-    write("ONLY", 7);
-    vec![p]
-}
-
 /// Every hand-authored grid in this module, for validation tests.
 #[cfg(test)]
 pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {

@@ -11,7 +11,7 @@ use bevy::prelude::*;
 
 use crate::adapt::{Calibration, Outcome, PlayerProfile, Probe, Skill, StoryAssist, WindowEntry};
 use crate::game::{AdaptiveProfile, StoryAssistState};
-use crate::level::LEVEL_COUNT;
+use crate::level::{LEVEL_COUNT, Topic};
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<Progress>();
@@ -44,6 +44,9 @@ pub struct Progress {
     pub taught_call: bool,
     /// Han's tricks the player has been shown on a lesson card, per [`HanTrick`].
     pub taught_tricks: [bool; HanTrick::ALL.len()],
+    /// The other mechanics (a toot, shelves, rides, flies, cans, stains, grease) the player has
+    /// been shown on a lesson card, per [`Topic`] (`Topic::ALL` order; only those topics are set).
+    pub taught_tips: [bool; Topic::ALL.len()],
 }
 
 /// Han's tricks, each taught by a lesson card at its first hint spot (`ui::lesson`).
@@ -55,10 +58,14 @@ pub enum HanTrick {
     Mega,
     /// With a nervous band, in a shaft, he climbs the wall: a jump off his head kicks up.
     Cling,
+    /// In the waltz, by a trapeze, he swings from the ceiling: ride him, jump off on ONE.
+    Trapeze,
+    /// Standing still by a buddy raft pool, he wades in and leaves a big raft.
+    Raft,
 }
 
 impl HanTrick {
-    pub const ALL: [HanTrick; 3] = [HanTrick::Throw, HanTrick::Mega, HanTrick::Cling];
+    pub const ALL: [HanTrick; 5] = [HanTrick::Throw, HanTrick::Mega, HanTrick::Cling, HanTrick::Trapeze, HanTrick::Raft];
 
     /// Its word in the save file.
     pub fn name(self) -> &'static str {
@@ -66,6 +73,8 @@ impl HanTrick {
             HanTrick::Throw => "throw",
             HanTrick::Mega => "mega",
             HanTrick::Cling => "cling",
+            HanTrick::Trapeze => "trapeze",
+            HanTrick::Raft => "raft",
         }
     }
 
@@ -116,6 +125,7 @@ impl Default for Progress {
             taught: [false; 4],
             taught_call: false,
             taught_tricks: [false; HanTrick::ALL.len()],
+            taught_tips: [false; Topic::ALL.len()],
         }
     }
 }
@@ -169,10 +179,12 @@ impl Progress {
     /// taught horn nugget
     /// taught-call
     /// tricks throw
+    /// tips toot oneway
     /// ```
     /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
     /// `audio-delay <ms>` only when set; `taught` the band counters taught, `taught-call` the
-    /// call lesson seen, `tricks` Han's tricks taught, only when any.)
+    /// call lesson seen, `tricks` Han's tricks taught, `tips` the other mechanics' cards seen, only
+    /// when any.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -196,6 +208,10 @@ impl Progress {
         let tricks: Vec<&str> = HanTrick::ALL.iter().filter(|t| self.taught_tricks[t.index()]).map(|t| t.name()).collect();
         if !tricks.is_empty() {
             s.push_str(&format!("tricks {}\n", tricks.join(" ")));
+        }
+        let tips: Vec<&str> = Topic::ALL.iter().filter(|t| self.taught_tips[t.index()]).map(|t| t.word()).collect();
+        if !tips.is_empty() {
+            s.push_str(&format!("tips {}\n", tips.join(" ")));
         }
         s
     }
@@ -239,6 +255,13 @@ impl Progress {
                     for w in words {
                         if let Some(t) = HanTrick::ALL.iter().find(|t| t.name() == *w) {
                             p.taught_tricks[t.index()] = true;
+                        }
+                    }
+                }
+                ["tips", words @ ..] => {
+                    for w in words {
+                        if let Some(t) = Topic::from_word(w) {
+                            p.taught_tips[t.index()] = true;
                         }
                     }
                 }
@@ -467,8 +490,10 @@ mod tests {
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
         let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
         assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
-        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true, false, false], ..Progress::default() };
-        assert!(taught.to_text().contains("taught horn note\ntaught-call\ntricks throw\n"), "{}", taught.to_text());
+        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true, false, false, false, true], ..Progress::default() };
+        let mut taught = taught;
+        taught.taught_tips[Topic::OneWay.index()] = true;
+        assert!(taught.to_text().contains("taught horn note\ntaught-call\ntricks throw raft\ntips oneway\n"), "{}", taught.to_text());
         assert_eq!(Progress::from_text(&taught.to_text()), Some(taught));
     }
 

@@ -407,12 +407,12 @@ fn fired_up_han_throws_nat_across_a_chasm() {
 
 // --- Lemme check that ----------------------------------------------------------------------------
 
-/// A shield row: 24 adjacent cans under a grating, low ceiling.
+/// A can tunnel (no gate: Han goes ahead of any cans): 24 adjacent cans under a grating, low ceiling.
 fn shield_level() -> String {
     shield_level_on(true)
 }
 
-/// A shield row of 24 adjacent cans with a low ceiling: under a grating (`grated`), or on
+/// A can tunnel of 24 adjacent cans with a low ceiling: under a grating (`grated`), or on
 /// the floor Nat walks on (the cans themselves deadly while they fire).
 fn shield_level_on(grated: bool) -> String {
     let w = 80;
@@ -436,7 +436,7 @@ fn shield_level_on(grated: bool) -> String {
     rows[9][2] = 'P';
     rows[9][w - 3] = 'G';
     let rows: Vec<String> = rows.iter().map(|r| r.iter().collect()).collect();
-    format!("name: Shield\ngate: shield 29,9 54,9\n---\n{}\n", rows.join("\n"))
+    format!("name: Shield\n---\n{}\n", rows.join("\n"))
 }
 
 #[test]
@@ -444,7 +444,7 @@ fn han_goes_ahead_and_shields_nat_from_sprays() {
     shields_nat(&shield_level());
 }
 
-/// Han plugs the cans themselves too: a shield row on the floor, walked behind him.
+/// Han plugs the cans themselves too: a can tunnel on the floor, walked behind him.
 #[test]
 fn han_shields_nat_from_floor_cans() {
     shields_nat(&shield_level_on(false));
@@ -486,7 +486,7 @@ fn shields_nat(level: &str) {
 }
 
 #[test]
-fn without_han_the_shield_row_sprays_nat() {
+fn without_han_the_can_tunnel_sprays_nat() {
     sprays_nat_alone(&shield_level());
 }
 
@@ -929,7 +929,7 @@ fn buddy_raft_and_shield_timing() {
 
 /// Going ahead is an escort: Nat may dawdle, Han waits for him and keeps the jets plugged.
 #[test]
-fn han_escorts_a_dawdling_nat_through_the_shield_row() {
+fn han_escorts_a_dawdling_nat_through_the_can_tunnel() {
     let mut app = app(&shield_level());
     press(&mut app, RIGHT);
     while nat(&mut app).x < 28.0 * TILE {
@@ -1054,4 +1054,131 @@ fn han_keeps_up_with_a_zooming_nat() {
     // took off on the run (and re-routed without stopping) he ended up ~90 tiles behind.
     assert!(max_lag < 8.0 * TILE, "kept up: {} tiles behind at most", max_lag / TILE);
     assert!(mean < 6.0 * TILE, "kept up: {} tiles behind on average", mean / TILE);
+}
+
+// --- The waltz: the trapeze ---------------------------------------------------------------------
+
+/// A 20-tile gap off a lip (col 19, Nat's row 17) under a ceiling ending over the swing's
+/// bottom (col 22, 6 tiles of handle), the far side 3 rows up behind 3 spikes.
+fn trapeze_level() -> String {
+    let rows: Vec<String> = (0..20)
+        .map(|r| {
+            (0..70)
+                .map(|c| match (c, r) {
+                    (2, 17) => 'P',
+                    (66, 14) => 'G',
+                    (8..=22, 0..=9) => '#',
+                    (0..=19, 18..) => '#',
+                    (40..=42, 14) => '^',
+                    (40.., 15..) => '#',
+                    _ => '.',
+                })
+                .collect()
+        })
+        .collect();
+    let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+    level("gate: trapeze 18,9 46,17\n", &rows)
+}
+
+/// Han swinging on the trapeze (the band waltzing or not), Nat put on his head at the back of
+/// the swing, jumping just before ONE (the bottom, swinging forward), a toot near the top:
+/// where Nat ends up, and whether Han ever swung.
+fn trapeze_flight(waltz: bool) -> (Vec2, bool, usize) {
+    let mut app = app(&trapeze_level());
+    let secs = 60.0 / nat_han_adventures::audio::waltz::WALTZ_BPM as f64;
+    let mut frame = 0usize;
+    let mut tick = |app: &mut App| {
+        if waltz {
+            let beats = frame as f64 * DT / secs;
+            *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+        }
+        frame += 1;
+        app.update();
+        trace(app);
+    };
+    let floor = |r: i32| standing((19 - r) as f32 * TILE);
+    put::<Player>(&mut app, Vec2::new(18.5 * TILE, floor(17)));
+    let on = |app: &mut App| matches!(brain(app).mode, HanMode::Trapeze { on: true, .. });
+    for _ in 0..360 {
+        tick(&mut app);
+        if on(&mut app) {
+            break;
+        }
+    }
+    if !on(&mut app) {
+        return (nat(&mut app), false, heard(&app).died);
+    }
+    let bar = |app: &App| {
+        let c = app.world().resource::<Groove>().clock;
+        (c.beat as f32 + c.phase) / c.beats_per_bar as f32
+    };
+    // At the back of the swing: onto his cap.
+    while !(0.74..0.77).contains(&bar(&app)) {
+        tick(&mut app);
+    }
+    let h = han(&mut app);
+    put::<Player>(&mut app, h + Vec2::new(0.0, tuning::PLAYER_SIZE.1 + 0.5));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    assert_eq!(nat_body(&mut app).riding, Some(single::<Han>(&mut app)), "riding Han on the trapeze");
+    while bar(&app) < 0.97 {
+        tick(&mut app);
+    }
+    press(&mut app, RIGHT);
+    release(&mut app, JUMP);
+    tick(&mut app);
+    press(&mut app, JUMP);
+    for _ in 0..20 {
+        tick(&mut app);
+    }
+    release(&mut app, JUMP);
+    tick(&mut app);
+    press(&mut app, JUMP); // the toot
+    for _ in 0..150 {
+        tick(&mut app);
+    }
+    assert!(!matches!(brain(&mut app).mode, HanMode::Trapeze { .. }), "he let go");
+    (nat(&mut app), true, heard(&app).died)
+}
+
+#[test]
+fn waltz_trapeze_launches_nat_across() {
+    let (p, swung, died) = trapeze_flight(true);
+    assert!(swung, "Han got on the trapeze");
+    assert_eq!(died, 0);
+    assert!(p.x > 43.0 * TILE && (p.y - standing(5.0 * TILE)).abs() < 1.0, "across, past the spikes: {p}");
+    // Not waltzing: no trapeze.
+    let (_, swung, _) = trapeze_flight(false);
+    assert!(!swung, "no trapeze out of the waltz");
+}
+
+// --- The laughing band: the boing boost ---------------------------------------------------------
+
+/// Nat dropped onto Han's head from 3 tiles up (the band laughing or not), no keys: how high
+/// his feet get above Han's floor afterwards (tiles), and the boosts heard.
+fn drop_on_han(laughing: bool) -> (f32, usize) {
+    let mut app = app(FLAT);
+    set_groove(&mut app, Harmony::Original, laughing);
+    step(&mut app, 0.5);
+    let h = han(&mut app);
+    let floor = h.y - tuning::PLAYER_SIZE.1 / 2.0;
+    put::<Player>(&mut app, h + Vec2::new(0.0, 4.0 * TILE));
+    let mut top: f32 = 0.0;
+    for _ in 0..90 {
+        app.update();
+        trace(&mut app);
+        top = top.max(nat(&mut app).y - tuning::PLAYER_SIZE.1 / 2.0);
+    }
+    ((top - floor) / TILE, heard(&app).boosted)
+}
+
+#[test]
+fn laughing_band_boing_boost() {
+    let (rise, boosts) = drop_on_han(true);
+    assert_eq!(boosts, 1, "one boing");
+    assert!(rise > 7.0, "boinged {rise} tiles up");
+    let (rise, boosts) = drop_on_han(false);
+    assert_eq!(boosts, 0);
+    assert!(rise < 4.5, "no boing: {rise}");
 }

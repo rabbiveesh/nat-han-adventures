@@ -10,8 +10,7 @@
 //! path (as if you can ride them anywhere they go). Flies are treated as static deadly squares
 //! covering their whole circle; spray cans and their jets are treated as passable (they're
 //! timed: a can and its jet fire together, 1.0 s on / 1.5 s off, and a lone can or a few in a
-//! row are a stroll in the off-beat), except in runs of [`CAN_ROW_MIN`]+ (deadly) and shield
-//! rows (below).
+//! row are a stroll in the off-beat), except in runs of [`CAN_ROW_MIN`]+ (deadly).
 //!
 //! The music bends the physics (`Groove`), and levels have gates that need a mode ([`Gate`]):
 //! - a **giant wall** (6 tiles) needs Giant Steps, which the player summons by tooting 5 times,
@@ -77,11 +76,11 @@
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys};
-use super::{CLING_ROWS, GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
+use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
+use super::{CLING_ROWS, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
+    ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, DRUNK_SWAY, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
     WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
@@ -117,9 +116,6 @@ pub const MAX_PIT_DEATHS: u32 = 4;
 pub const PIT_BEAM: usize = 4;
 /// Splat spots the pit search tries per stain set (the farthest jumps first).
 pub const PIT_TARGETS: usize = 6;
-/// Adjacent spray cans that make a shield row (too long for any mode, the waltz included:
-/// only behind Han going ahead).
-pub const SHIELD_ROW_MIN: usize = 24;
 /// Liquid surface tiles (under ceiling spikes) that make a buddy raft pool.
 pub const BUDDY_POOL_MIN: usize = 10;
 /// Bottomless columns that make a fired-up chasm (wider than a long gap).
@@ -153,6 +149,11 @@ pub enum Mode {
 pub const MODES: [Mode; 5] = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp, Mode::Waltz, Mode::Nervous];
 
 impl Mode {
+    /// The Han tricks this mode grants in their gates' zones.
+    pub fn granted(self) -> Granted {
+        Granted { giant_steps: self == Mode::GiantSteps, grip: self == Mode::Nervous, waltz: self == Mode::Waltz }
+    }
+
     pub fn groove(self) -> Groove {
         Groove::of(match self {
             Mode::Normal => Harmony::Original,
@@ -195,8 +196,9 @@ pub enum Gate {
     /// Needs the nervous band's grip and Han: he clings to the shaft's wall [`CLING_ROWS`] up,
     /// Nat hops onto his head and kicks off it (a full boost, away from the wall).
     ClingShaft,
-    /// Needs Han going ahead into the jets.
-    ShieldRow,
+    /// Needs the waltz and Han: he swings from his plunger stuck in the ceiling, Nat rides his
+    /// cap and jumps off it on ONE (a full boost, plus the swing's speed).
+    Trapeze,
     /// Needs the fired-up band and Han: his running throw, and catches in mid-air to throw
     /// again, chained with toots.
     ChainChasm,
@@ -207,12 +209,12 @@ pub enum Gate {
 impl Gate {
     /// Han's gates (he's what crosses them).
     pub fn needs_han(self) -> bool {
-        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
+        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::Trapeze | Gate::ChainChasm | Gate::BuddyRaft)
     }
 
     /// Han's gates whose mark is a band zone (his boost weak there but with their mode).
     pub fn zoned_han(self) -> bool {
-        matches!(self, Gate::MegaWall | Gate::ClingShaft)
+        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::Trapeze)
     }
 
     pub fn name(self) -> &'static str {
@@ -224,7 +226,7 @@ impl Gate {
             Gate::StainPit => "stain pit",
             Gate::MegaWall => "mega wall",
             Gate::ClingShaft => "cling shaft",
-            Gate::ShieldRow => "shield row",
+            Gate::Trapeze => "trapeze",
             Gate::ChainChasm => "fired-up chasm",
             Gate::BuddyRaft => "buddy raft pool",
         }
@@ -240,7 +242,7 @@ impl Gate {
             Gate::StainPit
             | Gate::MegaWall
             | Gate::ClingShaft
-            | Gate::ShieldRow
+            | Gate::Trapeze
             | Gate::ChainChasm
             | Gate::BuddyRaft => None,
         }
@@ -252,6 +254,7 @@ impl Gate {
         match self {
             Gate::MegaWall => Some(Mode::GiantSteps),
             Gate::ClingShaft => Some(Mode::Nervous),
+            Gate::Trapeze => Some(Mode::Waltz),
             _ => self.mode(),
         }
     }
@@ -265,7 +268,7 @@ impl Gate {
             Gate::StainPit => Topic::Stain,
             Gate::MegaWall => Topic::Mega,
             Gate::ClingShaft => Topic::Shaft,
-            Gate::ShieldRow => Topic::Shield,
+            Gate::Trapeze => Topic::Trapeze,
             Gate::ChainChasm => Topic::Chain,
             Gate::BuddyRaft => Topic::BuddyRaft,
         }
@@ -280,7 +283,7 @@ impl Gate {
             Gate::StainPit => 'K',
             Gate::MegaWall => 'M',
             Gate::ClingShaft => 'L',
-            Gate::ShieldRow => 'H',
+            Gate::Trapeze => 'T',
             Gate::ChainChasm => 'N',
             Gate::BuddyRaft => 'U',
         }
@@ -419,26 +422,17 @@ const RAFT: u16 = 2048;
 const DEADLY_TILE: u16 = SPIKE_UP | SPIKE_DOWN | LIQUID;
 const FLOOR_ONEWAY: u16 = ONEWAY | VIRT | STAIN | RAFT;
 
-/// A run of adjacent spray cans `c0..=c1` sitting in row `row`: under a one-way grating
-/// (`grated`: you walk on the grating, in the jets) or on the floor you walk on (the cans
-/// themselves are deadly while they fire, see `game::CAN_WIDTH`).
+/// A run of adjacent spray cans `c0..=c1` sitting in row `row`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct CanRow {
     pub row: i32,
     pub c0: i32,
     pub c1: i32,
-    pub grated: bool,
 }
 
 impl CanRow {
     pub fn cans(&self) -> usize {
         (self.c1 - self.c0 + 1) as usize
-    }
-
-    /// The row the player walks through the row in: on the grating above the cans, or among
-    /// the cans themselves.
-    pub fn walk_row(&self) -> i32 {
-        if self.grated { self.row - 2 } else { self.row }
     }
 }
 
@@ -493,12 +487,10 @@ pub struct Map<'a> {
     h: i32,
     flags: Vec<u16>,
     flies: Vec<(f32, f32)>,
-    /// Runs of [`CAN_ROW_MIN`] to [`SHIELD_ROW_MIN`] adjacent cans: too much to time your
-    /// way through, so (unlike a lone can) deadly for the validator.
+    /// Runs of [`CAN_ROW_MIN`]+ adjacent cans: too much to time your way through, so (unlike
+    /// a lone can) deadly for the validator.
     pub can_rows: Vec<CanRow>,
     pub pits: Vec<Pit>,
-    /// Runs of [`SHIELD_ROW_MIN`]+ cans (the same shape as can rows).
-    pub shield_rows: Vec<CanRow>,
     pub pools: Vec<Pool>,
     pub chasms: Vec<Chasm>,
     has_grease: bool,
@@ -599,16 +591,12 @@ impl<'a> Map<'a> {
         for (c, r) in cans {
             match can_rows.last_mut() {
                 Some(w) if w.row == r && w.c1 + 1 == c => w.c1 = c,
-                _ => can_rows.push(CanRow { row: r, c0: c, c1: c, grated: false }),
+                _ => can_rows.push(CanRow { row: r, c0: c, c1: c }),
             }
         }
-        for w in &mut can_rows {
-            w.grated = (w.c0..=w.c1).all(|c| level.tile(c, w.row - 1) == Tile::OneWay);
-        }
-        let shield_rows: Vec<CanRow> = can_rows.iter().copied().filter(|w| w.cans() >= SHIELD_ROW_MIN).collect();
-        can_rows.retain(|w| (CAN_ROW_MIN..SHIELD_ROW_MIN).contains(&w.cans()));
-        // A row's cans and jets are deadly (a shield row's timing is checked by `dash_through`).
-        for wr in can_rows.iter().chain(&shield_rows) {
+        can_rows.retain(|w| w.cans() >= CAN_ROW_MIN);
+        // A row's cans and jets are deadly.
+        for wr in &can_rows {
             for c in wr.c0..=wr.c1 {
                 for k in 0..=3 {
                     if let Some(i) = at(c, wr.row - k) {
@@ -643,7 +631,6 @@ impl<'a> Map<'a> {
             flies,
             can_rows,
             pits,
-            shield_rows,
             pools,
             chasms,
             has_grease: level.has_grease(),
@@ -711,10 +698,10 @@ impl<'a> Map<'a> {
         !self.in_band_zone(cell)
     }
 
-    /// Is Han's boost weak in `cell`, Giant Steps playing or not, with the grip or not (marked,
-    /// or found in a room)? See [`Level::weak_boost`].
-    pub fn weak_boost(&self, cell: Cell, giant_steps: bool, grip: bool) -> bool {
-        self.level.weak_boost(cell, giant_steps, grip) || self.derived.iter().any(|g| g.weakens(cell, giant_steps, grip))
+    /// Is Han's boost weak in `cell`, with what the band plays `granted` (marked, or found in
+    /// a room)? See [`Level::weak_boost`].
+    pub fn weak_boost(&self, cell: Cell, granted: Granted) -> bool {
+        self.level.weak_boost(cell, granted) || self.derived.iter().any(|g| g.weakens(cell, granted))
     }
 
     /// Is `cell` in a band zone (marked, or found in a room)? See [`Level::in_band_zone`].
@@ -1522,63 +1509,6 @@ fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &
     added
 }
 
-/// Can a player running at `vx` px/s get past `n` adjacent spray jets that fire when
-/// `mode.jets_on(t)`? Simulated like the game: 60 Hz steps, the jets updated before the player
-/// moves, the hit test after, with the game's forgiving hitbox. The player waits just outside
-/// the jets for the best moment (every start phase is tried) and enters at full speed.
-pub fn dash_through(n: usize, vx: f32, mode: Mode) -> bool {
-    const STEP: f32 = 1.0 / 60.0;
-    // The player's center is in danger within this distance of a can's center (its jet, or
-    // the can itself on the floor you walk on: both fire together).
-    let reach = HALF_W - FORGIVE + SPRAY_WIDTH.max(CAN_WIDTH) / 2.0;
-    let zone = TILE * (n - 1) as f32 + 2.0 * reach;
-    let period = mode.jets_period();
-    let starts = (period / STEP).round() as usize;
-    (0..starts).any(|k| {
-        let t0 = k as f32 * STEP;
-        let mut x = 0.0;
-        let mut i = 0;
-        loop {
-            i += 1;
-            x += vx * STEP;
-            if x >= zone {
-                return true;
-            }
-            if mode.jets_on(t0 + i as f32 * STEP) {
-                return false;
-            }
-        }
-    })
-}
-
-/// Problems with a shield row's timing: no mode may dash through its jets on their own clock
-/// (ideal speed, the waltz's long breath included). Behind Han it's safe: each jet he walks
-/// through stays plugged [`crate::game::HAN_PLUG_LINGER`] s after he's past it, longer than
-/// Nat right behind him takes to clear it (`tests/han.rs`).
-pub fn shield_row_timing(w: &CanRow) -> Vec<String> {
-    let mut errs = Vec::new();
-    for mode in [Mode::Normal, Mode::GiantSteps, Mode::FiredUp, Mode::Waltz] {
-        if dash_through(w.cans(), Env::new(mode, true).vx, mode) {
-            errs.push(format!(
-                "shield row at col {}..={} row {} ({} cans) can be run through with {mode:?} physics: it doesn't need Han",
-                w.c0,
-                w.c1,
-                w.row,
-                w.cans()
-            ));
-        }
-    }
-    errs
-}
-
-/// Is there a ceiling at most 2 tiles above the walk all along the row (so nobody can jump
-/// clear of the jets, or hop over the cans in the off-beats and hang above them while they
-/// fire)?
-fn low_ceiling(map: &Map, w: &CanRow) -> bool {
-    let r = w.walk_row();
-    (w.c0..=w.c1).all(|c| (1..=2).any(|k| map.is_solid(c, r - k)))
-}
-
 /// Room to summon the waltz near `cell`: a reached, calm, flat run of [`WALTZ_RUNWAY`] cells
 /// with 2 tiles of headroom (three even hops) within [`WALTZ_RUNWAY_REACH`].
 fn waltz_runway(map: &Map, g: &Graph, cell: Cell) -> bool {
@@ -1676,6 +1606,9 @@ pub struct Physics {
     /// Kicks off Han clinging to a wall, nervous: a human's, away from a wall on the left
     /// (`[0]`, kicking right) and on the right (`[1]`, kicking left).
     kick: [Arcs; 2],
+    /// Jumps off Han on the trapeze at the bottom of his swing, on ONE: the boost, plus a
+    /// human share of the swing's speed (`[0]` swinging right, `[1]` left).
+    trapeze: [Arcs; 2],
     boost_ideal: Vec<(Mode, Arcs)>,
     /// Weak boosts off Han in a band zone, ideal, in the modes with their own geometry (the
     /// waltz and the nervous band jump like normal).
@@ -1706,6 +1639,12 @@ impl Physics {
                 strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
             )
         });
+        let trapeze = [1.0, -1.0].map(|dir| {
+            Arcs::boost(
+                Env { kick: dir * TRAPEZE_SPEED * HUMAN_CARRY, ..Env::new(Mode::Normal, false) },
+                strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
+            )
+        });
         let boost_ideal = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp]
             .into_iter()
             .map(|m| (m, Arcs::boost(Env::new(m, true), ideal_strategies())))
@@ -1716,7 +1655,7 @@ impl Physics {
             .collect();
         let glide = Arcs::new(Env::glide(false), strategies());
         let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1728,8 +1667,8 @@ impl Physics {
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let glide = Arcs::new(Env::glide(false), human.clone());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, throw, mega, kick, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
+        let Physics { boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -1741,7 +1680,8 @@ impl Physics {
     pub fn laughing() -> [(&'static str, Physics); 2] {
         const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics { human, no_toot, boost, throw, mega, kick, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
+            let Physics { human, no_toot, boost, throw, mega, kick, trapeze, ideal, glide, glide_ideal, boost_ideal, weak_ideal } =
+                Physics::new();
             let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
@@ -1750,8 +1690,9 @@ impl Physics {
             let mega = Arcs::boost(nudge(mega.env), mega.strategies);
             // (From the plain strategies: the kicks' are already carried.)
             let kick = kick.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
+            let trapeze = trapeze.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
             let glide = Arcs::new(nudge(glide.env), glide.strategies);
-            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
         };
         [
             ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
@@ -2091,10 +2032,10 @@ fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
     g.reached(cell) && map.han_allowed(cell) && map.han_allowed((cell.0, cell.1 - 1)) && !map.han_keeps_out(cell)
 }
 
-/// Han's gates from reached cells not tried yet: mega walls (a boost off Han standing there:
-/// outside the band zones the plain one, in a mega wall's zone the mega-boost with room to
-/// summon Giant Steps), shield rows (Han goes ahead), buddy raft pools (Han's rafts), fired-up chasms
-/// (the running throw off Han at the edge, the band fired up).
+/// Han's gates from reached cells not tried yet: cling shafts (nervous), trapezes (the waltz),
+/// mega walls (a boost off Han standing there: outside the band zones the plain one, in a mega
+/// wall's zone the mega-boost with room to summon Giant Steps), buddy raft pools (Han's rafts),
+/// fired-up chasms (the running throw off Han at the edge, the band fired up).
 fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<Found> {
     let mut found = Vec::new();
     let mut buf = Vec::new();
@@ -2109,9 +2050,14 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
             found.extend(cling);
             continue;
         }
+        let trapeze = trapeze_found(map, phys, g, cell, &mut buf);
+        if !trapeze.is_empty() {
+            found.extend(trapeze);
+            continue;
+        }
         // (A generated room has no marks yet: there the mega-boost goes from anywhere, and its
         // mark is derived when it's found.)
-        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, true, false);
+        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { giant_steps: true, ..Granted::NONE });
         if g.reached(cell)
             && mega_at(cell)
             && mega_at((cell.0, cell.1 - 1))
@@ -2136,16 +2082,6 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
                 && !g.reached(l)
             {
                 found.push((Gate::MegaWall, cell, l, buf.clone()));
-            }
-        }
-        for w in &map.shield_rows {
-            for dir in [-1, 1] {
-                if let Some(l) = shield_walk(map, w, cell, dir)
-                    && !g.reached(l)
-                {
-                    let touched = (w.c0..=w.c1).map(|c| (c, w.walk_row())).collect();
-                    found.push((Gate::ShieldRow, cell, l, touched));
-                }
             }
         }
         for p in &map.pools {
@@ -2188,7 +2124,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
 fn cling_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
     let mut found = Vec::new();
     // (A generated room has no marks yet: there Han clings anywhere, and the mark is derived.)
-    let zone = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, false, true);
+    let zone = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { grip: true, ..Granted::NONE });
     if !g.reached(cell) || !map.standable(cell) || g.deaths.is_empty() || map.han_keeps_out(cell) {
         return found;
     }
@@ -2231,17 +2167,48 @@ fn cling_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<C
     found
 }
 
-/// Han marching through shield row `w` from the approach cell `from` (heading `dir`), Nat right
-/// behind him: the cell past the row, if the corridor is walkable and roofed.
-fn shield_walk(map: &Map, w: &CanRow, from: Cell, dir: i32) -> Option<Cell> {
-    let r = w.walk_row();
-    let (start, end) = if dir > 0 { (w.c0 - 1, w.c1 + 1) } else { (w.c1 + 1, w.c0 - 1) };
-    if from != (start, r) || !low_ceiling(map, w) {
-        return None;
+/// A trapeze off lip cell `cell` (the waltz): Han's plunger stuck in the ceiling over the gap
+/// ([`trapeze_swing`]), Nat hops onto his cap at the bottom of the swing from the floor near
+/// the lip, and jumps off it on ONE: a full boost and the swing's speed.
+fn trapeze_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
+    let mut found = Vec::new();
+    // (A generated room has no marks yet: there Han swings anywhere, and the mark is derived.)
+    let zone = |c: Cell| {
+        (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { waltz: true, ..Granted::NONE })
+    };
+    if !g.reached(cell) || !map.standable(cell) || map.han_keeps_out(cell) || !zone(cell) || !waltz_runway(map, g, cell) {
+        return found;
     }
-    let walkable = (w.c0..=w.c1)
-        .all(|c| map.floor(c, r + 1) != Floor::None && !map.is_solid(c, r) && !map.deadly_tile(c, r));
-    (walkable && map.standable((end, r))).then_some((end, r))
+    for (k, dir) in [1, -1].into_iter().enumerate() {
+        let Some((ax, han, _)) = trapeze_swing(|c, r| map.is_solid(c, r), cell, dir) else { continue };
+        let perch = (ax, han - 1);
+        if !zone(perch) || !zone((ax, han)) {
+            continue;
+        }
+        // Nat hops onto his cap (the bottom of the swing) from the floor near the lip.
+        let mut perch_map = map.clone();
+        perch_map.set((ax, han), VIRT, 0);
+        let normal = phys.human(Mode::Normal);
+        let hops = (-2..=0).map(|d| (cell.0 + d * dir, cell.1)).filter(|&c| g.reached(c)).any(|from| {
+            normal.at(&perch_map, from).iter().any(|s| {
+                normal.flight(&perch_map, from, s).is_some_and(|f| fly(&perch_map, &normal.env, &f, buf) == Outcome::Land(perch))
+            })
+        });
+        if !hops {
+            continue;
+        }
+        let arcs = &phys.trapeze[k];
+        for s in &arcs.strategies {
+            let Some(f) = arcs.flight(&perch_map, perch, s) else { continue };
+            if let Outcome::Land(l) = fly(&perch_map, &arcs.env, &f, buf)
+                && !g.reached(l)
+                && l != perch
+            {
+                found.push((Gate::Trapeze, cell, l, buf.clone()));
+            }
+        }
+    }
+    found
 }
 
 /// Han's raft bridge over pool `p` heading `dir`: he wades in off the end of the shore (or of
@@ -2462,11 +2429,8 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     let dir = (c.to.0 - at.0).signum();
     let near_side = |(x, _): Cell| dir == 0 || (x - c.to.0) * dir < 0;
     // (A mega wall's zone is a full boost's while Giant Steps plays, a cling shaft's with the
-    // grip.)
-    let zone = |(x, y): Cell, m: Mode| {
-        let (gs, grip) = (m == Mode::GiantSteps, m == Mode::Nervous);
-        map.weak_boost((x, y), gs, grip) || map.weak_boost((x, y - 1), gs, grip)
-    };
+    // grip, a trapeze's in the waltz.)
+    let zone = |(x, y): Cell, m: Mode| map.weak_boost((x, y), m.granted()) || map.weak_boost((x, y - 1), m.granted());
     let weak_at = |cell: Cell, m: Mode| zone(cell, m) && map.standable(cell) && !map.han_keeps_out(cell);
     let full_at = |cell: Cell, m: Mode| {
         !zone(cell, m) && !map.is_solid(cell.0, cell.1) && !map.deadly_tile(cell.0, cell.1) && !map.han_keeps_out(cell)
@@ -2786,6 +2750,18 @@ fn line_errors(level: &Level) -> Vec<String> {
             errs.push(format!("line longer than {MAX_LINE} chars: {line:?}"));
         }
     }
+    // Han barks; the lesson cards teach. Only the intro is a sentence.
+    let barks = level.says.iter().chain(level.say_at.iter().map(|s| &s.text)).chain(level.hints.iter().map(|s| &s.text));
+    for line in barks {
+        if !super::is_bark(line) {
+            errs.push(format!("Han barks at most {MAX_BARK_WORDS} words: {line:?}"));
+        }
+    }
+    for h in &level.hints {
+        if h.topics.is_empty() {
+            errs.push(format!("hint@{},{} names no topic: its lesson card teaches it, not Han", h.col, h.row));
+        }
+    }
     errs
 }
 
@@ -2848,15 +2824,6 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let (sx, sy) = (start.0 as f32 * TILE + 8.0, start.1 as f32 * TILE + 8.0);
     if map.in_fly_zone(sx - 48.0, sy - 48.0, sx + 48.0, sy + 48.0) {
         errs.push("fly swarm next to the start".into());
-    }
-    for w in &map.shield_rows {
-        errs.extend(shield_row_timing(w));
-        if !low_ceiling(&map, w) {
-            errs.push(format!(
-                "shield row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the walk) all along",
-                w.c0, w.c1, w.row
-            ));
-        }
     }
     errs.extend(grease_runs(&map));
     for p in &level.platforms {

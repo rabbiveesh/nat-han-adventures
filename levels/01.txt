@@ -2,10 +2,10 @@ name: Bathroom Floor
 world: 1
 intro: Morning, Nat! Han the plumber, at your service. Let's roll!
 deaths: 0
-say@54,12: Fresh roll! Two-ply. We're livin' large, Nat.
-hint@32,12 toot: Jump, then jump AGAIN in midair. That's a toot!
-hint@52,12 giant: Big wall! Toot 5 times, then DOWN: Giant Steps!
-hint@96,12 oneway: Thin shelves? Jump up through 'em, land on top!
+say@54,12: Two-ply!
+hint@32,12 toot: Toot!
+hint@52,12 giant: Big wall!
+hint@96,12 oneway: Shelves!
 gate: giant 55,6 61,12
 ---
 ............................................................................................................................................

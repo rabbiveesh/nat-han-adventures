@@ -2,12 +2,12 @@ name: Rat Kingdom
 world: 3
 intro: Rat Kingdom. Low ceilings, Nat. Little hops, big heart!
 deaths: 3
-hint@64,10 grease grip: Grease! Can't stop or jump. Splat a few: band gets nervous.
-say@70,14: Nervous band, sweaty grip: stop AND jump on grease!
-say@138,14: Rat King's wall! Toot 5 times in the open, DOWN, leap.
+hint@64,10 grease grip: Grease! Careful!
+say@70,14: Sweaty grip!
+say@138,14: Rat King's wall!
 gate: grip 90,14 97,17
 gate: giant 202,8 208,14
-hint@143,14 mega: Giant Steps? Hop on me: MEGA boost!
+hint@143,14 mega: Hop on!
 gate: mega 138,2 158,14
 ---
 ................##############################...........##########..................................#############....................................................##############################........................

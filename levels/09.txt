@@ -11,17 +11,17 @@ intro: The Treatment Plant. Everything at once, Nat. You got this!
 8: dx=0 dy=6 period=5 kind=plunger
 9: dx=4 dy=0 period=3.5 kind=duck
 deaths: 3
-say@202,8: Grease chute! Splat 3 times, get sweaty, grip and hop out.
-say@298,11: Last gap! Grab nuggets fast, DOWN, then RUN for it!
-say@122,14: Hop in threes, DOWN: waltz! Jump off the roll as it glides!
+say@202,8: Grease chute!
+say@298,11: Last gap!
+say@122,14: Waltz time!
 gate: waltz 133,13 162,14
 gate: grip 227,11 234,14
 gate: gap 339,11 351,11
-hint@302,11 shaft: Sweaty band? I climb walls! Hop on me, then JUMP!
+hint@302,11 shaft: Wall time!
 gate: shaft 307,0 316,11
-hint@41,14 buddyraft: Spikes up top! Stand still: I'll make us a raft.
+hint@41,14 buddyraft: Raft time!
 gate: buddyraft 43,14 66,15
-hint@9,14 mega: Giant Steps? Hop on me: MEGA boost!
+hint@9,14 mega: Hop on!
 gate: mega 10,2 26,14
 ---
 .............................................####################...................................................................##########################################################.................................................................................................................####....o....

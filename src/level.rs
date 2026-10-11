@@ -8,8 +8,8 @@
 //! world: 1
 //! intro: Han's line when the level starts.
 //! deaths: 0
-//! say@13,1: Han's line at the checkpoint in column 13, row 1.
-//! hint@4,1 toot: Jump, then jump AGAIN in midair. That's a toot!
+//! say@13,1: Two-ply!
+//! hint@4,1 toot: Toot!
 //! 1: dx=6 dy=0 period=4 kind=tp
 //! ---
 //! ....................
@@ -19,14 +19,14 @@
 //!
 //! Header keys (every line `key: value`; blank lines and `// comments` are skipped):
 //! - `name`, `world` (1..=5: tileset, backdrop, music), `intro` (Han's line at the start).
-//! - `say@<col>,<row>: text`: Han's line when Nat reaches the checkpoint in that cell.
+//! - `say@<col>,<row>: text`: Han's bark when Nat reaches the checkpoint in that cell.
 //!   (Old form, still accepted: plain `say: text` lines go, in order, to the checkpoints that
 //!   have no `say@`; checkpoints are numbered in reading order, top row first.)
-//! - `hint@<col>,<row>[ topic...]: text`: a *hint spot*. Han says the line the first time Nat
-//!   comes within [`HINT_RADIUS`] of that cell; once per level visit (dying doesn't repeat it),
-//!   and again after a restart. Optional [`Topic`] words name the mechanics it teaches; the
-//!   validator ([`validate`]) checks that every mechanic is taught by a hint before the
-//!   player first meets it.
+//! - `hint@<col>,<row> topic...: text`: a *hint spot*. The first time Nat comes within
+//!   [`HINT_RADIUS`] of that cell (once per level visit; dying doesn't repeat it, a restart
+//!   does), Han barks the line and the lesson card of each [`Topic`] word comes up, once per
+//!   save (`ui::lesson`). The validator ([`validate`]) checks that every mechanic is taught by a
+//!   hint before the player first meets it, and that every hint names a topic.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
@@ -34,10 +34,11 @@
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
 //!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `mega`
-//!   (mega wall), `shaft` (cling shaft), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
+//!   (mega wall), `shaft` (cling shaft), `trapeze` (trapeze), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
-//! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
+//! Lines (intro, say, hint) are at most [`MAX_LINE`] characters; all but the intro are barks of
+//! at most [`MAX_BARK_WORDS`] words (Han is nearly silent: cards teach).
 //!
 //! Grid legend:
 //! | char | meaning |
@@ -54,7 +55,7 @@
 //! | `v` | spikes hanging from the ceiling, deadly; top half of the tile |
 //! | `~` | deadly liquid (sewage); the whole tile, surface drawn at the top |
 //! | `F` | fly swarm: hovers in a circle (radius ~1 tile) around its tile, deadly |
-//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans are too many to time: the validator counts them deadly (24+ are Han's *shield row*) |
+//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans are too many to time: the validator counts them deadly |
 //! | `1`-`9` | moving platform: a horizontal run of the same digit is one platform, configured by its `N:` header line |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -68,7 +69,7 @@
 //! lie. The game reads them instead of re-running the validator at load:
 //! - **Han's boost is feeble near the band's gates** (and the death gates): within the *band
 //!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
-//!   `grip`, `stain`, `mega` or `shaft` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
+//!   `grip`, `stain`, `mega`, `shaft` or `trapeze` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
 //!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
 //!   holds Nat while he's standing on the ground. He follows normally, but keeps off the
 //!   grease in a grease chute's zone ([`Level::han_keeps_out`]).
@@ -83,12 +84,17 @@
 //!   With the nervous band's grip Han climbs a wall of it and clings there
 //!   ([`CLING_ROWS`] up), Nat hops onto his head and kicks off it: a full boost, away from the
 //!   wall. In a cling shaft's zone his boost is weak without the grip.
+//! - **Trapezes** (`trapeze`): a gap out of every mode's reach (its far side higher, spikes on
+//!   its first tiles) under a ceiling that ends over it. In the waltz Han sticks his plunger in
+//!   the ceiling's edge and swings (`buddy::trapeze_swing`), through the bottom on ONE; Nat
+//!   rides his cap, and a jump off it is a full boost plus the swing's speed. In a trapeze's
+//!   zone his boost is weak out of the waltz.
 //! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
 //!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
 //!   catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
-//!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red plunger-handle notches and yellow plumber's tape, shield rows a
-//!   "PLUMBERS ONLY" sign at their start.
+//!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red
+//!   plunger-handle notches and yellow plumber's tape.
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is a solid ceiling (the top of the screen: the camera never shows above row 0, so
@@ -117,6 +123,14 @@ pub const TILE: f32 = 16.0;
 pub const HINT_RADIUS: f32 = 2.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
+/// Han nearly never talks: everything he says but a level's intro is a bark of at most this
+/// many words (lesson cards do the teaching).
+pub const MAX_BARK_WORDS: usize = 3;
+
+/// A line short enough for Han: at most [`MAX_BARK_WORDS`] words.
+pub fn is_bark(line: &str) -> bool {
+    line.split_whitespace().count() <= MAX_BARK_WORDS
+}
 pub const LEVEL_COUNT: usize = 10;
 /// How many rows above the floor Han's feet cling in a cling shaft.
 pub const CLING_ROWS: i32 = 3;
@@ -230,8 +244,9 @@ pub enum Topic {
     /// Cling shafts: the nervous band's grip, Han clinging to the wall up the shaft, a kick
     /// off his head (`shaft`).
     Shaft,
-    /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
-    Shield,
+    /// Trapezes: the waltz, Han swinging from his plunger stuck in the ceiling, a launch off
+    /// his head on ONE (`trapeze`).
+    Trapeze,
     /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
     /// (`chain`).
     Chain,
@@ -254,7 +269,7 @@ impl Topic {
         Topic::Grip,
         Topic::Mega,
         Topic::Shaft,
-        Topic::Shield,
+        Topic::Trapeze,
         Topic::Chain,
         Topic::BuddyRaft,
     ];
@@ -274,10 +289,15 @@ impl Topic {
             Topic::Grip => "grip",
             Topic::Mega => "mega",
             Topic::Shaft => "shaft",
-            Topic::Shield => "shield",
+            Topic::Trapeze => "trapeze",
             Topic::Chain => "chain",
             Topic::BuddyRaft => "buddyraft",
         }
+    }
+
+    /// Its place in [`Topic::ALL`].
+    pub fn index(self) -> usize {
+        Topic::ALL.iter().position(|&t| t == self).expect("every topic is in ALL")
     }
 
     pub fn from_word(w: &str) -> Option<Topic> {
@@ -295,17 +315,50 @@ impl Topic {
                 | Topic::Stain
                 | Topic::Mega
                 | Topic::Shaft
-                | Topic::Shield
+                | Topic::Trapeze
                 | Topic::Chain
                 | Topic::BuddyRaft
         )
     }
 
-    /// The band's gates, the death gates, mega walls and cling shafts: Han's boost is weak in
-    /// their zone (a mega wall's, except while Giant Steps plays; a cling shaft's, except with
-    /// the nervous band's grip: [`Level::weak_boost`]).
+    /// The band's gates, the death gates, mega walls, cling shafts and trapezes: Han's boost is
+    /// weak in their zone (except where the band [`Granted`] his trick there:
+    /// [`Level::weak_boost`]).
     pub fn han_keeps_clear(self) -> bool {
-        matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain | Topic::Mega | Topic::Shaft)
+        matches!(
+            self,
+            Topic::Giant
+                | Topic::Gap
+                | Topic::Waltz
+                | Topic::Grip
+                | Topic::Stain
+                | Topic::Mega
+                | Topic::Shaft
+                | Topic::Trapeze
+        )
+    }
+}
+
+/// What the band is playing that grants Han a trick in its gate's zone: Giant Steps (a mega
+/// wall's mega-boost), the nervous band's grip (a cling shaft's cling), the waltz (a trapeze).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Granted {
+    pub giant_steps: bool,
+    pub grip: bool,
+    pub waltz: bool,
+}
+
+impl Granted {
+    pub const NONE: Granted = Granted { giant_steps: false, grip: false, waltz: false };
+
+    /// Is Han's trick at a `topic` gate granted?
+    pub fn grants(self, topic: Topic) -> bool {
+        match topic {
+            Topic::Mega => self.giant_steps,
+            Topic::Shaft => self.grip,
+            Topic::Trapeze => self.waltz,
+            _ => false,
+        }
     }
 }
 
@@ -324,14 +377,13 @@ impl GateMark {
         (self.c0..=self.c1).contains(&c) && (self.r0..=self.r1).contains(&r)
     }
 
-    /// The band zone (Han's boost is weak there): the mark grown by [`HAN_BERTH`] x
-    /// [`HAN_BERTH_ROWS`].
     /// Does this mark make Han's boost weak in `cell` (see [`Level::weak_boost`])?
-    pub fn weakens(&self, cell: (i32, i32), giant_steps: bool, grip: bool) -> bool {
-        let granted = (giant_steps && self.topic == Topic::Mega) || (grip && self.topic == Topic::Shaft);
-        self.topic.han_keeps_clear() && !granted && self.berth().contains(cell)
+    pub fn weakens(&self, cell: (i32, i32), granted: Granted) -> bool {
+        self.topic.han_keeps_clear() && !granted.grants(self.topic) && self.berth().contains(cell)
     }
 
+    /// The band zone (Han's boost is weak there): the mark grown by [`HAN_BERTH`] x
+    /// [`HAN_BERTH_ROWS`].
     pub fn berth(&self) -> GateMark {
         GateMark {
             c0: self.c0 - HAN_BERTH,
@@ -440,17 +492,22 @@ impl Level {
         self.band_zone(cell).is_some()
     }
 
-    /// Is Han's boost weak in cell (col, row), the band playing Giant Steps (`giant_steps`) or
-    /// not, with the nervous band's grip (`grip`) or not? In a band zone, but in a mega wall's
-    /// only while Giant Steps doesn't play (there it's the mega-boost), in a cling shaft's only
-    /// without the grip.
-    pub fn weak_boost(&self, cell: (i32, i32), giant_steps: bool, grip: bool) -> bool {
-        self.gates.iter().any(|g| g.weakens(cell, giant_steps, grip))
+    /// Is Han's boost weak in cell (col, row), with what the band plays `granted`? In a band
+    /// zone, but in a mega wall's only while Giant Steps doesn't play (there it's the
+    /// mega-boost), in a cling shaft's only without the grip, in a trapeze's only out of the
+    /// waltz.
+    pub fn weak_boost(&self, cell: (i32, i32), granted: Granted) -> bool {
+        self.gates.iter().any(|g| g.weakens(cell, granted))
     }
 
     /// Is `cell` inside a cling shaft's mark (Han clings to its walls there, nervous)?
     pub fn in_shaft(&self, cell: (i32, i32)) -> bool {
-        self.gates.iter().any(|g| g.topic == Topic::Shaft && g.contains(cell))
+        self.in_mark(Topic::Shaft, cell)
+    }
+
+    /// Is `cell` inside a `topic` gate mark?
+    pub fn in_mark(&self, topic: Topic, cell: (i32, i32)) -> bool {
+        self.gates.iter().any(|g| g.topic == topic && g.contains(cell))
     }
 
     /// Is Han's boost full strength in cell (col, row)? Outside every band zone. (The name is

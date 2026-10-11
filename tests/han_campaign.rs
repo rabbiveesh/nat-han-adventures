@@ -1,5 +1,5 @@
 //! The campaign's Han gates, played headless in the real levels with the real Han: each
-//! mega wall, shield row, fired-up chasm and buddy raft pool (found by its `gate:` mark). The
+//! mega wall, fired-up chasm, buddy raft pool, cling shaft and trapeze (found by its `gate:` mark). The
 //! same for free play's Han rooms (`free_play_*`), at a few bands and seeds.
 
 use std::time::Duration;
@@ -265,51 +265,99 @@ fn play_shaft(what: &str, level: &Level, m: GateMark, grip: bool) -> bool {
 }
 
 #[test]
-fn shield_rows_in_the_campaign() {
-    let ms = marks(Topic::Shield);
-    assert!(ms.len() >= 2);
-    for (what, level, m) in ms {
-        play_shield(&what, &level, m);
+fn trapezes_in_the_campaign() {
+    let ms = marks(Topic::Trapeze);
+    assert!(!ms.is_empty());
+    for (what, level, m) in &ms {
+        assert!(play_trapeze(what, level, *m, true), "{what}: not across");
     }
+    // Out of the waltz he doesn't swing: no way across.
+    let (what, level, m) = &ms[0];
+    assert!(!play_trapeze(what, level, *m, false), "{what}: across without the waltz");
 }
 
 #[test]
-fn free_play_shield_rows() {
-    for (what, level, m) in room_marks("shield row", Topic::Shield) {
-        play_shield(&what, &level, m);
+fn free_play_trapezes() {
+    for (what, level, m) in room_marks("trapeze", Topic::Trapeze) {
+        assert!(play_trapeze(&what, &level, m, true), "{what}: not across");
     }
 }
 
-fn play_shield(what: &str, level: &Level, m: GateMark) {
+/// Stand at trapeze `m`'s lip (the band waltzing or not) for Han to get up on his swing, hop
+/// onto his cap at the back of it, jump just before ONE and toot near the top: across?
+fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
+    use nat_han_adventures::audio::{Harmony, waltz::WALTZ_BPM};
+    use nat_han_adventures::level::buddy::trapeze_swing;
     let mut app = app(level);
-    put::<Player>(&mut app, stand(level, m.c0, m.r1));
-    wait_for_han(&mut app, what);
-    // Face the row, stand still: Han goes ahead.
-    RIGHT.press(app.world_mut());
-    step(&mut app, 0.05);
-    RIGHT.release(app.world_mut());
-    let mut ahead = false;
-    for _ in 0..300 {
+    let (lip, dir) = (m.c0..=m.c1)
+        .flat_map(|c| [(c, 1), (c, -1)])
+        .find(|&(c, d)| trapeze_swing(|c, r| level.tile(c, r).is_solid(), (c, m.r1), d).is_some())
+        .expect("a lip");
+    let secs = 60.0 / WALTZ_BPM as f64;
+    let mut frame = 0usize;
+    let mut tick = |app: &mut App| {
+        if waltz {
+            let beats = frame as f64 * DT / secs;
+            app.world_mut().insert_resource(Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3)));
+        }
+        frame += 1;
         app.update();
-        let h = single::<Han>(&mut app);
-        if matches!(app.world().get::<HanBrain>(h).unwrap().mode, HanMode::Ahead { .. }) {
-            ahead = true;
+    };
+    put::<Player>(&mut app, stand(level, lip - dir, m.r1));
+    let han = single::<Han>(&mut app);
+    let on = |app: &App| matches!(app.world().get::<HanBrain>(han).unwrap().mode, HanMode::Trapeze { on: true, .. });
+    for _ in 0..(20.0 / DT) as usize {
+        tick(&mut app);
+        if on(&app) {
             break;
         }
     }
-    assert!(ahead, "{what}: Han went ahead");
-    step(&mut app, 0.4);
-    RIGHT.press(app.world_mut());
-    let end = (m.c1 as f32 + 1.0) * TILE;
-    for _ in 0..1200 {
-        app.update();
-        if pos::<Player>(&mut app).x > end {
+    if !on(&app) {
+        assert!(!waltz, "{what}: Han never got on the trapeze: {:?}", app.world().get::<HanBrain>(han).unwrap().mode);
+        return false;
+    }
+    let bar = |app: &App| {
+        let c = app.world().resource::<Groove>().clock;
+        (c.beat as f32 + c.phase) / c.beats_per_bar as f32
+    };
+    // The back of the swing (whichever way he swings: forward through the bottom on ONE).
+    while !(0.74..0.77).contains(&bar(&app)) {
+        tick(&mut app);
+    }
+    let h = pos::<Han>(&mut app);
+    put::<Player>(&mut app, h + Vec2::new(0.0, nat_han_adventures::game::tuning::PLAYER_SIZE.1 + 0.5));
+    for _ in 0..4 {
+        tick(&mut app);
+    }
+    assert_eq!(body::<Player>(&mut app).riding, Some(han), "{what}: on Han");
+    while bar(&app) < 0.97 {
+        tick(&mut app);
+    }
+    let key = if dir > 0 { RIGHT } else { LEFT };
+    key.press(app.world_mut());
+    JUMP.release(app.world_mut());
+    tick(&mut app);
+    JUMP.press(app.world_mut());
+    for _ in 0..20 {
+        tick(&mut app);
+    }
+    JUMP.release(app.world_mut());
+    tick(&mut app);
+    JUMP.press(app.world_mut()); // the toot
+    let far = level.tile_center((m.c1 - 1) as usize, 0).x;
+    for _ in 0..(2.0 / DT) as usize {
+        tick(&mut app);
+        if body::<Player>(&mut app).on_ground && (pos::<Player>(&mut app).x - far) * dir as f32 > -2.0 * TILE {
             break;
         }
+    }
+    key.release(app.world_mut());
+    for _ in 0..30 {
+        tick(&mut app);
     }
     let p = pos::<Player>(&mut app);
-    assert_eq!(deaths(&app), 0, "{what}: sprayed at {p}");
-    assert!(p.x > end, "{what}: through at {p}");
+    assert_eq!(deaths(&app), 0, "{what}: {p}");
+    body::<Player>(&mut app).on_ground && (p.x - level.tile_center(lip as usize, 0).x) * dir as f32 > 10.0 * TILE
 }
 
 #[test]

@@ -12,7 +12,7 @@
 use super::canvas::*;
 use super::dice::{Dice, t};
 use crate::adapt::{Band, Skill};
-use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN, SHIELD_ROW_MIN};
+use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN};
 use crate::level::{PlatformKind, Topic};
 
 /// Room dressing from the assist levers (`crate::adapt::AssistLevers`), built into the room.
@@ -59,9 +59,9 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
     Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, height: MEGA_H, build: mega_wall },
     Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
-    Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
     Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
     Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, height: MEGA_H, build: cling_shaft },
+    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, height: MEGA_H, build: trapeze },
 ];
 
 /// The templates for a skill.
@@ -298,7 +298,7 @@ fn shelf_climb(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     for k in (summit + 2..floor - 1).step_by(4) {
         c.nugget(x + 1, k);
     }
-    Built { hint: Some((&[], "Shelves all the way up! Hop, hop, hop... don't look down!")), checkpoint }
+    Built { hint: Some((&[Topic::OneWay], "Hop hop hop!")), checkpoint }
 }
 
 // ─── HazardTiming: flies and sprays ──────────────────────────────────────────
@@ -353,9 +353,9 @@ fn hazards(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     }
     c.ground(3, FLOOR);
     let hint: Option<(&'static [Topic], &'static str)> = match (flies, sprays) {
-        (true, true) => Some((&[Topic::Fly, Topic::Spray], "Flies and sprays! Wait for the pssht, then go.")),
-        (true, false) => Some((&[Topic::Fly], "Fly swarms! Duck under 'em, Nat. Don't jump in.")),
-        (false, true) => Some((&[Topic::Spray], "Spray cans! Wait till the pssht stops, then go.")),
+        (true, true) => Some((&[Topic::Fly, Topic::Spray], "Flies! Sprays! Wait...")),
+        (true, false) => Some((&[Topic::Fly], "Little hops!")),
+        (false, true) => Some((&[Topic::Spray], "Pssht! Wait...")),
         _ => None,
     };
     Built { hint, checkpoint }
@@ -409,7 +409,7 @@ fn platforms(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         }
     }
     c.ground(3, FLOOR);
-    Built { hint: Some((&[Topic::Platform], "Ride the rolls, Nat. Hop on, hop off!")), checkpoint }
+    Built { hint: Some((&[Topic::Platform], "Ride the rolls!")), checkpoint }
 }
 
 // ─── GiantSteps: a giant wall with a runway ──────────────────────────────────
@@ -444,7 +444,7 @@ fn giant_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         c.pit(d.int(2, 3) as usize);
     }
     c.ground(4, FLOOR);
-    Built { hint: Some((&[Topic::Giant], "Big wall! Toot 5 times, then DOWN: Giant Steps!")), checkpoint }
+    Built { hint: Some((&[Topic::Giant], "Big wall!")), checkpoint }
 }
 
 // ─── FiredUp: a long gap with a nugget line ──────────────────────────────────
@@ -477,7 +477,7 @@ fn long_gap(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built
         c.ground(3, FLOOR);
     }
     c.ground(2, FLOOR);
-    Built { hint: Some((&[Topic::Gap], "Big gap! Grab nuggets fast, DOWN to fire up. Then RUN!")), checkpoint }
+    Built { hint: Some((&[Topic::Gap], "Big gap!")), checkpoint }
 }
 
 // ─── Waltz: a glide launch ───────────────────────────────────────────────────
@@ -502,7 +502,7 @@ fn glide_launch(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built
     for k in 0..3 {
         c.nugget(past + k, STAND);
     }
-    Built { hint: Some((&[Topic::Waltz], "Hop-hop-hop, DOWN: waltz! Jump off the roll as it glides!")), checkpoint }
+    Built { hint: Some((&[Topic::Waltz], "Waltz time!")), checkpoint }
 }
 
 /// A glide launch's platform period (s): 8 tiles in 4.5 s, 89 px/s at its fastest (the most
@@ -543,7 +543,7 @@ fn stain_pit(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         c.pit(d.int(2, 3) as usize);
         c.ground(3, FLOOR);
     }
-    Built { hint: Some((&[Topic::Stain], "Too wide to jump! Splat on spikes: your stain's a step!")), checkpoint: None }
+    Built { hint: Some((&[Topic::Stain], "Splat time!")), checkpoint: None }
 }
 
 // ─── Grease: a chute ─────────────────────────────────────────────────────────
@@ -571,7 +571,7 @@ fn grease_chute(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built
     }
     c.ground(5, FLOOR);
     Built {
-        hint: Some((&[Topic::Grease, Topic::Grip], "Grease! Can't stop or jump. Splat a few: band gets nervous.")),
+        hint: Some((&[Topic::Grease, Topic::Grip], "Grease! Careful!")),
         checkpoint: None,
     }
 }
@@ -628,7 +628,7 @@ fn mega_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(2, top + 4);
     c.ground(2, top + 8);
     c.ground(HAN_TAIL, floor);
-    Built { hint: Some((&[Topic::Mega], "Giant Steps? Hop on me: MEGA boost!")), checkpoint }
+    Built { hint: Some((&[Topic::Mega], "Hop on!")), checkpoint }
 }
 
 /// A cling shaft: a low corridor (under a wall up to the ceiling) into a 3-wide shaft whose far
@@ -668,7 +668,43 @@ fn cling_shaft(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     c.ground(2, top + 4);
     c.ground(2, top + 8);
     c.ground(HAN_TAIL, floor);
-    Built { hint: Some((&[Topic::Shaft], "Splat a few: sweaty band? I climb walls! Hop on, JUMP!")), checkpoint }
+    Built { hint: Some((&[Topic::Shaft], "Wall time!")), checkpoint }
+}
+
+/// A trapeze: a runway to waltz on, then a lip under a ceiling that ends over the gap (Han's
+/// plunger sticks in its edge, `TRAPEZE_OUT` past the lip, 5 tiles of handle), a bottomless gap
+/// (15 → 16 tiles) and the far side 3 rows up behind 3 spikes: out of every mode's reach, a
+/// launch off Han's swing on ONE clears it.
+fn trapeze(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
+    let checkpoint = han_lead(c);
+    c.ground(lerpi(band, 9.0, 7.0) + d.int(0, 1) as usize, floor);
+    // The ceiling: over the end of the runway and out over the gap to the anchor.
+    let cb = floor - 8;
+    for _ in 0..4 {
+        c.column(move |r| if r <= cb || r >= floor { b'#' } else { b'.' });
+    }
+    let out = crate::level::buddy::TRAPEZE_OUT as usize;
+    let gap = lerpi(band, 15.0, 16.0);
+    for k in 0..gap {
+        c.column(move |r| if k < out && r <= cb { b'#' } else { b'.' });
+    }
+    let high = floor - 3;
+    for _ in 0..3 {
+        c.column(move |r| match r {
+            r if r == high - 1 => b'^',
+            r if r >= high => b'#',
+            _ => b'.',
+        });
+    }
+    let x = c.width();
+    c.ground(4, high);
+    for k in 1..3 {
+        c.nugget(x + k, high - 1);
+    }
+    c.ground(2, high + 2);
+    c.ground(HAN_TAIL, floor);
+    Built { hint: Some((&[Topic::Trapeze], "Swing time!")), checkpoint }
 }
 
 /// Where a buddy raft pool starts (column in the room, from the entry checkpoint near 0).
@@ -707,34 +743,7 @@ fn buddy_raft_pool(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bu
     }
     c.ground(HAN_TAIL, FLOOR);
     // No mid-room checkpoint: one near the pool would let Nat's own rafts bridge it.
-    Built { hint: Some((&[Topic::BuddyRaft], "Spikes up top! Stand still: I'll make us a raft.")), checkpoint: None }
-}
-
-/// A shield row: a run of adjacent cans (24 → 32) under a grating with a low roof, too long
-/// for any mode, the waltz included: Nat walks it behind Han. From band 5 a hop on the way.
-fn shield_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
-    let checkpoint = han_lead(c);
-    if band >= 5 {
-        c.pit(d.int(2, 3) as usize);
-        c.ground(3, FLOOR);
-    }
-    c.ground(lerpi(band, 5.0, 3.0) + d.int(0, 1) as usize, FLOOR);
-    let n = SHIELD_ROW_MIN + lerpi(band, 0.0, 6.0) + d.int(0, 2) as usize;
-    let x = c.width();
-    for _ in 0..n {
-        c.column(|r| match r {
-            r if r <= PIPE_ROOF => b'#',
-            FLOOR => b'=',
-            r if r == FLOOR + 1 => b'S',
-            r if r > FLOOR + 1 => b'#',
-            _ => b'.',
-        });
-    }
-    for k in (2..n).step_by(4) {
-        c.nugget(x + k, STAND);
-    }
-    c.ground(HAN_TAIL, FLOOR);
-    Built { hint: Some((&[Topic::Shield], "Plumbers only! Wait, I go first. Stay behind me!")), checkpoint }
+    Built { hint: Some((&[Topic::BuddyRaft], "Raft time!")), checkpoint: None }
 }
 
 /// A fired-up chasm room's rows: a throw stays well under the room's top (a ceiling).
@@ -758,5 +767,5 @@ fn fired_up_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bui
     for k in (1..HAN_TAIL - 1).step_by(2) {
         c.nugget(x + k, floor - 1);
     }
-    Built { hint: Some((&[Topic::Chain], "Hop on! I'll throw you!")), checkpoint }
+    Built { hint: Some((&[Topic::Chain], "Hop on!")), checkpoint }
 }

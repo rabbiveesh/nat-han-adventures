@@ -9,7 +9,7 @@
 //! `!` unreachable checkpoint/goal, `@` moving platform (start), `-` its path, `%` a splat
 //! stain the search made, `?` a hint spot, and the take-off of each gate crossing: `W` giant
 //! wall (Giant Steps), `R` long gap (fired up), `Z` glide launch (waltz), `Y` grease chute (grip), `K`
-//! stain pit (splats), and Han's: `M` mega wall (Giant Steps + boost), `H` shield row, `N` chain chasm,
+//! stain pit (splats), and Han's: `M` mega wall (Giant Steps + boost), `N` chain chasm,
 //! `U` buddy raft pool.
 
 use std::time::Instant;
@@ -26,9 +26,9 @@ const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft]),
     ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::MegaWall]),
     ("Septic Tank", 4, &[Gate::GlideLaunch]),
-    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::GlideLaunch, Gate::StainPit, Gate::ShieldRow, Gate::ChainChasm]),
+    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::GlideLaunch, Gate::StainPit, Gate::ChainChasm]),
     ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::MegaWall, Gate::ClingShaft, Gate::BuddyRaft]),
-    ("The Golden Throne", 5, &[Gate::GiantWall, Gate::ShieldRow, Gate::ChainChasm]),
+    ("The Golden Throne", 5, &[Gate::GiantWall, Gate::Trapeze, Gate::ChainChasm]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).
 const GATED_GOAL: [usize; 2] = [0, 2];
@@ -328,6 +328,11 @@ fn validator_catches_broken_levels() {
     // A hint about something the level doesn't have.
     let fly = ok.replace("say@19,13: hey\n", "say@19,13: hey\nhint@5,13 fly: Flies!\n");
     assert!(errs_of(&fly).iter().any(|e| e.contains("teaches fly")), "{:?}", errs_of(&fly));
+    // Han barks (1-3 words, the intro aside), and every hint names what its card teaches.
+    let chatty = ok.replace("say@19,13: hey", "say@19,13: hey there you lot");
+    assert!(errs_of(&chatty).iter().any(|e| e.contains("barks")), "{:?}", errs_of(&chatty));
+    let mute = ok.replace("say@19,13: hey\n", "say@19,13: hey\nhint@5,13: Look!\n");
+    assert!(errs_of(&mute).iter().any(|e| e.contains("names no topic")), "{:?}", errs_of(&mute));
 }
 
 /// A flat walkway (row 9) with a spike pit `width` wide sunk into it (spikes in row 10 from
@@ -375,11 +380,11 @@ fn validator_knows_stain_pits() {
     let wide = run(&pit_level(50, "deaths: 5\n"));
     assert!(wide.errs.iter().any(|e| e.contains("can't be crossed")), "{:?}", wide.errs);
     // Teaching: a stain hint before the pit is the lesson; one after it is an error.
-    let taught = run(&pit_level(15, "deaths: 1\nhint@14,9 stain: Splat in the middle!\n"));
+    let taught = run(&pit_level(15, "deaths: 1\nhint@14,9 stain: Splat time!\n"));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
     let lesson = taught.lessons.iter().find(|l| l.topic == Topic::Stain).expect("a stain lesson");
     assert!(lesson.taught(), "{lesson:?}");
-    let late = run(&pit_level(15, "deaths: 1\nhint@40,9 stain: Splat in the middle!\n"));
+    let late = run(&pit_level(15, "deaths: 1\nhint@40,9 stain: Splat time!\n"));
     assert!(late.errs.iter().any(|e| e.contains("must come before")), "{:?}", late.errs);
 }
 
@@ -415,7 +420,7 @@ fn chute_level(header: &str, spikes: bool) -> Level {
 /// Grease chutes: impassable without grip in every mode, passable with it; three deaths.
 #[test]
 fn validator_knows_grease_chutes() {
-    let chute = run(&chute_level("deaths: 3\nhint@18,7 grease grip: Greasy! Splat a few times!\n", true));
+    let chute = run(&chute_level("deaths: 3\nhint@18,7 grease grip: Grease! Careful!\n", true));
     assert!(chute.errs.is_empty(), "{:?}", chute.errs);
     assert_eq!(gates(&chute), [Gate::GreaseChute]);
     assert!(chute.gated_goal);
@@ -530,7 +535,7 @@ fn validator_knows_fired_up_chasms() {
         let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chasm lesson");
         assert!(!lesson.taught(), "no hint yet");
     }
-    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Fired up? Hop on my head and JUMP!\n", mark(16))), SKY));
+    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Hop on!\n", mark(16))), SKY));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
     assert!(taught.lessons.iter().any(|l| l.topic == Topic::Chain && l.taught()));
     // Too wide even for a throw.
@@ -592,36 +597,6 @@ fn validator_proves_band_zone_boost_chains() {
     bare.gates = l.gates.clone();
     let one = check_with(&bare, &Options::default(), &full).errs;
     assert!(one.is_empty(), "{one:?}");
-}
-
-/// Shield rows: a can tunnel too long for the waltz; Han goes ahead.
-#[test]
-fn validator_knows_shield_rows() {
-    let level = |cans: usize, ceiling: bool| {
-        floor_level(30 + cans + 20, "gate: shield 20,9 70,9\n", |rows| {
-            let (c0, c1) = (30, 30 + cans - 1);
-            for r in 0..=7 {
-                for c in c0..=c1 {
-                    rows[r][c] = if ceiling || r < 6 { '#' } else { '.' };
-                }
-            }
-            for c in c0..=c1 {
-                rows[10][c] = '=';
-                rows[11][c] = 'S';
-            }
-        })
-    };
-    for n in [24, 26] {
-        let r = run(&level(n, true));
-        assert!(r.errs.is_empty(), "{n} cans: {:?}", r.errs);
-        assert_eq!(gates(&r), [Gate::ShieldRow]);
-        assert!(r.gated_goal);
-    }
-    let open = run(&level(26, false));
-    assert!(open.errs.iter().any(|e| e.contains("low ceiling")), "{:?}", open.errs);
-    // No mode dashes 24 cans, the waltz included; 20 is the waltz's.
-    assert!(shield_row_timing(&CanRow { row: 11, c0: 30, c1: 53, grated: true }).is_empty());
-    assert!(shield_row_timing(&CanRow { row: 11, c0: 30, c1: 49, grated: true }).iter().any(|e| e.contains("Waltz")));
 }
 
 /// Buddy raft pools: sewage under ceiling spikes, too wide for Nat's own rafts.

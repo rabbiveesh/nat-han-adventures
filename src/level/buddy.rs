@@ -320,6 +320,48 @@ pub fn stand(level: &Level, (c, r): (i32, i32)) -> Vec2 {
     Vec2::new(center.x, center.y - TILE / 2.0 + HALF.y)
 }
 
+// --- The waltz trapeze -----------------------------------------------------------------------
+
+/// Columns from the lip (the last floor before a gap) out to the bottom of Han's swing.
+pub const TRAPEZE_OUT: i32 = 3;
+/// Rows Nat's feet are above the lip's floor, riding Han at the bottom of the swing.
+pub const TRAPEZE_LIFT: i32 = 2;
+/// The plunger handle, from the ceiling to Han's head (tiles): shortest and longest.
+pub const TRAPEZE_ROPE: (i32, i32) = (2, 8);
+/// Han's horizontal speed at the bottom of the swing, on ONE (px/s): jumping off him then is
+/// the boost plus this, kept like a platform's speed ([`crate::game::Body::launch`]).
+pub const TRAPEZE_SPEED: f32 = 240.0;
+
+/// A trapeze off the lip cell `lip` (Nat standing on its floor, the gap on side `dir`): the
+/// column of the swing's bottom, the row Han's head tops out in there (Nat rides in the row
+/// above), and the ceiling row his plunger sticks into. `solid(col, row)` is the level.
+pub fn trapeze_swing(solid: impl Fn(i32, i32) -> bool, lip: (i32, i32), dir: i32) -> Option<(i32, i32, i32)> {
+    let ax = lip.0 + dir * TRAPEZE_OUT;
+    let han = lip.1 - TRAPEZE_LIFT + 1;
+    let nat = han - 1;
+    // The gap: open from the lip out to the bottom, from Nat's head riding down to the floor's row.
+    let open = (1..=TRAPEZE_OUT).all(|k| (nat - 1..=lip.1).all(|r| !solid(lip.0 + dir * k, r)));
+    if !open || !solid(lip.0, lip.1 + 1) || solid(lip.0 + dir, lip.1 + 1) {
+        return None;
+    }
+    let ceiling = (nat - 1 - TRAPEZE_ROPE.1..nat - 1).rev().find(|&r| solid(ax, r))?;
+    (han - ceiling - 1 >= TRAPEZE_ROPE.0).then_some((ax, han, ceiling))
+}
+
+/// Han on the trapeze: the plunger stuck in the ceiling at `anchor`, the handle `len` long (to
+/// his center), swinging towards `dir` through the bottom on ONE (`bar`: 0..1 through the
+/// bar): his center and velocity.
+pub fn trapeze_at(anchor: Vec2, len: f32, dir: f32, bar: f32, bar_secs: f32) -> (Vec2, Vec2) {
+    let w = std::f32::consts::TAU / bar_secs;
+    let amp = (TRAPEZE_SPEED / (len * w)).min(1.2);
+    let (s, c) = (std::f32::consts::TAU * bar).sin_cos();
+    let th = dir * amp * s;
+    let dth = dir * amp * w * c;
+    let pos = anchor + len * Vec2::new(th.sin(), -th.cos());
+    let vel = len * dth * Vec2::new(th.cos(), th.sin());
+    (pos, vel)
+}
+
 /// Which columns count as a fired-up chasm's (Han's head holds Nat in mid-air over them, up to
 /// [`HAN_CHASM_CATCH_RISE`], and nowhere else) in a [`chain_try`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

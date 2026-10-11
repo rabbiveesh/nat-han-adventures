@@ -1,5 +1,7 @@
-//! Lesson cards: the band's counters teach themselves, and Han's tricks are taught the same way
-//! (a [`HanTrick`]'s card comes up at its first hint spot). The first time a counter matters (Nat
+//! Lesson cards: every mechanic is taught by a card, since Han only barks (1-3 words). The
+//! band's counters teach themselves, Han's tricks ([`HanTrick`]) and the other mechanics (a
+//! [`Lesson::Tip`]: a toot, shelves, rides, flies, cans, stains, grease) come up at their first
+//! hint spot, and again when Han repeats that hint after repeated deaths there. The first time a counter matters (Nat
 //! reaches the hint spot of its gate, or the counter fills or, for the sweat drop, the band gets
 //! nervous) the game freezes ([`PlayState::Lesson`]), dims, and a card explains it, the strip
 //! still lit above. The first full counter also gets "press Down to call the band". Jump (a
@@ -16,6 +18,7 @@ use leafwing_input_manager::prelude::*;
 
 use super::{palette::*, *};
 use crate::audio::{BandMeters, Harmony, director::SUMMON_ORDER};
+use crate::events::HintRepeated;
 use crate::game::HintSpot;
 use crate::input::Action;
 use crate::level::Topic;
@@ -54,6 +57,8 @@ pub enum Lesson {
     Call(BandCounter),
     /// One of Han's tricks.
     Trick(HanTrick),
+    /// Any other mechanic ([`tip_of`]).
+    Tip(Topic),
 }
 
 /// The cards waiting, and the one up.
@@ -82,6 +87,11 @@ impl Lessons {
                 self.queue.push_back(Lesson::Trick(t));
             }
         }
+        for t in Topic::ALL {
+            if progress.taught_tips[t.index()] {
+                self.queue.push_back(Lesson::Tip(t));
+            }
+        }
     }
 }
 
@@ -102,8 +112,31 @@ pub fn trick_of(topic: Topic) -> Option<HanTrick> {
         Topic::Chain => Some(HanTrick::Throw),
         Topic::Mega => Some(HanTrick::Mega),
         Topic::Shaft => Some(HanTrick::Cling),
+        Topic::Trapeze => Some(HanTrick::Trapeze),
+        Topic::BuddyRaft => Some(HanTrick::Raft),
         _ => None,
     }
+}
+
+/// A mechanic with neither a counter nor a Han trick: its own card.
+pub fn tip_of(topic: Topic) -> Option<Topic> {
+    (counter_of(topic).is_none() && trick_of(topic).is_none()).then_some(topic)
+}
+
+/// The cards a hint's topics teach, taught or not (a repeated hint shows them again).
+pub fn cards_of(topics: &[Topic]) -> Vec<Lesson> {
+    let mut out = Vec::new();
+    for &t in topics {
+        let l = match (counter_of(t), trick_of(t)) {
+            (Some(c), _) => Lesson::Counter(c),
+            (_, Some(k)) => Lesson::Trick(k),
+            _ => Lesson::Tip(t),
+        };
+        if !out.contains(&l) {
+            out.push(l);
+        }
+    }
+    out
 }
 
 fn counter_of_harmony(h: Harmony) -> Option<BandCounter> {
@@ -133,6 +166,14 @@ pub fn due(progress: &mut Progress, heard: &[Topic], meters: &crate::audio::dire
             out.push(Lesson::Trick(t));
         }
     }
+    for &t in heard {
+        if let Some(t) = tip_of(t)
+            && !progress.taught_tips[t.index()]
+        {
+            progress.taught_tips[t.index()] = true;
+            out.push(Lesson::Tip(t));
+        }
+    }
     for (i, m) in meters.summons.iter().enumerate() {
         if m.full {
             teach(BandCounter::ALL[i], &mut out);
@@ -155,8 +196,18 @@ fn queue_lessons(
     mut progress: ResMut<Progress>,
     meters: Option<Res<BandMeters>>,
     hints: Query<&HintSpot, Changed<HintSpot>>,
+    mut repeated: MessageReader<HintRepeated>,
     off: Option<Res<LessonsOff>>,
 ) {
+    for r in repeated.read() {
+        if off.is_none() {
+            for l in cards_of(&r.topics) {
+                if !lessons.queue.contains(&l) && lessons.showing != Some(l) {
+                    lessons.queue.push_back(l);
+                }
+            }
+        }
+    }
     let heard: Vec<Topic> = hints.iter().filter(|h| h.said).flat_map(|h| h.topics.iter().copied()).collect();
     let m = meters.map(|m| m.0).unwrap_or_default();
     // (Only touch the save when something's due: it's written on every change.)
@@ -248,8 +299,45 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
             "HAN'S TRICK: THE WALL CLING",
             vec!["BAND NERVOUS? IN A SHAFT".into(), "HAN CLIMBS THE WALL. HOP ON".into(), "HIS HEAD AND JUMP: UP!".into()],
         ),
+        Lesson::Trick(HanTrick::Trapeze) => (
+            "HAN'S TRICK: THE TRAPEZE",
+            vec!["WALTZING? HAN SWINGS FROM".into(), "THE CEILING. RIDE HIS CAP,".into(), "JUMP ON ONE: FLY FAR!".into()],
+        ),
+        Lesson::Trick(HanTrick::Raft) => (
+            "HAN'S TRICK: THE RAFT",
+            vec!["SPIKES OVER SEWAGE? STAND".into(), "STILL BY IT: HAN WADES IN".into(), "AND LEAVES A BIG RAFT.".into()],
+        ),
+        Lesson::Tip(t) => tip_text(t, touch),
     };
     (title.into(), lines)
+}
+
+/// A [`Lesson::Tip`]'s title and lines.
+fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
+    let jump = if touch { "TAP JUMP" } else { "JUMP" };
+    let lines: Vec<String> = match t {
+        Topic::Toot => {
+            return ("NEW: THE TOOT", vec![format!("{jump}, THEN {jump} AGAIN"), "IN MIDAIR: A TOOT!".into()]);
+        }
+        Topic::OneWay => vec!["THIN SHELVES: JUMP UP".into(), "THROUGH THEM, LAND ON TOP.".into()],
+        Topic::Platform => vec!["HOP ON A FLOATING ROLL:".into(), "IT CARRIES YOU. JUMP OFF".into(), "AND KEEP ITS SPEED.".into()],
+        Topic::Fly => vec!["FLIES HOVER UP THERE.".into(), "LITTLE HOPS UNDER THEM!".into()],
+        Topic::Spray => vec!["A CAN PUFFS ON A BEAT.".into(), "WAIT TILL THE PSSHT STOPS,".into(), "THEN GO!".into()],
+        Topic::Stain => vec!["TOO WIDE TO JUMP? SPLAT".into(), "ON THE SPIKES: YOUR STAIN".into(), "IS A STEP!".into()],
+        Topic::Grease => vec!["ON GREASE YOU CAN'T STOP".into(), "OR JUMP. SPLAT A FEW AND".into(), "THE BAND GETS NERVOUS.".into()],
+        // (The others have a counter or a trick card; a tip for them is never due.)
+        _ => vec![],
+    };
+    let title = match t {
+        Topic::OneWay => "NEW: SHELVES",
+        Topic::Platform => "NEW: RIDES",
+        Topic::Fly => "NEW: FLIES",
+        Topic::Spray => "NEW: SPRAY CANS",
+        Topic::Stain => "NEW: SPLAT STAINS",
+        Topic::Grease => "NEW: GREASE",
+        _ => "NEW!",
+    };
+    (title, lines)
 }
 
 #[derive(Component)]
@@ -305,8 +393,8 @@ mod tests {
     fn lessons_come_once_per_save() {
         let mut p = Progress::default();
         let none = Meters::default();
-        assert_eq!(due(&mut p, &[Topic::Toot, Topic::Giant], &none), [Lesson::Counter(BandCounter::Horn)]);
-        assert_eq!(due(&mut p, &[Topic::Giant], &none), [], "once");
+        assert_eq!(due(&mut p, &[Topic::Toot, Topic::Giant], &none), [Lesson::Counter(BandCounter::Horn), Lesson::Tip(Topic::Toot)]);
+        assert_eq!(due(&mut p, &[Topic::Giant, Topic::Toot], &none), [], "once");
         // A counter that fills before its hint teaches itself, and the first full one the call.
         let mut full = Meters::default();
         full.summons[1] = Meter { lit: 4, of: 4, full: true, active: None };
@@ -331,18 +419,36 @@ mod tests {
                 Lesson::Counter(BandCounter::Nugget),
                 Lesson::Counter(BandCounter::Sweat),
                 Lesson::Call(BandCounter::Horn),
-                Lesson::Trick(HanTrick::Throw)
+                Lesson::Trick(HanTrick::Throw),
+                Lesson::Tip(Topic::Toot)
             ]
         );
+    }
+
+    /// Han only barks, so every mechanic a hint can name has a card, and a repeated hint brings
+    /// its cards back.
+    #[test]
+    fn every_topic_has_a_card() {
+        for t in Topic::ALL {
+            let cards = cards_of(&[t]);
+            assert_eq!(cards.len(), 1, "{t:?}");
+            assert!(!card_text(cards[0], false).1.is_empty(), "{t:?}");
+            let mut p = Progress::default();
+            assert!(!due(&mut p, &[t], &Meters::default()).is_empty(), "{t:?} teaches nothing");
+        }
+        assert_eq!(cards_of(&[Topic::Grease, Topic::Grip]), [Lesson::Tip(Topic::Grease), Lesson::Counter(BandCounter::Sweat)]);
+        assert_eq!(cards_of(&[Topic::BuddyRaft]), [Lesson::Trick(HanTrick::Raft)]);
     }
 
     #[test]
     fn cards_fit_the_screen() {
         for l in BandCounter::ALL.map(Lesson::Counter).into_iter().chain(BandCounter::ALL[..3].iter().map(|&c| Lesson::Call(c)))
             .chain(HanTrick::ALL.map(Lesson::Trick))
+            .chain(Topic::ALL.into_iter().filter_map(tip_of).map(Lesson::Tip))
         {
             for touch in [false, true] {
                 let (title, lines) = card_text(l, touch);
+                assert!(!lines.is_empty(), "{l:?} says nothing");
                 for s in std::iter::once(&title).chain(&lines) {
                     // 8 px a character; a 4:3 screen is 288 virtual px wide, less the card's rim.
                     assert!(s.len() <= 32, "{l:?}: {s:?} is {} long", s.len());

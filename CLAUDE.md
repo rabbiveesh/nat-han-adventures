@@ -72,7 +72,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   level's solution is a plan in `tests/side_b.rs` (`try_a_plan` tries one). Ways in: Up Up Down Down on
   the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
-  calls the band) and its lesson cards (`lesson.rs`, `NATHAN_LESSONS=0` turns them off; off in
+  calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 - `src/capture/` deterministic video capture (native dev, the `capture` feature): frame-stepped
   time, screenshots, lockstep audio, the input timeline (Dev loop 4).

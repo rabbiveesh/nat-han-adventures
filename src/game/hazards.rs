@@ -17,7 +17,7 @@ use super::{
 };
 use crate::adapt::Skill;
 use crate::events::{DeathCause, HanSays, PlayerDied, PlayerRespawned};
-use crate::level::{Level, PlatformKind, TILE, Tile, Topic};
+use crate::level::{Level, PlatformKind, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<RaftLife>().add_systems(
@@ -330,14 +330,12 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
         (c0 - 2..=c1 + 2).contains(&c) && (pit || (r0 - 2..=r1 + 2).contains(&r))
     };
     let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray);
-    if let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1)) {
-        // Flies and sprays only count against a gate built of them.
-        let tunnel = g.topic == Topic::Shield;
-        if (!hazard || tunnel)
-            && let Some(skill) = super::adaptive::skill_of(g.topic)
-        {
-            return skill;
-        }
+    // Flies and sprays never count against a gate: none is built of them.
+    if !hazard
+        && let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1))
+        && let Some(skill) = super::adaptive::skill_of(g.topic)
+    {
+        return skill;
     }
     if hazard {
         return Skill::HazardTiming;
@@ -420,7 +418,7 @@ mod tests {
         assert_eq!(death_skill(l, Vec2::new(20.0 * TILE, -20.0), DeathCause::Pit), Skill::Precision);
         // A fall at level 7's glide launch is a failed launch.
         let l = &levels.0[6];
-        let m = l.gates.iter().find(|g| g.topic == Topic::Waltz).expect("level 7 has a glide launch");
+        let m = l.gates.iter().find(|g| g.topic == crate::level::Topic::Waltz).expect("level 7 has a glide launch");
         let fell = Vec2::new((m.c0 + m.c1) as f32 / 2.0 * TILE, -20.0);
         assert_eq!(death_skill(l, fell, DeathCause::Pit), Skill::Waltz);
     }

@@ -368,8 +368,9 @@ pub struct HanHead {
     /// In a band zone (`Level::in_band_zone`): jumping off him (or off the coyote time after
     /// stepping off him) is the weak boost ([`WEAK_BOOST_SPEED`]), winded or not.
     pub weak: bool,
-    /// Clinging to a wall (a cling shaft, nervous): the way away from it (-1 or 1; 0 when
-    /// not). Jumping off him is then a kick: the boost and [`KICK_CARRY`] that way.
+    /// Horizontal speed a boost off him adds, kept like a platform's (px/s, signed; 0 for
+    /// none): clinging to a wall (a cling shaft, nervous) [`KICK_CARRY`] away from it; on the
+    /// trapeze (the waltz) his swing's speed.
     pub kick: f32,
 }
 
@@ -380,6 +381,8 @@ pub struct HanBoosted {
     pub pos: Vec2,
     pub weak: bool,
     pub throw: bool,
+    /// The laughing band's boing: Nat landed on him and sprang off, no jump needed.
+    pub boing: bool,
 }
 
 /// Upward speed of the weak boost, Han's in a band zone (px/s): Nat's feet rise 300²/2800 ≈ 32
@@ -498,25 +501,25 @@ fn player_step(
             body.vel.y = WEAK_BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: true, throw: false });
+            boosted.write(HanBoosted { pos: pos.0, weak: true, throw: false, boing: false });
         } else if on_han.is_some_and(|h| h.boost) && groove.fired_up() {
             // The running throw: flat and far, and the toot's fresh again.
             body.vel.y = THROW_SPEED;
             body.launch = ctl.facing * THROW_CARRY;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true });
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true, boing: false });
         } else if on_han.is_some_and(|h| h.boost) {
             // The plunger boost: way up, and the toot's fresh again (off Han clinging to a wall,
-            // a kick away from it too).
+            // a kick away from it too; off his trapeze, his swing).
             body.vel.y = BOOST_SPEED;
             let kick = on_han.map_or(0.0, |h| h.kick);
             if kick != 0.0 {
-                body.launch = kick * KICK_CARRY;
+                body.launch = kick;
             }
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false });
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false, boing: false });
         } else {
             body.vel.y = JUMP_SPEED * groove.jump_scale();
             if groove.on_the_one() {
@@ -586,8 +589,30 @@ fn player_step(
         }
         ctl.has_toot = true;
         ctl.weak_toot = false;
+        let was_bouncing = ctl.bouncing;
         ctl.bouncing = false;
         ctl.weak_ground = contact.riding.and_then(|e| han.get(e).ok()).is_some_and(|(_, _, _, h)| h.weak);
+        // The laughing band's boing: dropping onto Han's head (where he'd boost) springs Nat
+        // off it at the full boost, no jump needed (fired up, a jump off him is the throw).
+        // Once: coming back down from a bounce, it's the plain bounce.
+        let springy = contact.riding.and_then(|e| han.get(e).ok()).map(|(_, _, _, h)| *h).filter(|h| h.boost && !h.weak);
+        if let Some(h) = springy
+            && groove.bouncy()
+            && !groove.fired_up()
+            && !was_bouncing
+            && !contact.was_on_ground
+            && contact.fall_speed > BOUNCE_MIN_SPEED
+        {
+            body.vel.y = BOOST_SPEED;
+            if h.kick != 0.0 {
+                body.launch = h.kick;
+            }
+            ctl.bouncing = true;
+            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false, boing: true });
+            body.on_ground = false;
+            body.riding = None;
+            return;
+        }
         // The laughing band: spring back up a little (lower each time, until it dies out).
         // Grease doesn't bounce (unless you've got grip): it would be a jump off grease. Nor
         // does a band zone's Han: a bounce plus the weak boost would be more than a jump.

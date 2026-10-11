@@ -60,8 +60,11 @@ Status: built (see "As built" at the end for the decisions and numbers).
 ## Readable behaviour (so players can learn the AI)
 - Distinct poses: **braced** (plunger up, feet planted), **intercepting** (arms out like a
   goalkeeper), going-ahead (determined march), parachuting, winded.
-- Simple, predictable rules above; Han **teaches every one of his mechanics** himself via hint
-  spots at first use ("Need a lift? Land on my head and JUMP! Oof, my back.").
+- Simple, predictable rules above. Han is **nearly silent**: poses plus barks of 1-3 words
+  ("Hop on!", "Lemme check.", "BOING!"); only a level's intro is a sentence. Every mechanic,
+  his tricks included, is taught by a freeze-frame **lesson card** at its first hint spot
+  (`ui::lesson`), shown again when he repeats that hint after repeated deaths. The validator
+  enforces the barks and that every hint names its topic.
 
 ## Adaptive coupling
 Han's helpfulness follows the adaptive assist dial: struggling → he intercepts more eagerly,
@@ -75,7 +78,7 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 | Quartal (fired up) | as fast as Nat; his boost is the running throw |
 | Waltz | moves only on the beat (a little step per beat) |
 | Nervous | clings close behind Nat, trembles |
-| Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase) |
+| Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase); his head is a spring: the boing boost |
 
 ## Level design (gates the validator must prove are exclusive)
 - **Mega walls** (need Giant Steps and Han's mega-boost): marked with **red plunger-handle
@@ -87,12 +90,14 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
   a band gate's, except with the grip. The band gets nervous from deaths anywhere in the level,
   so a shaft after a grease chute needs no splats of its own (level 9); a free-play shaft room
   has a sunken spike strip to splat on.
+- **Trapezes** (need the waltz and Han's swing): a bottomless gap, its far side 3 rows up
+  behind 3 spikes (so no mode alone, fired up included, makes it), under a ceiling that ends
+  over the gap for his plunger. Their zone weakens his boost except in the waltz.
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
-- **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
   inside).
 - Free play gets all of these as rooms (`src/freeplay/templates.rs`: mega wall, buddy raft
-  pool, shield row, fired-up chasm, cling shaft), served once the story level that teaches each is unlocked;
+  pool, fired-up chasm, cling shaft, trapeze), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
   width from the room's ends, so a neighbouring room's band gate never weakens Han there.
   `tests/han_campaign.rs` plays them with the real Han too.
@@ -120,6 +125,20 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   head; jumping off is the full boost plus `KICK_CARRY` (90 px/s) away from the wall
   (`HanHead::kick`). He lets go once kicked, when Nat leaves the shaft or makes it up, dies, or
   the grip goes. The validator models it as `Gate::ClingShaft` (`cling_found`).
+- **The trapeze** (the waltz): by a trapeze lip (`gate: trapeze`), Nat standing near it, Han
+  reels up his plunger handle (`REEL_SPEED`) into the ceiling's edge `TRAPEZE_OUT` (3) columns
+  past the lip and swings (`HanMode::Trapeze`, `buddy::trapeze_at`): a pendulum a bar long,
+  through the bottom (Nat's feet `TRAPEZE_LIFT` rows above the lip) swinging forward on ONE at
+  `TRAPEZE_SPEED` (240 px/s). Nat rides his cap; a jump off it is the boost plus the swing's
+  speed then (`HanHead::kick`). He lets go (and falls, and parachutes back) once kicked, when
+  Nat lands past the swing or leaves, dies, or the waltz ends. The validator's
+  `Gate::Trapeze` (`trapeze_found`) takes the jump at the bottom with a human share (80%) of
+  the speed.
+- **The boing boost** (the laughing band, not fired up): dropping onto Han's head where he'd
+  boost springs Nat off it at the full boost (`BOOST_SPEED`), no jump needed, with a "BOING!"
+  bark and its own sfx (`Sfx::Boing`); once per landing chain (coming back down from it, it's
+  the band's plain bounce). No gate needs it (the laughing band stays a surprise), and it
+  reaches no further than the boost the validator already proves.
 - **The running throw** (fired up): `THROW_SPEED` 380 px/s up, `THROW_CARRY` 120 px/s kept
   (`Body::launch`) towards where Nat faces; `HanBoosted { throw: true }`. Han runs at
   165 x 1.35 px/s then (his own nav graph for it, `HanNav::fired`); his goalkeeper dive brakes
@@ -181,16 +200,15 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   up Giant Steps; no mode alone, no plain boost from outside a zone and no weak one inside
   it; unmarked, a plain boost from outside any zone that climbs something is reported as one,
   to be marked; tier 2 checks Giant Steps can be summoned there from every music state, with a
-  hop onto Han); shield rows (24+ adjacent cans
-  on the floor or under a grating, with a low ceiling: no mode dashes them, the waltz
-  included; Han plugs both the jets and the cans); fired-up chasms
+  hop onto Han); fired-up chasms
   (14+ bottomless columns with a nugget line before them, as a long gap has; crossed by a
   human's throw off Han standing at the edge or up to 3 tiles back; no plain boost, and no
   mode alone, may do it; tier 2 checks the band can be fired up there from every music
   state, with a wait for Han and a hop onto his head); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
   tile it; Nat's own: fewest rafts x (respawn + walk back at full speed) must exceed 12 s).
-  Teaching topics `boost`, `shield`, `chain`, `buddyraft`.
+  Teaching topics `boost`, `chain`, `buddyraft`, `shaft`, `trapeze`.
 - **Markers**: from the marks: gold staff trim + note emblem (giant), red notches + yellow tape
-  (boost), a PLUMBERS ONLY sign (shield).
+  (boost). Shield rows are gone (2026-10-11): a run of 24+ adjacent cans is simply deadly;
+  Han still goes ahead of shorter can runs and plugs them ("lemme check that").
 - Repeating a hint after repeated deaths is the adaptive engine's `han_hint` lever.
 

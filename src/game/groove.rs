@@ -271,6 +271,15 @@ impl Groove {
 
     /// Sweaty grip: the nervous band (melodic minor, the 3+ deaths mood) lets Nat brake and
     /// jump on grease.
+    /// The Han tricks the band grants in their gates' zones ([`crate::level::Level::weak_boost`]).
+    pub fn granted(&self) -> crate::level::Granted {
+        crate::level::Granted {
+            giant_steps: self.giant_steps(),
+            grip: self.grip(),
+            waltz: self.harmony == Harmony::Waltz,
+        }
+    }
+
     pub fn grip(&self) -> bool {
         self.nervous || self.harmony == Harmony::MelodicMinor
     }
