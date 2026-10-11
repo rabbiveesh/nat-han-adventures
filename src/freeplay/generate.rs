@@ -26,22 +26,18 @@ pub const WORLD_STREAM: u64 = 3;
 
 /// Han's line at each room's checkpoint.
 pub const CHECKPOINT_LINES: &[&str] = &[
-    "Fresh roll! Onward, Nat.",
-    "Two-ply! This pipe's all yours.",
-    "New pipe, new smells. Let's go!",
-    "Plumber's tip: always flush forward.",
-    "This one's got character. And odor.",
-    "Roll call! Nat? Here. Han? Here. Go!",
-    "Another pipe! Who builds these? Oh. Me.",
-    "Keep rollin', Nat. I'll keep followin'.",
+    "Fresh roll!",
+    "Two-ply!",
+    "New pipe!",
+    "Flush forward!",
+    "Character! Odor!",
+    "Roll call!",
+    "Who built this?",
+    "Keep rollin'!",
 ];
 
 /// The disguised placement rooms' lines ("Han checks your plumbing").
-pub const CALIBRATION_LINES: &[&str] = &[
-    "Lemme check your plumbing, Nat. Hop along!",
-    "Good pressure! Couple more test pipes.",
-    "Last test pipe, Nat. Then the real stuff!",
-];
+pub const CALIBRATION_LINES: &[&str] = &["Pipe check!", "Good pressure!", "Last test!"];
 
 /// The validator's physics tables for rooms, built once: reachability with [`lean_strategies`]
 /// (the proofs that gates are exclusive keep every ideal jump).
@@ -226,7 +222,7 @@ pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
     if (plan.request.assists.extra_checkpoint || c.width() > LONG_ROOM)
         && let Some((col, row)) = built.checkpoint
     {
-        c.checkpoint(col, row, "Extra roll, on the house!");
+        c.checkpoint(col, row, "On the house!");
     }
     c.finish(plan.world, plan.line)
 }

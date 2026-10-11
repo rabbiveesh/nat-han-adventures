@@ -6,12 +6,12 @@ intro: The Main Sewer! Mind the flies, Nat. They're buzzkills.
 3: dx=3 dy=0 period=3 kind=duck
 4: dx=21 dy=0 period=9 kind=duck
 deaths: 2
-hint@50,11 fly: Flies above? Little hops! Save the big jumps for later.
-say@70,11: Spike pit ahead. Splat, hop, splat, hop. Two should do!
-say@211,11: Big gap ahead! Grab nuggets fast, then DOWN: fired up!
+hint@50,11 fly: Little hops!
+say@70,11: Spike pit!
+say@211,11: Big gap!
 gate: stain 77,11 104,11
 gate: gap 234,11 246,11
-hint@142,11 buddyraft: Spikes up top! Stand still: I'll make us a raft.
+hint@142,11 buddyraft: Raft time!
 gate: buddyraft 144,11 159,12
 ---
 ##########################################################################################################################################################################################################################################################################

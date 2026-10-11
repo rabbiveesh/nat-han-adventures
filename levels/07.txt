@@ -4,11 +4,11 @@ intro: Septic Tank, Nat! The band waltzes here. Ride that roll!
 1: dx=8 dy=0 period=5 kind=tp
 2: dx=8 dy=0 period=4.5 kind=tp
 deaths: 0
-hint@42,43 spray: Spray can! Wait till the pssht stops, then go.
-hint@3,43 waltz: Hop in threes, DOWN: waltz! Jump off the roll as it glides!
-say@44,10: Last stretch! Count the puffs, then GO.
-say@5,25: Halfway! I'd stay and chat, but... the smell. You know.
-say@57,43: Count the puffs: pssht... wait... GO! Easy peasy.
+hint@42,43 spray: Pssht! Wait...
+hint@3,43 waltz: Waltz time!
+say@44,10: Last stretch!
+say@5,25: Halfway! Phew.
+say@57,43: Count puffs!
 gate: waltz 12,42 41,43
 ---
 ##..####################......................................##

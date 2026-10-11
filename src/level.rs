@@ -8,8 +8,8 @@
 //! world: 1
 //! intro: Han's line when the level starts.
 //! deaths: 0
-//! say@13,1: Han's line at the checkpoint in column 13, row 1.
-//! hint@4,1 toot: Jump, then jump AGAIN in midair. That's a toot!
+//! say@13,1: Two-ply!
+//! hint@4,1 toot: Toot!
 //! 1: dx=6 dy=0 period=4 kind=tp
 //! ---
 //! ....................
@@ -19,14 +19,14 @@
 //!
 //! Header keys (every line `key: value`; blank lines and `// comments` are skipped):
 //! - `name`, `world` (1..=5: tileset, backdrop, music), `intro` (Han's line at the start).
-//! - `say@<col>,<row>: text`: Han's line when Nat reaches the checkpoint in that cell.
+//! - `say@<col>,<row>: text`: Han's bark when Nat reaches the checkpoint in that cell.
 //!   (Old form, still accepted: plain `say: text` lines go, in order, to the checkpoints that
 //!   have no `say@`; checkpoints are numbered in reading order, top row first.)
-//! - `hint@<col>,<row>[ topic...]: text`: a *hint spot*. Han says the line the first time Nat
-//!   comes within [`HINT_RADIUS`] of that cell; once per level visit (dying doesn't repeat it),
-//!   and again after a restart. Optional [`Topic`] words name the mechanics it teaches; the
-//!   validator ([`validate`]) checks that every mechanic is taught by a hint before the
-//!   player first meets it.
+//! - `hint@<col>,<row> topic...: text`: a *hint spot*. The first time Nat comes within
+//!   [`HINT_RADIUS`] of that cell (once per level visit; dying doesn't repeat it, a restart
+//!   does), Han barks the line and the lesson card of each [`Topic`] word comes up, once per
+//!   save (`ui::lesson`). The validator ([`validate`]) checks that every mechanic is taught by a
+//!   hint before the player first meets it, and that every hint names a topic.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
@@ -37,7 +37,8 @@
 //!   (mega wall), `shaft` (cling shaft), `trapeze` (trapeze), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
-//! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
+//! Lines (intro, say, hint) are at most [`MAX_LINE`] characters; all but the intro are barks of
+//! at most [`MAX_BARK_WORDS`] words (Han is nearly silent: cards teach).
 //!
 //! Grid legend:
 //! | char | meaning |
@@ -122,6 +123,14 @@ pub const TILE: f32 = 16.0;
 pub const HINT_RADIUS: f32 = 2.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
+/// Han nearly never talks: everything he says but a level's intro is a bark of at most this
+/// many words (lesson cards do the teaching).
+pub const MAX_BARK_WORDS: usize = 3;
+
+/// A line short enough for Han: at most [`MAX_BARK_WORDS`] words.
+pub fn is_bark(line: &str) -> bool {
+    line.split_whitespace().count() <= MAX_BARK_WORDS
+}
 pub const LEVEL_COUNT: usize = 10;
 /// How many rows above the floor Han's feet cling in a cling shaft.
 pub const CLING_ROWS: i32 = 3;
@@ -284,6 +293,11 @@ impl Topic {
             Topic::Chain => "chain",
             Topic::BuddyRaft => "buddyraft",
         }
+    }
+
+    /// Its place in [`Topic::ALL`].
+    pub fn index(self) -> usize {
+        Topic::ALL.iter().position(|&t| t == self).expect("every topic is in ALL")
     }
 
     pub fn from_word(w: &str) -> Option<Topic> {

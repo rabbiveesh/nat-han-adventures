@@ -67,7 +67,7 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
   chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up),
   the Giant Steps mega-boost (buddy ledges became 11-tile mega walls), the nervous
   wall-cling (cling shafts; level 9 has one after its chute), and the waltz trapeze (level 10).
-  Each trick gets a freeze-frame lesson card at its first hint spot. The laughing band's boing boost is in too (no gate). Shield rows are out (levels 8 and 10 keep a plain low tunnel there). Next: Han nearly silent.
+  Each trick gets a freeze-frame lesson card at its first hint spot. The laughing band's boing boost is in too (no gate). Shield rows are out (levels 8 and 10 keep a plain low tunnel there). Han is nearly silent: barks of 1-3 words, every mechanic taught by a lesson card (tips for the plain mechanics, a card for his raft too).
 
 ## Planned (agreed, not started)
 - **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics
@@ -86,6 +86,6 @@ and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASS
 - No music theory on screen: the HUD's groove badge says what the physics does (LOW GRAVITY,
   SLIPPERY LANDINGS), the band readout gives the band's mood by nickname (GIANT STEPS!, SEASICK).
 - Seeds stay adaptive; last seed is remembered.
-- Every mechanic is taught by Han (hint spots) before its first use; the validator enforces it.
+- Every mechanic is taught by a lesson card at a hint spot before its first use; Han only barks (1-3 words, intros aside). The validator enforces both.
 - Builds at full parallelism under `nice -n 15`; tests with `cargo nextest run`; push to `main`
   after each finished feature (it deploys); clean up worktrees and stray Xvfbs when done.

@@ -115,27 +115,24 @@ pub const HAN_PLUG_LINGER: f32 = 0.5;
 /// How far ahead (tiles) a hazard counts as "facing" it.
 pub const LOOK_AHEAD: i32 = 4;
 
-/// What Han says.
-pub const LEMME_LINE: &str = "Lemme check that.";
-pub const PRO_LINE: &str = "I'm fine! I'm a professional!";
-pub const BACK_WARN_LINE: &str = "Oof. My back...";
-pub const UNION_LINE: &str = "My back! I'm union, Nat!";
+/// What Han says: barks of 1-3 words ([`crate::level::MAX_BARK_WORDS`]); lesson cards teach,
+/// he doesn't.
+pub const LEMME_LINE: &str = "Lemme check.";
+pub const PRO_LINE: &str = "I'm fine!";
+pub const BACK_WARN_LINE: &str = "Oof. Back...";
+pub const UNION_LINE: &str = "Union break!";
 /// What Han grumbles when Nat jumps off his head in a band zone (the weak boost), in turn with
 /// the lines of the gate's kind ([`grumble_lines`]).
-pub const GRUMBLE_LINES: &[&str] = &[
-    "Nope. Need more music in my soul for that one.",
-    "Too tired, Nat. Get the band going.",
-    "That's band work, Nat. I'm just the plumber.",
-];
+pub const GRUMBLE_LINES: &[&str] = &["Nope.", "Too tired.", "Band work!"];
 
 /// Han's grumbles for a band zone of gate kind `topic` (on top of [`GRUMBLE_LINES`]).
 pub fn grumble_lines(topic: Topic) -> &'static [&'static str] {
     match topic {
-        Topic::Giant => &["My back says no. My heart says Giant Steps.", "Toot it up, Nat! Five toots fetch the giant."],
-        Topic::Gap => &["Grab nuggets, get the band fired up!", "That gap wants a fired-up band, not a plumber."],
-        Topic::Waltz => &["That's a waltz job, Nat!", "Hop in threes, Nat. ONE-two-three!"],
-        Topic::Grip => &["Grease? Only a sweaty band gets a grip on that.", "Slippery job, Nat. Get the band nervous."],
-        Topic::Stain => &["Spikes? That's a splat job, Nat. Sorry!", "Make your own stepping stones, Nat. Splat!"],
+        Topic::Giant => &["Toot it up!", "Giant Steps!"],
+        Topic::Gap => &["Nuggets first!", "Fire 'em up!"],
+        Topic::Waltz => &["Waltz job!", "ONE-two-three!"],
+        Topic::Grip => &["Too slippy!", "Get sweaty!"],
+        Topic::Stain => &["Splat job!", "Splat it!"],
         _ => &[],
     }
 }
@@ -155,23 +152,16 @@ pub fn grumble_line(topic: Option<Topic>, n: u32) -> &'static str {
 
 /// At most one grumble this often (s).
 pub const GRUMBLE_EVERY: f32 = 2.0;
-pub const JET_LINES: &[&str] = &["Pssht! Ha! Tickles!", "Smells like... lavender?", "Pssht yourself!"];
-pub const FLY_LINE: &str = "Shoo! Shoo! Union rules!";
+pub const JET_LINES: &[&str] = &["Pssht! Ha!", "Lavender?", "Tickles!"];
+pub const FLY_LINE: &str = "Shoo! Shoo!";
 
 /// What Han says when the player splats (every 3rd death).
-pub const DEATH_LINES: &[&str] = &[
-    "Don't worry, Nat. I've unclogged worse.",
-    "Nat! That's not how plumbing works!",
-    "Shake it off, Nat. Gravity's just a big drain.",
-    "Ooh. I'm puttin' that one on the invoice.",
-    "Happens to the best of us. Mostly to you, Nat.",
-    "Nat, you go AROUND the pointy stuff.",
-];
+pub const DEATH_LINES: &[&str] = &["Oof, Nat!", "Not plumbing!", "Shake it off!", "On the invoice!", "Happens!", "Around, Nat!"];
 
 /// What Han says when the band turns nervous (3+ deaths) on a level with grease: sweaty grip.
-pub const GRIP_LINE: &str = "Band's nervous! Sweaty grip: now you can stop AND jump!";
+pub const GRIP_LINE: &str = "Sweaty grip!";
 /// ...and on a level without grease.
-pub const NERVOUS_LINE: &str = "Band's sweatin' bullets. Slow-mo! Breathe, Nat.";
+pub const NERVOUS_LINE: &str = "Slow-mo! Breathe.";
 
 /// Eagerness `e` (0 lazy, 0.5 neutral, 1 very eager) → seconds Nat must stand facing a hazard
 /// before Han goes ahead: 2.0 s lazy, 1.5 s neutral, 0.7 s eager.
@@ -269,5 +259,30 @@ fn nervous_line(
     if groove.grip() {
         let text = if active.level.has_grease() { GRIP_LINE } else { NERVOUS_LINE };
         says.write(crate::events::HanSays { text: text.to_string() });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::level::is_bark;
+
+    /// Han is nearly silent: everything he says (intros aside) is a bark.
+    #[test]
+    fn han_only_barks() {
+        let topics = crate::level::Topic::ALL.into_iter().flat_map(|t| grumble_lines(t).iter());
+        let lines = [LEMME_LINE, PRO_LINE, BACK_WARN_LINE, UNION_LINE, FLY_LINE, GRIP_LINE, NERVOUS_LINE, BOING_LINE]
+            .into_iter()
+            .chain(GRUMBLE_LINES.iter().copied())
+            .chain(topics.copied())
+            .chain(JET_LINES.iter().copied())
+            .chain(DEATH_LINES.iter().copied())
+            .chain(crate::game::pickups::CHECKPOINT_QUIPS.iter().copied())
+            .chain(crate::freeplay::generate::CHECKPOINT_LINES.iter().copied())
+            .chain(crate::freeplay::generate::CALIBRATION_LINES.iter().copied())
+            .chain([crate::game::groove::WALTZ_ONE_LINE]);
+        for l in lines {
+            assert!(is_bark(l), "{l:?}");
+        }
     }
 }
