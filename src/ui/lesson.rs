@@ -100,6 +100,7 @@ pub fn counter_of(topic: Topic) -> Option<BandCounter> {
 pub fn trick_of(topic: Topic) -> Option<HanTrick> {
     match topic {
         Topic::Chain => Some(HanTrick::Throw),
+        Topic::Mega => Some(HanTrick::Mega),
         _ => None,
     }
 }
@@ -237,6 +238,10 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
         Lesson::Trick(HanTrick::Throw) => (
             "HAN'S TRICK: THE THROW",
             vec!["BAND FIRED UP? HAN RUNS FAST.".into(), "HOP ON HIS HEAD AND JUMP:".into(), "HE THROWS YOU FAR!".into()],
+        ),
+        Lesson::Trick(HanTrick::Mega) => (
+            "HAN'S TRICK: THE MEGA BOOST",
+            vec!["GIANT STEPS PLAYING? HOP ON".into(), "HAN'S HEAD AND JUMP: WAY UP!".into(), "TOOT AT THE TOP.".into()],
         ),
     };
     (title.into(), lines)

@@ -33,8 +33,8 @@
 //! - `N: ...` (a digit): a moving platform, see below.
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
-//!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `boost`
-//!   (buddy ledge), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
+//!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `mega`
+//!   (mega wall), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
 //! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
@@ -68,18 +68,22 @@
 //! lie. The game reads them instead of re-running the validator at load:
 //! - **Han's boost is feeble near the band's gates** (and the death gates): within the *band
 //!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
-//!   `grip` or `stain` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
+//!   `grip`, `stain` or `mega` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
 //!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
 //!   holds Nat while he's standing on the ground. He follows normally, but keeps off the
 //!   grease in a grease chute's zone ([`Level::han_keeps_out`]).
 //!   So no boost, and no chain of boosts, ever opens them: they always need their mode (the
 //!   validator proves it: full boosts from everywhere outside the zones Han may be, weak ones
 //!   from everywhere inside them Nat may get to).
+//! - **Mega walls** (`mega`): too tall for Giant Steps alone and for Han's plain boost. In a
+//!   mega wall's zone, while Giant Steps plays, his boost is full strength: the floaty
+//!   *mega-boost* (Giant Steps' low gravity under the plunger boost) and a toot clear it
+//!   ([`Level::weak_boost`]).
 //! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
 //!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
 //!   catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
-//!   emblem, glide launches a 3/4 emblem in the ground at each end, buddy ledges red plunger-handle notches and yellow plumber's tape, shield rows a
+//!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red plunger-handle notches and yellow plumber's tape, shield rows a
 //!   "PLUMBERS ONLY" sign at their start.
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
@@ -214,8 +218,8 @@ pub enum Topic {
     Grease,
     /// Sweaty grip: the nervous band lets Nat brake on grease (`grip`).
     Grip,
-    /// Buddy ledges: land on Han's head and jump, the plunger boost (`boost`).
-    Boost,
+    /// Mega walls: Giant Steps and Han's mega-boost off his head, a toot (`mega`).
+    Mega,
     /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
     Shield,
     /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
@@ -238,7 +242,7 @@ impl Topic {
         Topic::Stain,
         Topic::Grease,
         Topic::Grip,
-        Topic::Boost,
+        Topic::Mega,
         Topic::Shield,
         Topic::Chain,
         Topic::BuddyRaft,
@@ -257,7 +261,7 @@ impl Topic {
             Topic::Stain => "stain",
             Topic::Grease => "grease",
             Topic::Grip => "grip",
-            Topic::Boost => "boost",
+            Topic::Mega => "mega",
             Topic::Shield => "shield",
             Topic::Chain => "chain",
             Topic::BuddyRaft => "buddyraft",
@@ -277,16 +281,17 @@ impl Topic {
                 | Topic::Waltz
                 | Topic::Grip
                 | Topic::Stain
-                | Topic::Boost
+                | Topic::Mega
                 | Topic::Shield
                 | Topic::Chain
                 | Topic::BuddyRaft
         )
     }
 
-    /// The band's gates and the death gates: Han's boost is weak in their zone.
+    /// The band's gates, the death gates and mega walls: Han's boost is weak in their zone
+    /// (a mega wall's, except while Giant Steps plays: [`Level::weak_boost`]).
     pub fn han_keeps_clear(self) -> bool {
-        matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain)
+        matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain | Topic::Mega)
     }
 }
 
@@ -413,6 +418,15 @@ impl Level {
     /// Is cell (col, row) in a band zone (Han's boost is weak there)?
     pub fn in_band_zone(&self, cell: (i32, i32)) -> bool {
         self.band_zone(cell).is_some()
+    }
+
+    /// Is Han's boost weak in cell (col, row), the band playing Giant Steps (`giant_steps`) or
+    /// not? In a band zone, but in a mega wall's only while Giant Steps doesn't play (there
+    /// it's the mega-boost).
+    pub fn weak_boost(&self, cell: (i32, i32), giant_steps: bool) -> bool {
+        self.gates
+            .iter()
+            .any(|g| g.topic.han_keeps_clear() && !(giant_steps && g.topic == Topic::Mega) && g.berth().contains(cell))
     }
 
     /// Is Han's boost full strength in cell (col, row)? Outside every band zone. (The name is

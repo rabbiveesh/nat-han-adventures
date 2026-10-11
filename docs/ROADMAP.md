@@ -45,7 +45,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   fade at grease-chute ends; stain pits and chutes in the levels.
 - **Han** (`docs/han-buddy.md`): graph navigation, plunger boost (refreshes the toot), mid-air
   intercepts, shield escort through sprays, sewage rafts, per-mode physics, weak boost + grumbles
-  near band gates, overuse limit, the fired-up running throw; buddy ledges, shield rows,
+  near band gates, overuse limit, the fired-up running throw, the Giant Steps mega-boost; mega walls, shield rows,
   fired-up chasms, buddy raft pools.
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
@@ -64,9 +64,10 @@ Nothing: everything from the original session is merged. Deadly spray cans lande
 kills while firing; Han's plug covers it; free-play waltz rooms are now glide launches),
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 - **Buddy vs band, step 4** (Han's per-mode tricks): the fired-up running throw is in (chain
-  chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up).
-  Next: the Giant Steps mega-boost (replacing buddy ledges), the nervous wall-cling, the
-  waltz trapeze, the laughing boing boost, shield rows out, Han nearly silent.
+  chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up),
+  and the Giant Steps mega-boost (buddy ledges became 11-tile mega walls). Each trick gets a
+  freeze-frame lesson card at its first hint spot. Next: the nervous wall-cling, the waltz
+  trapeze, the laughing boing boost, shield rows out, Han nearly silent.
 
 ## Planned (agreed, not started)
 - **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics

@@ -388,8 +388,11 @@ pub const WEAK_BOOST_SPEED: f32 = 300.0;
 
 /// Upward speed of the plunger boost (px/s): Nat's feet rise 560²/2800 = 112 px = 7 tiles above
 /// Han's head (≈ 7.9 tiles above Han's floor), and the refreshed toot adds ~39 px: ≈ 10.3
-/// tiles with ideal timing, ≥ 9.3 for a human. A *buddy ledge* is 9 tiles: out of Giant
-/// Steps' reach (a perfect GS double jump tops out at ~8.7 tiles) yet a comfortable boost.
+/// tiles with ideal timing, ≥ 9.3 for a human. In Giant Steps' low gravity it's the
+/// *mega-boost*: 560²/1820 ≈ 172 px over Han's head, ≈ 15 tiles over his floor with the toot.
+/// A *mega wall* is 11 tiles: out of Giant Steps' reach (a perfect GS double jump tops out at
+/// ~8.7 tiles) and the plain boost's, a comfortable mega-boost (by a mega wall Han's boost is
+/// full strength only while Giant Steps plays: `Level::weak_boost`).
 pub const BOOST_SPEED: f32 = 560.0;
 
 /// Upward speed of the fired-up band's running throw off Han's head (px/s): flatter than the

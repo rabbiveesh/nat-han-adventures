@@ -50,7 +50,7 @@ pub enum SpriteId {
     /// Han's big raft: frames 0/1/2 are its left, middle and right segments. 16x16.
     HanRaft,
     /// Gate markers: gold music-staff trim on a giant wall's face, its note emblem, the staff
-    /// a glide launch's 3/4 emblems, a buddy ledge's red plunger-handle
+    /// a glide launch's 3/4 emblems, a mega wall's red plunger-handle
     /// notches and yellow plumber's tape (16x16 overlays), and the "PLUMBERS ONLY" sign at a
     /// shield row (36x16).
     GiantTrim,

@@ -23,7 +23,7 @@ pub enum Skill {
     Stains,
     /// Grease chutes with sweaty grip.
     Grease,
-    /// Han's gates: buddy ledges, buddy raft pools, shield rows, fired-up chasms.
+    /// Han's gates: mega walls, buddy raft pools, shield rows, fired-up chasms.
     Buddy,
 }
 

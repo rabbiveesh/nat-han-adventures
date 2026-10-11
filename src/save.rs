@@ -51,15 +51,18 @@ pub struct Progress {
 pub enum HanTrick {
     /// Fired up, a jump off his head is a running throw.
     Throw,
+    /// In Giant Steps, by a mega wall, a jump off his head is the mega-boost.
+    Mega,
 }
 
 impl HanTrick {
-    pub const ALL: [HanTrick; 1] = [HanTrick::Throw];
+    pub const ALL: [HanTrick; 2] = [HanTrick::Throw, HanTrick::Mega];
 
     /// Its word in the save file.
     pub fn name(self) -> &'static str {
         match self {
             HanTrick::Throw => "throw",
+            HanTrick::Mega => "mega",
         }
     }
 
@@ -461,7 +464,7 @@ mod tests {
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
         let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
         assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
-        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true], ..Progress::default() };
+        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true, false], ..Progress::default() };
         assert!(taught.to_text().contains("taught horn note\ntaught-call\ntricks throw\n"), "{}", taught.to_text());
         assert_eq!(Progress::from_text(&taught.to_text()), Some(taught));
     }
