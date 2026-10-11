@@ -62,6 +62,10 @@ pub mod tuning {
     pub const GROUND_ACCEL: f32 = 1400.0;
     pub const GROUND_DECEL: f32 = 1800.0;
     pub const AIR_ACCEL: f32 = 1000.0;
+    /// Most horizontal speed (px/s) a jump (or a step) off a moving platform keeps from it
+    /// ([`super::Body::launch`]): the waltz's glide on ONE is fast (up to 4.5× the platform's
+    /// normal top speed), this keeps its launch a long one rather than a cannon shot.
+    pub const LAUNCH_MAX: f32 = 240.0;
     /// Initial upward speed of the ground jump (apex ~51px ≈ 3.2 tiles).
     pub const JUMP_SPEED: f32 = 380.0;
     /// Upward speed set by the mid-air toot jump (adds ~39px ≈ 2.4 tiles). A perfectly timed

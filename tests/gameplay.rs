@@ -354,6 +354,39 @@ fn carried_by_a_moving_platform() {
 }
 
 #[test]
+fn a_jump_off_a_moving_platform_keeps_its_speed() {
+    let level = PLATFORM.replacen("..P.............P", "..P..............", 1);
+    let mut app = app(&level);
+    // A second in, the 4-tile, 4 s platform is mid-path at its top speed: π·64/4 ≈ 50 px/s.
+    step(&mut app, 1.0);
+    assert!(body(&mut app).on_ground);
+    hold(&mut app, JUMP);
+    app.update();
+    let b = body(&mut app);
+    assert!(!b.on_ground && b.riding.is_none());
+    let top = std::f32::consts::PI * 4.0 * TILE / 4.0;
+    assert!((b.launch - top).abs() < 2.0, "launch {} vs the platform's {top}", b.launch);
+    // No key held: the launch alone carries him along while he's in the air.
+    let x0 = player_pos(&mut app).x;
+    step(&mut app, 0.3);
+    let b = body(&mut app);
+    assert!(!b.on_ground && b.vel.x == 0.0);
+    let dx = player_pos(&mut app).x - x0;
+    assert!((dx - b.launch * 0.3).abs() < 1.0, "drifted {dx} at {}", b.launch);
+    release(&mut app, JUMP);
+    // Landing (on the platform, or anywhere) drops it.
+    for _ in 0..120 {
+        app.update();
+        if body(&mut app).on_ground {
+            break;
+        }
+    }
+    assert!(body(&mut app).on_ground);
+    assert_eq!(body(&mut app).launch, 0.0);
+    assert_eq!(counted::<PlayerDied>(&app), 0);
+}
+
+#[test]
 fn rides_a_vertical_platform() {
     let level = PLATFORM.replacen("..P.............P", "................P", 1);
     let mut app = app(&level);
@@ -1166,6 +1199,99 @@ fn waltz_platforms_glide_on_one_and_hold_on_two_three() {
     assert!((t - bars as f32 * 1.5).abs() < 0.1, "platform clock ran {t}s in {}s", bars as f32 * 1.5);
     // ...and it still covers its whole path.
     assert!(hi - lo > def.travel.x - 1.0, "covered {}px of {}", hi - lo, def.travel.x);
+}
+
+/// The waltz's gate: an 18-tile gap past an 8-tile, 4.5 s platform's path (free play's
+/// widest glide launch; `level::validate` finds it one for a human's [`HUMAN_GLIDE`] share of
+/// the glide, and impassable in every other mode). Riding the platform in the waltz and
+/// jumping as it glides fast toward the gap, Nat clears it, wherever the platform was when
+/// the waltz came in.
+#[test]
+fn a_glide_launch_clears_the_gap() {
+    // Wherever the platform is when the waltz comes in.
+    for phase in 0..10 {
+        glide_launch(phase as f32 / 10.0);
+    }
+}
+
+fn glide_launch(phase: f32) {
+    use nat_han_adventures::level::validate::{GLIDE_PEAK, HUMAN_GLIDE};
+    let (start, dx, gap) = (20usize, 8usize, 18usize);
+    let land = start + 2 + dx + gap;
+    let w = land + 10;
+    let mut rows = vec![vec![b'.'; w]; 14];
+    for c in (0..start).chain(land..w) {
+        rows[12][c] = b'#';
+        rows[13][c] = b'#';
+    }
+    rows[11][start] = b'P';
+    rows[11][w - 2] = b'G';
+    rows[12][start] = b'1';
+    rows[12][start + 1] = b'1';
+    let grid: Vec<String> = rows.into_iter().map(|r| String::from_utf8(r).unwrap()).collect();
+    let level = format!("name: Glide\n1: dx={dx} dy=0 period=4.5 phase={phase}\n---\n{}\n", grid.join("\n"));
+    let mut app = app(&level);
+    let plat = single::<MovingPlatform>(&mut app);
+    let top = std::f32::consts::PI * dx as f32 * TILE / 4.5;
+    let want = (top * GLIDE_PEAK * HUMAN_GLIDE).min(tuning::LAUNCH_MAX * 0.9);
+    let mut prev = app.world().get::<Pos>(plat).unwrap().0;
+    // The waltz and the platform repeat every 3 bars (its period): a player watches a round
+    // (once riding), then jumps at the best moment of the next: late in a glide (the platform
+    // furthest on) while the jump (on the next step) still keeps at least `want`.
+    const ROUND: usize = 270;
+    let mut riding_since = None;
+    let mut seen: Vec<(usize, f32, f32)> = Vec::new();
+    let mut best: Option<usize> = None;
+    let mut jumped_at = None;
+    // (Nat may spawn where the platform isn't yet: those falls are before the launch.)
+    let mut deaths = 0;
+    for i in 0..60 * 60 {
+        waltz(&mut app, i as f64 * WALTZ_STEP);
+        app.update();
+        let p = app.world().get::<Pos>(plat).unwrap().0;
+        let v = (p.x - prev.x) / DT as f32;
+        prev = p;
+        if jumped_at.is_none() {
+            if body(&mut app).riding.is_none() {
+                riding_since = None;
+                seen.clear();
+                continue;
+            }
+            let since = *riding_since.get_or_insert(i);
+            if i <= since + ROUND {
+                seen.push((i, player_pos(&mut app).x, v));
+                continue;
+            }
+            let k = *best.get_or_insert_with(|| {
+                let at = seen
+                    .windows(2)
+                    .filter(|w| w[1].2 >= want)
+                    .max_by(|a, b| a[0].1.total_cmp(&b[0].1))
+                    .unwrap_or_else(|| panic!("phase {phase}: the glide never got to {want} px/s"));
+                at[0].0 % ROUND
+            });
+            if i % ROUND == k {
+                deaths = counted::<PlayerDied>(&app);
+                hold(&mut app, JUMP);
+                hold(&mut app, RIGHT);
+                jumped_at = Some(i);
+            }
+            continue;
+        }
+        let j = jumped_at.unwrap();
+        if i == j + 24 {
+            release(&mut app, JUMP);
+        } else if i == j + 26 {
+            hold(&mut app, JUMP);
+        } else if i > j + 30 && body(&mut app).on_ground {
+            break;
+        }
+    }
+    let j = jumped_at.unwrap_or_else(|| panic!("phase {phase}: never jumped"));
+    assert!(body(&mut app).on_ground, "phase {phase}: landed (jumped at step {j})");
+    let x = player_pos(&mut app).x;
+    assert!(x + tuning::PLAYER_SIZE.0 / 2.0 > land as f32 * TILE, "phase {phase}: cleared the gap: at {:.1} tiles, the far side at {land}", x / TILE);
+    assert_eq!(counted::<PlayerDied>(&app), deaths, "phase {phase}: no fall since the launch");
 }
 
 #[test]

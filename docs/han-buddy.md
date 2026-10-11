@@ -124,7 +124,7 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   laughing-band bounce off him there either). He grumbles (`grumble_line`: the gate's own lines
   and general ones in turn, at most every 2 s) and his back doesn't count it. In the zone his
   head only holds Nat while he stands (no mid-air catches, no intercepts, no going ahead), and
-  he keeps out of a waltz row's mark and a chute's grease (`Level::han_keeps_out`). Everywhere,
+  he keeps off a chute's grease (`Level::han_keeps_out`). Everywhere,
   his head holds Nat in mid-air only 2 tiles above the floor he left (5 over a chain chasm), so
   chains of full boosts can't climb out of reach.
 - **The proof** (`validate::boost_leak`, per band/death gate crossing, every mode, ideal input):

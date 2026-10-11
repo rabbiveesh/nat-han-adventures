@@ -10,7 +10,8 @@
 //! path (as if you can ride them anywhere they go). Flies are treated as static deadly squares
 //! covering their whole circle; spray cans and their jets are treated as passable (they're
 //! timed: a can and its jet fire together, 1.0 s on / 1.5 s off, and a lone can or a few in a
-//! row are a stroll in the off-beat), except in waltz and shield rows (below).
+//! row are a stroll in the off-beat), except in runs of [`CAN_ROW_MIN`]+ (deadly) and shield
+//! rows (below).
 //!
 //! The music bends the physics (`Groove`), and levels have gates that need a mode ([`Gate`]):
 //! - a **giant wall** (6 tiles) needs Giant Steps, which the player summons by tooting 5 times,
@@ -18,18 +19,20 @@
 //! - a **long gap** (11 tiles) needs the fired-up band (quartal: faster running), summoned by
 //!   grabbing 4 nuggets quickly, so it must have a nugget line right before it (no checkpoint in
 //!   between: nuggets since the checkpoint come back after a splat) and a flat run-up;
-//! - a **waltz row** needs the waltzing band, summoned by 3 evenly spaced ground jumps, so it
-//!   must have a flat, hazard-free runway of [`WALTZ_RUNWAY`] tiles before it. It's a run of at
-//!   least [`WALTZ_ROW_MIN`] *adjacent* spray cans (with gaps you could wait between the jets),
-//!   either on the floor you walk on (the cans are deadly while they fire) or under a one-way
-//!   grating you walk on (in the jets: the campaign's tunnels), with a low ceiling so nobody
-//!   jumps over the jets (they're deadly here, whatever the timing). Running through is checked
-//!   by simulating the cans and jets as time-varying hazards ([`dash_through`]) with the game's
-//!   own clocks: impossible at
-//!   any phase with the normal shared timing (1.0 s on / 1.5 s off) at the top speed of every
-//!   other mode (fired up included), possible in the waltz (on for the big ONE's beat, 2.5 s
-//!   off) at a human 90% of top speed. The waltz's jump on ONE (×1.15, weak toot) is checked
-//!   like any other mode: it must not climb a giant wall.
+//! - a **glide launch** needs the waltzing band, summoned by 3 evenly spaced ground jumps, so
+//!   there must be a flat, hazard-free runway of [`WALTZ_RUNWAY`] tiles near its take-off
+//!   ([`WALTZ_RUNWAY_REACH`]). A jump off a moving platform keeps its horizontal speed
+//!   (`game::physics`, "Platform carry", at most `LAUNCH_MAX`); in the waltz the platforms
+//!   glide on ONE at up to [`GLIDE_PEAK`] × their everyday speed. So every jump from a cell
+//!   over a platform's path is also tried carrying speeds up to the platform's speed there
+//!   ([`Map::carry`]; ideal: all of it, a human: [`HUMAN_CARRY`]), and in the waltz up to the
+//!   glide's (ideal: [`GLIDE_PEAK`] × for off-beat jumps, [`glide_on_one`] × for jumps on ONE;
+//!   a human: [`HUMAN_GLIDE`] of that). A glide launch is a waltz jump carrying speed that gets
+//!   somewhere new: a gap past a platform's path wider than any other mode's jump off it at
+//!   its everyday speed (bottomless, like a long gap: a raft or a stain would bridge it).
+//!   `tests/gameplay.rs` clears free play's widest with the real physics at every phase of the
+//!   platform. The waltz's jump on ONE (×1.15, weak toot) is checked like any other mode: it
+//!   must not climb a giant wall.
 //! - a **grease chute** needs sweaty grip: the nervous band (3+ deaths) lets Nat brake and
 //!   jump on grease. Without grip grease can't be jumped from (see `game::physics`), so the
 //!   validator never takes off from grease in other modes; a chute is a grease floor whose
@@ -78,7 +81,7 @@ use super::buddy::{Chasm, HAN_CATCH_RISE, HAN_CHASM_CATCH_RISE, HanPhys, chain_c
 use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    ALIEN_PULSE, BOOST_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
+    ALIEN_PULSE, BOOST_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
     WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
@@ -101,10 +104,12 @@ pub const NUGGET_LINE_REACH: i32 = 30;
 pub const DETOUR_NUGGETS: usize = 3;
 /// Rows above a runway tile that must be free of hazards (a toot goes ~5 tiles up).
 pub const RUNWAY_HEADROOM: i32 = 5;
-/// Flat, hazard-free tiles to jump in threes on before a waltz row.
+/// Flat, hazard-free tiles to jump in threes on near a glide launch's platform...
 pub const WALTZ_RUNWAY: usize = 6;
-/// Adjacent spray cans that make a waltz row.
-pub const WALTZ_ROW_MIN: usize = 4;
+/// ...this close to its take-off (columns, rows).
+pub const WALTZ_RUNWAY_REACH: (i32, i32) = (16, 6);
+/// Adjacent spray cans that make a can row (deadly for the validator, see [`Map::can_rows`]).
+pub const CAN_ROW_MIN: usize = 4;
 /// Adjacent floor spikes that make a stain pit.
 pub const STAIN_PIT_MIN: usize = 8;
 /// Most splats a stain pit may need, and how many stain sets the search keeps per depth.
@@ -180,7 +185,8 @@ impl Mode {
 pub enum Gate {
     GiantWall,
     LongGap,
-    WaltzRow,
+    /// Needs the waltz: a jump off a moving platform gliding on ONE.
+    GlideLaunch,
     GreaseChute,
     StainPit,
     /// Needs the plunger boost off Han's head.
@@ -203,7 +209,7 @@ impl Gate {
         match self {
             Gate::GiantWall => "giant wall",
             Gate::LongGap => "long gap",
-            Gate::WaltzRow => "waltz row",
+            Gate::GlideLaunch => "glide launch",
             Gate::GreaseChute => "grease chute",
             Gate::StainPit => "stain pit",
             Gate::BuddyLedge => "buddy ledge",
@@ -218,7 +224,7 @@ impl Gate {
         match self {
             Gate::GiantWall => Some(Mode::GiantSteps),
             Gate::LongGap => Some(Mode::FiredUp),
-            Gate::WaltzRow => Some(Mode::Waltz),
+            Gate::GlideLaunch => Some(Mode::Waltz),
             Gate::GreaseChute => Some(Mode::Nervous),
             Gate::StainPit | Gate::BuddyLedge | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft => None,
         }
@@ -228,7 +234,7 @@ impl Gate {
         match self {
             Gate::GiantWall => Topic::Giant,
             Gate::LongGap => Topic::Gap,
-            Gate::WaltzRow => Topic::Waltz,
+            Gate::GlideLaunch => Topic::Waltz,
             Gate::GreaseChute => Topic::Grip,
             Gate::StainPit => Topic::Stain,
             Gate::BuddyLedge => Topic::Boost,
@@ -242,7 +248,7 @@ impl Gate {
         match self {
             Gate::GiantWall => 'W',
             Gate::LongGap => 'R',
-            Gate::WaltzRow => 'Z',
+            Gate::GlideLaunch => 'Z',
             Gate::GreaseChute => 'Y',
             Gate::StainPit => 'K',
             Gate::BuddyLedge => 'B',
@@ -271,7 +277,31 @@ pub struct Env {
     pub toot: f32,
     /// Sweaty grip: grease is just ground.
     pub grip: bool,
+    /// Platform carry: a jump off a moving platform keeps up to `carry` × the platform's
+    /// normal top speed where it's taken from ([`Map::carry`]), at most `carry_cap` px/s.
+    pub carry: f32,
+    pub carry_cap: f32,
+    /// Proofs (ideal input): carried speeds round up to the next [`Arcs`] step, not down.
+    pub ideal: bool,
 }
+
+/// How much faster than normal the waltz's platforms glide at the peak of ONE
+/// (`Groove::waltz_glide_rate`: 3 beats × 6 × ¼).
+pub const GLIDE_PEAK: f32 = 4.5;
+/// The glide's rate at the end of the window a jump counts as on ONE (`WALTZ_ONE_WINDOW`):
+/// the most a jump on ONE (the high one) gets.
+pub fn glide_on_one() -> f32 {
+    let p = (WALTZ_ONE_WINDOW * WALTZ_BPM / 60.0).min(0.5);
+    18.0 * p * (1.0 - p)
+}
+/// A human's share of the carry the physics allow: a platform's own speed (the jump comes
+/// anywhere on the path cell), and of the waltz's glide (timing ONE, and the bar the glide
+/// sweeps the fast middle of the path).
+pub const HUMAN_CARRY: f32 = 0.8;
+pub const HUMAN_GLIDE: f32 = 0.6;
+/// Carried speeds tried (px/s steps): ideal and human.
+const CARRY_STEP_IDEAL: f32 = 30.0;
+const CARRY_STEP_HUMAN: f32 = 40.0;
 
 impl Env {
     /// `ideal`: full top speed and hanging off the very edge; otherwise a human margin (90% of
@@ -288,7 +318,21 @@ impl Env {
             boost: if waltz { WALTZ_ONE_BOOST } else { 1.0 },
             toot: if waltz { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED },
             grip: g.grip(),
+            carry: match (waltz, ideal) {
+                (true, true) => glide_on_one(),
+                (true, false) => glide_on_one() * HUMAN_GLIDE,
+                (false, true) => 1.0,
+                (false, false) => HUMAN_CARRY,
+            },
+            carry_cap: LAUNCH_MAX * if ideal { 1.0 } else { 0.9 },
+            ideal,
         }
+    }
+
+    /// The waltz's off-beat jumps: normal physics, but the platforms glide (up to
+    /// [`GLIDE_PEAK`] × their speed) on ONE.
+    pub fn glide(ideal: bool) -> Env {
+        Env { carry: GLIDE_PEAK * if ideal { 1.0 } else { HUMAN_GLIDE }, ..Env::new(Mode::Normal, ideal) }
     }
 
     /// Han's physics in `mode`, for his navigation ([`super::nav`]): his run speed and gravity
@@ -304,6 +348,9 @@ impl Env {
             boost: 1.0,
             toot: p.toot_speed,
             grip: true,
+            carry: 0.0,
+            carry_cap: 0.0,
+            ideal: false,
         }
     }
 }
@@ -325,17 +372,17 @@ const DEADLY_TILE: u16 = SPIKE_UP | SPIKE_DOWN | LIQUID;
 const FLOOR_ONEWAY: u16 = ONEWAY | VIRT | STAIN | RAFT;
 
 /// A run of adjacent spray cans `c0..=c1` sitting in row `row`: under a one-way grating
-/// (`grated`, the campaign's tunnels: you walk on the grating, in the jets) or on the floor
-/// you walk on (the cans themselves are deadly while they fire, see `game::CAN_WIDTH`).
+/// (`grated`: you walk on the grating, in the jets) or on the floor you walk on (the cans
+/// themselves are deadly while they fire, see `game::CAN_WIDTH`).
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct WaltzRow {
+pub struct CanRow {
     pub row: i32,
     pub c0: i32,
     pub c1: i32,
     pub grated: bool,
 }
 
-impl WaltzRow {
+impl CanRow {
     pub fn cans(&self) -> usize {
         (self.c1 - self.c0 + 1) as usize
     }
@@ -398,13 +445,18 @@ pub struct Map<'a> {
     h: i32,
     flags: Vec<u16>,
     flies: Vec<(f32, f32)>,
-    pub waltz_rows: Vec<WaltzRow>,
+    /// Runs of [`CAN_ROW_MIN`] to [`SHIELD_ROW_MIN`] adjacent cans: too much to time your
+    /// way through, so (unlike a lone can) deadly for the validator.
+    pub can_rows: Vec<CanRow>,
     pub pits: Vec<Pit>,
-    /// Runs of [`SHIELD_ROW_MIN`]+ cans (same shape as waltz rows).
-    pub shield_rows: Vec<WaltzRow>,
+    /// Runs of [`SHIELD_ROW_MIN`]+ cans (the same shape as can rows).
+    pub shield_rows: Vec<CanRow>,
     pub pools: Vec<Pool>,
     pub chasms: Vec<Chasm>,
     has_grease: bool,
+    /// Per cell: the top horizontal speed (px/s, normal time) of a moving platform you can
+    /// stand on there (0: none). See [`Map::carry`].
+    carry: Vec<f32>,
     /// Generated rooms (free play) carry no `gate:` marks: the band and death gates found so far,
     /// marked as they're found (Han's boost is weak around them like around marked ones).
     derive_marks: bool,
@@ -443,6 +495,29 @@ impl<'a> Map<'a> {
                 }
             }
         }
+        // Platform carry: the platform's horizontal speed (cosine ease: top speed × 2√(f(1−f))
+        // at fraction f of the path) over each cell above it, at the top of its range around
+        // each sample.
+        let mut carry = vec![0f32; (w * h) as usize];
+        for p in &level.platforms {
+            let top = std::f32::consts::PI * p.dx.abs() * TILE / p.period.max(0.01);
+            if top == 0.0 {
+                continue;
+            }
+            let steps = ((p.dx.abs() + p.dy.abs()) * 4.0).ceil().max(1.0) as i32;
+            let speed = |f: f32| top * 2.0 * (f.clamp(0.0, 1.0) * (1.0 - f.clamp(0.0, 1.0))).sqrt();
+            for s in 0..=steps {
+                let f = s as f32 / steps as f32;
+                let v = speed(f).max(speed(f - 1.0 / steps as f32)).max(speed(f + 1.0 / steps as f32));
+                let left = p.col as f32 + p.dx * f;
+                let r = (p.row as f32 - p.dy * f).round() as i32 - 1;
+                for c in left.floor() as i32..=(left + p.width as f32 - 1.0).ceil() as i32 {
+                    if let Some(i) = at(c, r) {
+                        carry[i] = carry[i].max(v);
+                    }
+                }
+            }
+        }
         let mut flies = Vec::new();
         let mut cans: Vec<Cell> = Vec::new();
         for t in &level.things {
@@ -472,20 +547,20 @@ impl<'a> Map<'a> {
             }
         }
         cans.sort_by_key(|&(c, r)| (r, c));
-        let mut waltz_rows: Vec<WaltzRow> = Vec::new();
+        let mut can_rows: Vec<CanRow> = Vec::new();
         for (c, r) in cans {
-            match waltz_rows.last_mut() {
+            match can_rows.last_mut() {
                 Some(w) if w.row == r && w.c1 + 1 == c => w.c1 = c,
-                _ => waltz_rows.push(WaltzRow { row: r, c0: c, c1: c, grated: false }),
+                _ => can_rows.push(CanRow { row: r, c0: c, c1: c, grated: false }),
             }
         }
-        for w in &mut waltz_rows {
+        for w in &mut can_rows {
             w.grated = (w.c0..=w.c1).all(|c| level.tile(c, w.row - 1) == Tile::OneWay);
         }
-        let shield_rows: Vec<WaltzRow> = waltz_rows.iter().copied().filter(|w| w.cans() >= SHIELD_ROW_MIN).collect();
-        waltz_rows.retain(|w| (WALTZ_ROW_MIN..SHIELD_ROW_MIN).contains(&w.cans()));
-        // A row's cans and jets are deadly (the timing is the dash's, see `dash_through`).
-        for wr in waltz_rows.iter().chain(&shield_rows) {
+        let shield_rows: Vec<CanRow> = can_rows.iter().copied().filter(|w| w.cans() >= SHIELD_ROW_MIN).collect();
+        can_rows.retain(|w| (CAN_ROW_MIN..SHIELD_ROW_MIN).contains(&w.cans()));
+        // A row's cans and jets are deadly (a shield row's timing is checked by `dash_through`).
+        for wr in can_rows.iter().chain(&shield_rows) {
             for c in wr.c0..=wr.c1 {
                 for k in 0..=3 {
                     if let Some(i) = at(c, wr.row - k) {
@@ -518,12 +593,13 @@ impl<'a> Map<'a> {
             h,
             flags,
             flies,
-            waltz_rows,
+            can_rows,
             pits,
             shield_rows,
             pools,
             chasms,
             has_grease: level.has_grease(),
+            carry,
             derive_marks: false,
             derived: Vec::new(),
         }
@@ -595,11 +671,7 @@ impl<'a> Map<'a> {
     /// Does Han keep out of `cell` (marked, or found in a room)? See [`Level::han_keeps_out`].
     pub fn han_keeps_out(&self, cell: Cell) -> bool {
         self.level.han_keeps_out(cell)
-            || self.derived.iter().any(|g| match g.topic {
-                Topic::Waltz => g.contains(cell),
-                Topic::Grip => self.greasy(cell) && g.berth().contains(cell),
-                _ => false,
-            })
+            || self.derived.iter().any(|g| g.topic == Topic::Grip && self.greasy(cell) && g.berth().contains(cell))
     }
 
     /// Does a player box centered at (x, y) overlap anything solid?
@@ -616,6 +688,16 @@ impl<'a> Map<'a> {
         } else {
             Floor::None
         }
+    }
+
+    /// The top horizontal speed (px/s, normal time) of a moving platform under `cell` (one
+    /// you can stand on there): what a jump from it can keep (`game::Body::launch`). 0 off
+    /// the platforms' paths.
+    pub fn carry(&self, (c, r): Cell) -> f32 {
+        if c < 0 || r < 0 || c >= self.w || r >= self.h || self.f(c, r + 1) & VIRT == 0 {
+            return 0.0;
+        }
+        self.carry[(r * self.w + c) as usize]
     }
 
     /// Standing in `cell` on grease.
@@ -811,6 +893,9 @@ pub struct Strategy {
     pub edge: bool,
     /// Let go of the direction key after this long.
     pub release: f32,
+    /// Horizontal speed (px/s, signed) kept from the moving platform taken off from
+    /// (`game::Body::launch`): 0 for a plain jump. [`Arcs`] adds the carried variants itself.
+    pub carry: f32,
 }
 
 /// The jumps a human might try.
@@ -821,7 +906,7 @@ pub fn strategies() -> Vec<Strategy> {
     for hold in [f32::INFINITY, 0.12, 0.05] {
         for toot in toots {
             let release = f32::INFINITY;
-            out.push(Strategy { dir: 0.0, jump: true, hold, vx0: 0.0, toot, edge: false, release });
+            out.push(Strategy { dir: 0.0, jump: true, hold, vx0: 0.0, toot, edge: false, release, carry: 0.0 });
         }
     }
     for dir in [-1.0, 1.0] {
@@ -831,13 +916,13 @@ pub fn strategies() -> Vec<Strategy> {
                 for hold in [f32::INFINITY, 0.12, 0.05] {
                     for vx0 in [0.0, dir] {
                         for edge in [false, true] {
-                            out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release });
+                            out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release, carry: 0.0 });
                         }
                     }
                 }
                 // Running off a ledge (coyote jumps are covered by edge jumps).
                 let hold = f32::INFINITY;
-                out.push(Strategy { dir, jump: false, hold, vx0: dir, toot, edge: true, release });
+                out.push(Strategy { dir, jump: false, hold, vx0: dir, toot, edge: true, release, carry: 0.0 });
             }
         }
     }
@@ -851,14 +936,14 @@ pub fn ideal_strategies() -> Vec<Strategy> {
     let release = f32::INFINITY;
     let hold = f32::INFINITY;
     for &toot in &toots {
-        out.push(Strategy { dir: 0.0, jump: true, hold, vx0: 0.0, toot, edge: false, release });
+        out.push(Strategy { dir: 0.0, jump: true, hold, vx0: 0.0, toot, edge: false, release, carry: 0.0 });
         for dir in [-1.0, 1.0] {
             for vx0 in [0.0, dir] {
                 for edge in [false, true] {
-                    out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release });
+                    out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release, carry: 0.0 });
                 }
             }
-            out.push(Strategy { dir, jump: false, hold, vx0: dir, toot, edge: true, release });
+            out.push(Strategy { dir, jump: false, hold, vx0: dir, toot, edge: true, release, carry: 0.0 });
         }
     }
     out
@@ -890,7 +975,11 @@ pub enum Launch {
 /// flight, so a landing outside the envelope is impossible.
 pub struct Arcs {
     pub env: Env,
+    /// The strategies: the plain ones first (`..plain`), then (ground launches, with
+    /// `env.carry`) each moving one again with every carried speed (signed with its direction;
+    /// both ways straight up) in steps up to `env.carry_cap`.
     pub strategies: Vec<Strategy>,
+    pub plain: usize,
     pub launch: Launch,
     envelope: Vec<[Option<(f32, f32)>; (DR_MAX - DR_MIN + 1) as usize]>,
 }
@@ -917,9 +1006,31 @@ impl Arcs {
 
     fn with_launch(env: Env, strategies: Vec<Strategy>, launch: Launch) -> Arcs {
         let y0 = if launch == Launch::Ground { 0.0 } else { ON_HAN };
+        let mut strategies: Vec<Strategy> = strategies.into_iter().filter(|s| s.carry == 0.0).collect();
+        let plain = strategies.len();
+        if launch == Launch::Ground && env.carry > 0.0 {
+            let step = if env.ideal { CARRY_STEP_IDEAL } else { CARRY_STEP_HUMAN };
+            let speeds: Vec<f32> =
+                (1..).map(|k| k as f32 * step).take_while(|&v| v < env.carry_cap + step).map(|v| v.min(env.carry_cap)).collect();
+            for k in 0..plain {
+                let s = strategies[k];
+                for &v in &speeds {
+                    for sign in [-1.0, 1.0] {
+                        if s.dir == 0.0 || s.dir == sign {
+                            strategies.push(Strategy { carry: sign * v, ..s });
+                        }
+                    }
+                }
+            }
+        }
         let envelope =
             strategies.iter().map(|s| free_envelope(&env, &Flight::of(&env, s, launch, 0.0, y0))).collect();
-        Arcs { env, strategies, launch, envelope }
+        Arcs { env, strategies, plain, launch, envelope }
+    }
+
+    /// The strategies that may apply in `cell`: the carried ones only on a platform's path.
+    pub fn at(&self, map: &Map, cell: Cell) -> &[Strategy] {
+        if map.carry(cell) > 0.0 { &self.strategies } else { &self.strategies[..self.plain] }
     }
 
     /// Can strategy `k` from `from` (x0 = the take-off box center) possibly land in row `r`,
@@ -977,6 +1088,8 @@ pub(crate) struct Flight {
     /// Toot times (`INFINITY`: unused), and the toot's upward speed.
     pub toots: [f32; 3],
     pub toot_speed: f32,
+    /// Horizontal speed kept from a moving platform (px/s), until a wall.
+    pub carry: f32,
 }
 
 impl Flight {
@@ -998,6 +1111,7 @@ impl Flight {
             cut: !s.jump,
             toots: [s.toot.unwrap_or(f32::INFINITY), f32::INFINITY, f32::INFINITY],
             toot_speed: env.toot,
+            carry: s.carry,
         }
     }
 }
@@ -1038,7 +1152,7 @@ fn free_envelope(env: &Env, f: &Flight) -> [Option<(f32, f32)>; (DR_MAX - DR_MIN
     while t < MAX_T {
         t += DT;
         air_controls(env, f, t, &mut vx, &mut vy, &mut cut, &mut tooted);
-        x += vx * DT;
+        x += (vx + f.carry) * DT;
         y += vy * DT;
         lo = lo.min(x);
         hi = hi.max(x);
@@ -1072,6 +1186,15 @@ pub(crate) enum Outcome {
 fn take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> Option<f32> {
     if s.jump && !env.grip && map.greasy((c, r)) {
         return None; // can't jump off grease
+    }
+    if s.carry != 0.0 {
+        // As fast as the platform under the cell goes (ideal: the next step up, a human's:
+        // the step at or below).
+        let most = (map.carry((c, r)) * env.carry).min(env.carry_cap);
+        let ok = if env.ideal { s.carry.abs() - CARRY_STEP_IDEAL < most } else { s.carry.abs() <= most + 0.01 };
+        if !ok {
+            return None;
+        }
     }
     let mut x = c as f32 * TILE + 8.0;
     if s.edge {
@@ -1124,6 +1247,7 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
         return (Outcome::Nothing, 0.0);
     }
     let (mut vx, mut vy) = (f.vx0, f.vy0);
+    let mut carry = f.carry;
     let mut cut = f.cut;
     let mut tooted = [false; 3];
     let mut t = 0.0;
@@ -1132,19 +1256,21 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
         air_controls(env, f, t, &mut vx, &mut vy, &mut cut, &mut tooted);
 
         // Horizontal move against solids.
-        let nx = x + vx * DT;
+        let nx = x + (vx + carry) * DT;
+        let moving = vx + carry;
         let (y0, y1) = (y - HALF_H, y + HALF_H);
         let mut blocked = false;
         for col in cells(nx - HALF_W, nx + HALF_W) {
             for row in cells(y0, y1) {
                 if map.is_solid(col, row) {
                     blocked = true;
-                    x = if vx > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
+                    x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
                 }
             }
         }
         if blocked {
             vx = 0.0;
+            carry = 0.0;
         } else {
             x = nx;
         }
@@ -1290,7 +1416,7 @@ fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &
                 out.push(n);
             }
         }
-        for s in &arcs.strategies {
+        for s in arcs.at(map, cell) {
             let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
             match simulate(map, &arcs.env, cell, s, x0, &mut buf) {
                 Outcome::Land(land) => {
@@ -1350,39 +1476,11 @@ pub fn dash_through(n: usize, vx: f32, mode: Mode) -> bool {
     })
 }
 
-/// Problems with a waltz row's timing: it must stop every other mode cold and let the waltz
-/// through.
-pub fn waltz_row_timing(w: &WaltzRow) -> Vec<String> {
-    let mut errs = Vec::new();
-    for mode in [Mode::Normal, Mode::GiantSteps, Mode::FiredUp] {
-        let vx = Env::new(mode, true).vx;
-        if dash_through(w.cans(), vx, mode) {
-            errs.push(format!(
-                "waltz row at col {}..={} row {} ({} cans) can be run through with {mode:?} physics and normal spray timing",
-                w.c0,
-                w.c1,
-                w.row,
-                w.cans()
-            ));
-        }
-    }
-    if !dash_through(w.cans(), Env::new(Mode::Waltz, false).vx, Mode::Waltz) {
-        errs.push(format!(
-            "waltz row at col {}..={} row {} ({} cans) is too long to dash through even in the waltz",
-            w.c0,
-            w.c1,
-            w.row,
-            w.cans()
-        ));
-    }
-    errs
-}
-
 /// Problems with a shield row's timing: no mode may dash through its jets on their own clock
 /// (ideal speed, the waltz's long breath included). Behind Han it's safe: each jet he walks
 /// through stays plugged [`crate::game::HAN_PLUG_LINGER`] s after he's past it, longer than
 /// Nat right behind him takes to clear it (`tests/han.rs`).
-pub fn shield_row_timing(w: &WaltzRow) -> Vec<String> {
+pub fn shield_row_timing(w: &CanRow) -> Vec<String> {
     let mut errs = Vec::new();
     for mode in [Mode::Normal, Mode::GiantSteps, Mode::FiredUp, Mode::Waltz] {
         if dash_through(w.cans(), Env::new(mode, true).vx, mode) {
@@ -1401,34 +1499,25 @@ pub fn shield_row_timing(w: &WaltzRow) -> Vec<String> {
 /// Is there a ceiling at most 2 tiles above the walk all along the row (so nobody can jump
 /// clear of the jets, or hop over the cans in the off-beats and hang above them while they
 /// fire)?
-fn low_ceiling(map: &Map, w: &WaltzRow) -> bool {
+fn low_ceiling(map: &Map, w: &CanRow) -> bool {
     let r = w.walk_row();
     (w.c0..=w.c1).all(|c| (1..=2).any(|k| map.is_solid(c, r - k)))
 }
 
-/// The waltz dash along row `w` from the approach cell `from`, heading `dir`: the landing cell
-/// on the far side, if the corridor is walkable (grating all along) and `from` has a runway to
-/// jump in threes on.
-fn waltz_dash(map: &Map, w: &WaltzRow, from: Cell, dir: i32) -> Option<Cell> {
-    let r = w.walk_row();
-    let (start, end) = if dir > 0 { (w.c0 - 1, w.c1 + 1) } else { (w.c1 + 1, w.c0 - 1) };
-    if from != (start, r) {
-        return None;
-    }
-    // The runway: calm, flat floor behind the approach, with room to hop.
-    let run = map.flat_run(from);
-    let behind: Vec<&Cell> = run.iter().filter(|c| (c.0 - from.0) * dir <= 0).collect();
-    let roomy = behind.iter().filter(|c| (1..=2).all(|k| !map.is_solid(c.0, c.1 - k))).count();
-    if roomy < WALTZ_RUNWAY {
-        return None;
-    }
-    if !low_ceiling(map, w) {
-        return None;
-    }
-    // The corridor: a floor under every step, nothing solid or otherwise deadly in the way.
-    let walkable = (w.c0..=w.c1)
-        .all(|c| map.floor(c, r + 1) != Floor::None && !map.is_solid(c, r) && !map.deadly_tile(c, r));
-    (walkable && map.standable((end, r))).then_some((end, r))
+/// Room to summon the waltz near `cell`: a reached, calm, flat run of [`WALTZ_RUNWAY`] cells
+/// with 2 tiles of headroom (three even hops) within [`WALTZ_RUNWAY_REACH`].
+fn waltz_runway(map: &Map, g: &Graph, cell: Cell) -> bool {
+    let (dc, dr) = WALTZ_RUNWAY_REACH;
+    g.order.iter().any(|&c| {
+        (c.0 - cell.0).abs() <= dc
+            && (c.1 - cell.1).abs() <= dr
+            && map
+                .flat_run(c)
+                .iter()
+                .filter(|f| (1..=2).all(|k| !map.is_solid(f.0, f.1 - k)))
+                .count()
+                >= WALTZ_RUNWAY
+    })
 }
 
 /// A gate crossed: from `from` (on its runway / after its nugget line / on grease / at the pit's
@@ -1451,8 +1540,8 @@ fn ready(map: &Map, g: &Graph, mode: Mode, cell: Cell, dir: i32) -> bool {
         Mode::Normal => true,
         // Room to toot 5 times.
         Mode::GiantSteps => map.flat_run(cell).len() >= RUNWAY,
-        // Waltz rows are dashed, not jumped (see `waltz_dash`).
-        Mode::Waltz => false,
+        // A glide launch: off a moving platform, with room nearby to summon the waltz.
+        Mode::Waltz => map.carry(cell) > 0.0 && waltz_runway(map, g, cell),
         // Splat at the end of the grease run (there's always something deadly there, see
         // `grease_runs`) until the band is nervous, then jump off the grease.
         Mode::Nervous => map.greasy(cell),
@@ -1496,6 +1585,10 @@ fn ready(map: &Map, g: &Graph, mode: Mode, cell: Cell, dir: i32) -> bool {
 pub struct Physics {
     human: Vec<Arcs>,
     ideal: Vec<Arcs>,
+    /// The waltz's off-beat jumps off its gliding platforms ([`Env::glide`]): a human's and
+    /// ideal ones. ([`Mode::Waltz`]'s own arcs are its jumps on ONE.)
+    pub glide: Arcs,
+    glide_ideal: Arcs,
     no_toot: Arcs,
     /// Plunger boosts off Han standing still: a human's (normal physics), and ideal ones in
     /// the modes that could carry them farthest.
@@ -1524,7 +1617,9 @@ impl Physics {
             .into_iter()
             .map(|m| (m, Arcs::weak(Env::new(m, true), ideal_strategies())))
             .collect();
-        Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
+        let glide = Arcs::new(Env::glide(false), strategies());
+        let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1534,9 +1629,10 @@ impl Physics {
     pub fn with_human(human: Vec<Strategy>) -> Physics {
         let ideal = MODES.iter().map(|&m| Arcs::new(Env::new(m, true), ideal_strategies())).collect();
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
+        let glide = Arcs::new(Env::glide(false), human.clone());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, boost_ideal, weak_ideal, .. } = Physics::new();
-        Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
+        let Physics { boost, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -1548,11 +1644,12 @@ impl Physics {
     pub fn laughing() -> [(&'static str, Physics); 2] {
         const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics { human, no_toot, boost, ideal, boost_ideal, weak_ideal } = Physics::new();
+            let Physics { human, no_toot, boost, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
             let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
-            Physics { human, ideal, no_toot, boost, boost_ideal, weak_ideal }
+            let glide = Arcs::new(nudge(glide.env), glide.strategies);
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, boost_ideal, weak_ideal }
         };
         [
             ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
@@ -1575,6 +1672,11 @@ impl Physics {
 
     pub fn ideal(&self, m: Mode) -> &Arcs {
         &self.ideal[MODES.iter().position(|&x| x == m).unwrap()]
+    }
+
+    /// Every ideal way to jump in `m`: the waltz's jumps on ONE and its glide launches.
+    pub fn ideal_all(&self, m: Mode) -> Vec<&Arcs> {
+        if m == Mode::Waltz { vec![self.ideal(m), &self.glide_ideal] } else { vec![self.ideal(m)] }
     }
 }
 
@@ -1675,7 +1777,7 @@ fn cross_dying(
                 let mut reached = st.reached.clone();
                 let mut queue: Vec<Cell> = Vec::new();
                 for &from in &froms {
-                    for s in &arcs.strategies {
+                    for s in arcs.at(&m, from) {
                         let Some(x0) = take_off(&m, &arcs.env, from, s) else { continue };
                         if let Outcome::Land(l) = simulate(&m, &arcs.env, from, s, x0, &mut buf)
                             && !known(l)
@@ -1702,7 +1804,7 @@ fn cross_dying(
                             queue.push(n);
                         }
                     }
-                    for s in &arcs.strategies {
+                    for s in arcs.at(&m, cell) {
                         let Some(x0) = take_off(&m, &arcs.env, cell, s) else { continue };
                         match simulate(&m, &arcs.env, cell, s, x0, &mut buf) {
                             Outcome::Land(l) if !known(l) && reached.insert(l) => queue.push(l),
@@ -1794,11 +1896,17 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
         let mut found: Vec<(Gate, Cell, Cell, Vec<Cell>)> = Vec::new();
         for &cell in &todo {
             tried[g.idx(cell).unwrap()] = true;
-            for mode in [Mode::GiantSteps, Mode::FiredUp, Mode::Nervous] {
+            let modes = [
+                (Mode::GiantSteps, phys.human(Mode::GiantSteps)),
+                (Mode::FiredUp, phys.human(Mode::FiredUp)),
+                (Mode::Nervous, phys.human(Mode::Nervous)),
+                (Mode::Waltz, phys.human(Mode::Waltz)),
+                (Mode::Waltz, &phys.glide),
+            ];
+            for (mode, arcs) in modes {
                 if mode == Mode::Nervous && !map.has_grease {
                     continue;
                 }
-                let arcs = phys.human(mode);
                 let ok = [-1, 0, 1].map(|d| ready(map, &g, mode, cell, d));
                 if !ok.iter().any(|&b| b) {
                     continue;
@@ -1806,10 +1914,12 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                 let gate = match mode {
                     Mode::GiantSteps => Gate::GiantWall,
                     Mode::FiredUp => Gate::LongGap,
+                    Mode::Waltz => Gate::GlideLaunch,
                     _ => Gate::GreaseChute,
                 };
-                for s in &arcs.strategies {
-                    if !ok[(s.dir as i32 + 1) as usize] {
+                for s in arcs.at(map, cell) {
+                    // The waltz's gate is the glide's launch, not its higher jump on ONE.
+                    if !ok[(s.dir as i32 + 1) as usize] || (mode == Mode::Waltz && s.carry == 0.0) {
                         continue;
                     }
                     let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
@@ -1817,16 +1927,6 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                         && !g.reached(land)
                     {
                         found.push((gate, cell, land, buf.clone()));
-                    }
-                }
-            }
-            for w in &map.waltz_rows {
-                for dir in [-1, 1] {
-                    if let Some(land) = waltz_dash(map, w, cell, dir)
-                        && !g.reached(land)
-                    {
-                        let touched = (w.c0..=w.c1).map(|c| (c, w.walk_row())).collect();
-                        found.push((Gate::WaltzRow, cell, land, touched));
                     }
                 }
             }
@@ -1943,7 +2043,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
 
 /// Han marching through shield row `w` from the approach cell `from` (heading `dir`), Nat right
 /// behind him: the cell past the row, if the corridor is walkable and roofed.
-fn shield_walk(map: &Map, w: &WaltzRow, from: Cell, dir: i32) -> Option<Cell> {
+fn shield_walk(map: &Map, w: &CanRow, from: Cell, dir: i32) -> Option<Cell> {
     let r = w.walk_row();
     let (start, end) = if dir > 0 { (w.c0 - 1, w.c1 + 1) } else { (w.c1 + 1, w.c0 - 1) };
     if from != (start, r) || !low_ceiling(map, w) {
@@ -1993,7 +2093,7 @@ fn leak(
     while !frontier.is_empty() {
         let mut next = Vec::new();
         for &from in &frontier {
-            for (k, s) in arcs.strategies.iter().enumerate() {
+            for (k, s) in arcs.at(map, from).iter().enumerate() {
                 let Some(f) = arcs.flight(map, from, s) else { continue };
                 if !rows.iter().any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1)) {
                     continue;
@@ -2043,7 +2143,9 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
         if Some(mode) == c.gate.mode() || (mode == Mode::Nervous && !map.has_grease) {
             continue;
         }
-        if let Some((from, to)) = leak(&before, phys.ideal(mode), &near, &beyond, &HashSet::new()) {
+        if let Some((from, to)) =
+            phys.ideal_all(mode).into_iter().find_map(|a| leak(&before, a, &near, &beyond, &HashSet::new()))
+        {
             errs.push(format!(
                 "{what} is passable with {mode:?} physics too: col {} row {} -> col {} row {}",
                 from.0, from.1, to.0, to.1
@@ -2068,7 +2170,9 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
                 if Some(mode) == c.gate.mode() {
                     continue;
                 }
-                if let Some((f, to)) = leak(&stained, phys.ideal(mode), &near, &beyond, &tops) {
+                if let Some((f, to)) =
+                    phys.ideal_all(mode).into_iter().find_map(|a| leak(&stained, a, &near, &beyond, &tops))
+                {
                     errs.push(format!(
                         "{what} is passable with {mode:?} physics after splat stains/rafts: col {} row {} -> col {} row {}",
                         f.0, f.1, to.0, to.1
@@ -2188,7 +2292,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     let mut buf = Vec::new();
     // One launch: a landing past the gate, or (into `new`) the unreached cells it gets Nat to.
     let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>| -> Option<Cell> {
-        for (k, s) in arcs.strategies.iter().enumerate() {
+        for (k, s) in arcs.at(map, from).iter().enumerate() {
             let Some(f) = arcs.flight(map, from, s) else { continue };
             if !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
                 continue;
@@ -2236,7 +2340,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
         let ground: Vec<&Arcs> = alike
             .into_iter()
             .filter(|&m| !own(m) && (m != Mode::Nervous || map.has_grease))
-            .map(|m| phys.ideal(m))
+            .flat_map(|m| phys.ideal_all(m))
             .collect();
         // Nat's cells: reached before, then whatever the boosts get him to.
         let mut nat: HashSet<Cell> = reached.iter().copied().collect();
@@ -2544,15 +2648,6 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let (sx, sy) = (start.0 as f32 * TILE + 8.0, start.1 as f32 * TILE + 8.0);
     if map.in_fly_zone(sx - 48.0, sy - 48.0, sx + 48.0, sy + 48.0) {
         errs.push("fly swarm next to the start".into());
-    }
-    for w in &map.waltz_rows {
-        errs.extend(waltz_row_timing(w));
-        if !low_ceiling(&map, w) {
-            errs.push(format!(
-                "waltz row at col {}..={} row {} needs a low ceiling (solid at most 2 tiles above the walk) all along",
-                w.c0, w.c1, w.row
-            ));
-        }
     }
     for w in &map.shield_rows {
         errs.extend(shield_row_timing(w));

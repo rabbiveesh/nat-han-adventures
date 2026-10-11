@@ -332,7 +332,7 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
     let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray);
     if let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1)) {
         // Flies and sprays only count against a gate built of them.
-        let tunnel = matches!(g.topic, Topic::Waltz | Topic::Shield);
+        let tunnel = g.topic == Topic::Shield;
         if (!hazard || tunnel)
             && let Some(skill) = super::adaptive::skill_of(g.topic)
         {
@@ -418,8 +418,10 @@ mod tests {
         assert_eq!(death_skill(l, at(90.0, 11.0, l), DeathCause::Spikes), Skill::Stains);
         assert_eq!(death_skill(l, at(90.0, 9.0, l), DeathCause::Fly), Skill::HazardTiming);
         assert_eq!(death_skill(l, Vec2::new(20.0 * TILE, -20.0), DeathCause::Pit), Skill::Precision);
-        // Level 7's waltz row (3-24, row 10) is built of sprays.
+        // A fall at level 7's glide launch is a failed launch.
         let l = &levels.0[6];
-        assert_eq!(death_skill(l, at(10.0, 10.0, l), DeathCause::Spray), Skill::Waltz);
+        let m = l.gates.iter().find(|g| g.topic == Topic::Waltz).expect("level 7 has a glide launch");
+        let fell = Vec2::new((m.c0 + m.c1) as f32 / 2.0 * TILE, -20.0);
+        assert_eq!(death_skill(l, fell, DeathCause::Pit), Skill::Waltz);
     }
 }

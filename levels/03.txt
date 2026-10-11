@@ -1,7 +1,7 @@
 name: U-Bend
 world: 2
 intro: The U-bend, Nat! Down, along, and back up. Like a smile!
-1: dx=8 dy=0 period=5 kind=duck
+1: dx=8 dy=0 period=7 kind=duck
 2: dx=9 dy=0 period=5 kind=duck
 deaths: 1
 hint@5,13 stain: Too wide to jump! Splat mid-spikes: your stain's a step!

@@ -17,7 +17,7 @@ pub enum Skill {
     GiantSteps,
     /// Long gaps (jumpable while the band is fired up).
     FiredUp,
-    /// Waltz rows.
+    /// Glide launches (the waltz).
     Waltz,
     /// Death-mechanic rooms: some rooms expect you to die (stains).
     Stains,
