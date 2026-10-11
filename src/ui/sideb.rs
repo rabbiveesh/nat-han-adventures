@@ -8,7 +8,7 @@ use bevy::prelude::*;
 use super::{palette::*, *};
 use crate::audio::{BandMeters, Harmony};
 use crate::audio::director::SUMMON_ORDER;
-use crate::game::sideb::{Phase, SideB};
+use crate::game::sideb::{MELT_SECS, Phase, SetCall, SideB};
 use crate::state::AppState;
 
 pub fn plugin(app: &mut App) {
@@ -31,11 +31,13 @@ struct CallPick(usize);
 #[derive(Component)]
 struct Banner;
 
-fn icon_of(h: Harmony) -> SpriteId {
-    match h {
-        Harmony::Quartal => SpriteId::IconNugget,
-        Harmony::Waltz => SpriteId::IconNote,
-        _ => SpriteId::IconHorn,
+fn icon_of(c: SetCall) -> SpriteId {
+    match c {
+        SetCall::Mode(Harmony::Quartal) => SpriteId::IconNugget,
+        SetCall::Mode(Harmony::Waltz) => SpriteId::IconNote,
+        SetCall::Mode(_) => SpriteId::IconHorn,
+        // A drop: melting.
+        SetCall::Melt => SpriteId::IconSweat,
     }
 }
 
@@ -113,6 +115,8 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
 fn update(
     side: Res<SideB>,
     meters: Option<Res<BandMeters>>,
+    director: Option<Res<crate::audio::plugin::Director>>,
+    run: Option<Res<crate::game::LevelRun>>,
     mut cells: Query<(&CallCell, &mut BorderColor, &mut BackgroundColor)>,
     mut counts: Query<(&CallCount, &mut Text, &mut TextColor)>,
     mut timers: Query<(&CallTimer, &mut Node)>,
@@ -134,11 +138,16 @@ fn update(
         color.set_if_neq(TextColor(if left > 0 { CREAM } else { DIM_CREAM }));
     }
     for (c, mut node) in &mut timers {
-        let h = side.setlist[c.0].0;
-        let share = meters
-            .as_ref()
-            .and_then(|m| SUMMON_ORDER.iter().position(|&s| s == h).and_then(|i| m.0.summons[i].active))
-            .unwrap_or(0.0);
+        let share = match side.setlist[c.0].0 {
+            SetCall::Mode(h) => meters
+                .as_ref()
+                .and_then(|m| SUMMON_ORDER.iter().position(|&s| s == h).and_then(|i| m.0.summons[i].active))
+                .unwrap_or(0.0),
+            SetCall::Melt => {
+                let now = run.as_ref().map_or(0.0, |r| r.time);
+                director.as_ref().and_then(|d| d.melt_until).map_or(0.0, |u| ((u - now) / MELT_SECS).clamp(0.0, 1.0))
+            }
+        };
         let w = percent(share * 100.0);
         if node.width != w {
             node.width = w;

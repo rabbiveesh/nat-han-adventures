@@ -94,7 +94,7 @@ impl HanPhys {
             speed: RUN_SPEED * g.speed_scale,
             ground_accel: GROUND_ACCEL * g.speed_scale,
             air_accel: AIR_ACCEL * g.speed_scale,
-            jump_speed: JUMP_SPEED,
+            jump_speed: JUMP_SPEED * g.jump_scale(),
             toot_speed: DOUBLE_JUMP_SPEED,
             bounce: g.bouncy(),
             on_the_beat: g.waltz(),

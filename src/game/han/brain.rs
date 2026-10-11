@@ -162,6 +162,9 @@ pub struct HanBrain {
     pub behind: f32,
     /// How far (px, sideways) Nat was last step.
     pub gap: f32,
+    /// Side B (`game::sideb`): no route on, so he charges this way regardless, jumping (and
+    /// tooting at the top) at whatever's in front of him. Brave, and often fatal.
+    pub charge: Option<f32>,
 }
 
 impl Default for HanBrain {
@@ -195,6 +198,7 @@ impl Default for HanBrain {
             reroute: false,
             behind: 0.0,
             gap: 0.0,
+            charge: None,
         }
     }
 }
@@ -627,8 +631,15 @@ pub(super) fn think(
         input.dir = 0.0;
         input.jump = false;
     }
+    // Side B: charging at what he can't cross (`game::sideb`).
+    if side_b
+        && brain.mode == HanMode::Follow
+        && let Some(dir) = brain.charge
+    {
+        input = charge(level, &pos.0, &body, &brain.ctl, dir);
+    }
     // Keep out of a waltz row and a chute's grease (on foot).
-    if !parachute && input.dir != 0.0 && body.on_ground {
+    if !side_b && !parachute && input.dir != 0.0 && body.on_ground {
         let here = level.han_keeps_out(feet_cell(level, pos.0));
         let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
         if !here && next {
@@ -734,6 +745,23 @@ pub(super) fn think(
         anim.facing_left
     };
     set_anim(&mut anim, pose, facing_left, &groove, false);
+}
+
+/// Side B's charge: run `dir`; jump at a wall or an edge (or nothing under him ahead), hold it,
+/// and toot at the top. No looking where he's going.
+fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> HanInput {
+    // (His own size: melting shrinks him.)
+    let half = body.half;
+    let ahead = |dy: f32| {
+        let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 3.0), dy));
+        level.tile(c, r).is_solid()
+    };
+    let wall = ahead(0.0) || ahead(-half.y + 2.0);
+    let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 2.0), -half.y - 2.0));
+    let edge = !floor_at(level, c, r);
+    let jump = body.on_ground && (wall || edge);
+    let toot = !body.on_ground && body.vel.y <= 0.0 && ctl.toots_left > 0;
+    HanInput { dir, speed: 1.0, jump, hold: true, toot }
 }
 
 fn set_anim(anim: &mut HanAnim, pose: HanPose, facing_left: bool, groove: &Groove, hidden: bool) {

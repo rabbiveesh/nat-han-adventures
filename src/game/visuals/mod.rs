@@ -630,6 +630,7 @@ fn relax_squash(
     time: Res<Time>,
     groove: Option<Res<Groove>>,
     player: Query<&Children, With<Player>>,
+    han: Query<(&Children, &Body), With<Han>>,
     mut q: Query<(Entity, &mut CharacterSprite, &mut Transform)>,
 ) {
     let k = 1.0 - (-time.delta_secs() * 14.0).exp();
@@ -639,6 +640,10 @@ fn relax_squash(
     for (e, mut cs, mut tf) in &mut q {
         if player.iter().any(|c| c.contains(&e)) {
             cs.size += (nat_size - cs.size) * melt;
+        }
+        // Han's drawn as big as his box (Side B's melting shrinks it, `game::sideb`).
+        if let Some((_, b)) = han.iter().find(|(c, _)| c.contains(&e)) {
+            cs.size = b.half.y / Body::player().half.y;
         }
         cs.squash = cs.squash.lerp(Vec2::ONE, k);
         tf.scale = (cs.squash * cs.size).extend(1.0);

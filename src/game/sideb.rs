@@ -7,11 +7,14 @@
 //! it. Han takes whatever route is quickest under the physics now, so calling a mode steers him.
 //!
 //! - **Han heads for the goal**, or, when no route gets there, for the reachable cell nearest
-//!   it (the *frontier*), and barks what blocks him there.
-//! - **Han can die**: spikes, sewage, the pit. A death rewinds the whole level (the set list
-//!   comes back with it): there are no checkpoints on Side B.
-//! - **Stuck rewinds too**: at the frontier with no mode playing and nothing left on the set
-//!   list, he gives up and the level rewinds.
+//!   it (the *frontier*), and from there he **charges**: runs on, jumping at walls and edges,
+//!   tooting at the top. Without the right music playing by then, that's comically fatal.
+//! - **Han can die**: spikes, sewage, the pit, and knocking himself out on a wall he can't
+//!   climb. A death rewinds the whole level (the set list comes back with it): there are no
+//!   checkpoints on Side B.
+//! - **Melting** (`melt` on the set list): the laughing band, held on its melting phrase. Han
+//!   shrinks to [`MELT_SIZE`] and ducks under ceiling spikes he'd otherwise lose his cap to,
+//!   but if it wears off while he's under them, he grows back into them.
 //!
 //! How it's wired: the level is a [`GeneratedLevel`] (so the story's levels and saves aren't
 //! touched), and Nat stays in the world as an invisible, frozen *beacon* (`Finished`: no input,
@@ -33,42 +36,73 @@ use crate::level::{Level, TILE, Tile, Topic};
 use crate::state::{AppState, PlayState};
 
 /// Side B's levels, in play order.
-pub static SIDE_B_SOURCES: [&str; 2] =
-    [include_str!("../../levels/side-b/b1.txt"), include_str!("../../levels/side-b/b2.txt")];
+pub static SIDE_B_SOURCES: [&str; 3] = [
+    include_str!("../../levels/side-b/b1.txt"),
+    include_str!("../../levels/side-b/b2.txt"),
+    include_str!("../../levels/side-b/b3.txt"),
+];
 
 /// A level rewinds this long after Han's death (the needle scratch).
-pub const REWIND_SECS: f32 = 1.5;
-/// Han gives up this long after he's stuck with nothing left to call.
-pub const STUCK_SECS: f32 = 2.0;
+pub const REWIND_SECS: f32 = 2.0;
 /// The goal reached: this long on the cheer, then back to the title.
 pub const CLEARED_SECS: f32 = 4.0;
 /// Cells a frontier search may simulate per step.
 const SEARCH_BUDGET: usize = 120;
 
-pub const DEATH_LINE: &str = "Ow! Union's hearin' about this. Again!";
-pub const STUCK_LINE: &str = "Outta music. Take it from the top!";
+/// Han's size while melting (Nat's melting is only drawn, and less: on Side B he really
+/// shrinks, enough to duck under a row of ceiling spikes).
+pub const MELT_SIZE: f32 = 0.65;
+/// How long a melting call holds (s).
+pub const MELT_SECS: f32 = 12.0;
+/// Charging this long without getting anywhere: he's done for.
+pub const CHARGE_GIVE_UP: f32 = 8.0;
+
 pub const CLEARED_LINE: &str = "Nat's hat! He went thataway!";
 
-/// Ask the band for a mode by name (Side B's set list). Plays it at once, charged or not.
-#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CallMode(pub Harmony);
+/// How Han met his end (each has its line).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum Fate {
+    Spikes,
+    Pit,
+    Sewage,
+    /// Knocked out on a wall he charged at.
+    Bonk,
+    /// Charged about for ages and got nowhere.
+    Pooped,
+}
 
-/// What a set-list call plays, by its header word.
-pub fn mode_of(word: &str) -> Option<Harmony> {
-    match word {
-        "giant" => Some(Harmony::Coltrane),
-        "gap" => Some(Harmony::Quartal),
-        _ => None,
+impl Fate {
+    pub fn line(self) -> &'static str {
+        match self {
+            Fate::Spikes => "OW! Pointy! POINTY!",
+            Fate::Pit => "Naaaat! I'm comiiiing...",
+            Fate::Sewage => "Glub. I'm a pro. Glub.",
+            Fate::Bonk => "Who put a WALL there?!",
+            Fate::Pooped => "I'm pooped. And not the good kind.",
+        }
     }
 }
 
-/// The set list's name for a mode, on screen.
-pub fn call_name(h: Harmony) -> &'static str {
-    match h {
-        Harmony::Coltrane => "GIANT STEPS",
-        Harmony::Quartal => "FIRED UP",
-        Harmony::Waltz => "WALTZ",
-        _ => "?",
+/// One entry of a set list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum SetCall {
+    /// A band mode (Giant Steps, fired up).
+    Mode(Harmony),
+    /// The laughing band, held on its melting phrase ([`MELT_SECS`]).
+    Melt,
+}
+
+/// Ask the band for a set-list call. Plays it at once, charged or not.
+#[derive(Message, Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CallMode(pub SetCall);
+
+/// What a set-list call plays, by its header word.
+pub fn call_of(word: &str) -> Option<SetCall> {
+    match word {
+        "giant" => Some(SetCall::Mode(Harmony::Coltrane)),
+        "gap" => Some(SetCall::Mode(Harmony::Quartal)),
+        "melt" => Some(SetCall::Melt),
+        _ => None,
     }
 }
 
@@ -76,7 +110,7 @@ pub fn call_name(h: Harmony) -> &'static str {
 #[derive(Debug, Clone)]
 pub struct SideBLevel {
     pub level: Level,
-    pub setlist: Vec<(Harmony, u32)>,
+    pub setlist: Vec<(SetCall, u32)>,
 }
 
 impl SideBLevel {
@@ -94,7 +128,7 @@ impl SideBLevel {
                 Some((k, v)) if in_header && k.trim() == "setlist" => {
                     for item in v.split_whitespace() {
                         let (word, n) = item.split_once('=').ok_or_else(|| format!("bad set list item `{item}`"))?;
-                        let h = mode_of(word).ok_or_else(|| format!("no such call `{word}`"))?;
+                        let h = call_of(word).ok_or_else(|| format!("no such call `{word}`"))?;
                         let n = n.parse().map_err(|_| format!("bad count `{n}`"))?;
                         setlist.push((h, n));
                     }
@@ -129,7 +163,7 @@ pub enum Phase {
 pub struct SideB {
     pub level: usize,
     #[reflect(ignore)]
-    pub setlist: Vec<(Harmony, u32)>,
+    pub setlist: Vec<(SetCall, u32)>,
     /// Calls left, per set list entry.
     pub left: Vec<u32>,
     pub selected: usize,
@@ -137,15 +171,19 @@ pub struct SideB {
     /// Where Han's heading (a cell), and whether it's the frontier (no route to the goal).
     pub target: Option<(i32, i32)>,
     pub frontier: bool,
-    pub stuck: f32,
-    /// The frontier cell he last barked at (once per cell per try).
-    pub barked: Option<(i32, i32)>,
+    /// Charging since this long, from this x, with this many landings since.
+    pub charging: Option<f32>,
+    pub charge_x: f32,
+    pub charge_landings: u32,
+    pub was_grounded: bool,
+    /// How the last try ended.
+    pub fate: Option<Fate>,
     pub rewinds: u32,
     pub calls: u32,
 }
 
 impl SideB {
-    pub fn new(level: usize, setlist: Vec<(Harmony, u32)>) -> SideB {
+    pub fn new(level: usize, setlist: Vec<(SetCall, u32)>) -> SideB {
         let left = setlist.iter().map(|s| s.1).collect();
         SideB {
             level,
@@ -155,8 +193,11 @@ impl SideB {
             phase: Phase::Playing,
             target: None,
             frontier: false,
-            stuck: 0.0,
-            barked: None,
+            charging: None,
+            charge_x: 0.0,
+            charge_landings: 0,
+            was_grounded: true,
+            fate: None,
             rewinds: 0,
             calls: 0,
         }
@@ -164,7 +205,12 @@ impl SideB {
 
     /// Back to the top: the set list refilled.
     fn rewound(&mut self) {
-        *self = SideB { rewinds: self.rewinds + 1, selected: self.selected, ..SideB::new(self.level, self.setlist.clone()) };
+        *self = SideB {
+            rewinds: self.rewinds + 1,
+            selected: self.selected,
+            fate: self.fate,
+            ..SideB::new(self.level, self.setlist.clone())
+        };
     }
 
     pub fn calls_left(&self) -> u32 {
@@ -195,7 +241,7 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             FixedUpdate,
             (
-                beacon.in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
+                (beacon, melt).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
                 han_fate.in_set(GameSet::Interact),
             )
                 .run_if(resource_exists::<SideB>),
@@ -253,15 +299,18 @@ fn refill_on_restart(mut restarts: MessageReader<RestartLevel>, mut side: ResMut
 }
 
 /// Where Han should head now: the goal, or the frontier. Nat (the beacon) is parked there.
-#[allow(clippy::type_complexity)]
+/// At the frontier, Han charges.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn beacon(
     mut commands: Commands,
+    time: Res<Time>,
     active: Res<ActiveLevel>,
     groove: Res<Groove>,
     nav: Option<ResMut<HanNav>>,
     mut side: ResMut<SideB>,
     mut nat: Query<(Entity, &mut Pos, &mut Body, &mut PlayerControl, Has<Finished>), (With<Player>, Without<Han>)>,
-    han: Query<(&Pos, &Body), (With<Han>, Without<Player>)>,
+    mut han: Query<(&Pos, &Body, &mut HanBrain), (With<Han>, Without<Player>)>,
+    mut says: MessageWriter<HanSays>,
 ) {
     let Ok((e, mut pos, mut body, mut ctl, finished)) = nat.single_mut() else { return };
     if !finished {
@@ -272,17 +321,21 @@ fn beacon(
     if !nav.side_b {
         *nav = HanNav::side_b();
     }
-    let Ok((hpos, hbody)) = han.single() else { return };
+    let Ok((hpos, hbody, mut brain)) = han.single_mut() else { return };
+    let goal = (level.goal.0 as i32, level.goal.1 as i32);
+    let dir = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
     // Re-plan from where he stands (mid-air he's carrying out a move already).
     if hbody.on_ground && side.phase == Phase::Playing {
         let map = Map::for_han(level);
-        let from = nav_cell(level, hpos.0);
-        let goal = (level.goal.0 as i32, level.goal.1 as i32);
+        // (Where he stands: by his feet, however small he's melted.)
+        let from = nav_cell(level, hpos.0 + Vec2::Y * (HALF.y - hbody.half.y));
         let (route, nearest) = nav.for_groove(&groove).route_or_nearest(&map, from, goal, SEARCH_BUDGET);
         match route {
             crate::level::nav::Route::Found(_) => {
                 side.target = Some(goal);
                 side.frontier = false;
+                side.charging = None;
+                brain.charge = None;
             }
             crate::level::nav::Route::NoRoute => {
                 side.target = Some(nearest);
@@ -290,35 +343,67 @@ fn beacon(
             }
             crate::level::nav::Route::Budget => {}
         }
+        // At the frontier: charge!
+        let there = side.target.is_some_and(|t| (t.0 - from.0) * dir as i32 <= 1 && t.1 == from.1);
+        if side.frontier && there && side.charging.is_none() {
+            side.charging = Some(0.0);
+            side.charge_x = hpos.0.x;
+            side.charge_landings = 0;
+            says.write(HanSays { text: charge_line(level, from, dir).to_string() });
+        }
     }
+    if let Some(t) = &mut side.charging {
+        *t += time.delta_secs();
+        brain.charge = Some(dir);
+    }
+    if hbody.on_ground && !side.was_grounded && side.charging.is_some() {
+        side.charge_landings += 1;
+    }
+    side.was_grounded = hbody.on_ground;
     let Some(t) = side.target else { return };
     pos.0 = stand(level, t);
     body.vel = Vec2::ZERO;
     body.on_ground = true;
     body.riding = None;
-    ctl.facing = if t.0 as f32 * TILE >= hpos.0.x { 1.0 } else { -1.0 };
+    ctl.facing = dir;
 }
 
-/// What Han says when he's stopped at the frontier: the gate right ahead of him, or (none
-/// there, a mode playing) the music that's in his way.
-pub fn bark_line(level: &Level, at: (i32, i32), playing: bool) -> &'static str {
+/// What Han yells as he charges: at the gate right ahead of him, or ceiling spikes, or anything.
+pub fn charge_line(level: &Level, at: (i32, i32), dir: f32) -> &'static str {
+    let d = if dir < 0.0 { -1 } else { 1 };
+    if (1..=4).any(|k| level.tile(at.0 + k * d, at.1) == Tile::SpikesDown) {
+        return "Duck and run! Duck and run!";
+    }
     let near = |g: &&crate::level::GateMark| (g.c0 - 3..=g.c1 + 3).contains(&at.0);
-    let gate = level.gates.iter().find(near);
-    if gate.is_none() && playing {
-        return "Whoa! Not with THIS music on!";
-    }
-    match gate.map(|g| g.topic) {
-        Some(Topic::Giant) => "Too tall for these legs. Music, please!",
-        Some(Topic::Gap) => "Too far to jump. Music, please!",
-        Some(Topic::Waltz) => "Can't get across. Gimme a waltz!",
-        _ => "Hmm. I need some music here.",
+    match level.gates.iter().find(near).map(|g| g.topic) {
+        Some(Topic::Giant) => "I can climb that. Probably!",
+        Some(Topic::Gap) => "Plumber's leap! HYAAA!",
+        _ => "Here goes nothin'!",
     }
 }
 
-/// Is Han's box in a spike tile's deadly half?
-fn on_spikes(level: &Level, pos: Vec2) -> bool {
+/// Melting: Han shrinks (feet planted) while the band's on its melting phrase, and grows
+/// back after.
+fn melt(time: Res<Time>, groove: Res<Groove>, mut han: Query<(&mut Pos, &mut Body), With<Han>>) {
+    let Ok((mut pos, mut body)) = han.single_mut() else { return };
+    let size = if groove.nudge() == Some(super::Nudge::Melting) { MELT_SIZE } else { 1.0 };
+    let full = Body::player().half;
+    let want = full * size;
+    let step = full.y * 4.0 * time.delta_secs();
+    let new = Vec2::new(
+        crate::game::move_towards(body.half.x, want.x, step),
+        crate::game::move_towards(body.half.y, want.y, step),
+    );
+    if new != body.half {
+        pos.0.y += new.y - body.half.y;
+        body.half = new;
+    }
+}
+
+/// Is a box at `pos` (half extents `half`) in a spike tile's deadly half?
+fn on_spikes(level: &Level, pos: Vec2, half: Vec2) -> bool {
     let shrink = Vec2::splat(super::FORGIVE);
-    let (min, max) = (pos - HALF + shrink, pos + HALF - shrink);
+    let (min, max) = (pos - half + shrink, pos + half - shrink);
     let (c0, r1) = level.cell_at(min);
     let (c1, r0) = level.cell_at(max);
     for r in r0..=r1 {
@@ -342,12 +427,11 @@ fn on_spikes(level: &Level, pos: Vec2) -> bool {
     false
 }
 
-/// The goal, a death, a stuck Han; and the rewind or the cheer when their time's up.
+/// The goal, or how Han met his end; and the rewind or the cheer when their time's up.
 #[allow(clippy::too_many_arguments)]
 fn han_fate(
     time: Res<Time>,
     active: Res<ActiveLevel>,
-    groove: Res<Groove>,
     clock: Res<SimClock>,
     mut side: ResMut<SideB>,
     mut han: Query<(&Pos, &Body, &mut HanBrain), With<Han>>,
@@ -394,32 +478,26 @@ fn han_fate(
             return;
         }
     }
-    let sunk = matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. });
-    let fell = pos.0.y + HALF.y < 0.0;
-    let spiked = on_spikes(level, pos.0);
-    if sunk || fell || spiked {
-        if spiked {
+    let fate = if matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. }) {
+        Some(if pos.0.y + HALF.y < 0.0 { Fate::Pit } else { Fate::Sewage })
+    } else if pos.0.y + body.half.y < 0.0 {
+        Some(Fate::Pit)
+    } else if on_spikes(level, pos.0, body.half) {
+        Some(Fate::Spikes)
+    } else if side.charge_landings >= 2 && (pos.0.x - side.charge_x).abs() < 2.5 * TILE {
+        Some(Fate::Bonk)
+    } else if side.charging.is_some_and(|t| t > CHARGE_GIVE_UP) {
+        Some(Fate::Pooped)
+    } else {
+        None
+    };
+    if let Some(f) = fate {
+        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped) {
             brain.mode = HanMode::Sinking { t: 30.0 };
         }
+        brain.charge = None;
+        side.fate = Some(f);
         side.phase = Phase::Rewind { t: REWIND_SECS };
-        say(&mut says, DEATH_LINE);
-        return;
-    }
-    // At the frontier: bark once, and with nothing left to call, give up.
-    let here = nav_cell(level, pos.0);
-    let at_frontier = side.frontier && body.on_ground && side.target.is_some_and(|t| (t.0 - here.0).abs() <= 1 && t.1 == here.1);
-    if at_frontier && side.barked != side.target {
-        side.barked = side.target;
-        say(&mut says, bark_line(level, here, groove.harmony != Harmony::Original));
-    }
-    let nothing_playing = groove.harmony == Harmony::Original;
-    if at_frontier && nothing_playing && side.calls_left() == 0 {
-        side.stuck += dt;
-        if side.stuck >= STUCK_SECS {
-            side.phase = Phase::Rewind { t: REWIND_SECS };
-            say(&mut says, STUCK_LINE);
-        }
-    } else {
-        side.stuck = 0.0;
+        say(&mut says, f.line());
     }
 }

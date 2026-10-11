@@ -1,12 +1,14 @@
 # Side B level 2, Spike Alley (NATHAN_SIDE_B=2), for `scripts/record-run --capture`.
 
-# Try 1: Giant Steps called in the alley. Low gravity would float Han into the ceiling spikes,
-# so he waits it out, then reaches the giant wall with nothing left: rewind.
-wait 1
-tap Down
-wait 30
-
-# Try 2: wait for the wall, then call it.
-wait 5
-tap Down
+# Try 1: no music. Han hops the spike pits, then bonks the giant wall.
 wait 9
+
+# Try 2: Giant Steps in the alley floats Han into the ceiling spikes.
+wait 1500ms
+tap Down
+wait 6
+
+# Try 3: Giant Steps once he's out from under the ceiling.
+wait 3
+tap Down
+wait 8

@@ -35,6 +35,7 @@ use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, Playbac
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
+use crate::game::sideb::SetCall;
 use crate::events::{BandFreedom, CallBand, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
 use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
@@ -237,6 +238,10 @@ pub struct Director {
     /// The band's memory of this level: stats, rolling window, the held summon.
     pub band: director::Band,
     was_playing: bool,
+    /// Side B's melting call (`game::sideb`): the laughing band, held on its melting phrase,
+    /// until then (play time).
+    pub melt_until: Option<f32>,
+    melting: bool,
 }
 
 /// The band's counters for the HUD strip (`ui::hud`), as of this frame: what each counter
@@ -490,7 +495,14 @@ fn direct(
     }
     ev.checkpoints = checkpoints.read().count() as u32;
     ev.calls = calls.read().count() as u32;
-    ev.call_mode = named_calls.read().last().map(|c| c.0);
+    let now_secs = run.as_ref().map_or(0.0, |r| r.time);
+    for c in named_calls.read() {
+        match c.0 {
+            SetCall::Mode(h) => ev.call_mode = Some(h),
+            // Side B's melting: the laughing band held on its melting phrase.
+            SetCall::Melt => director.melt_until = Some(now_secs + crate::game::sideb::MELT_SECS),
+        }
+    }
     // Play time (pause excluded): the director's clock.
     let now = run.as_ref().map_or(0.0, |r| r.time);
     let d = &mut *director;
@@ -499,6 +511,7 @@ fn direct(
     if playing && (!d.was_playing || restarted) {
         // Level start: everything resets, the band plays it straight.
         decision = Some(d.band.start(now));
+        d.melt_until = None;
         level_start = !restarted;
     }
     d.was_playing = playing;
@@ -522,10 +535,28 @@ fn direct(
         Some(f) => (f, "NATHAN_MUSIC"),
         None => (filters, reason),
     });
+    // Side B's melting: the laughing band, on the melting phrase only.
+    let melting = d.melt_until.is_some_and(|u| now < u);
+    let melt_changed = melting != d.melting;
+    d.melting = melting;
+    let decided = match decided {
+        Some((mut f, r)) => {
+            f.just_intonation |= melting;
+            Some((f, r))
+        }
+        None if melt_changed => player.decided.map(|(mut f, r)| {
+            f.just_intonation = melting;
+            (f, r)
+        }),
+        None => None,
+    };
     if let Some(dec) = decided {
         player.decided = Some(dec);
     }
     let Some(h) = audio.handle.as_mut() else { return };
+    if melt_changed {
+        h.post(Input::ForceTuning(melting.then_some(crate::audio::tuning::Tuning::CarlosAlpha)));
+    }
     if level_start {
         h.post(Input::LevelStart);
     }
@@ -610,7 +641,9 @@ fn sync(
     if !p.playing {
         return;
     }
-    let filters = Filters { harmony: p.state.harmony, just_intonation: p.state.tuning == Tuning::Medley };
+    // (A medley tuning held on its own, Side B's melting, is the laughing band too.)
+    let held_phrase = crate::audio::tuning::MEDLEY_TUNINGS.contains(&p.state.tuning).then_some(p.state.tuning);
+    let filters = Filters { harmony: p.state.harmony, just_intonation: p.state.tuning == Tuning::Medley || held_phrase.is_some() };
     // The clock as heard: the engine is `ahead_secs` ahead of the output, and time has passed
     // since it published (on the web, the browser says how far off the last sample it was
     // handed is: [`web_output_lead`]), and the player's speakers may lag more than the
@@ -636,7 +669,7 @@ fn sync(
     }
     let heard = p.clock.advanced(dt);
     *clock = LiveClock { clock: heard, filters, tuning: p.state.tuning };
-    let tuning_now = p.state.medley_phrase;
+    let tuning_now = p.state.medley_phrase.or(held_phrase);
     if now_playing.tuning_now != tuning_now {
         now_playing.tuning_now = tuning_now;
     }
