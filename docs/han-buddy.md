@@ -75,7 +75,7 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 | Quartal (fired up) | as fast as Nat; his boost is the running throw |
 | Waltz | moves only on the beat (a little step per beat) |
 | Nervous | clings close behind Nat, trembles |
-| Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase) |
+| Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase); his head is a spring: the boing boost |
 
 ## Level design (gates the validator must prove are exclusive)
 - **Mega walls** (need Giant Steps and Han's mega-boost): marked with **red plunger-handle
@@ -132,6 +132,11 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   Nat lands past the swing or leaves, dies, or the waltz ends. The validator's
   `Gate::Trapeze` (`trapeze_found`) takes the jump at the bottom with a human share (80%) of
   the speed.
+- **The boing boost** (the laughing band, not fired up): dropping onto Han's head where he'd
+  boost springs Nat off it at the full boost (`BOOST_SPEED`), no jump needed, with a "BOING!"
+  bark and its own sfx (`Sfx::Boing`); once per landing chain (coming back down from it, it's
+  the band's plain bounce). No gate needs it (the laughing band stays a surprise), and it
+  reaches no further than the boost the validator already proves.
 - **The running throw** (fired up): `THROW_SPEED` 380 px/s up, `THROW_CARRY` 120 px/s kept
   (`Body::launch`) towards where Nat faces; `HanBoosted { throw: true }`. Han runs at
   165 x 1.35 px/s then (his own nav graph for it, `HanNav::fired`); his goalkeeper dive brakes

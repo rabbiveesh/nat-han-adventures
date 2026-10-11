@@ -1152,3 +1152,33 @@ fn waltz_trapeze_launches_nat_across() {
     let (_, swung, _) = trapeze_flight(false);
     assert!(!swung, "no trapeze out of the waltz");
 }
+
+// --- The laughing band: the boing boost ---------------------------------------------------------
+
+/// Nat dropped onto Han's head from 3 tiles up (the band laughing or not), no keys: how high
+/// his feet get above Han's floor afterwards (tiles), and the boosts heard.
+fn drop_on_han(laughing: bool) -> (f32, usize) {
+    let mut app = app(FLAT);
+    set_groove(&mut app, Harmony::Original, laughing);
+    step(&mut app, 0.5);
+    let h = han(&mut app);
+    let floor = h.y - tuning::PLAYER_SIZE.1 / 2.0;
+    put::<Player>(&mut app, h + Vec2::new(0.0, 4.0 * TILE));
+    let mut top: f32 = 0.0;
+    for _ in 0..90 {
+        app.update();
+        trace(&mut app);
+        top = top.max(nat(&mut app).y - tuning::PLAYER_SIZE.1 / 2.0);
+    }
+    ((top - floor) / TILE, heard(&app).boosted)
+}
+
+#[test]
+fn laughing_band_boing_boost() {
+    let (rise, boosts) = drop_on_han(true);
+    assert_eq!(boosts, 1, "one boing");
+    assert!(rise > 7.0, "boinged {rise} tiles up");
+    let (rise, boosts) = drop_on_han(false);
+    assert_eq!(boosts, 0);
+    assert!(rise < 4.5, "no boing: {rise}");
+}

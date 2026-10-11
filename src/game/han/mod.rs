@@ -86,6 +86,8 @@ pub const STUCK_SECS: f32 = 3.0;
 pub const CLIMB_SPEED: f32 = 120.0;
 /// The longest Han clings to a wall before he slides off (s).
 pub const CLING_SECS: f32 = 8.0;
+/// Han's bark when Nat boings off his head (the laughing band).
+pub const BOING_LINE: &str = "BOING!";
 /// How fast Han reels himself up his plunger handle onto the trapeze (px/s).
 pub const REEL_SPEED: f32 = 320.0;
 /// Han swings on the trapeze at most this long (s) before he lets go.

@@ -18,12 +18,12 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::HanBlip => 0.6,
         Sfx::Jump | Sfx::Land => 0.75,
         Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect => 0.85,
-        Sfx::Toot | Sfx::Splat | Sfx::Flush => 1.0,
+        Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing => 1.0,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 10] = [
+    pub const ALL: [Sfx; 11] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -34,6 +34,7 @@ impl Sfx {
         Sfx::MenuMove,
         Sfx::MenuSelect,
         Sfx::HanBlip,
+        Sfx::Boing,
     ];
 }
 
@@ -53,6 +54,7 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::MenuMove => menu_move(),
         Sfx::MenuSelect => menu_select(),
         Sfx::HanBlip => return han_blip(0),
+        Sfx::Boing => boing(),
     };
     finish(mono, level(sfx))
 }
@@ -172,6 +174,21 @@ fn toot() -> Vec<f32> {
             // Flappy noise, gated by the flutter so it "bbbb"s.
             let flap = lp.run(noise.next(3_500.0, false), 1_800.0) * (0.5 + 0.5 * flutter).powi(2) * 0.7;
             (buzz + flap) * env_ar(i, n, 0.006, 0.05)
+        })
+        .collect()
+}
+
+/// A cartoon spring: "boi-oi-oing", a rising twang with a wobble that dies away.
+fn boing() -> Vec<f32> {
+    let n = secs(0.45);
+    let (mut o, mut wob) = (Osc::default(), Osc::default());
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let wobble = wob.sine(14.0) * 0.18 * (1.0 - t);
+            let f = exp_sweep(110.0, 440.0, (t * 2.2).min(1.0)) * (1.0 + wobble);
+            let twang = o.tri(f) * 0.9 + o.pulse(f * 2.0, 0.25) * 0.15 * (1.0 - t);
+            twang * env_ar(i, n, 0.004, 0.25)
         })
         .collect()
 }

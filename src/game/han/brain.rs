@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 
 use super::{
-    BACK_WARN_LINE, CLIMB_SPEED, CLING_SECS, REEL_SPEED, TRAPEZE_SECS, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
+    BACK_WARN_LINE, BOING_LINE, CLIMB_SPEED, CLING_SECS, REEL_SPEED, TRAPEZE_SECS, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
     LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE,
     brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
 };
@@ -455,6 +455,9 @@ pub(super) fn think(
                 brain.since_grumble = 0.0;
             }
             continue;
+        }
+        if b.boing {
+            say(&mut says, BOING_LINE);
         }
         brain.boosts += 1;
         brain.since_boost = 0.0;
