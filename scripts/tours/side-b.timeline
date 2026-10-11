@@ -3,15 +3,15 @@
 # calls). A wrong call (or none) and Han comes off worst; the level rewinds, set list and all.
 
 # Try 1: no music. Han charges the giant wall and knocks himself out.
-wait 8
+wait 6
 
 # Try 2: Giant Steps, and nothing for the gap. A long way down.
-wait 500ms
+wait 300ms
 tap Down
-wait 9
+wait 7
 
 # Try 3: Giant Steps for the wall, fired up on top of it for the gap.
-wait 500ms
+wait 200ms
 tap Down
 wait 2800ms
 tap Right
