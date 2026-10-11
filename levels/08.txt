@@ -15,7 +15,7 @@ gate: waltz 280,11 310,12
 gate: giant 312,6 324,12
 hint@188,12 shield: Plumbers only! Wait, I go first. Stay behind me!
 gate: shield 190,12 217,12
-hint@18,12 chain: Fired up? Hop on my head and JUMP: I'll throw you!
+hint@18,12 chain: Hop on! I'll throw you!
 gate: chain 20,12 41,12
 ---
 ................................................................................................................................................................................................########################

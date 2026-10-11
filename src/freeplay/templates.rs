@@ -712,5 +712,5 @@ fn fired_up_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bui
     for k in (1..HAN_TAIL - 1).step_by(2) {
         c.nugget(x + k, floor - 1);
     }
-    Built { hint: Some((&[Topic::Chain], "Fired up? Hop on my head and JUMP: I'll throw you!")), checkpoint }
+    Built { hint: Some((&[Topic::Chain], "Hop on! I'll throw you!")), checkpoint }
 }

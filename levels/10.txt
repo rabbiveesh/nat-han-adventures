@@ -13,7 +13,7 @@ say@218,15: Throne's up high! Toot 5 times, DOWN, Giant Steps up!
 gate: giant 293,9 299,15
 hint@232,15 shield: Plumbers only! Wait, I go first. Stay behind me!
 gate: shield 234,15 261,15
-hint@19,15 chain: Fired up? Hop on my head and JUMP: I'll throw you!
+hint@19,15 chain: Hop on! I'll throw you!
 gate: chain 21,15 42,15
 ---
 ............................................................................#############...................................................................................................................................................########################............................................................
