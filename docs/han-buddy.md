@@ -22,14 +22,19 @@ Status: built (see "As built" at the end for the decisions and numbers).
 ## Mechanics
 - **Solid only on top, only from above**: a one-way platform on his head. You can walk and jump
   through him from the side or below.
-- **Plunger boost**: land on his head — on the ground *or mid-air* — and press jump: he launches
-  you (~6 tiles). **A boost refreshes Nat's toot**, so chains are possible: jump → toot → boost
-  → toot → boost… capped by how high/far Han can follow with his 3 toots.
+- **Plunger boost**: land on his head and press jump: he launches you (~7 tiles up). **A boost
+  refreshes Nat's toot.**
+- **Fired up: the running throw** (step 4 of the buddy-vs-band plan): while the band's fired
+  up Han runs as fast as Nat, and jumping off his head is a throw instead: flat (380 px/s up)
+  and far (Nat keeps 120 px/s on top of his run until he lands, like a platform's speed).
+  A throw and a toot clear a **fired-up chasm** (15-18 bottomless tiles; the fired-up band
+  alone does 11). Over a chasm's mark he also catches Nat in mid-air (and throws again):
+  jump → toot → throw → toot…; nowhere else does his head hold Nat in mid-air.
   - Note: a chain's toots count toward the Giant Steps counter (5 toots), and a player with
-    it charged may call the band (Down) mid-chain, so gravity can drop mid-combo. The
-    validator models this (`buddy::GsSwitch`).
+    it charged may call the band (Down) mid-chain, so gravity can drop mid-combo
+    (`buddy::GsSwitch` in the chain simulation).
 - **Intercept**: when Nat is airborne and descending near him, Han tries to get underneath
-  (runs/jumps/toots) so you can bounce off him. This is what makes mid-air combos possible.
+  (runs/jumps/toots) so you can land on him.
 - **"Lemme check that"**: if Nat stands still facing a hazard for ~1.5 s, Han **goes ahead** into
   it. Invulnerable, he **absorbs hazards**: spray jets stop at his body, flies bounce off him; he
   takes the hit with a comedic splat + wobble. Walking right behind him, you're shielded.
@@ -50,8 +55,7 @@ Status: built (see "As built" at the end for the decisions and numbers).
   loosen things that are already provably solvable.
 - **Overuse**: stomping him a lot in a row → he complains ("My back! I'm union, Nat!") and, past a
   limit, needs a short breather (cooldown). The limit/cooldown **slides with the adaptive assist
-  dial**. **Carve-out: no overuse limit inside chain-jump chasms** (zones you can only cross by
-  chaining).
+  dial**. **Carve-out: no overuse limit inside fired-up chasms**.
 
 ## Readable behaviour (so players can learn the AI)
 - Distinct poses: **braced** (plunger up, feet planted), **intercepting** (arms out like a
@@ -68,7 +72,7 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 | Mode | Han |
 |---|---|
 | Giant Steps | floats even more, paddles his arms |
-| Quartal (fired up) | can't keep up: wheezes, falls behind, parachutes in |
+| Quartal (fired up) | as fast as Nat; his boost is the running throw |
 | Waltz | moves only on the beat (a little step per beat) |
 | Nervous | clings close behind Nat, trembles |
 | Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase) |
@@ -78,9 +82,10 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
   yellow plumber's tape**; shaped beyond Giant Steps' reach (taller/overhanging).
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
 - **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
-- **Chain-jump chasms**: crossable only by chaining boosts and toots (no overuse limit inside).
+- **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
+  inside).
 - Free play gets all of these as rooms (`src/freeplay/templates.rs`: buddy ledge, buddy raft
-  pool, shield row, chain chasm), served once the story level that teaches each is unlocked;
+  pool, shield row, fired-up chasm), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
   width from the room's ends, so a neighbouring room's band gate never weakens Han there.
   `tests/han_campaign.rs` plays them with the real Han too.
@@ -98,6 +103,10 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
 - **Plunger boost**: 560 px/s, 7 tiles above Han's head (~7.9 above his floor); the refreshed
   toot adds ~2.4: ~10.3 tiles ideal, >= 9.3 for a human. Buddy ledges are 9 tiles: out of
   Giant Steps' reach (~8.7), comfortably in the boost's. Not a `Jumped`: a `HanBoosted`.
+- **The running throw** (fired up): `THROW_SPEED` 380 px/s up, `THROW_CARRY` 120 px/s kept
+  (`Body::launch`) towards where Nat faces; `HanBoosted { throw: true }`. Han runs at
+  165 x 1.35 px/s then (his own nav graph for it, `HanNav::fired`); his goalkeeper dive brakes
+  in time to stop under Nat.
 - **Navigation**: A* (seconds of travel) on a lazily simulated graph of Han's moves (66 jump /
   walk-off moves from a standing start, up to 3 toots) on the validator's map with his physics,
   per mode (normal; Giant Steps built on demand), re-planned 4x/s, at most 24 new cells
@@ -110,11 +119,11 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   the planned jump (or another one the same way) still lands on his route from there at that
   speed (`Nav::lands_rolling`), else he stops at the take-off point as planned; when the slot
   moves he keeps going on the old route until the new one is in; he keeps to a running Nat's
-  slot between re-plans (right in it, as the chain proofs assume) and runs on when Nat jumps;
+  slot between re-plans (right in it, as the chain simulation assumes) and runs on when Nat jumps;
   far behind a Nat running away he runs up to 1.3x faster on the walks (not when the band's
   fired up); a slot that keeps moving no longer hides that he's stuck; and left behind out of
   sight for 1.5 s he parachutes in like a lost Han. Running after Nat, he stops 2.5 tiles short
-  of a chain chasm's drop, so a mid-air intercept still has its runway.
+  of a fired-up chasm's drop, so a mid-air intercept still has its runway.
 - **Giant walls etc.: the band zone**: levels mark every gate (`gate: <topic> c0,r0 c1,r1`,
   validated against the crossings). Within 14 columns / 10 rows of a band or death gate mark
   (giant, gap, waltz, grip, stain) Han follows as usual, but jumping off his head is the
@@ -124,12 +133,14 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   laughing-band bounce off him there either). He grumbles (`grumble_line`: the gate's own lines
   and general ones in turn, at most every 2 s) and his back doesn't count it. In the zone his
   head only holds Nat while he stands (no mid-air catches, no intercepts, no going ahead), and
-  he keeps off a chute's grease (`Level::han_keeps_out`). Everywhere,
-  his head holds Nat in mid-air only 2 tiles above the floor he left (5 over a chain chasm), so
-  chains of full boosts can't climb out of reach.
-- **The proof** (`validate::boost_leak`, per band/death gate crossing, every mode, ideal input):
-  full boosts from every cell outside the zones Han may be in (standing, or in mid-air up to
-  that catch height and 16 columns from a floor: Nat's before the gate, a chain's, or an
+  he keeps off a chute's grease (`Level::han_keeps_out`). Everywhere, his head holds Nat in
+  mid-air only while the band's fired up, over a fired-up chasm's mark,
+  5 tiles above the floor he left at most (`head_holds`), so chains of throws can't climb
+  out of reach.
+- **The proof** (`validate::boost_leak`, per band/death gate crossing, every mode, ideal input;
+  fired up the full boosts are throws): full boosts from every cell outside the zones Han may
+  be in (standing, or, fired up, in mid-air over a chasm up to that catch height and 16
+  columns from a floor: Nat's before the gate, a chain's, or an
   unreached ledge in a zone that Nat's own jumps get near), weak boosts (and steps off his
   head, then a toot) from every zone cell Nat stands in; whatever unreached cells those land on
   (or pass in a zone) are added, with Nat's own jumps from there, until nothing new: a chain of
@@ -146,15 +157,16 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
 - **Overuse**: 3 / 5 / 7 boosts in a row (lazy / neutral / eager; reset after 1.2 s on real
   ground or 4 s without a boost) → "My back! I'm union, Nat!", a breather of 3 to 1.5 s with
   no boosts (his head still holds you). No limit inside `chain` marks.
-- **Modes**: Giant Steps gravity x0.8 more than Nat's and paddling; fired up he stays at his
-  speed (falls behind, "Wheeze..."), the waltz: steps only in the first 40% of each beat;
+- **Modes**: Giant Steps gravity x0.8 more than Nat's and paddling; fired up he speeds up as
+  Nat does (x1.35) and throws, the waltz: steps only in the first 40% of each beat;
   nervous: 0.8-tile follow gap, trembling; laughing band: bounces (x1.3), rolls.
 - **Gates**: buddy ledges (a boost reaches it, no mode does); shield rows (24+ adjacent cans
   on the floor or under a grating, with a low ceiling: no mode dashes them, the waltz
-  included; Han plugs both the jets and the cans); chain chasms
-  (14+ bottomless columns; crossed by a co-simulated chain with the real reflex, for every
-  moment the band might switch to Giant Steps after the chain's toots; one boost must not do
-  it); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
+  included; Han plugs both the jets and the cans); fired-up chasms
+  (14+ bottomless columns with a nugget line before them, as a long gap has; crossed by a
+  human's throw off Han standing at the edge or up to 3 tiles back; no plain boost, and no
+  mode alone, may do it; tier 2 checks the band can be fired up there from every music
+  state, with a wait for Han and a hop onto his head); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
   tile it; Nat's own: fewest rafts x (respawn + walk back at full speed) must exceed 12 s).
   Teaching topics `boost`, `shield`, `chain`, `buddyraft`.
 - **Markers**: from the marks: gold staff trim + note emblem (giant), red notches + yellow tape

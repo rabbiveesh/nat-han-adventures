@@ -1,5 +1,5 @@
 //! The campaign's Han gates, played headless in the real levels with the real Han: each
-//! buddy ledge, shield row, chain chasm and buddy raft pool (found by its `gate:` mark). The
+//! buddy ledge, shield row, fired-up chasm and buddy raft pool (found by its `gate:` mark). The
 //! same for free play's Han rooms (`free_play_*`), at a few bands and seeds.
 
 use std::time::Duration;
@@ -16,6 +16,7 @@ use nat_han_adventures::{
 const DT: f64 = 1.0 / 60.0;
 const JUMP: KeyCode = KeyCode::KeyZ;
 const RIGHT: KeyCode = KeyCode::ArrowRight;
+const LEFT: KeyCode = KeyCode::ArrowLeft;
 
 #[derive(Resource, Default)]
 struct Deaths(usize);
@@ -28,7 +29,14 @@ fn app(level: &Level) -> App {
         .insert_resource(Levels(vec![level.clone()]))
         .insert_resource(AssistMode::Manual)
         .init_resource::<Deaths>()
-        .add_systems(Last, |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| d.0 += r.read().count());
+        .add_systems(Last, |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| {
+            for e in r.read() {
+                if std::env::var("HAN_TRACE").is_ok() {
+                    eprintln!("died: {e:?}");
+                }
+                d.0 += 1;
+            }
+        });
     app.finish();
     app.cleanup();
     app.update();
@@ -227,7 +235,7 @@ fn play_shield(what: &str, level: &Level, m: GateMark) {
 }
 
 #[test]
-fn chain_chasms_in_the_campaign() {
+fn fired_up_chasms_in_the_campaign() {
     let ms = marks(Topic::Chain);
     assert!(ms.len() >= 2);
     for (what, level, m) in ms {
@@ -236,67 +244,90 @@ fn chain_chasms_in_the_campaign() {
 }
 
 #[test]
-fn free_play_chain_chasms() {
-    for (what, level, m) in room_marks("chain chasm", Topic::Chain) {
+fn free_play_fired_up_chasms() {
+    for (what, level, m) in room_marks("fired-up chasm", Topic::Chain) {
         play_chasm(&what, &level, m);
     }
 }
 
-/// A chain across, trying a few run-ups and toot timings (a player tries again too: how far
-/// behind Han is at the take-off decides when he dives); every failure if none gets across.
+/// The band fired up, Nat walks to the edge and waits for Han, hops back onto his head, and
+/// jumps off it (the throw) running right, then toots: across. A few toot timings (a player
+/// tries again too); every failure if none gets across.
 fn play_chasm(what: &str, level: &Level, m: GateMark) {
     let mut fails = Vec::new();
-    for (run, toot) in [(4, 0.32), (4, 0.26), (4, 0.38), (6, 0.32), (8, 0.32), (3, 0.32), (6, 0.26), (8, 0.38)] {
-        match chain_try(what, level, m, run, toot) {
+    for toot in [0.35, 0.25, 0.45, 0.55] {
+        match throw_try(what, level, m, toot) {
             Ok(()) => return,
-            Err(e) => fails.push(format!("{run}-tile run-up, toot at {toot}s: {e}")),
+            Err(e) => fails.push(format!("toot at {toot}s: {e}")),
         }
     }
-    panic!("{what}: no chain across:\n  {}", fails.join("\n  "));
+    panic!("{what}: no throw across:\n  {}", fails.join("\n  "));
 }
 
-fn chain_try(what: &str, level: &Level, m: GateMark, run: i32, toot: f32) -> Result<(), String> {
+fn throw_try(what: &str, level: &Level, m: GateMark, toot: f32) -> Result<(), String> {
     let mut app = app(level);
+    app.world_mut().insert_resource(Groove::of(nat_han_adventures::audio::Harmony::Quartal));
     // The walk row: the first row of the mark with floor under it.
     let r = (m.r0..=m.r1).find(|&r| (m.c0..=m.c1).any(|c| level.tile(c, r + 1).is_solid())).expect("a floor");
     let edge = (m.c0..=m.c1).find(|&c| !level.tile(c, r + 1).is_solid()).expect("a chasm") - 1;
-    put::<Player>(&mut app, stand(level, edge - run, r));
+    put::<Player>(&mut app, stand(level, edge - 3, r));
     wait_for_han(&mut app, what);
     RIGHT.press(app.world_mut());
-    while pos::<Player>(&mut app).x < (edge as f32 + 1.0) * TILE - 6.0 {
+    while pos::<Player>(&mut app).x < (edge as f32 + 0.5) * TILE {
         app.update();
     }
-    if std::env::var("HAN_TRACE").is_ok() {
-        eprintln!("{what}: takeoff nat {} han {} edge {edge} c1 {}", pos::<Player>(&mut app), pos::<Han>(&mut app), m.c1);
+    RIGHT.release(app.world_mut());
+    wait_for_han(&mut app, what);
+    // Hop back onto Han's head.
+    let han = single::<Han>(&mut app);
+    let mut on = false;
+    for k in 0..4 {
+        // Straight up (Han runs under), else a little hop back towards him.
+        let back = if k == 0 { 0 } else { 2 * k };
+        if back > 0 {
+            LEFT.press(app.world_mut());
+        }
+        tap(&mut app);
+        for i in 0..60 {
+            app.update();
+            if i >= back {
+                LEFT.release(app.world_mut());
+            }
+            if std::env::var("HAN_TRACE").is_ok() {
+                let mode = app.world().get::<HanBrain>(han).unwrap().mode;
+                eprintln!("k={k} i={i} nat {} {} han {} {} {mode:?}", pos::<Player>(&mut app), body::<Player>(&mut app).vel, pos::<Han>(&mut app), body::<Han>(&mut app).vel);
+            }
+            let b = body::<Player>(&mut app);
+            if b.riding == Some(han) {
+                on = true;
+                break;
+            }
+            if b.on_ground {
+                break;
+            }
+        }
+        LEFT.release(app.world_mut());
+        if on {
+            break;
+        }
+        step(&mut app, 0.3);
     }
+    if !on {
+        return Err(format!("never got onto Han (Nat at {}, Han at {})", pos::<Player>(&mut app), pos::<Han>(&mut app)));
+    }
+    step(&mut app, 0.2);
+    RIGHT.press(app.world_mut());
     tap(&mut app);
     step(&mut app, toot);
     tap(&mut app);
-    let han = single::<Han>(&mut app);
-    let mut boosted = false;
     for _ in 0..300 {
         app.update();
-        if std::env::var("HAN_TRACE").is_ok() {
-            let (n, h) = (pos::<Player>(&mut app), pos::<Han>(&mut app));
-            let (nb, hb) = (body::<Player>(&mut app), body::<Han>(&mut app));
-            let mode = app.world().get::<HanBrain>(han).unwrap().mode;
-            eprintln!("nat {n} {} han {h} {} {mode:?}", nb.vel, hb.vel);
-        }
-        if !boosted && body::<Player>(&mut app).riding == Some(han) {
-            tap(&mut app);
-            boosted = true;
-            step(&mut app, 0.4);
-            tap(&mut app);
-        }
         let b = body::<Player>(&mut app);
-        if b.on_ground && b.riding.is_none() {
+        if (b.on_ground && b.riding.is_none()) || deaths(&app) > 0 {
             break;
         }
     }
     let p = pos::<Player>(&mut app);
-    if !boosted {
-        return Err("never landed on Han mid-air".into());
-    }
     if deaths(&app) > 0 {
         return Err(format!("fell at {p}"));
     }

@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use super::{
     BACK_WARN_LINE, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
     LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE,
-    WHEEZE_LINE, brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
+    brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
 };
 use crate::audio::Harmony;
 use crate::events::HanSays;
@@ -23,23 +23,27 @@ use crate::level::nav::{Edge, HanMove, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
 use crate::level::{Level, PlatformKind, TILE, ThingKind, Tile};
 
-/// Han's routes for the level visit (one graph per physics he's had: normal, Giant Steps).
+/// Han's routes for the level visit (one graph per physics he's had: normal, Giant Steps,
+/// fired up).
 #[derive(Resource)]
 pub struct HanNav {
     pub normal: Nav,
     pub giant: Option<Nav>,
+    pub fired: Option<Nav>,
 }
 
 impl Default for HanNav {
     fn default() -> Self {
-        HanNav { normal: Nav::new(Mode::Normal), giant: None }
+        HanNav { normal: Nav::new(Mode::Normal), giant: None, fired: None }
     }
 }
 
 impl HanNav {
     fn for_groove(&mut self, groove: &Groove) -> &mut Nav {
-        if groove.harmony == Harmony::Coltrane {
+        if groove.giant_steps() {
             self.giant.get_or_insert_with(|| Nav::new(Mode::GiantSteps))
+        } else if groove.fired_up() {
+            self.fired.get_or_insert_with(|| Nav::new(Mode::FiredUp))
         } else {
             &mut self.normal
         }
@@ -47,8 +51,8 @@ impl HanNav {
 
     fn invalidate(&mut self) {
         self.normal.invalidate();
-        if let Some(g) = &mut self.giant {
-            g.invalidate();
+        for n in [&mut self.giant, &mut self.fired].into_iter().flatten() {
+            n.invalidate();
         }
     }
 }
@@ -91,11 +95,6 @@ pub struct Exec {
     pub wait: f32,
 }
 
-/// Lines Han says once per level visit.
-mod once {
-    pub const WHEEZE: u32 = 2;
-}
-
 #[derive(Component, Debug, Clone, Reflect)]
 #[reflect(Component)]
 pub struct HanBrain {
@@ -129,11 +128,11 @@ pub struct HanBrain {
     pub boosts: u32,
     /// Parachute drops this level visit (stats, tests).
     pub drops: u32,
-    pub said: u32,
     /// Braced for Nat this step.
     pub braced: bool,
-    /// Where his feet were (world y) when he last stood on something: in mid-air his head holds
-    /// Nat only [`HAN_CATCH_RISE`](crate::level::buddy::HAN_CATCH_RISE) above it.
+    /// Where his feet were (world y) when he last stood on something: in mid-air (over a
+    /// fired-up chasm) his head holds Nat only
+    /// [`HAN_CHASM_CATCH_RISE`](crate::level::buddy::HAN_CHASM_CATCH_RISE) above it.
     pub floor_y: f32,
     /// Weak boosts given this level visit (stats, tests), grumbles said, and seconds since the
     /// last grumble.
@@ -170,7 +169,6 @@ impl Default for HanBrain {
             winded: 0.0,
             boosts: 0,
             drops: 0,
-            said: 0,
             braced: false,
             floor_y: 0.0,
             weak_boosts: 0,
@@ -661,21 +659,16 @@ pub(super) fn think(
     if lost && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
-    // Fired up: he can't keep up.
-    if groove.harmony == Harmony::Quartal && dx_nat.abs() > 8.0 * TILE && brain.said & once::WHEEZE == 0 {
-        brain.said |= once::WHEEZE;
-        say(&mut says, WHEEZE_LINE);
-    }
-
-    // --- His head: a perch for Nat (standing, or in mid-air not too high up and not in a band
-    // zone, see `head_holds`), the plunger boost, the weak one in a band zone.
+    // --- His head: a perch for Nat (standing, or, fired up, in mid-air not too high up and not
+    // in a band zone, see `head_holds`), the plunger boost (fired up: the throw), the weak one
+    // in a band zone.
     if body.on_ground {
         brain.floor_y = pos.0.y;
     }
     let up = matches!(brain.mode, HanMode::Follow | HanMode::Intercept | HanMode::Ahead { .. });
     let my_cell = feet_cell(level, pos.0);
     let zone = level.in_band_zone(my_cell) || level.in_band_zone((my_cell.0, my_cell.1 - 1));
-    let holds = head_holds(body.on_ground, pos.0.y - brain.floor_y, zone, level.in_chasm(my_cell.0))
+    let holds = head_holds(body.on_ground, pos.0.y - brain.floor_y, zone, level.in_chasm(my_cell.0), groove.fired_up())
         && !level.han_keeps_out(my_cell);
     *head = HanHead {
         solid: up && holds,
@@ -704,7 +697,6 @@ pub(super) fn think(
         }
         HanMode::Follow if running && groove.bouncy() => HanPose::Roll,
         HanMode::Follow if running => HanPose::Run,
-        HanMode::Follow if groove.harmony == Harmony::Quartal && dx_nat.abs() > 4.0 * TILE => HanPose::Winded,
         HanMode::Follow => HanPose::Idle,
     };
     let facing_left = if brain.braced || pose == HanPose::Idle {
@@ -896,7 +888,7 @@ fn follow(
                 if brain.path.is_empty() && nat.vel.x.abs() > 30.0 {
                     brain.replan = 0.0;
                 }
-                let speed = catch_up(groove, me.pos.x, slot_x, nat.vel.x);
+                let speed = catch_up(me.pos.x, slot_x, nat.vel.x);
                 return if more { HanInput { dir: dx.signum(), speed, ..default() } } else { arrive(dx, 2.0) };
             }
             Step::Move(k) => {
@@ -1042,9 +1034,9 @@ fn careful(level: &Level, me: &Kin, body: &Body, i: HanInput) -> HanInput {
 
 /// Running along a walk after a Nat running away (at `nat_vx`): faster (up to
 /// [`HAN_CATCH_UP`] × his top speed) the further he is from his slot (at `slot_x`), so he
-/// catches up after a hold-up. Not while the band's fired up: then he just can't keep up.
-fn catch_up(groove: &Groove, x: f32, slot_x: f32, nat_vx: f32) -> f32 {
-    if groove.harmony == Harmony::Quartal || nat_vx * (slot_x - x) <= 0.0 || nat_vx.abs() < 30.0 {
+/// catches up after a hold-up.
+fn catch_up(x: f32, slot_x: f32, nat_vx: f32) -> f32 {
+    if nat_vx * (slot_x - x) <= 0.0 || nat_vx.abs() < 30.0 {
         return 1.0;
     }
     let far = ((slot_x - x).abs() / TILE - 3.0) / 4.0;

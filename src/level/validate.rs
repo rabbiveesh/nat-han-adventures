@@ -77,11 +77,11 @@
 
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
-use super::buddy::{Chasm, HAN_CATCH_RISE, HAN_CHASM_CATCH_RISE, HanPhys, chain_cross};
+use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys};
 use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    ALIEN_PULSE, BOOST_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
+    ALIEN_PULSE, BOOST_SPEED, THROW_CARRY, THROW_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
     WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
@@ -122,7 +122,7 @@ pub const PIT_TARGETS: usize = 6;
 pub const SHIELD_ROW_MIN: usize = 24;
 /// Liquid surface tiles (under ceiling spikes) that make a buddy raft pool.
 pub const BUDDY_POOL_MIN: usize = 10;
-/// Bottomless columns that make a chain-jump chasm (wider than a long gap).
+/// Bottomless columns that make a fired-up chasm (wider than a long gap).
 pub const CHASM_MIN: usize = 14;
 /// Most of Nat's own rafts the raft-bridge search tries for a buddy raft pool.
 pub const MAX_NAT_RAFTS: u32 = 6;
@@ -193,7 +193,8 @@ pub enum Gate {
     BuddyLedge,
     /// Needs Han going ahead into the jets.
     ShieldRow,
-    /// Needs boosts off Han in mid-air, chained with toots.
+    /// Needs the fired-up band and Han: his running throw, and catches in mid-air to throw
+    /// again, chained with toots.
     ChainChasm,
     /// Needs Han's big raft.
     BuddyRaft,
@@ -214,7 +215,7 @@ impl Gate {
             Gate::StainPit => "stain pit",
             Gate::BuddyLedge => "buddy ledge",
             Gate::ShieldRow => "shield row",
-            Gate::ChainChasm => "chain chasm",
+            Gate::ChainChasm => "fired-up chasm",
             Gate::BuddyRaft => "buddy raft pool",
         }
     }
@@ -283,6 +284,9 @@ pub struct Env {
     pub carry_cap: f32,
     /// Proofs (ideal input): carried speeds round up to the next [`Arcs`] step, not down.
     pub ideal: bool,
+    /// The fired-up band: a jump off Han's head ([`Launch::Boost`]) is the running throw
+    /// ([`THROW_SPEED`] up, [`THROW_CARRY`] kept on top of the run, towards where Nat faces).
+    pub throw: bool,
 }
 
 /// How much faster than normal the waltz's platforms glide at the peak of ONE
@@ -326,6 +330,7 @@ impl Env {
             },
             carry_cap: LAUNCH_MAX * if ideal { 1.0 } else { 0.9 },
             ideal,
+            throw: g.fired_up(),
         }
     }
 
@@ -351,6 +356,7 @@ impl Env {
             carry: 0.0,
             carry_cap: 0.0,
             ideal: false,
+            throw: false,
         }
     }
 }
@@ -843,7 +849,7 @@ fn find_pools(level: &Level) -> Vec<Pool> {
     out
 }
 
-/// Chain-jump chasms: at least [`CHASM_MIN`] columns with nothing at all from the walk row
+/// Fired-up chasms: at least [`CHASM_MIN`] columns with nothing at all from the walk row
 /// down (bottomless), between two floors at the same height.
 fn find_chasms(level: &Level, flags: &[u16]) -> Vec<Chasm> {
     let (w, h) = (level.width as i32, level.height as i32);
@@ -960,7 +966,9 @@ pub enum Launch {
     /// Standing in the take-off cell: a ground jump (or running off the edge).
     Ground,
     /// Standing on Han's head, Han standing in the take-off cell: the plunger boost
-    /// ([`BOOST_SPEED`], toot refreshed). Only jumping strategies apply.
+    /// ([`BOOST_SPEED`], toot refreshed), or with [`Env::throw`] the running throw (each
+    /// strategy's `carry` is then the throw's, signed with where Nat faces). Only jumping
+    /// strategies apply.
     Boost,
     /// Standing on Han's head in a band zone, Han standing in the take-off cell: the weak boost
     /// ([`WEAK_BOOST_SPEED`], toot refreshed), or stepping off his head (then a toot). Han may
@@ -1007,6 +1015,19 @@ impl Arcs {
     fn with_launch(env: Env, strategies: Vec<Strategy>, launch: Launch) -> Arcs {
         let y0 = if launch == Launch::Ground { 0.0 } else { ON_HAN };
         let mut strategies: Vec<Strategy> = strategies.into_iter().filter(|s| s.carry == 0.0).collect();
+        if launch == Launch::Boost && env.throw {
+            // Thrown towards where Nat faces: his key's way, or either way with no key held.
+            strategies = strategies
+                .into_iter()
+                .flat_map(|s| {
+                    let signs: &[f32] = if s.dir == 0.0 { &[-1.0, 1.0] } else { &[0.0] };
+                    signs.iter().map(move |&sign| {
+                        let facing = if s.dir == 0.0 { sign } else { s.dir };
+                        Strategy { carry: facing * THROW_CARRY, ..s }
+                    })
+                })
+                .collect();
+        }
         let plain = strategies.len();
         if launch == Launch::Ground && env.carry > 0.0 {
             let step = if env.ideal { CARRY_STEP_IDEAL } else { CARRY_STEP_HUMAN };
@@ -1064,7 +1085,9 @@ impl Arcs {
     pub(crate) fn flight(&self, map: &Map, cell: Cell, s: &Strategy) -> Option<Flight> {
         let x0 = match self.launch {
             Launch::Weak => weak_take_off(map, &self.env, cell, s),
-            _ => take_off(map, &self.env, cell, s)?,
+            // A throw's carry is Han's, not a platform's.
+            Launch::Boost => take_off(map, &self.env, cell, &Strategy { carry: 0.0, ..*s })?,
+            Launch::Ground => take_off(map, &self.env, cell, s)?,
         };
         let floor = (cell.1 + 1) as f32 * TILE;
         let y0 = floor - HALF_H + if self.launch == Launch::Ground { 0.0 } else { ON_HAN };
@@ -1097,6 +1120,7 @@ impl Flight {
         let vy0 = match (s.jump, launch) {
             (false, _) => 0.0,
             (true, Launch::Ground) => -JUMP_SPEED * env.boost,
+            (true, Launch::Boost) if env.throw => -THROW_SPEED,
             (true, Launch::Boost) => -BOOST_SPEED,
             (true, Launch::Weak) => -WEAK_BOOST_SPEED * env.boost,
         };
@@ -1591,8 +1615,11 @@ pub struct Physics {
     glide_ideal: Arcs,
     no_toot: Arcs,
     /// Plunger boosts off Han standing still: a human's (normal physics), and ideal ones in
-    /// the modes that could carry them farthest.
+    /// the modes that could carry them farthest (fired up: the running throw).
     boost: Arcs,
+    /// The fired-up band's running throw off Han standing still: a human's (crossing a
+    /// fired-up chasm).
+    throw: Arcs,
     boost_ideal: Vec<(Mode, Arcs)>,
     /// Weak boosts off Han in a band zone, ideal, in the modes with their own geometry (the
     /// waltz and the nervous band jump like normal).
@@ -1609,6 +1636,10 @@ impl Physics {
             Env::new(Mode::Normal, false),
             strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
         );
+        let throw = Arcs::boost(
+            Env::new(Mode::FiredUp, false),
+            strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
+        );
         let boost_ideal = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp]
             .into_iter()
             .map(|m| (m, Arcs::boost(Env::new(m, true), ideal_strategies())))
@@ -1619,7 +1650,7 @@ impl Physics {
             .collect();
         let glide = Arcs::new(Env::glide(false), strategies());
         let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, boost_ideal, weak_ideal }
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1631,8 +1662,8 @@ impl Physics {
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let glide = Arcs::new(Env::glide(false), human.clone());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, boost_ideal, weak_ideal }
+        let Physics { boost, throw, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -1644,12 +1675,14 @@ impl Physics {
     pub fn laughing() -> [(&'static str, Physics); 2] {
         const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics { human, no_toot, boost, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
+            let Physics { human, no_toot, boost, throw, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
             let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
+            // (From the plain strategies: the throw's are already signed with its carry.)
+            let throw = Arcs::boost(nudge(throw.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect());
             let glide = Arcs::new(nudge(glide.env), glide.strategies);
-            Physics { human, ideal, glide, glide_ideal, no_toot, boost, boost_ideal, weak_ideal }
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, boost_ideal, weak_ideal }
         };
         [
             ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
@@ -1984,7 +2017,8 @@ fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
 }
 
 /// Han's gates from reached cells not tried yet: buddy ledges (a boost off Han standing
-/// there), shield rows (Han goes ahead), buddy raft pools (Han's rafts), chain chasms.
+/// there), shield rows (Han goes ahead), buddy raft pools (Han's rafts), fired-up chasms
+/// (the running throw off Han at the edge, the band fired up).
 fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<Found> {
     let mut found = Vec::new();
     let mut buf = Vec::new();
@@ -2026,14 +2060,20 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
         }
         for ch in &map.chasms {
             for dir in [-1, 1] {
-                let edge = if dir > 0 { (ch.c0 - 1, ch.row) } else { (ch.c1 + 1, ch.row) };
-                if edge == cell
-                    && let Some(l) = chain_cross(map.level, ch, dir)
-                    && map.standable(l)
-                    && !g.reached(l)
-                {
-                    let touched = (ch.c0..=ch.c1).map(|c| (c, ch.row)).collect();
-                    found.push((Gate::ChainChasm, cell, l, touched));
+                // Han standing at the edge (or a few steps back), the band fired up: the throw.
+                let edge = if dir > 0 { ch.c0 - 1 } else { ch.c1 + 1 };
+                let back = (edge - cell.0) * dir;
+                if cell.1 != ch.row || !(0..RUN_UP as i32).contains(&back) || !ready(map, g, Mode::FiredUp, cell, dir) {
+                    continue;
+                }
+                for s in phys.throw.strategies.iter().filter(|s| s.dir == dir as f32) {
+                    let Some(f) = phys.throw.flight(map, cell, s) else { continue };
+                    if let Outcome::Land(l) = fly(map, &phys.throw.env, &f, &mut buf)
+                        && (l.0 - if dir > 0 { ch.c1 } else { ch.c0 }) * dir > 0
+                        && !g.reached(l)
+                    {
+                        found.push((Gate::ChainChasm, cell, l, buf.clone()));
+                    }
                 }
             }
         }
@@ -2188,12 +2228,14 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
     }
     match c.gate {
         Gate::ChainChasm => {
-            // A chain, not one boost: no single boost off Han standing anywhere near crosses.
+            // The fired-up band's: no plunger boost off Han standing anywhere near crosses in
+            // another mode (and none catches Nat in mid-air there). The fired-up band alone
+            // can't either (above: it's every mode's leak).
             let cands: Vec<Cell> = near.iter().copied().filter(|&n| before.han_allowed(n)).collect();
             for (mode, arcs) in phys.boost_ideal.iter().filter(|(m, _)| *m != Mode::FiredUp) {
                 if let Some((f, to)) = leak(&before, arcs, &cands, &beyond, &HashSet::new()) {
                     errs.push(format!(
-                        "{what} is crossable with one plunger boost ({mode:?}) from col {} row {} -> col {} row {}: not a chain",
+                        "{what} is crossable with a plunger boost ({mode:?}) from col {} row {} -> col {} row {}: it needs the throw",
                         f.0, f.1, to.0, to.1
                     ));
                 }
@@ -2205,21 +2247,18 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
     errs
 }
 
-/// In mid-air Han's head holds Nat up to [`HAN_CATCH_RISE`] above the floor he last stood on:
-/// that many rows, plus one (his feet anywhere in a cell); [`HAN_CHASM_CATCH_RISE`] over a
-/// chain-jump chasm...
-const CATCH_ROWS: i32 = (HAN_CATCH_RISE / TILE) as i32 + 1;
+/// In mid-air Han's head holds Nat only over a fired-up chasm, up to [`HAN_CHASM_CATCH_RISE`]
+/// above the floor he last stood on: that many rows, plus one (his feet anywhere in a cell)...
 const CHASM_CATCH_ROWS: i32 = (HAN_CHASM_CATCH_RISE / TILE) as i32 + 1;
 /// ...as far as this (columns) from it (at that height he runs and toots a long way)...
 const CATCH_COLS: i32 = 16;
 /// ...and down to this many rows below it (off a ledge, down a pit).
 const CATCH_DROP: i32 = 4;
 /// Where Han may be in mid-air, holding Nat, after leaving the floor of `cell`: the open cells
-/// (flood-filled, so not through walls) up to [`CATCH_ROWS`] above it (over a chasm,
-/// [`CHASM_CATCH_ROWS`]), [`CATCH_DROP`] below and [`CATCH_COLS`] to either side.
+/// over a chasm (flood-filled, so not through walls, from his floor) up to
+/// [`CHASM_CATCH_ROWS`] above it, [`CATCH_DROP`] below and [`CATCH_COLS`] to either side.
 fn han_air(map: &Map, h: Cell) -> Vec<Cell> {
-    let up = |x: i32| if map.level.in_chasm(x) { CHASM_CATCH_ROWS } else { CATCH_ROWS };
-    let inside = |(x, y): Cell| (x - h.0).abs() <= CATCH_COLS && (h.1 - up(x)..=h.1 + CATCH_DROP).contains(&y);
+    let inside = |(x, y): Cell| (x - h.0).abs() <= CATCH_COLS && (h.1 - CHASM_CATCH_ROWS..=h.1 + CATCH_DROP).contains(&y);
     let mut seen: HashSet<Cell> = HashSet::from([h]);
     let mut todo = vec![h];
     while let Some((x, y)) = todo.pop() {
@@ -2229,7 +2268,7 @@ fn han_air(map: &Map, h: Cell) -> Vec<Cell> {
             }
         }
     }
-    seen.into_iter().collect()
+    seen.into_iter().filter(|&(x, y)| (x, y) == h || map.level.in_chasm(x)).collect()
 }
 
 /// How far (columns, rows) around a gate's take-off the boost proof looks for Nat and Han.
@@ -2240,10 +2279,10 @@ pub const BOOST_ROWS: i32 = 12;
 /// chain of boosts and toots, opens it, in any mode, with ideal input. Returns what does.
 ///
 /// Han follows Nat everywhere, so (over-approximating where a chain can put them):
-/// - **Full boosts**, outside the band zones (Han's cell and Nat's on his head): Han standing,
-///   or in mid-air up to [`HAN_CATCH_RISE`] (over a chasm [`HAN_CHASM_CATCH_RISE`]) above a
-///   floor he may have stood on, anywhere [`CATCH_COLS`] from it, through open air ([`han_air`]):
-///   a cell Nat reached before the gate, one a chain got Nat to, or one nobody reached in a
+/// - **Full boosts** (fired up: throws), outside the band zones (Han's cell and Nat's on his
+///   head): Han standing, or (only while the band's fired up, over a chasm) in mid-air up to
+///   [`HAN_CHASM_CATCH_RISE`] above a floor he may have stood on, anywhere [`CATCH_COLS`]
+///   from it, through open air ([`han_air`]): a cell Nat reached before the gate, one a chain got Nat to, or one nobody reached in a
 ///   zone this side of the gate whose air Nat gets into on his own. Whatever came before, a
 ///   chain of full boosts only ever launches from one of these.
 /// - **Weak boosts**, in the zones: his head holds Nat there only while he stands, so from the
@@ -2353,7 +2392,8 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
             // Full boosts from every cell Han may be in, around every floor so far.
             for (h, air) in std::mem::take(&mut floors) {
                 for a in air {
-                    if !full_at(a) || near_side(a) != near_side(h) || !full_tried.insert(a) {
+                    // His head holds Nat in mid-air only while the band's fired up.
+                    if (mode != Mode::FiredUp && a != h) || !full_at(a) || near_side(a) != near_side(h) || !full_tried.insert(a) {
                         continue;
                     }
                     if let Some(l) = fly_from(full, a, &mut new) {
