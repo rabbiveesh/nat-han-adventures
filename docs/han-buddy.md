@@ -91,11 +91,10 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
   behind 3 spikes (so no mode alone, fired up included, makes it), under a ceiling that ends
   over the gap for his plunger. Their zone weakens his boost except in the waltz.
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
-- **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
   inside).
 - Free play gets all of these as rooms (`src/freeplay/templates.rs`: mega wall, buddy raft
-  pool, shield row, fired-up chasm, cling shaft, trapeze), served once the story level that teaches each is unlocked;
+  pool, fired-up chasm, cling shaft, trapeze), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
   width from the room's ends, so a neighbouring room's band gate never weakens Han there.
   `tests/han_campaign.rs` plays them with the real Han too.
@@ -198,16 +197,15 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   up Giant Steps; no mode alone, no plain boost from outside a zone and no weak one inside
   it; unmarked, a plain boost from outside any zone that climbs something is reported as one,
   to be marked; tier 2 checks Giant Steps can be summoned there from every music state, with a
-  hop onto Han); shield rows (24+ adjacent cans
-  on the floor or under a grating, with a low ceiling: no mode dashes them, the waltz
-  included; Han plugs both the jets and the cans); fired-up chasms
+  hop onto Han); fired-up chasms
   (14+ bottomless columns with a nugget line before them, as a long gap has; crossed by a
   human's throw off Han standing at the edge or up to 3 tiles back; no plain boost, and no
   mode alone, may do it; tier 2 checks the band can be fired up there from every music
   state, with a wait for Han and a hop onto his head); buddy raft pools (10+ sewage tiles under ceiling spikes hanging from solid; Han's rafts
   tile it; Nat's own: fewest rafts x (respawn + walk back at full speed) must exceed 12 s).
-  Teaching topics `boost`, `shield`, `chain`, `buddyraft`.
+  Teaching topics `boost`, `chain`, `buddyraft`, `shaft`, `trapeze`.
 - **Markers**: from the marks: gold staff trim + note emblem (giant), red notches + yellow tape
-  (boost), a PLUMBERS ONLY sign (shield).
+  (boost). Shield rows are gone (2026-10-11): a run of 24+ adjacent cans is simply deadly;
+  Han still goes ahead of shorter can runs and plugs them ("lemme check that").
 - Repeating a hint after repeated deaths is the adaptive engine's `han_hint` lever.
 

@@ -407,12 +407,12 @@ fn fired_up_han_throws_nat_across_a_chasm() {
 
 // --- Lemme check that ----------------------------------------------------------------------------
 
-/// A shield row: 24 adjacent cans under a grating, low ceiling.
+/// A can tunnel (no gate: Han goes ahead of any cans): 24 adjacent cans under a grating, low ceiling.
 fn shield_level() -> String {
     shield_level_on(true)
 }
 
-/// A shield row of 24 adjacent cans with a low ceiling: under a grating (`grated`), or on
+/// A can tunnel of 24 adjacent cans with a low ceiling: under a grating (`grated`), or on
 /// the floor Nat walks on (the cans themselves deadly while they fire).
 fn shield_level_on(grated: bool) -> String {
     let w = 80;
@@ -436,7 +436,7 @@ fn shield_level_on(grated: bool) -> String {
     rows[9][2] = 'P';
     rows[9][w - 3] = 'G';
     let rows: Vec<String> = rows.iter().map(|r| r.iter().collect()).collect();
-    format!("name: Shield\ngate: shield 29,9 54,9\n---\n{}\n", rows.join("\n"))
+    format!("name: Shield\n---\n{}\n", rows.join("\n"))
 }
 
 #[test]
@@ -444,7 +444,7 @@ fn han_goes_ahead_and_shields_nat_from_sprays() {
     shields_nat(&shield_level());
 }
 
-/// Han plugs the cans themselves too: a shield row on the floor, walked behind him.
+/// Han plugs the cans themselves too: a can tunnel on the floor, walked behind him.
 #[test]
 fn han_shields_nat_from_floor_cans() {
     shields_nat(&shield_level_on(false));
@@ -486,7 +486,7 @@ fn shields_nat(level: &str) {
 }
 
 #[test]
-fn without_han_the_shield_row_sprays_nat() {
+fn without_han_the_can_tunnel_sprays_nat() {
     sprays_nat_alone(&shield_level());
 }
 
@@ -929,7 +929,7 @@ fn buddy_raft_and_shield_timing() {
 
 /// Going ahead is an escort: Nat may dawdle, Han waits for him and keeps the jets plugged.
 #[test]
-fn han_escorts_a_dawdling_nat_through_the_shield_row() {
+fn han_escorts_a_dawdling_nat_through_the_can_tunnel() {
     let mut app = app(&shield_level());
     press(&mut app, RIGHT);
     while nat(&mut app).x < 28.0 * TILE {

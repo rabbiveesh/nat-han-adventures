@@ -1,5 +1,5 @@
 //! The campaign's Han gates, played headless in the real levels with the real Han: each
-//! mega wall, shield row, fired-up chasm and buddy raft pool (found by its `gate:` mark). The
+//! mega wall, fired-up chasm, buddy raft pool, cling shaft and trapeze (found by its `gate:` mark). The
 //! same for free play's Han rooms (`free_play_*`), at a few bands and seeds.
 
 use std::time::Duration;
@@ -358,54 +358,6 @@ fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
     let p = pos::<Player>(&mut app);
     assert_eq!(deaths(&app), 0, "{what}: {p}");
     body::<Player>(&mut app).on_ground && (p.x - level.tile_center(lip as usize, 0).x) * dir as f32 > 10.0 * TILE
-}
-
-#[test]
-fn shield_rows_in_the_campaign() {
-    let ms = marks(Topic::Shield);
-    assert!(ms.len() >= 2);
-    for (what, level, m) in ms {
-        play_shield(&what, &level, m);
-    }
-}
-
-#[test]
-fn free_play_shield_rows() {
-    for (what, level, m) in room_marks("shield row", Topic::Shield) {
-        play_shield(&what, &level, m);
-    }
-}
-
-fn play_shield(what: &str, level: &Level, m: GateMark) {
-    let mut app = app(level);
-    put::<Player>(&mut app, stand(level, m.c0, m.r1));
-    wait_for_han(&mut app, what);
-    // Face the row, stand still: Han goes ahead.
-    RIGHT.press(app.world_mut());
-    step(&mut app, 0.05);
-    RIGHT.release(app.world_mut());
-    let mut ahead = false;
-    for _ in 0..300 {
-        app.update();
-        let h = single::<Han>(&mut app);
-        if matches!(app.world().get::<HanBrain>(h).unwrap().mode, HanMode::Ahead { .. }) {
-            ahead = true;
-            break;
-        }
-    }
-    assert!(ahead, "{what}: Han went ahead");
-    step(&mut app, 0.4);
-    RIGHT.press(app.world_mut());
-    let end = (m.c1 as f32 + 1.0) * TILE;
-    for _ in 0..1200 {
-        app.update();
-        if pos::<Player>(&mut app).x > end {
-            break;
-        }
-    }
-    let p = pos::<Player>(&mut app);
-    assert_eq!(deaths(&app), 0, "{what}: sprayed at {p}");
-    assert!(p.x > end, "{what}: through at {p}");
 }
 
 #[test]

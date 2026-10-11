@@ -12,7 +12,7 @@
 use super::canvas::*;
 use super::dice::{Dice, t};
 use crate::adapt::{Band, Skill};
-use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN, SHIELD_ROW_MIN};
+use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN};
 use crate::level::{PlatformKind, Topic};
 
 /// Room dressing from the assist levers (`crate::adapt::AssistLevers`), built into the room.
@@ -59,7 +59,6 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
     Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, height: MEGA_H, build: mega_wall },
     Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
-    Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
     Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
     Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, height: MEGA_H, build: cling_shaft },
     Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, height: MEGA_H, build: trapeze },
@@ -745,33 +744,6 @@ fn buddy_raft_pool(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bu
     c.ground(HAN_TAIL, FLOOR);
     // No mid-room checkpoint: one near the pool would let Nat's own rafts bridge it.
     Built { hint: Some((&[Topic::BuddyRaft], "Spikes up top! Stand still: I'll make us a raft.")), checkpoint: None }
-}
-
-/// A shield row: a run of adjacent cans (24 → 32) under a grating with a low roof, too long
-/// for any mode, the waltz included: Nat walks it behind Han. From band 5 a hop on the way.
-fn shield_row(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
-    let checkpoint = han_lead(c);
-    if band >= 5 {
-        c.pit(d.int(2, 3) as usize);
-        c.ground(3, FLOOR);
-    }
-    c.ground(lerpi(band, 5.0, 3.0) + d.int(0, 1) as usize, FLOOR);
-    let n = SHIELD_ROW_MIN + lerpi(band, 0.0, 6.0) + d.int(0, 2) as usize;
-    let x = c.width();
-    for _ in 0..n {
-        c.column(|r| match r {
-            r if r <= PIPE_ROOF => b'#',
-            FLOOR => b'=',
-            r if r == FLOOR + 1 => b'S',
-            r if r > FLOOR + 1 => b'#',
-            _ => b'.',
-        });
-    }
-    for k in (2..n).step_by(4) {
-        c.nugget(x + k, STAND);
-    }
-    c.ground(HAN_TAIL, FLOOR);
-    Built { hint: Some((&[Topic::Shield], "Plumbers only! Wait, I go first. Stay behind me!")), checkpoint }
 }
 
 /// A fired-up chasm room's rows: a throw stays well under the room's top (a ceiling).

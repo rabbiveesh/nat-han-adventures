@@ -34,7 +34,7 @@
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
 //!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `mega`
-//!   (mega wall), `shaft` (cling shaft), `trapeze` (trapeze), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
+//!   (mega wall), `shaft` (cling shaft), `trapeze` (trapeze), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
 //! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
@@ -54,7 +54,7 @@
 //! | `v` | spikes hanging from the ceiling, deadly; top half of the tile |
 //! | `~` | deadly liquid (sewage); the whole tile, surface drawn at the top |
 //! | `F` | fly swarm: hovers in a circle (radius ~1 tile) around its tile, deadly |
-//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans are too many to time: the validator counts them deadly (24+ are Han's *shield row*) |
+//! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans are too many to time: the validator counts them deadly |
 //! | `1`-`9` | moving platform: a horizontal run of the same digit is one platform, configured by its `N:` header line |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -92,8 +92,8 @@
 //!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
 //!   catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
-//!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red plunger-handle notches and yellow plumber's tape, shield rows a
-//!   "PLUMBERS ONLY" sign at their start.
+//!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red
+//!   plunger-handle notches and yellow plumber's tape.
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is a solid ceiling (the top of the screen: the camera never shows above row 0, so
@@ -238,8 +238,6 @@ pub enum Topic {
     /// Trapezes: the waltz, Han swinging from his plunger stuck in the ceiling, a launch off
     /// his head on ONE (`trapeze`).
     Trapeze,
-    /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
-    Shield,
     /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
     /// (`chain`).
     Chain,
@@ -248,7 +246,7 @@ pub enum Topic {
 }
 
 impl Topic {
-    pub const ALL: [Topic; 17] = [
+    pub const ALL: [Topic; 16] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -263,7 +261,6 @@ impl Topic {
         Topic::Mega,
         Topic::Shaft,
         Topic::Trapeze,
-        Topic::Shield,
         Topic::Chain,
         Topic::BuddyRaft,
     ];
@@ -284,7 +281,6 @@ impl Topic {
             Topic::Mega => "mega",
             Topic::Shaft => "shaft",
             Topic::Trapeze => "trapeze",
-            Topic::Shield => "shield",
             Topic::Chain => "chain",
             Topic::BuddyRaft => "buddyraft",
         }
@@ -306,7 +302,6 @@ impl Topic {
                 | Topic::Mega
                 | Topic::Shaft
                 | Topic::Trapeze
-                | Topic::Shield
                 | Topic::Chain
                 | Topic::BuddyRaft
         )

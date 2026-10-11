@@ -51,14 +51,12 @@ pub enum SpriteId {
     HanRaft,
     /// Gate markers: gold music-staff trim on a giant wall's face, its note emblem, the staff
     /// a glide launch's 3/4 emblems, a mega wall's red plunger-handle
-    /// notches and yellow plumber's tape (16x16 overlays), and the "PLUMBERS ONLY" sign at a
-    /// shield row (36x16).
+    /// notches and yellow plumber's tape (16x16 overlays).
     GiantTrim,
     GiantEmblem,
     WaltzEmblem,
     LedgeNotch,
     PlumberTape,
-    PlumbersOnly,
     /// Golden nugget, spinning frames. 16x16 with the nugget ~8px centered.
     Nugget,
     /// Checkpoint: toilet-paper holder, untouched / unrolled after touching. 16x16.
@@ -140,7 +138,7 @@ impl SpriteId {
         let mut v = vec![
             PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, HanBraced, HanIntercept,
             HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
-            WaltzEmblem, LedgeNotch, PlumberTape, PlumbersOnly, Nugget,
+            WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
@@ -159,8 +157,7 @@ impl SpriteId {
             GoalFlag => (16, 32),
             HanBraced => (16, 20),
             HanParachute => (16, 24),
-            PlumbersOnly => (36, 16),
-            Throne => (32, 32),
+                Throne => (32, 32),
             Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
@@ -197,7 +194,6 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         WaltzEmblem => buddy::waltz_emblem(),
         LedgeNotch => buddy::ledge_notches(),
         PlumberTape => buddy::plumber_tape(),
-        PlumbersOnly => buddy::plumbers_only(),
         Nugget => items::nugget(),
         CheckpointOff => items::checkpoint_off(),
         CheckpointOn => items::checkpoint_on(),
