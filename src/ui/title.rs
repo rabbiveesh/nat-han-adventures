@@ -27,7 +27,10 @@ struct TitleScreen;
 const OPTIONS: [&str; 2] = ["STORY", "FREE PLAY"];
 
 #[derive(Resource, Default)]
-struct TitleCursor(usize);
+struct TitleCursor(usize, Vec<i32>);
+
+/// The hidden way into Side B (a prototype, `game::sideb`): Up Up Down Down on the title.
+const SIDE_B_COMBO: [i32; 4] = [-1, -1, 1, 1];
 
 #[derive(Component)]
 struct TitleOption(usize);
@@ -111,6 +114,20 @@ fn input(
     if d != 0 {
         cursor.0 = (cursor.0 as i32 + d).rem_euclid(OPTIONS.len() as i32) as usize;
         sfx(&mut sfx_w, Sfx::MenuMove);
+        cursor.1.push(d);
+        let n = cursor.1.len();
+        if n > SIDE_B_COMBO.len() {
+            cursor.1.drain(..n - SIDE_B_COMBO.len());
+        }
+        if cursor.1 == SIDE_B_COMBO {
+            cursor.1.clear();
+            sfx(&mut sfx_w, Sfx::MenuSelect);
+            crate::game::sideb::start(&mut commands, 0);
+            return;
+        }
+    }
+    if nav(&action).x != 0 {
+        cursor.1.clear();
     }
     if action.just_pressed(&Action::Confirm) {
         sfx(&mut sfx_w, Sfx::MenuSelect);

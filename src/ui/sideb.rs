@@ -13,7 +13,32 @@ use crate::state::AppState;
 
 pub fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::Playing), spawn.run_if(resource_exists::<SideB>))
-        .add_systems(Update, update.run_if(in_state(AppState::Playing).and_then(resource_exists::<SideB>)));
+        .add_systems(
+            Update,
+            (respawn, update).chain().run_if(in_state(AppState::Playing).and_then(resource_exists::<SideB>)),
+        );
+}
+
+/// The set list strip, for Side B level `.0`.
+#[derive(Component)]
+struct SetList(usize);
+
+/// On to the next level: its set list.
+fn respawn(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    sprites: Option<Res<Sprites>>,
+    side: Res<SideB>,
+    strip: Query<(Entity, &SetList)>,
+    banner: Query<Entity, With<Banner>>,
+) {
+    if strip.iter().all(|(_, s)| s.0 == side.level) {
+        return;
+    }
+    for e in strip.iter().map(|(e, _)| e).chain(&banner) {
+        commands.entity(e).despawn();
+    }
+    spawn(commands, font, sprites, side);
 }
 
 #[derive(Component)]
@@ -46,6 +71,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
     commands
         .spawn((
             Name::new("SetList"),
+            SetList(side.level),
             DespawnOnExit(AppState::Playing),
             Node {
                 position_type: PositionType::Absolute,

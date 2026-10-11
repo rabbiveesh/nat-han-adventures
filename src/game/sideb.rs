@@ -249,16 +249,26 @@ pub(super) fn plugin(app: &mut App) {
     for s in [AppState::Title, AppState::LevelSelect, AppState::FreePlaySetup] {
         app.add_systems(OnEnter(s), leave);
     }
-    #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_start);
 }
 
-/// Dev shortcut: `NATHAN_SIDE_B=1 cargo run` starts straight in Side B's level 1.
-#[cfg(not(target_arch = "wasm32"))]
+/// Hidden ways in (Side B is a prototype): `NATHAN_SIDE_B=1 cargo run`, or `?sideb=1` on the
+/// web, start straight in Side B's level 1 (and the title's Up Up Down Down: `ui::title`).
 fn dev_start(mut commands: Commands) {
-    if let Some(n) = std::env::var("NATHAN_SIDE_B").ok().and_then(|v| v.parse::<usize>().ok()) {
+    if let Some(n) = asked_for() {
         start(&mut commands, n.saturating_sub(1).min(SIDE_B_SOURCES.len() - 1));
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn asked_for() -> Option<usize> {
+    std::env::var("NATHAN_SIDE_B").ok()?.parse().ok()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn asked_for() -> Option<usize> {
+    let search = web_sys::window()?.location().search().ok()?;
+    search.trim_start_matches('?').split('&').find_map(|kv| kv.strip_prefix("sideb=")?.parse().ok())
 }
 
 /// Leaving Side B: the story gets its levels and assists back.
@@ -430,6 +440,7 @@ fn on_spikes(level: &Level, pos: Vec2, half: Vec2) -> bool {
 /// The goal, or how Han met his end; and the rewind or the cheer when their time's up.
 #[allow(clippy::too_many_arguments)]
 fn han_fate(
+    mut commands: Commands,
     time: Res<Time>,
     active: Res<ActiveLevel>,
     clock: Res<SimClock>,
@@ -456,7 +467,19 @@ fn han_fate(
         }
         Phase::Cleared { t } => {
             if t - dt <= 0.0 {
-                next.set(AppState::Title);
+                // On to the next Side B level (the strip and the level redraw), or the title
+                // after the last.
+                let n = side.level + 1;
+                if n < SIDE_B_SOURCES.len() {
+                    commands.queue(move |w: &mut World| {
+                        let b = SideBLevel::load(n);
+                        w.insert_resource(SideB::new(n, b.setlist));
+                        w.insert_resource(GeneratedLevel(b.level));
+                        w.write_message(RestartLevel);
+                    });
+                } else {
+                    next.set(AppState::Title);
+                }
             } else {
                 side.phase = Phase::Cleared { t: t - dt };
             }

@@ -187,3 +187,19 @@ fn full_size_han_loses_his_cap_in_the_drip_pipe() {
     assert_eq!(fate(&app), Some(Fate::Spikes));
     assert!(said(&app, "Duck and run! Duck and run!"));
 }
+
+#[test]
+fn a_cleared_level_goes_on_to_the_next() {
+    let mut app = app(0);
+    until(&mut app, 0.5, |_| false);
+    tap(&mut app, KeyCode::ArrowDown);
+    until(&mut app, 10.0, |a| col(a) > 21.0).expect("up the wall");
+    tap(&mut app, KeyCode::ArrowRight);
+    tap(&mut app, KeyCode::ArrowDown);
+    until(&mut app, 15.0, |a| matches!(side(a).phase, Phase::Cleared { .. })).expect("cleared");
+    until(&mut app, 6.0, |a| side(a).level == 1).expect("on to Spike Alley");
+    until(&mut app, 0.1, |_| false);
+    assert_eq!(side(&app).phase, Phase::Playing);
+    assert_eq!(side(&app).left, vec![1], "Spike Alley's set list");
+    assert!(col(&mut app) < 5.0, "Han's at its start");
+}
