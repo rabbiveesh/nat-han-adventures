@@ -77,6 +77,8 @@ fn every_template_validates_at_every_band() {
         match tpl.skill {
             Skill::Stains => assert!(deaths.iter().all(|&d| d >= 1), "{}: {deaths:?}", tpl.name),
             Skill::Grease => assert!(deaths.iter().all(|&d| d == 3), "{}: {deaths:?}", tpl.name),
+            // A cling shaft: the splats that make the band nervous (Han's grip).
+            _ if tpl.name == "cling shaft" => assert!(deaths.iter().all(|&d| d == 3), "{}: {deaths:?}", tpl.name),
             _ => assert!(deaths.iter().all(|&d| d == 0), "{}: {deaths:?}", tpl.name),
         }
     }
@@ -190,7 +192,7 @@ fn unlocks_follow_the_story() {
     };
     assert_eq!(served(3), ["mega wall"]);
     assert_eq!(served(5), ["buddy raft pool", "mega wall"]);
-    assert_eq!(served(10), ["buddy raft pool", "fired-up chasm", "mega wall", "shield row"]);
+    assert_eq!(served(10), ["buddy raft pool", "cling shaft", "fired-up chasm", "mega wall", "shield row"]);
 }
 
 /// A climb is taller than the other rooms: the course is as tall as it, every room sits on its

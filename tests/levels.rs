@@ -27,7 +27,7 @@ const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::MegaWall]),
     ("Septic Tank", 4, &[Gate::GlideLaunch]),
     ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::GlideLaunch, Gate::StainPit, Gate::ShieldRow, Gate::ChainChasm]),
-    ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::MegaWall, Gate::BuddyRaft]),
+    ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::MegaWall, Gate::ClingShaft, Gate::BuddyRaft]),
     ("The Golden Throne", 5, &[Gate::GiantWall, Gate::ShieldRow, Gate::ChainChasm]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).

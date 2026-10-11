@@ -78,10 +78,10 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys};
-use super::{GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
+use super::{CLING_ROWS, GateMark, HAN_BERTH, Level, MAX_LINE, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    ALIEN_PULSE, BOOST_SPEED, THROW_CARRY, THROW_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
+    ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, CAN_WIDTH, DRUNK_SWAY, FORGIVE, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, SPRAY_WIDTH, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
     WEAK_BOOST_SPEED, spray_on,
     tuning::*,
 };
@@ -192,6 +192,9 @@ pub enum Gate {
     /// Needs Giant Steps and Han: the mega-boost off his head (the plunger boost in Giant
     /// Steps' low gravity), and a toot.
     MegaWall,
+    /// Needs the nervous band's grip and Han: he clings to the shaft's wall [`CLING_ROWS`] up,
+    /// Nat hops onto his head and kicks off it (a full boost, away from the wall).
+    ClingShaft,
     /// Needs Han going ahead into the jets.
     ShieldRow,
     /// Needs the fired-up band and Han: his running throw, and catches in mid-air to throw
@@ -204,7 +207,12 @@ pub enum Gate {
 impl Gate {
     /// Han's gates (he's what crosses them).
     pub fn needs_han(self) -> bool {
-        matches!(self, Gate::MegaWall | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
+        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
+    }
+
+    /// Han's gates whose mark is a band zone (his boost weak there but with their mode).
+    pub fn zoned_han(self) -> bool {
+        matches!(self, Gate::MegaWall | Gate::ClingShaft)
     }
 
     pub fn name(self) -> &'static str {
@@ -215,6 +223,7 @@ impl Gate {
             Gate::GreaseChute => "grease chute",
             Gate::StainPit => "stain pit",
             Gate::MegaWall => "mega wall",
+            Gate::ClingShaft => "cling shaft",
             Gate::ShieldRow => "shield row",
             Gate::ChainChasm => "fired-up chasm",
             Gate::BuddyRaft => "buddy raft pool",
@@ -228,7 +237,12 @@ impl Gate {
             Gate::LongGap => Some(Mode::FiredUp),
             Gate::GlideLaunch => Some(Mode::Waltz),
             Gate::GreaseChute => Some(Mode::Nervous),
-            Gate::StainPit | Gate::MegaWall | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft => None,
+            Gate::StainPit
+            | Gate::MegaWall
+            | Gate::ClingShaft
+            | Gate::ShieldRow
+            | Gate::ChainChasm
+            | Gate::BuddyRaft => None,
         }
     }
 
@@ -237,6 +251,7 @@ impl Gate {
     pub fn band(self) -> Option<Mode> {
         match self {
             Gate::MegaWall => Some(Mode::GiantSteps),
+            Gate::ClingShaft => Some(Mode::Nervous),
             _ => self.mode(),
         }
     }
@@ -249,6 +264,7 @@ impl Gate {
             Gate::GreaseChute => Topic::Grip,
             Gate::StainPit => Topic::Stain,
             Gate::MegaWall => Topic::Mega,
+            Gate::ClingShaft => Topic::Shaft,
             Gate::ShieldRow => Topic::Shield,
             Gate::ChainChasm => Topic::Chain,
             Gate::BuddyRaft => Topic::BuddyRaft,
@@ -263,6 +279,7 @@ impl Gate {
             Gate::GreaseChute => 'Y',
             Gate::StainPit => 'K',
             Gate::MegaWall => 'M',
+            Gate::ClingShaft => 'L',
             Gate::ShieldRow => 'H',
             Gate::ChainChasm => 'N',
             Gate::BuddyRaft => 'U',
@@ -297,6 +314,9 @@ pub struct Env {
     /// The fired-up band: a jump off Han's head ([`Launch::Boost`]) is the running throw
     /// ([`THROW_SPEED`] up, [`THROW_CARRY`] kept on top of the run, towards where Nat faces).
     pub throw: bool,
+    /// A kick off Han clinging to a wall ([`Launch::Boost`]): the boost, plus this horizontal
+    /// speed (px/s, signed: away from the wall), kept like a platform's.
+    pub kick: f32,
 }
 
 /// How much faster than normal the waltz's platforms glide at the peak of ONE
@@ -341,6 +361,7 @@ impl Env {
             carry_cap: LAUNCH_MAX * if ideal { 1.0 } else { 0.9 },
             ideal,
             throw: g.fired_up(),
+            kick: 0.0,
         }
     }
 
@@ -367,6 +388,7 @@ impl Env {
             carry_cap: 0.0,
             ideal: false,
             throw: false,
+            kick: 0.0,
         }
     }
 
@@ -689,11 +711,10 @@ impl<'a> Map<'a> {
         !self.in_band_zone(cell)
     }
 
-    /// Is Han's boost weak in `cell`, Giant Steps playing or not (marked, or found in a room)?
-    /// See [`Level::weak_boost`].
-    pub fn weak_boost(&self, cell: Cell, giant_steps: bool) -> bool {
-        self.level.weak_boost(cell, giant_steps)
-            || self.derived.iter().any(|g| !(giant_steps && g.topic == Topic::Mega) && g.berth().contains(cell))
+    /// Is Han's boost weak in `cell`, Giant Steps playing or not, with the grip or not (marked,
+    /// or found in a room)? See [`Level::weak_boost`].
+    pub fn weak_boost(&self, cell: Cell, giant_steps: bool, grip: bool) -> bool {
+        self.level.weak_boost(cell, giant_steps, grip) || self.derived.iter().any(|g| g.weakens(cell, giant_steps, grip))
     }
 
     /// Is `cell` in a band zone (marked, or found in a room)? See [`Level::in_band_zone`].
@@ -1054,6 +1075,9 @@ impl Arcs {
                     })
                 })
                 .collect();
+        }
+        if launch == Launch::Boost && env.kick != 0.0 {
+            strategies = strategies.into_iter().map(|s| Strategy { carry: env.kick, ..s }).collect();
         }
         let plain = strategies.len();
         if launch == Launch::Ground && env.carry > 0.0 {
@@ -1649,6 +1673,9 @@ pub struct Physics {
     throw: Arcs,
     /// The mega-boost, Giant Steps', off Han standing still: a human's (climbing a mega wall).
     mega: Arcs,
+    /// Kicks off Han clinging to a wall, nervous: a human's, away from a wall on the left
+    /// (`[0]`, kicking right) and on the right (`[1]`, kicking left).
+    kick: [Arcs; 2],
     boost_ideal: Vec<(Mode, Arcs)>,
     /// Weak boosts off Han in a band zone, ideal, in the modes with their own geometry (the
     /// waltz and the nervous band jump like normal).
@@ -1673,6 +1700,12 @@ impl Physics {
             Env::new(Mode::GiantSteps, false),
             strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
         );
+        let kick = [1.0, -1.0].map(|away| {
+            Arcs::boost(
+                Env { kick: away * KICK_CARRY, ..Env::new(Mode::Nervous, false) },
+                strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
+            )
+        });
         let boost_ideal = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp]
             .into_iter()
             .map(|m| (m, Arcs::boost(Env::new(m, true), ideal_strategies())))
@@ -1683,7 +1716,7 @@ impl Physics {
             .collect();
         let glide = Arcs::new(Env::glide(false), strategies());
         let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, boost_ideal, weak_ideal }
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1695,8 +1728,8 @@ impl Physics {
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let glide = Arcs::new(Env::glide(false), human.clone());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, throw, mega, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, boost_ideal, weak_ideal }
+        let Physics { boost, throw, mega, kick, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -1708,15 +1741,17 @@ impl Physics {
     pub fn laughing() -> [(&'static str, Physics); 2] {
         const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics { human, no_toot, boost, throw, mega, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
+            let Physics { human, no_toot, boost, throw, mega, kick, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
             let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
             // (From the plain strategies: the throw's are already signed with its carry.)
             let throw = Arcs::boost(nudge(throw.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect());
             let mega = Arcs::boost(nudge(mega.env), mega.strategies);
+            // (From the plain strategies: the kicks' are already carried.)
+            let kick = kick.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
             let glide = Arcs::new(nudge(glide.env), glide.strategies);
-            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, boost_ideal, weak_ideal }
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, boost_ideal, weak_ideal }
         };
         [
             ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
@@ -2024,6 +2059,11 @@ fn take(map: &mut Map, phys: &Physics, g: &mut Graph, crossings: &mut Vec<Crossi
     }
 }
 
+/// Is the band nervous for crossing `i` already: a grease chute on the way to the goal before it?
+fn nervous_by(crossings: &[Crossing], to_goal: &[usize], i: usize) -> bool {
+    (0..i).any(|j| crossings[j].gate == Gate::GreaseChute && to_goal.contains(&j))
+}
+
 /// The mark a crossing from `from` to `to` would need.
 fn mark_of(gate: Gate, from: Cell, to: Cell) -> GateMark {
     GateMark {
@@ -2038,7 +2078,7 @@ fn mark_of(gate: Gate, from: Cell, to: Cell) -> GateMark {
 /// In a generated room, a band or death gate (or a mega wall: its zone weakens Han's plain
 /// boost) is marked as soon as it's found.
 fn derive_mark(map: &mut Map, gate: Gate, from: Cell, to: Cell) {
-    if map.derive_marks && (!gate.needs_han() || gate == Gate::MegaWall) {
+    if map.derive_marks && (!gate.needs_han() || gate.zoned_han()) {
         map.derived.push(mark_of(gate, from, to));
     }
 }
@@ -2062,9 +2102,16 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
     cells.sort();
     for &cell in &cells {
         tried[g.idx(cell).unwrap()] = true;
+        // A cling shaft first: in a generated room (no marks yet) the mega-boost would go from
+        // anywhere, the shaft's floor too, where its mark (once derived) weakens it.
+        let cling = cling_found(map, phys, g, cell, &mut buf);
+        if !cling.is_empty() {
+            found.extend(cling);
+            continue;
+        }
         // (A generated room has no marks yet: there the mega-boost goes from anywhere, and its
         // mark is derived when it's found.)
-        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, true);
+        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, true, false);
         if g.reached(cell)
             && mega_at(cell)
             && mega_at((cell.0, cell.1 - 1))
@@ -2129,6 +2176,55 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
                         found.push((Gate::ChainChasm, cell, l, buf.clone()));
                     }
                 }
+            }
+        }
+    }
+    found
+}
+
+/// A cling shaft from floor cell `cell`: Han climbs a wall of the shaft and clings
+/// [`CLING_ROWS`] up it (the band nervous: a death to splat on reached, for the grip), Nat hops
+/// onto his head from the floor, and kicks off it, away from the wall.
+fn cling_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
+    let mut found = Vec::new();
+    // (A generated room has no marks yet: there Han clings anywhere, and the mark is derived.)
+    let zone = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, false, true);
+    if !g.reached(cell) || !map.standable(cell) || g.deaths.is_empty() || map.han_keeps_out(cell) {
+        return found;
+    }
+    let h = (cell.0, cell.1 - CLING_ROWS);
+    let open = (h.1 - 1..cell.1).all(|r| !map.is_solid(cell.0, r) && !map.deadly_tile(cell.0, r));
+    if !open || !zone(h) || !zone((h.0, h.1 - 1)) {
+        return found;
+    }
+    for (k, side) in [-1, 1].into_iter().enumerate() {
+        if !map.is_solid(h.0 + side, h.1) {
+            continue;
+        }
+        // Nat hops onto his head from the floor near him: Han's a floor at `h`, Nat above it.
+        let mut perch_map = map.clone();
+        perch_map.set(h, VIRT, 0);
+        let perch = (h.0, h.1 - 1);
+        let nervous = phys.human(Mode::Nervous);
+        let hops = (-2..=2).map(|d| (cell.0 + d, cell.1)).filter(|&c| g.reached(c)).any(|from| {
+            nervous.at(&perch_map, from).iter().any(|s| {
+                nervous.flight(&perch_map, from, s).is_some_and(|f| fly(&perch_map, &nervous.env, &f, buf) == Outcome::Land(perch))
+            })
+        });
+        if !hops {
+            continue;
+        }
+        // The kick: Han standing (clinging) in `h`.
+        let mut han_map = map.clone();
+        han_map.set((h.0, h.1 + 1), VIRT, 0);
+        let kick = &phys.kick[k];
+        for s in &kick.strategies {
+            let Some(f) = kick.flight(&han_map, h, s) else { continue };
+            if let Outcome::Land(l) = fly(&han_map, &kick.env, &f, buf)
+                && !g.reached(l)
+                && l != h
+            {
+                found.push((Gate::ClingShaft, cell, l, buf.clone()));
             }
         }
     }
@@ -2275,7 +2371,7 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
             }
         }
     }
-    if (!c.gate.needs_han() || c.gate == Gate::MegaWall)
+    if (!c.gate.needs_han() || c.gate.zoned_han())
         && let Some(e) = boost_leak(&before, phys, g, i, c, &beyond)
     {
         errs.push(format!("{what} {e}"));
@@ -2365,10 +2461,11 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     // to catch a Nat still on the near side).
     let dir = (c.to.0 - at.0).signum();
     let near_side = |(x, _): Cell| dir == 0 || (x - c.to.0) * dir < 0;
-    // (A mega wall's zone is a full boost's while Giant Steps plays.)
+    // (A mega wall's zone is a full boost's while Giant Steps plays, a cling shaft's with the
+    // grip.)
     let zone = |(x, y): Cell, m: Mode| {
-        let gs = m == Mode::GiantSteps;
-        map.weak_boost((x, y), gs) || map.weak_boost((x, y - 1), gs)
+        let (gs, grip) = (m == Mode::GiantSteps, m == Mode::Nervous);
+        map.weak_boost((x, y), gs, grip) || map.weak_boost((x, y - 1), gs, grip)
     };
     let weak_at = |cell: Cell, m: Mode| zone(cell, m) && map.standable(cell) && !map.han_keeps_out(cell);
     let full_at = |cell: Cell, m: Mode| {
@@ -2434,7 +2531,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     for (mode, full) in &phys.boost_ideal {
         let mode = *mode;
         // A mega wall's own mode: Giant Steps and Han is what crosses it.
-        if c.gate == Gate::MegaWall && own(mode) {
+        if c.gate.zoned_han() && own(mode) {
             continue;
         }
         let weak = phys.weak_ideal.iter().find(|(m, _)| *m == mode).map(|(_, a)| a).filter(|_| !own(mode));
@@ -2810,7 +2907,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     if map.derive_marks {
         marks.extend(map.derived.iter().copied());
         marks.extend(
-            crossings.iter().filter(|c| c.gate.needs_han() && c.gate != Gate::MegaWall).map(|c| mark_of(c.gate, c.from, c.to)),
+            crossings.iter().filter(|c| c.gate.needs_han() && !c.gate.zoned_han()).map(|c| mark_of(c.gate, c.from, c.to)),
         );
     }
     for c in crossings.iter().filter(|_| !map.derive_marks) {
@@ -2864,6 +2961,9 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         let splats = match c.gate {
             Gate::StainPit => c.stains.len() as u32,
             Gate::GreaseChute => NERVOUS_DEATHS,
+            // The grip comes from the level's deaths: a grease chute's on the way before it
+            // already gave it.
+            Gate::ClingShaft if !nervous_by(&crossings, &to_goal, i) => NERVOUS_DEATHS,
             _ => 0,
         };
         if on_way {
@@ -2893,7 +2993,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     }
     if check_deaths && level.deaths.unwrap_or(0) != deaths {
         errs.push(format!(
-            "`deaths: {}` but the design needs {deaths} (stain pit splats + {NERVOUS_DEATHS} per grease chute)",
+            "`deaths: {}` but the design needs {deaths} (stain pit splats + {NERVOUS_DEATHS} per grease chute, and for a cling shaft with no chute before it)",
             level.deaths.unwrap_or(0)
         ));
     }

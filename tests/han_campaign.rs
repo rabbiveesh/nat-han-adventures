@@ -196,6 +196,75 @@ fn play_mega(what: &str, level: &Level, m: GateMark, giant_steps: bool) -> bool 
 }
 
 #[test]
+fn cling_shafts_in_the_campaign() {
+    let ms = marks(Topic::Shaft);
+    assert!(!ms.is_empty());
+    for (what, level, m) in &ms {
+        assert!(play_shaft(what, level, *m, true), "{what}: not up the shaft");
+    }
+    // The band not nervous, he doesn't cling: no way up.
+    let (what, level, m) = &ms[0];
+    assert!(!play_shaft(what, level, *m, false), "{what}: up the shaft without grip");
+}
+
+#[test]
+fn free_play_cling_shafts() {
+    for (what, level, m) in room_marks("cling shaft", Topic::Shaft) {
+        assert!(play_shaft(&what, &level, m, true), "{what}: not up the shaft");
+    }
+}
+
+/// Wait in cling shaft `m` (the band nervous or not) for Han to climb a wall, hop on his head
+/// and kick off it, toot at the top: up out of the shaft?
+fn play_shaft(what: &str, level: &Level, m: GateMark, grip: bool) -> bool {
+    let mut app = app(level);
+    app.world_mut().insert_resource(Groove { nervous: grip, ..Groove::default() });
+    // The shaft's floor: the first open column of the mark at its bottom row.
+    let r = m.r1;
+    let c = (m.c0..=m.c1).find(|&c| !level.tile(c, r).is_solid() && level.tile(c, r + 1).is_solid()).expect("a shaft floor");
+    put::<Player>(&mut app, stand(level, c + 1, r));
+    let han = single::<Han>(&mut app);
+    let mut kick = 0.0;
+    // Han comes (or parachutes in) and, nervous, climbs a wall: his head kicks.
+    for _ in 0..(20.0 / DT) as usize {
+        app.update();
+        let head = *app.world().get::<HanHead>(han).unwrap();
+        if head.boost && head.kick != 0.0 {
+            kick = head.kick;
+            break;
+        }
+    }
+    if kick == 0.0 {
+        assert!(!grip, "{what}: Han never clung: {:?}", app.world().get::<HanBrain>(han).unwrap().mode);
+        return false;
+    }
+    let floor = pos::<Player>(&mut app).y;
+    let h = pos::<Han>(&mut app);
+    put::<Player>(&mut app, h + Vec2::new(0.0, 1.5 * TILE));
+    step(&mut app, 0.4);
+    assert_eq!(body::<Player>(&mut app).riding, Some(han), "{what}: on Han");
+    let dir = if kick > 0.0 { RIGHT } else { LEFT };
+    dir.press(app.world_mut());
+    tap(&mut app);
+    step(&mut app, 0.33); // the toot near the top
+    let mode = app.world().get::<HanBrain>(han).unwrap().mode;
+    assert!(!matches!(mode, HanMode::Cling { .. }), "{what}: kicked off, he lets go: {mode:?}");
+    tap(&mut app);
+    // Let go once landed up top (a narrow top is easy to overshoot).
+    for _ in 0..(1.5 / DT) as usize {
+        app.update();
+        if body::<Player>(&mut app).on_ground && pos::<Player>(&mut app).y > floor + 6.0 * TILE {
+            break;
+        }
+    }
+    dir.release(app.world_mut());
+    step(&mut app, 1.0);
+    let p = pos::<Player>(&mut app);
+    assert_eq!(deaths(&app), 0, "{what}");
+    p.y > floor + 6.0 * TILE && body::<Player>(&mut app).on_ground
+}
+
+#[test]
 fn shield_rows_in_the_campaign() {
     let ms = marks(Topic::Shield);
     assert!(ms.len() >= 2);

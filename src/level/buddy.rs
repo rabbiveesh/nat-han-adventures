@@ -367,7 +367,7 @@ pub fn chain_try(
     hb.vel.x = nb.vel.x;
     let mut hctl = HanCtl::default();
     let han_id = Entity::from_raw_u32(1).unwrap_or(Entity::PLACEHOLDER);
-    let mut head = HanHead { solid: true, boost: true, block: false, weak: false };
+    let mut head = HanHead { solid: true, boost: true, block: false, weak: false, kick: 0.0 };
     let mut han_floor = han.y;
     let (mut jumped, mut has_toot, mut toots, mut t, mut last_launch, mut tooted_since) =
         (false, true, 0u32, 0.0f32, 0.0f32, false);
