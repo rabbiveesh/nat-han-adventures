@@ -61,6 +61,7 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
     Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
     Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
+    Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, height: MEGA_H, build: cling_shaft },
 ];
 
 /// The templates for a skill.
@@ -628,6 +629,46 @@ fn mega_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(2, top + 8);
     c.ground(HAN_TAIL, floor);
     Built { hint: Some((&[Topic::Mega], "Giant Steps? Hop on me: MEGA boost!")), checkpoint }
+}
+
+/// A cling shaft: a low corridor (under a wall up to the ceiling) into a 3-wide shaft whose far
+/// wall is an 11-tile mesa (out of the plain boost's reach). Nervous, Han climbs a wall of it and kicks Nat up. A sunken spike
+/// strip on the way (one tile per splat the band needs to get nervous), easy to hop; from band 5
+/// a hop before it too.
+fn cling_shaft(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
+    let checkpoint = han_lead(c);
+    if band >= 5 {
+        c.pit(d.int(2, 3) as usize);
+        c.ground(3, floor);
+    }
+    let spikes = crate::audio::director::NERVOUS_DEATHS as usize;
+    for _ in 0..spikes {
+        c.column(move |r| match r {
+            r if r == floor => b'^',
+            r if r > floor => b'#',
+            _ => b'.',
+        });
+    }
+    c.ground(lerpi(band, 5.0, 3.0) + d.int(0, 1) as usize, floor);
+    let top = floor - 11;
+    // The corridor under the near wall: two rows of headroom, solid to the top (no roof to
+    // mega-boost onto from outside).
+    for _ in 0..4 {
+        c.column(move |r| if r < floor - 2 || r >= floor { b'#' } else { b'.' });
+    }
+    c.ground(3, floor);
+    let x = c.width();
+    let thick = (lerpi(band, 6.0, 3.0) + d.int(0, 1) as usize).max(3);
+    c.ground(thick, top);
+    for k in 1..thick - 1 {
+        c.nugget(x + k, top - 1);
+    }
+    // Down the far side in steps.
+    c.ground(2, top + 4);
+    c.ground(2, top + 8);
+    c.ground(HAN_TAIL, floor);
+    Built { hint: Some((&[Topic::Shaft], "Splat a few: sweaty band? I climb walls! Hop on, JUMP!")), checkpoint }
 }
 
 /// Where a buddy raft pool starts (column in the room, from the entry checkpoint near 0).

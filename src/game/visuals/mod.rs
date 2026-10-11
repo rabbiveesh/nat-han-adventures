@@ -586,7 +586,8 @@ fn animate_han(
                 HanPose::Idle => (SpriteId::HanIdle, (t * 3.0) as usize),
                 HanPose::Run => (SpriteId::HanRun, (t * 12.0) as usize),
                 HanPose::Jump => (SpriteId::HanJump, (t * 10.0) as usize),
-                HanPose::Braced => (SpriteId::HanBraced, (t * 4.0) as usize),
+                // (Clinging: braced, plunger up, against the wall.)
+                HanPose::Braced | HanPose::Cling => (SpriteId::HanBraced, (t * 4.0) as usize),
                 HanPose::Intercept => (SpriteId::HanIntercept, (t * 8.0) as usize),
                 HanPose::March => (SpriteId::HanMarch, (t * 9.0) as usize),
                 HanPose::Parachute => (SpriteId::HanParachute, (t * 2.0) as usize),

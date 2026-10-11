@@ -101,6 +101,7 @@ pub fn trick_of(topic: Topic) -> Option<HanTrick> {
     match topic {
         Topic::Chain => Some(HanTrick::Throw),
         Topic::Mega => Some(HanTrick::Mega),
+        Topic::Shaft => Some(HanTrick::Cling),
         _ => None,
     }
 }
@@ -242,6 +243,10 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
         Lesson::Trick(HanTrick::Mega) => (
             "HAN'S TRICK: THE MEGA BOOST",
             vec!["GIANT STEPS PLAYING? HOP ON".into(), "HAN'S HEAD AND JUMP: WAY UP!".into(), "TOOT AT THE TOP.".into()],
+        ),
+        Lesson::Trick(HanTrick::Cling) => (
+            "HAN'S TRICK: THE WALL CLING",
+            vec!["BAND NERVOUS? IN A SHAFT".into(), "HAN CLIMBS THE WALL. HOP ON".into(), "HIS HEAD AND JUMP: UP!".into()],
         ),
     };
     (title.into(), lines)

@@ -8,7 +8,7 @@
 use bevy::prelude::*;
 
 use super::{
-    BACK_WARN_LINE, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
+    BACK_WARN_LINE, CLIMB_SPEED, CLING_SECS, FALL_BEHIND_SECS, FOLLOW_GAP, GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LEMME_LINE,
     LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, PRO_LINE, REPLAN_SECS, STUCK_SECS, UNION_LINE,
     brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
 };
@@ -16,12 +16,12 @@ use crate::audio::Harmony;
 use crate::events::HanSays;
 use crate::game::{
     ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, MovingPlatform, Player,
-    PlayerControl, Pos, PrevPos, SimClock, platform_pos,
+    PlayerControl, Pos, PrevPos, SimClock, move_towards, platform_pos,
 };
 use crate::level::buddy::{HALF, HanCtl, HanInput, HanPhys, Kin, drive, head_holds, intercept, waltz_step};
 use crate::level::nav::{Edge, HanMove, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
-use crate::level::{Level, PlatformKind, TILE, ThingKind, Tile};
+use crate::level::{CLING_ROWS, Level, PlatformKind, TILE, ThingKind, Tile};
 
 /// Han's routes for the level visit (one graph per physics he's had: normal, Giant Steps,
 /// fired up).
@@ -78,6 +78,14 @@ pub enum HanMode {
         t: f32,
     },
     Gone {
+        t: f32,
+    },
+    /// Clinging to a wall of a cling shaft (the nervous band's grip): on the `wall` side
+    /// (-1/1), scrambling to `x` and up to `top` (his center), `t` seconds on it.
+    Cling {
+        wall: f32,
+        x: f32,
+        top: f32,
         t: f32,
     },
 }
@@ -278,9 +286,12 @@ pub fn parachute_spot(level: &Level, nat: Vec2, side: f32) -> Vec2 {
         if x < TILE || x > level.size_px().x - TILE {
             continue;
         }
+        // His whole width (a narrow shaft: not half into its wall).
         let free = |y: f32| {
-            let (c, r) = level.cell_at(Vec2::new(x, y));
-            !level.tile(c, r).is_solid() && !level.tile(c, r).is_deadly()
+            [-1.0, 0.0, 1.0].iter().all(|s| {
+                let (c, r) = level.cell_at(Vec2::new(x + s * (HALF.x - 1.0), y));
+                !level.tile(c, r).is_solid() && !level.tile(c, r).is_deadly()
+            })
         };
         if !free(nat.y) {
             continue;
@@ -400,7 +411,9 @@ pub(super) fn think(
 
     // --- Overuse: boosts in a row.
     brain.since_grumble += dt;
+    let mut kicked = false;
     for b in boosted.read() {
+        kicked |= matches!(brain.mode, HanMode::Cling { .. }) && !b.weak;
         if b.weak {
             // The band zone: a feeble hop and a grumble (not his back's business).
             brain.weak_boosts += 1;
@@ -474,6 +487,47 @@ pub(super) fn think(
         // Fell out of the level: he'll float back down.
         brain.mode = HanMode::Gone { t: 1.0 };
         return;
+    }
+
+    // --- A cling shaft, nervous: Nat waiting in it, Han up a wall of it for Nat to kick off.
+    let nat_cell = feet_cell(level, nat.pos);
+    if brain.mode == HanMode::Follow
+        && groove.grip()
+        && !nat_dead
+        && body.on_ground
+        && nat.grounded
+        && !nat_on_han
+        && feet_cell(level, pos.0).1 == nat_cell.1
+        && level.in_shaft(nat_cell)
+        && (nat.pos.x - pos.0.x).abs() < 3.0 * TILE
+        && let Some((wall, x)) = cling_wall(level, nat_cell, brain.side)
+    {
+        // Up from the floor Nat's on (not from wherever he landed).
+        let floor = level.tile_center(nat_cell.0.max(0) as usize, nat_cell.1.max(0) as usize).y - TILE / 2.0;
+        brain.mode = HanMode::Cling { wall, x, top: floor + HALF.y + CLING_ROWS as f32 * TILE, t: 0.0 };
+        brain.exec = None;
+        brain.path.clear();
+    }
+    if let HanMode::Cling { wall, x, top, t } = brain.mode {
+        let t = t + dt;
+        // Nat made it up (or walked off): done.
+        let nat_left = nat.grounded && !nat_on_han && (!level.in_shaft(nat_cell) || nat.pos.y > top + 3.0 * TILE);
+        if kicked || nat_dead || !groove.grip() || t > CLING_SECS || nat_left {
+            // Let go: he drops back down.
+            brain.mode = HanMode::Follow;
+            brain.replan = 0.0;
+            body.vel = Vec2::ZERO;
+        } else {
+            brain.mode = HanMode::Cling { wall, x, top, t };
+            pos.0.x = move_towards(pos.0.x, x, CLIMB_SPEED * dt);
+            pos.0.y = (pos.0.y + CLIMB_SPEED * dt).min(top);
+            body.vel = Vec2::ZERO;
+            body.on_ground = false;
+            let up = pos.0.y >= top;
+            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall };
+            set_anim(&mut anim, HanPose::Cling, wall < 0.0, &groove, false);
+            return;
+        }
     }
 
     let me = Kin { pos: pos.0, vel: body.vel, grounded: body.on_ground };
@@ -674,9 +728,10 @@ pub(super) fn think(
         solid: up && holds,
         boost: up && holds && brain.winded == 0.0,
         block: matches!(brain.mode, HanMode::Ahead { .. }),
+        kick: 0.0,
         // (By a mega wall, while Giant Steps plays, the mega-boost: full strength.)
-        weak: level.weak_boost(my_cell, groove.giant_steps())
-            || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.giant_steps()),
+        weak: level.weak_boost(my_cell, groove.giant_steps(), groove.grip())
+            || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.giant_steps(), groove.grip()),
     };
 
     // --- Pose.
@@ -684,6 +739,7 @@ pub(super) fn think(
     let running = body.vel.x.abs() > 20.0;
     let pose = match brain.mode {
         HanMode::Parachute { .. } => HanPose::Parachute,
+        HanMode::Cling { .. } => HanPose::Cling,
         HanMode::Ahead { .. } => HanPose::March,
         HanMode::Intercept if !grounded && gs => HanPose::Paddle,
         HanMode::Intercept => HanPose::Intercept,
@@ -709,6 +765,24 @@ pub(super) fn think(
         anim.facing_left
     };
     set_anim(&mut anim, pose, facing_left, &groove, false);
+}
+
+/// The wall Han clings to in a cling shaft, Nat standing in `nat` (a cell of the shaft's
+/// floor): a wall [`CLING_ROWS`] up beside Nat's column or one over, on the side Han trails
+/// (`side`) first; returns its side and the x Han clings at.
+fn cling_wall(level: &Level, nat: (i32, i32), side: f32) -> Option<(f32, f32)> {
+    let up = nat.1 - CLING_ROWS;
+    for wall in [side, -side] {
+        let w = wall as i32;
+        for c in [nat.0, nat.0 + w] {
+            let open = (up - 1..=nat.1).all(|r| !level.tile(c, r).is_solid());
+            if open && level.tile(c + w, up).is_solid() && level.in_shaft((c, nat.1)) {
+                let x = level.tile_center(c as usize, nat.1 as usize).x;
+                return Some((wall, x));
+            }
+        }
+    }
+    None
 }
 
 fn set_anim(anim: &mut HanAnim, pose: HanPose, facing_left: bool, groove: &Groove, hidden: bool) {

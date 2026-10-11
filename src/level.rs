@@ -34,7 +34,7 @@
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
 //!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `mega`
-//!   (mega wall), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
+//!   (mega wall), `shaft` (cling shaft), `shield` (shield row), `chain` (fired-up chasm), `buddyraft` (buddy raft
 //!   pool). See "Gate marks" below.
 //!
 //! Lines (intro, say, hint) are at most [`MAX_LINE`] characters.
@@ -68,7 +68,7 @@
 //! lie. The game reads them instead of re-running the validator at load:
 //! - **Han's boost is feeble near the band's gates** (and the death gates): within the *band
 //!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
-//!   `grip`, `stain` or `mega` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
+//!   `grip`, `stain`, `mega` or `shaft` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
 //!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
 //!   holds Nat while he's standing on the ground. He follows normally, but keeps off the
 //!   grease in a grease chute's zone ([`Level::han_keeps_out`]).
@@ -79,6 +79,10 @@
 //!   mega wall's zone, while Giant Steps plays, his boost is full strength: the floaty
 //!   *mega-boost* (Giant Steps' low gravity under the plunger boost) and a toot clear it
 //!   ([`Level::weak_boost`]).
+//! - **Cling shafts** (`shaft`): a shaft too tall for any mode and any boost from its floor.
+//!   With the nervous band's grip Han climbs a wall of it and clings there
+//!   ([`CLING_ROWS`] up), Nat hops onto his head and kicks off it: a full boost, away from the
+//!   wall. In a cling shaft's zone his boost is weak without the grip.
 //! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
 //!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
 //!   catch you in mid-air (fired up) to throw you again.
@@ -114,6 +118,9 @@ pub const HINT_RADIUS: f32 = 2.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
 pub const LEVEL_COUNT: usize = 10;
+/// How many rows above the floor Han's feet cling in a cling shaft.
+pub const CLING_ROWS: i32 = 3;
+
 /// The band zone: this many columns around a band (or death) gate's mark, Han's boost is the
 /// weak one (see "Gate marks"). (The name is from when he kept this berth.)
 pub const HAN_BERTH: i32 = 14;
@@ -220,6 +227,9 @@ pub enum Topic {
     Grip,
     /// Mega walls: Giant Steps and Han's mega-boost off his head, a toot (`mega`).
     Mega,
+    /// Cling shafts: the nervous band's grip, Han clinging to the wall up the shaft, a kick
+    /// off his head (`shaft`).
+    Shaft,
     /// Shield rows: Han goes ahead into the jets, you walk behind him (`shield`).
     Shield,
     /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
@@ -230,7 +240,7 @@ pub enum Topic {
 }
 
 impl Topic {
-    pub const ALL: [Topic; 15] = [
+    pub const ALL: [Topic; 16] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -243,6 +253,7 @@ impl Topic {
         Topic::Grease,
         Topic::Grip,
         Topic::Mega,
+        Topic::Shaft,
         Topic::Shield,
         Topic::Chain,
         Topic::BuddyRaft,
@@ -262,6 +273,7 @@ impl Topic {
             Topic::Grease => "grease",
             Topic::Grip => "grip",
             Topic::Mega => "mega",
+            Topic::Shaft => "shaft",
             Topic::Shield => "shield",
             Topic::Chain => "chain",
             Topic::BuddyRaft => "buddyraft",
@@ -282,16 +294,18 @@ impl Topic {
                 | Topic::Grip
                 | Topic::Stain
                 | Topic::Mega
+                | Topic::Shaft
                 | Topic::Shield
                 | Topic::Chain
                 | Topic::BuddyRaft
         )
     }
 
-    /// The band's gates, the death gates and mega walls: Han's boost is weak in their zone
-    /// (a mega wall's, except while Giant Steps plays: [`Level::weak_boost`]).
+    /// The band's gates, the death gates, mega walls and cling shafts: Han's boost is weak in
+    /// their zone (a mega wall's, except while Giant Steps plays; a cling shaft's, except with
+    /// the nervous band's grip: [`Level::weak_boost`]).
     pub fn han_keeps_clear(self) -> bool {
-        matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain | Topic::Mega)
+        matches!(self, Topic::Giant | Topic::Gap | Topic::Waltz | Topic::Grip | Topic::Stain | Topic::Mega | Topic::Shaft)
     }
 }
 
@@ -312,6 +326,12 @@ impl GateMark {
 
     /// The band zone (Han's boost is weak there): the mark grown by [`HAN_BERTH`] x
     /// [`HAN_BERTH_ROWS`].
+    /// Does this mark make Han's boost weak in `cell` (see [`Level::weak_boost`])?
+    pub fn weakens(&self, cell: (i32, i32), giant_steps: bool, grip: bool) -> bool {
+        let granted = (giant_steps && self.topic == Topic::Mega) || (grip && self.topic == Topic::Shaft);
+        self.topic.han_keeps_clear() && !granted && self.berth().contains(cell)
+    }
+
     pub fn berth(&self) -> GateMark {
         GateMark {
             c0: self.c0 - HAN_BERTH,
@@ -421,12 +441,16 @@ impl Level {
     }
 
     /// Is Han's boost weak in cell (col, row), the band playing Giant Steps (`giant_steps`) or
-    /// not? In a band zone, but in a mega wall's only while Giant Steps doesn't play (there
-    /// it's the mega-boost).
-    pub fn weak_boost(&self, cell: (i32, i32), giant_steps: bool) -> bool {
-        self.gates
-            .iter()
-            .any(|g| g.topic.han_keeps_clear() && !(giant_steps && g.topic == Topic::Mega) && g.berth().contains(cell))
+    /// not, with the nervous band's grip (`grip`) or not? In a band zone, but in a mega wall's
+    /// only while Giant Steps doesn't play (there it's the mega-boost), in a cling shaft's only
+    /// without the grip.
+    pub fn weak_boost(&self, cell: (i32, i32), giant_steps: bool, grip: bool) -> bool {
+        self.gates.iter().any(|g| g.weakens(cell, giant_steps, grip))
+    }
+
+    /// Is `cell` inside a cling shaft's mark (Han clings to its walls there, nervous)?
+    pub fn in_shaft(&self, cell: (i32, i32)) -> bool {
+        self.gates.iter().any(|g| g.topic == Topic::Shaft && g.contains(cell))
     }
 
     /// Is Han's boost full strength in cell (col, row)? Outside every band zone. (The name is

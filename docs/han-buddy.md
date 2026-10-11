@@ -82,12 +82,17 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
   notches and Han's yellow plumber's tape**; 11 tiles, beyond Giant Steps' reach and the plain
   boost's. Their zone weakens his boost like a band gate's, except while Giant Steps plays.
   (They replaced buddy ledges, which the plain boost climbed.)
+- **Cling shafts** (need the nervous band's grip and Han's wall-cling): a narrow shaft whose
+  walls are out of every mode's reach and the plain boost's. Their zone weakens his boost like
+  a band gate's, except with the grip. The band gets nervous from deaths anywhere in the level,
+  so a shaft after a grease chute needs no splats of its own (level 9); a free-play shaft room
+  has a sunken spike strip to splat on.
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
 - **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
   inside).
 - Free play gets all of these as rooms (`src/freeplay/templates.rs`: mega wall, buddy raft
-  pool, shield row, fired-up chasm), served once the story level that teaches each is unlocked;
+  pool, shield row, fired-up chasm, cling shaft), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
   width from the room's ends, so a neighbouring room's band gate never weakens Han there.
   `tests/han_campaign.rs` plays them with the real Han too.
@@ -109,6 +114,12 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   mega wall (`gate: mega`) his boost is full strength only while Giant Steps plays
   (`Level::weak_boost`). Mega walls are 11 tiles: out of Giant Steps' reach (~8.7) and the
   plain boost's (~10.3), comfortably in the mega-boost's.
+- **The wall-cling** (nervous): in a cling shaft (`gate: shaft`, `Level::in_shaft`) with Nat
+  standing in it near him, Han climbs the wall on his side (`CLIMB_SPEED`) to `CLING_ROWS` (3)
+  above the floor and clings there (`HanMode::Cling`, up to `CLING_SECS`). Nat hops onto his
+  head; jumping off is the full boost plus `KICK_CARRY` (90 px/s) away from the wall
+  (`HanHead::kick`). He lets go once kicked, when Nat leaves the shaft or makes it up, dies, or
+  the grip goes. The validator models it as `Gate::ClingShaft` (`cling_found`).
 - **The running throw** (fired up): `THROW_SPEED` 380 px/s up, `THROW_CARRY` 120 px/s kept
   (`Body::launch`) towards where Nat faces; `HanBoosted { throw: true }`. Han runs at
   165 x 1.35 px/s then (his own nav graph for it, `HanNav::fired`); his goalkeeper dive brakes

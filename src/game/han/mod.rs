@@ -82,6 +82,10 @@ pub const FOLLOW_GAP: f32 = 1.5 * TILE;
 pub const NERVOUS_GAP: f32 = 0.8 * TILE;
 /// No progress toward his slot for this long (s): he's lost.
 pub const STUCK_SECS: f32 = 3.0;
+/// How fast Han scrambles up a cling shaft's wall (px/s).
+pub const CLIMB_SPEED: f32 = 120.0;
+/// The longest Han clings to a wall before he slides off (s).
+pub const CLING_SECS: f32 = 8.0;
 /// Running along to catch up, far from his slot, he goes up to this × his top speed.
 pub const HAN_CATCH_UP: f32 = 1.3;
 /// Left behind out of sight (Nat ran on) this long (s): he parachutes in, like when he's lost.
@@ -225,6 +229,8 @@ pub enum HanPose {
     Paddle,
     /// The laughing band: rolling along.
     Roll,
+    /// Clinging to a wall (a cling shaft): plunger stuck in it, cap up for Nat.
+    Cling,
 }
 
 /// For visuals: what Han is doing and which way he faces.

@@ -19,7 +19,8 @@
 //! ([`PlayerControl`]: input, jumps, toots, grease, bounces) wraps it; Han's AI wraps it with
 //! his own (`game::han`). Han's head is a one-way carrier for Nat ([`HanHead`]); jumping off it
 //! is the plunger boost ([`BOOST_SPEED`], [`HanBoosted`]; in a band zone the weak one,
-//! [`WEAK_BOOST_SPEED`]). While the band's fired up it's the **running throw** instead:
+//! [`WEAK_BOOST_SPEED`]). Off Han clinging to a wall (a cling shaft) it's a **kick**: the boost
+//! and [`KICK_CARRY`] away from the wall. While the band's fired up it's the **running throw** instead:
 //! flatter ([`THROW_SPEED`]) and far, Nat keeping [`THROW_CARRY`] on top of his run the way he
 //! keeps a platform's speed ([`Body::launch`]), towards where he's facing.
 //!
@@ -367,6 +368,9 @@ pub struct HanHead {
     /// In a band zone (`Level::in_band_zone`): jumping off him (or off the coyote time after
     /// stepping off him) is the weak boost ([`WEAK_BOOST_SPEED`]), winded or not.
     pub weak: bool,
+    /// Clinging to a wall (a cling shaft, nervous): the way away from it (-1 or 1; 0 when
+    /// not). Jumping off him is then a kick: the boost and [`KICK_CARRY`] that way.
+    pub kick: f32,
 }
 
 /// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone;
@@ -401,6 +405,10 @@ pub const THROW_SPEED: f32 = 380.0;
 /// ...and the horizontal speed it adds on top of Nat's run (px/s, kept like a platform's speed
 /// until he lands or hits a wall: [`Body::launch`]).
 pub const THROW_CARRY: f32 = 120.0;
+
+/// The horizontal speed a kick off Han clinging to a wall adds, away from it (px/s, kept like a
+/// platform's speed until Nat lands or hits a wall: [`Body::launch`]).
+pub const KICK_CARRY: f32 = 90.0;
 
 /// Han's head as a carrier, if it's solid (`pos` is his box center).
 pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<Carrier> {
@@ -499,8 +507,13 @@ fn player_step(
             ctl.weak_toot = false;
             boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true });
         } else if on_han.is_some_and(|h| h.boost) {
-            // The plunger boost: way up, and the toot's fresh again.
+            // The plunger boost: way up, and the toot's fresh again (off Han clinging to a wall,
+            // a kick away from it too).
             body.vel.y = BOOST_SPEED;
+            let kick = on_han.map_or(0.0, |h| h.kick);
+            if kick != 0.0 {
+                body.launch = kick * KICK_CARRY;
+            }
             ctl.has_toot = true;
             ctl.weak_toot = false;
             boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false });

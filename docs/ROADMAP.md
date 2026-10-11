@@ -45,12 +45,12 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   fade at grease-chute ends; stain pits and chutes in the levels.
 - **Han** (`docs/han-buddy.md`): graph navigation, plunger boost (refreshes the toot), mid-air
   intercepts, shield escort through sprays, sewage rafts, per-mode physics, weak boost + grumbles
-  near band gates, overuse limit, the fired-up running throw, the Giant Steps mega-boost; mega walls, shield rows,
-  fired-up chasms, buddy raft pools.
+  near band gates, overuse limit, the fired-up running throw, the Giant Steps mega-boost, the nervous wall-cling; mega walls,
+  cling shafts, shield rows, fired-up chasms, buddy raft pools.
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
   freedom. Never shown to the player.
-- **Free play** (`src/freeplay/`): procedural rooms from 13 templates (Han's four gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
+- **Free play** (`src/freeplay/`): procedural rooms from 14 templates (Han's five gates among them, one `Buddy` skill; shelf climbs 20 tiles up, like level 2's bowl), validated as they're
   added, chosen by the adaptive engine; seeds shown and remembered (adaptive, not fixed courses).
   On web the validation runs in a Web Worker (`src/freeplay/offload.rs`, the `roomgen` wasm),
   so a new room never hitches the game; the main thread takes over if the worker fails.
@@ -65,9 +65,9 @@ kills while firing; Han's plug covers it; free-play waltz rooms are now glide la
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).
 - **Buddy vs band, step 4** (Han's per-mode tricks): the fired-up running throw is in (chain
   chasms became fired-up chasms; Han's head holds Nat in mid-air only over them, fired up),
-  and the Giant Steps mega-boost (buddy ledges became 11-tile mega walls). Each trick gets a
-  freeze-frame lesson card at its first hint spot. Next: the nervous wall-cling, the waltz
-  trapeze, the laughing boing boost, shield rows out, Han nearly silent.
+  the Giant Steps mega-boost (buddy ledges became 11-tile mega walls), and the nervous
+  wall-cling (cling shafts; level 9 has one after its chute). Each trick gets a freeze-frame
+  lesson card at its first hint spot. Next: the waltz trapeze, the laughing boing boost, shield rows out, Han nearly silent.
 
 ## Planned (agreed, not started)
 - **More band behaviours** (offered, not picked yet): call-and-response comping, real dynamics
