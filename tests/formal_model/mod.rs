@@ -3,8 +3,8 @@
 //! explored breadth-first, and the properties checked from every one of them.
 //!
 //! - **Play** is a sequence of [`Act`]s on a 0.25 s grid ([`TICK`]): frames of events (a toot,
-//!   a nugget, a death, a checkpoint, a ground jump, a call, or several at once in tier 2) at the
-//!   current time, restarts, and waits (each waited tick is one empty frame, so periodic checks
+//!   a nugget, a death, a slip: a death the band laughs at, a checkpoint, a ground jump, a call,
+//!   or several at once in tier 2) at the current time, restarts, and waits (each waited tick is one empty frame, so periodic checks
 //!   and hold expiry happen exactly as in the game, a tick late at most).
 //! - **The model** ([`Sim`]) is what `audio::plugin::direct` does with the director: the band
 //!   steps, its decisions become the music playing, and the physics follow
@@ -53,8 +53,17 @@ pub const DEATH: u8 = 4;
 pub const CHECKPOINT: u8 = 8;
 pub const JUMP: u8 = 16;
 pub const CALL: u8 = 32;
-const BITS: [(u8, &str); 6] =
-    [(TOOT, "toot"), (NUGGET, "nugget"), (DEATH, "death"), (CHECKPOINT, "checkpoint"), (JUMP, "jump"), (CALL, "call")];
+/// A death at something easy (the laughing band).
+pub const SLIP: u8 = 64;
+const BITS: [(u8, &str); 7] = [
+    (TOOT, "toot"),
+    (NUGGET, "nugget"),
+    (DEATH, "death"),
+    (CHECKPOINT, "checkpoint"),
+    (JUMP, "jump"),
+    (CALL, "call"),
+    (SLIP, "slip"),
+];
 
 /// One step of play.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -74,13 +83,15 @@ impl Act {
     pub const CHECKPOINT: Act = Act::Frame(CHECKPOINT);
     pub const JUMP: Act = Act::Frame(JUMP);
     pub const CALL: Act = Act::Frame(CALL);
+    pub const SLIP: Act = Act::Frame(SLIP);
 
     fn events(bits: u8) -> Events {
         let n = |b: u8| (bits & b != 0) as u32;
         Events {
             toots: n(TOOT),
             nuggets: n(NUGGET),
-            deaths: n(DEATH),
+            deaths: n(DEATH) + n(SLIP),
+            slips: n(SLIP),
             checkpoints: n(CHECKPOINT),
             ground_jumps: n(JUMP),
             waltz_steps: 0,
@@ -112,6 +123,8 @@ pub enum Mutation {
     RestartKeepsBand,
     /// Calls wait for the next periodic check instead of switching at once.
     CallWaitsForCheck,
+    /// Every death is a slip (the old laughing band: it laughed at stain pits and chutes).
+    EveryDeathLaughs,
 }
 
 /// The director as the game drives it (see the module docs).
@@ -147,7 +160,10 @@ impl Sim {
     }
 
     /// One frame at the current time; returns the decision, if one was made.
-    fn frame(&mut self, ev: Events) -> Option<Filters> {
+    fn frame(&mut self, mut ev: Events) -> Option<Filters> {
+        if self.mutation == Mutation::EveryDeathLaughs {
+            ev.slips = ev.deaths;
+        }
         let now = self.now();
         let periodic = now >= self.band.next_check();
         let d = self.band.step(now, ev).map(|d| d.0);
@@ -235,13 +251,13 @@ impl Sim {
             counters: [
                 s.level_deaths.min(NERVOUS_DEATHS) as u8,
                 s.mood_deaths.min(NERVOUS_DEATHS) as u8,
-                s.checkpoint_deaths.min(director::LAUGHING_DEATHS) as u8,
+                s.checkpoint_slips.min(director::LAUGHING_SLIPS) as u8,
             ],
             charged: self.band.charged(),
             hold: self.band.hold.filter(|&(_, until)| until > now).map(|(h, until)| (h, rel(until))),
             next_check: rel(self.band.next_check()).max(0),
             since_start: (-rel(self.band.level_start())).min(HORIZON),
-            laugh_decay: (s.checkpoint_deaths > 0).then(|| rel(self.band.laugh_decay_at()).max(0)),
+            laugh_decay: (s.checkpoint_slips > 0).then(|| rel(self.band.laugh_decay_at()).max(0)),
             window,
             steps,
             playing: self.playing,
@@ -260,7 +276,7 @@ pub fn groove_of(playing: Filters, level_deaths: u32, mutation: Mutation) -> Gro
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Key {
     /// Level deaths (saturated at 3: the grip layer), mood deaths (3: nervous), checkpoint
-    /// deaths (2: the laughing band).
+    /// slips (1: the laughing band).
     counters: [u8; 3],
     /// The full counters, the one a call plays last.
     charged: Vec<Harmony>,
@@ -393,7 +409,7 @@ pub struct Violation {
 }
 
 /// The properties checked from every reachable state.
-pub const PROPERTIES: [(&str, &str); 6] = [
+pub const PROPERTIES: [(&str, &str); 7] = [
     (
         "a",
         "deaths always reach grip: 3+ level deaths give grip, whatever else happens (chute loops with ghost nuggets)",
@@ -406,6 +422,7 @@ pub const PROPERTIES: [(&str, &str); 6] = [
     ("d", "holds expire without keep-alive input (no input, or only deaths and checkpoints)"),
     ("e", "restart returns to the initial state"),
     ("f", "the laughing band never blocks grip"),
+    ("g", "only a slip starts the laughing band: a plain death (a stain pit, a chute) never does"),
 ];
 
 /// Respawn and walk back to a chute (ticks): the respawn delay, rounded up.
@@ -470,6 +487,7 @@ pub fn check_state(s: &Sim, init: &Key) -> Result<(), Violation> {
     prop_d(s, &q)?;
     prop_e(s, init)?;
     prop_f(s)?;
+    prop_g(s)?;
     Ok(())
 }
 
@@ -487,7 +505,7 @@ fn prop_a(s: &Sim) -> Result<(), Violation> {
         for lap_no in 0..NERVOUS_DEATHS as usize {
             for (i, &a) in lap.iter().enumerate() {
                 t.apply(a);
-                deaths += (a == Act::DEATH) as u32;
+                deaths += matches!(a, Act::Frame(b) if b & (DEATH | SLIP) != 0) as u32;
                 if deaths == NERVOUS_DEATHS && !t.grip() {
                     let witness = lap.iter().cycle().take(lap_no * lap.len() + i + 1).copied().collect();
                     return Err(Violation {
@@ -668,6 +686,23 @@ fn prop_f(s: &Sim) -> Result<(), Violation> {
                 s.playing.just_intonation,
                 other.grip()
             ),
+        });
+    }
+    Ok(())
+}
+
+fn prop_g(s: &Sim) -> Result<(), Violation> {
+    if s.playing.just_intonation {
+        return Ok(());
+    }
+    let mut t = s.clone();
+    let mut laughed = false;
+    t.apply_with(Act::DEATH, |_, d| laughed |= d.is_some_and(|f| f.just_intonation));
+    if laughed {
+        return Err(Violation {
+            prop: "g",
+            witness: vec![Act::DEATH],
+            detail: "a plain death set the band laughing".into(),
         });
     }
     Ok(())

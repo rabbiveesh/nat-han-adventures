@@ -137,7 +137,7 @@ fn five_toots_summon_giant_steps_at_the_next_bar() {
 fn giant_steps_beats_a_nervous_band() {
     let mut app = app(0);
     for _ in 0..director::NERVOUS_DEATHS {
-        app.world_mut().write_message(PlayerDied { pos: Vec2::ZERO });
+        app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
         app.update();
     }
     let player = app.world().resource::<LivePlayer>();
@@ -298,7 +298,7 @@ fn quick_deaths_bring_grip_even_while_laughing() {
         // A death every 2.5 s (respawn + slide back + splat), re-grabbing 4 ghost nuggets after
         // each respawn: that keeps refiring "fired up", which must not keep grip away.
         if frame % 150 == 0 && frame < 150 * 5 {
-            app.world_mut().write_message(PlayerDied { pos: Vec2::ZERO });
+            app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
         }
         if frame % 150 > 60 && frame % 150 <= 64 && frame < 150 * 5 {
             app.world_mut().write_message(NuggetCollected { pos: Vec2::ZERO });

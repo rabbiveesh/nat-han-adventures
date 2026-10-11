@@ -167,7 +167,7 @@ impl Musician for Lead {
             // Answer the toot in the next bar.
             Input::Toot => self.p.cue(next_bar, super::BarIntent { answer: true, ..Default::default() }),
             // The comic wah-wah.
-            Input::Death => self.p.cue(next_bar, super::BarIntent { wah: true, ..Default::default() }),
+            Input::Death | Input::Slip => self.p.cue(next_bar, super::BarIntent { wah: true, ..Default::default() }),
             Input::LevelStart | Input::Restart => self.solo_note = None,
             _ => {}
         }

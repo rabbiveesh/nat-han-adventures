@@ -67,6 +67,8 @@ pub enum Input {
     Toot,
     Nugget,
     Death,
+    /// A death at something the game rates easy for the player: the band laughs.
+    Slip,
     Checkpoint,
     Jump { on_ground: bool },
     /// Landed, falling at `speed` px/s.
@@ -805,6 +807,13 @@ impl Engine {
             Input::Death => {
                 self.energy += ENERGY_DEATH;
                 Some(ev(|e| e.deaths = 1))
+            }
+            Input::Slip => {
+                self.energy += ENERGY_DEATH;
+                Some(ev(|e| {
+                    e.deaths = 1;
+                    e.slips = 1;
+                }))
             }
             Input::WaltzStep => {
                 self.energy += ENERGY_WALTZ_STEP;

@@ -82,6 +82,11 @@ impl RollingWindow {
         }))
     }
 
+    /// Clean rate of everything remembered at `band` or harder, any epoch.
+    pub fn at_or_above(&self, band: Band) -> (Option<f32>, usize) {
+        rate(self.entries.iter().filter(|e| e.band >= band))
+    }
+
     /// Clean rate of stretch rooms (above the center) in the current epoch.
     pub fn above_center(&self, center: Band, epoch: u32) -> (Option<f32>, usize) {
         rate(self.entries.iter().filter(|e| e.epoch == epoch && e.band > center))

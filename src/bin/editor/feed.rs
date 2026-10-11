@@ -22,6 +22,8 @@ pub enum Button {
     Toot,
     Nugget,
     Death,
+    /// A death at something easy (the game's per-skill judgement): the band laughs.
+    Slip,
     Checkpoint,
     Jump,
     Land,
@@ -32,10 +34,11 @@ pub enum Button {
 }
 
 impl Button {
-    pub const ALL: [Button; 9] = [
+    pub const ALL: [Button; 10] = [
         Button::Toot,
         Button::Nugget,
         Button::Death,
+        Button::Slip,
         Button::Checkpoint,
         Button::Jump,
         Button::Land,
@@ -49,6 +52,7 @@ impl Button {
             Button::Toot => "TOOT",
             Button::Nugget => "NUGGET",
             Button::Death => "DEATH",
+            Button::Slip => "SLIP",
             Button::Checkpoint => "CHECKPT",
             Button::Jump => "JUMP",
             Button::Land => "LAND",
@@ -64,6 +68,7 @@ impl Button {
             Button::Toot => 'T',
             Button::Nugget => 'N',
             Button::Death => 'D',
+            Button::Slip => 'S',
             Button::Checkpoint => 'C',
             Button::Jump => 'J',
             Button::Land => 'L',
@@ -78,7 +83,7 @@ impl Button {
         match self {
             Button::Toot => Some(Sfx::Toot),
             Button::Nugget => Some(Sfx::Nugget),
-            Button::Death => Some(Sfx::Splat),
+            Button::Death | Button::Slip => Some(Sfx::Splat),
             Button::Checkpoint => Some(Sfx::Checkpoint),
             Button::Jump => Some(Sfx::Jump),
             Button::Land => Some(Sfx::Land),
@@ -125,6 +130,11 @@ impl Gameplay {
             Button::Death => {
                 out.push(Input::Death);
                 self.frame.deaths += 1;
+            }
+            Button::Slip => {
+                out.push(Input::Slip);
+                self.frame.deaths += 1;
+                self.frame.slips += 1;
             }
             Button::Checkpoint => {
                 out.push(Input::Checkpoint);
@@ -197,7 +207,7 @@ pub fn stat_bars(s: &director::PlayStats) -> [(&'static str, u32, u32); 5] {
         ("nuggets", s.stretch_nuggets, director::FIRED_UP_NUGGETS),
         ("waltz steps", s.stretch_waltzes, 1),
         ("mood deaths", s.mood_deaths, director::NERVOUS_DEATHS),
-        ("deaths since cp", s.checkpoint_deaths, director::LAUGHING_DEATHS),
+        ("slips since cp", s.checkpoint_slips, director::LAUGHING_SLIPS),
     ]
 }
 
@@ -240,6 +250,7 @@ impl AutoNat {
             (Button::Toot, 0.02 + 0.55 * c * c.sqrt()),
             (Button::Nugget, 0.12 + 0.25 * c),
             (Button::Death, 0.004 + 0.12 * c * c),
+            (Button::Slip, 0.002 + 0.04 * c * c),
             (Button::Checkpoint, 1.0 / 35.0),
             // Calls whenever something's charged, now and then.
             (Button::Call, 0.3),
@@ -316,7 +327,7 @@ mod tests {
     }
 
     /// Five toots and a call summon Giant Steps, and a headless engine fed the inputs plays it
-    /// from the next bar line; two deaths since the checkpoint set the band laughing.
+    /// from the next bar line; a slip sets the band laughing.
     #[test]
     fn the_feed_drives_a_headless_engine() {
         let song = library::load("sweet_georgia_brown").unwrap();
@@ -354,7 +365,7 @@ mod tests {
         assert_eq!(engine.state().harmony, Harmony::Coltrane);
         let mut inputs = Vec::new();
         g.press(Button::Death, &mut inputs);
-        g.press(Button::Death, &mut inputs);
+        g.press(Button::Slip, &mut inputs);
         run(&mut g, &mut engine, inputs, 3.0);
         assert!(engine.state().filters.just_intonation);
         assert_eq!(engine.state().tuning, Tuning::Medley);
@@ -376,6 +387,6 @@ mod tests {
         let (calm, wild) = (count(0.0), count(1.0));
         assert!(wild[0] > 4 * calm[0].max(1), "toots {calm:?} {wild:?}");
         assert!(wild[2] > calm[2], "deaths");
-        assert!(calm[4] > 20 && calm[5] > 20, "jumps and lands");
+        assert!(calm[5] > 20 && calm[6] > 20, "jumps and lands");
     }
 }
