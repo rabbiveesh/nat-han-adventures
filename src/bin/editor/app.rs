@@ -593,8 +593,8 @@ mod tests {
     fn the_text_cursor_knows_its_beat() {
         let mut e = Editor::new(repo_root(), Some("sweet_georgia_brown"), AudioOutput::Headless);
         let text = e.doc.text.clone();
-        // The cursor on bar 5's first note of the lead (`o5 r4 g4 a4 b4 |` starts the line).
-        let at = text.find("o5 r4 g4 a4 b4").unwrap();
+        // The cursor on bar 5's first note of the lead (`o5 d4 e4 f4 d4 |` starts the line).
+        let at = text.find("o5 d4 e4 f4 d4").unwrap();
         e.text.cursor = text[..at].chars().count() + 3;
         assert_eq!(e.text_cursor_beat(), Some(16.0));
         e.view = View::Text;
