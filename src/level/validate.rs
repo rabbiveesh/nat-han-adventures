@@ -189,8 +189,9 @@ pub enum Gate {
     GlideLaunch,
     GreaseChute,
     StainPit,
-    /// Needs the plunger boost off Han's head.
-    BuddyLedge,
+    /// Needs Giant Steps and Han: the mega-boost off his head (the plunger boost in Giant
+    /// Steps' low gravity), and a toot.
+    MegaWall,
     /// Needs Han going ahead into the jets.
     ShieldRow,
     /// Needs the fired-up band and Han: his running throw, and catches in mid-air to throw
@@ -203,7 +204,7 @@ pub enum Gate {
 impl Gate {
     /// Han's gates (he's what crosses them).
     pub fn needs_han(self) -> bool {
-        matches!(self, Gate::BuddyLedge | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
+        matches!(self, Gate::MegaWall | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft)
     }
 
     pub fn name(self) -> &'static str {
@@ -213,7 +214,7 @@ impl Gate {
             Gate::GlideLaunch => "glide launch",
             Gate::GreaseChute => "grease chute",
             Gate::StainPit => "stain pit",
-            Gate::BuddyLedge => "buddy ledge",
+            Gate::MegaWall => "mega wall",
             Gate::ShieldRow => "shield row",
             Gate::ChainChasm => "fired-up chasm",
             Gate::BuddyRaft => "buddy raft pool",
@@ -227,7 +228,16 @@ impl Gate {
             Gate::LongGap => Some(Mode::FiredUp),
             Gate::GlideLaunch => Some(Mode::Waltz),
             Gate::GreaseChute => Some(Mode::Nervous),
-            Gate::StainPit | Gate::BuddyLedge | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft => None,
+            Gate::StainPit | Gate::MegaWall | Gate::ShieldRow | Gate::ChainChasm | Gate::BuddyRaft => None,
+        }
+    }
+
+    /// The band mode it needs: its own mode, or the one under Han's trick (a mega wall: Giant
+    /// Steps).
+    pub fn band(self) -> Option<Mode> {
+        match self {
+            Gate::MegaWall => Some(Mode::GiantSteps),
+            _ => self.mode(),
         }
     }
 
@@ -238,7 +248,7 @@ impl Gate {
             Gate::GlideLaunch => Topic::Waltz,
             Gate::GreaseChute => Topic::Grip,
             Gate::StainPit => Topic::Stain,
-            Gate::BuddyLedge => Topic::Boost,
+            Gate::MegaWall => Topic::Mega,
             Gate::ShieldRow => Topic::Shield,
             Gate::ChainChasm => Topic::Chain,
             Gate::BuddyRaft => Topic::BuddyRaft,
@@ -252,7 +262,7 @@ impl Gate {
             Gate::GlideLaunch => 'Z',
             Gate::GreaseChute => 'Y',
             Gate::StainPit => 'K',
-            Gate::BuddyLedge => 'B',
+            Gate::MegaWall => 'M',
             Gate::ShieldRow => 'H',
             Gate::ChainChasm => 'N',
             Gate::BuddyRaft => 'U',
@@ -677,6 +687,13 @@ impl<'a> Map<'a> {
     /// or found in a room), where it's the weak one ([`Level::han_allowed`]).
     pub fn han_allowed(&self, cell: Cell) -> bool {
         !self.in_band_zone(cell)
+    }
+
+    /// Is Han's boost weak in `cell`, Giant Steps playing or not (marked, or found in a room)?
+    /// See [`Level::weak_boost`].
+    pub fn weak_boost(&self, cell: Cell, giant_steps: bool) -> bool {
+        self.level.weak_boost(cell, giant_steps)
+            || self.derived.iter().any(|g| !(giant_steps && g.topic == Topic::Mega) && g.berth().contains(cell))
     }
 
     /// Is `cell` in a band zone (marked, or found in a room)? See [`Level::in_band_zone`].
@@ -1630,6 +1647,8 @@ pub struct Physics {
     /// The fired-up band's running throw off Han standing still: a human's (crossing a
     /// fired-up chasm).
     throw: Arcs,
+    /// The mega-boost, Giant Steps', off Han standing still: a human's (climbing a mega wall).
+    mega: Arcs,
     boost_ideal: Vec<(Mode, Arcs)>,
     /// Weak boosts off Han in a band zone, ideal, in the modes with their own geometry (the
     /// waltz and the nervous band jump like normal).
@@ -1650,6 +1669,10 @@ impl Physics {
             Env::new(Mode::FiredUp, false),
             strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
         );
+        let mega = Arcs::boost(
+            Env::new(Mode::GiantSteps, false),
+            strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
+        );
         let boost_ideal = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp]
             .into_iter()
             .map(|m| (m, Arcs::boost(Env::new(m, true), ideal_strategies())))
@@ -1660,7 +1683,7 @@ impl Physics {
             .collect();
         let glide = Arcs::new(Env::glide(false), strategies());
         let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, boost_ideal, weak_ideal }
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -1672,8 +1695,8 @@ impl Physics {
         let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let glide = Arcs::new(Env::glide(false), human.clone());
         let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
-        let Physics { boost, throw, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
-        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, boost_ideal, weak_ideal }
+        let Physics { boost, throw, mega, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -1685,14 +1708,15 @@ impl Physics {
     pub fn laughing() -> [(&'static str, Physics); 2] {
         const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics { human, no_toot, boost, throw, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
+            let Physics { human, no_toot, boost, throw, mega, ideal, glide, glide_ideal, boost_ideal, weak_ideal } = Physics::new();
             let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
             // (From the plain strategies: the throw's are already signed with its carry.)
             let throw = Arcs::boost(nudge(throw.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect());
+            let mega = Arcs::boost(nudge(mega.env), mega.strategies);
             let glide = Arcs::new(nudge(glide.env), glide.strategies);
-            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, boost_ideal, weak_ideal }
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, boost_ideal, weak_ideal }
         };
         [
             ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
@@ -2011,9 +2035,10 @@ fn mark_of(gate: Gate, from: Cell, to: Cell) -> GateMark {
     }
 }
 
-/// In a generated room, a band or death gate is marked as soon as it's found.
+/// In a generated room, a band or death gate (or a mega wall: its zone weakens Han's plain
+/// boost) is marked as soon as it's found.
 fn derive_mark(map: &mut Map, gate: Gate, from: Cell, to: Cell) {
-    if map.derive_marks && !gate.needs_han() {
+    if map.derive_marks && (!gate.needs_han() || gate == Gate::MegaWall) {
         map.derived.push(mark_of(gate, from, to));
     }
 }
@@ -2026,8 +2051,9 @@ fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
     g.reached(cell) && map.han_allowed(cell) && map.han_allowed((cell.0, cell.1 - 1)) && !map.han_keeps_out(cell)
 }
 
-/// Han's gates from reached cells not tried yet: buddy ledges (a boost off Han standing
-/// there), shield rows (Han goes ahead), buddy raft pools (Han's rafts), fired-up chasms
+/// Han's gates from reached cells not tried yet: mega walls (a boost off Han standing there:
+/// outside the band zones the plain one, in a mega wall's zone the mega-boost with room to
+/// summon Giant Steps), shield rows (Han goes ahead), buddy raft pools (Han's rafts), fired-up chasms
 /// (the running throw off Han at the edge, the band fired up).
 fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<Found> {
     let mut found = Vec::new();
@@ -2036,6 +2062,24 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
     cells.sort();
     for &cell in &cells {
         tried[g.idx(cell).unwrap()] = true;
+        // (A generated room has no marks yet: there the mega-boost goes from anywhere, and its
+        // mark is derived when it's found.)
+        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, true);
+        if g.reached(cell)
+            && mega_at(cell)
+            && mega_at((cell.0, cell.1 - 1))
+            && !map.han_keeps_out(cell)
+            && ready(map, g, Mode::GiantSteps, cell, 0)
+        {
+            for s in &phys.mega.strategies {
+                let Some(f) = phys.mega.flight(map, cell, s) else { continue };
+                if let Outcome::Land(l) = fly(map, &phys.mega.env, &f, &mut buf)
+                    && !g.reached(l)
+                {
+                    found.push((Gate::MegaWall, cell, l, buf.clone()));
+                }
+            }
+        }
         if !han_at(map, g, cell) {
             continue;
         }
@@ -2044,7 +2088,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
             if let Outcome::Land(l) = fly(map, &phys.boost.env, &f, &mut buf)
                 && !g.reached(l)
             {
-                found.push((Gate::BuddyLedge, cell, l, buf.clone()));
+                found.push((Gate::MegaWall, cell, l, buf.clone()));
             }
         }
         for w in &map.shield_rows {
@@ -2231,7 +2275,7 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
             }
         }
     }
-    if !c.gate.needs_han()
+    if (!c.gate.needs_han() || c.gate == Gate::MegaWall)
         && let Some(e) = boost_leak(&before, phys, g, i, c, &beyond)
     {
         errs.push(format!("{what} {e}"));
@@ -2286,11 +2330,12 @@ pub const BOOST_COLS: i32 = HAN_BERTH + 16;
 pub const BOOST_ROWS: i32 = 12;
 
 /// The boost proof for band (or death) gate crossing `c` (number `i`): no plunger boost, and no
-/// chain of boosts and toots, opens it, in any mode, with ideal input. Returns what does.
+/// chain of boosts and toots, opens it, in any mode, with ideal input. Returns what does. (A
+/// mega wall gets it too, but for Giant Steps: there Han's boost is what crosses it.)
 ///
 /// Han follows Nat everywhere, so (over-approximating where a chain can put them):
 /// - **Full boosts** (fired up: throws), outside the band zones (Han's cell and Nat's on his
-///   head): Han standing, or (only while the band's fired up, over a chasm) in mid-air up to
+///   head; Giant Steps also in a mega wall's, the mega-boost's): Han standing, or (only while the band's fired up, over a chasm) in mid-air up to
 ///   [`HAN_CHASM_CATCH_RISE`] above a floor he may have stood on, anywhere [`CATCH_COLS`]
 ///   from it, through open air ([`han_air`]): a cell Nat reached before the gate, one a chain got Nat to, or one nobody reached in a
 ///   zone this side of the gate whose air Nat gets into on his own. Whatever came before, a
@@ -2320,10 +2365,14 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     // to catch a Nat still on the near side).
     let dir = (c.to.0 - at.0).signum();
     let near_side = |(x, _): Cell| dir == 0 || (x - c.to.0) * dir < 0;
-    let zone = |(x, y): Cell| map.in_band_zone((x, y)) || map.in_band_zone((x, y - 1));
-    let weak_at = |cell: Cell| zone(cell) && map.standable(cell) && !map.han_keeps_out(cell);
-    let full_at = |cell: Cell| {
-        !zone(cell) && !map.is_solid(cell.0, cell.1) && !map.deadly_tile(cell.0, cell.1) && !map.han_keeps_out(cell)
+    // (A mega wall's zone is a full boost's while Giant Steps plays.)
+    let zone = |(x, y): Cell, m: Mode| {
+        let gs = m == Mode::GiantSteps;
+        map.weak_boost((x, y), gs) || map.weak_boost((x, y - 1), gs)
+    };
+    let weak_at = |cell: Cell, m: Mode| zone(cell, m) && map.standable(cell) && !map.han_keeps_out(cell);
+    let full_at = |cell: Cell, m: Mode| {
+        !zone(cell, m) && !map.is_solid(cell.0, cell.1) && !map.deadly_tile(cell.0, cell.1) && !map.han_keeps_out(cell)
     };
     // Landing targets (per row, the columns), for the envelopes.
     let mut rows: HashMap<i32, Vec<i32>> = HashMap::new();
@@ -2340,7 +2389,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
         .collect();
     let mut buf = Vec::new();
     // One launch: a landing past the gate, or (into `new`) the unreached cells it gets Nat to.
-    let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>| -> Option<Cell> {
+    let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>, m: Mode| -> Option<Cell> {
         for (k, s) in arcs.at(map, from).iter().enumerate() {
             let Some(f) = arcs.flight(map, from, s) else { continue };
             if !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
@@ -2355,12 +2404,12 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
                 }
             }
             // Passing through a zone cell: Han may be standing there to catch him.
-            new.extend(buf.iter().copied().filter(|&t| unreached.contains(&t) && weak_at(t)));
+            new.extend(buf.iter().copied().filter(|&t| unreached.contains(&t) && weak_at(t, m)));
         }
         None
     };
     let name = |m: Mode| if m == Mode::Normal { "normal, waltz or nervous".to_string() } else { format!("{m:?}") };
-    let own = |m: Mode| Some(m) == c.gate.mode();
+    let own = |m: Mode| Some(m) == c.gate.band();
     // Han's floors to start with, and the air around each where he may catch Nat: where Nat
     // stands before the gate, and the unreached ledges in a zone this side of it whose air Nat
     // gets into on his own (a jump above where he stands).
@@ -2384,6 +2433,10 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     }
     for (mode, full) in &phys.boost_ideal {
         let mode = *mode;
+        // A mega wall's own mode: Giant Steps and Han is what crosses it.
+        if c.gate == Gate::MegaWall && own(mode) {
+            continue;
+        }
         let weak = phys.weak_ideal.iter().find(|(m, _)| *m == mode).map(|(_, a)| a).filter(|_| !own(mode));
         let alike = if mode == Mode::Normal { vec![Mode::Normal, Mode::Waltz, Mode::Nervous] } else { vec![mode] };
         let ground: Vec<&Arcs> = alike
@@ -2403,10 +2456,10 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
             for (h, air) in std::mem::take(&mut floors) {
                 for a in air {
                     // His head holds Nat in mid-air only while the band's fired up.
-                    if (mode != Mode::FiredUp && a != h) || !full_at(a) || near_side(a) != near_side(h) || !full_tried.insert(a) {
+                    if (mode != Mode::FiredUp && a != h) || !full_at(a, mode) || near_side(a) != near_side(h) || !full_tried.insert(a) {
                         continue;
                     }
-                    if let Some(l) = fly_from(full, a, &mut new) {
+                    if let Some(l) = fly_from(full, a, &mut new, mode) {
                         return Some(format!(
                             "is passable with a full plunger boost ({}) off Han at col {} row {} (from his floor at col {} row {}) -> col {} row {}: mark it (`gate:`) so his boost is weak there",
                             name(mode), a.0, a.1, h.0, h.1, l.0, l.1
@@ -2421,8 +2474,8 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
             }
             let Some((cell, fresh)) = queue.pop() else { break };
             if let Some(weak) = weak
-                && weak_at(cell)
-                && let Some(l) = fly_from(weak, cell, &mut new)
+                && weak_at(cell, mode)
+                && let Some(l) = fly_from(weak, cell, &mut new, mode)
             {
                 let how = if fresh { " (got to by a chain of boosts)" } else { "" };
                 return Some(format!(
@@ -2434,7 +2487,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
                 // Somewhere new: Nat's own jumps from there, walking on, and a floor for Han.
                 floors.push((cell, han_air(map, cell)));
                 for arcs in &ground {
-                    if let Some(l) = fly_from(arcs, cell, &mut new) {
+                    if let Some(l) = fly_from(arcs, cell, &mut new, mode) {
                         return Some(format!(
                             "is passable with a chain of plunger boosts ({}) off Han to col {} row {}, then a jump -> col {} row {}",
                             name(mode), cell.0, cell.1, l.0, l.1
@@ -2756,7 +2809,9 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let mut marks = level.gates.clone();
     if map.derive_marks {
         marks.extend(map.derived.iter().copied());
-        marks.extend(crossings.iter().filter(|c| c.gate.needs_han()).map(|c| mark_of(c.gate, c.from, c.to)));
+        marks.extend(
+            crossings.iter().filter(|c| c.gate.needs_han() && c.gate != Gate::MegaWall).map(|c| mark_of(c.gate, c.from, c.to)),
+        );
     }
     for c in crossings.iter().filter(|_| !map.derive_marks) {
         let t = c.gate.topic();

@@ -9,7 +9,7 @@
 //! `!` unreachable checkpoint/goal, `@` moving platform (start), `-` its path, `%` a splat
 //! stain the search made, `?` a hint spot, and the take-off of each gate crossing: `W` giant
 //! wall (Giant Steps), `R` long gap (fired up), `Z` glide launch (waltz), `Y` grease chute (grip), `K`
-//! stain pit (splats), and Han's: `B` buddy ledge (boost), `H` shield row, `N` chain chasm,
+//! stain pit (splats), and Han's: `M` mega wall (Giant Steps + boost), `H` shield row, `N` chain chasm,
 //! `U` buddy raft pool.
 
 use std::time::Instant;
@@ -21,13 +21,13 @@ use nat_han_adventures::level::*;
 const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Bathroom Floor", 1, &[Gate::GiantWall]),
     ("The Bowl", 1, &[]),
-    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit, Gate::BuddyLedge]),
+    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit, Gate::MegaWall]),
     ("Pipe Maze", 2, &[Gate::GiantWall]),
     ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft]),
-    ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::BuddyLedge]),
+    ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::MegaWall]),
     ("Septic Tank", 4, &[Gate::GlideLaunch]),
     ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::GlideLaunch, Gate::StainPit, Gate::ShieldRow, Gate::ChainChasm]),
-    ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::BuddyLedge, Gate::BuddyRaft]),
+    ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::MegaWall, Gate::BuddyRaft]),
     ("The Golden Throne", 5, &[Gate::GiantWall, Gate::ShieldRow, Gate::ChainChasm]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).
@@ -294,12 +294,18 @@ fn validator_catches_broken_levels() {
     assert!(giant.gated_goal);
     // 9 tiles: beyond Giant Steps, so Han keeping clear of it makes it a dead end...
     assert!(errs_of(&mark(&wall(9), giant_mark)).iter().any(|e| e.contains("goal")), "9 tiles is too tall");
-    // ...but a buddy ledge if he comes along: the plunger boost (and it must be marked).
-    let ledge = check_with_nuggets(&mark(&wall(9), "gate: boost 20,3 41,13"), &[]);
-    assert!(ledge.errs.is_empty(), "the boost climbs 9: {:?}", ledge.errs);
-    assert_eq!(gates(&ledge), [Gate::BuddyLedge]);
-    assert!(errs_of(&wall(9)).iter().any(|e| e.contains("`gate: boost")), "unmarked: {:?}", errs_of(&wall(9)));
-    assert!(errs_of(&wall(11)).iter().any(|e| e.contains("goal")), "11 tiles is too tall even for the boost");
+    // ...but a mega wall if he comes along: Giant Steps and his mega-boost (it must be
+    // marked: unmarked, his plain boost climbs 9 from outside any band zone).
+    let mega_mark = "gate: mega 20,1 41,13";
+    let mega = check_with_nuggets(&mark(&wall(9), mega_mark), &[]);
+    assert!(mega.errs.is_empty(), "the mega-boost climbs 9: {:?}", mega.errs);
+    assert_eq!(gates(&mega), [Gate::MegaWall]);
+    assert!(errs_of(&wall(9)).iter().any(|e| e.contains("`gate: mega")), "unmarked: {:?}", errs_of(&wall(9)));
+    // 11 tiles: too tall for the plain boost, a mega wall.
+    assert!(errs_of(&wall(11)).iter().any(|e| e.contains("goal")), "11 tiles is too tall for the plain boost");
+    let tall = check_with_nuggets(&mark(&wall(11), mega_mark), &[]);
+    assert!(tall.errs.is_empty(), "the mega-boost climbs 11: {:?}", tall.errs);
+    assert_eq!(gates(&tall), [Gate::MegaWall]);
     // No runway (ceiling spikes 5 tiles up all the way to the wall: tooting would splat):
     // no Giant Steps, no way up.
     let mut spiked: Vec<String> = wall(6).lines().map(String::from).collect();

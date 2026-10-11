@@ -334,7 +334,7 @@ fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Co
 
 /// What a gate mark looks like, and where (world center of the overlay, z): giant walls get
 /// gold music-staff trim on their face and a note emblem; glide launches a 3/4 emblem in the
-/// ground at each end; buddy ledges
+/// ground at each end; mega walls
 /// red plunger-handle notches on their face and Han's yellow plumber's tape along the top;
 /// shield rows a "PLUMBERS ONLY" sign over their start.
 pub fn gate_decor(level: &Level) -> Vec<(SpriteId, Vec2, f32)> {
@@ -374,7 +374,7 @@ fn marks_decor(level: &Level, marks: &[crate::level::GateMark]) -> Vec<(SpriteId
                     }
                 }
             }
-            Topic::Boost => {
+            Topic::Mega => {
                 for &(c, r) in &faces {
                     out.push((SpriteId::LedgeNotch, at((c, r)), 0.4));
                     if !level.tile(c, r - 1).is_solid() {
