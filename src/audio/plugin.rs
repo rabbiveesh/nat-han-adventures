@@ -498,7 +498,10 @@ fn direct(
     let now_secs = run.as_ref().map_or(0.0, |r| r.time);
     for c in named_calls.read() {
         match c.0 {
-            SetCall::Mode(h) => ev.call_mode = Some(h),
+            SetCall::Mode(h) => {
+                ev.call_mode = Some(h);
+                director.band.hold_secs = Some(crate::game::sideb::HOLD_SECS);
+            }
             // Side B's melting: the laughing band held on its melting phrase.
             SetCall::Melt => director.melt_until = Some(now_secs + crate::game::sideb::MELT_SECS),
         }

@@ -299,6 +299,9 @@ pub struct Band {
     pub steps: ThreeStep,
     /// The called mode being held, and until when (play time).
     pub hold: Option<(Harmony, f32)>,
+    /// How long a call holds, when not [`SUMMON_HOLD_SECS`] (Side B's set list: a few bars).
+    /// Reset at a level start.
+    pub hold_secs: Option<f32>,
     /// Jumps in threes completed this level (the music hears each as a waltz step).
     pub steps_taken: u32,
     /// Per [`SUMMON_ORDER`]: charged, and when its counter was last ticked (the count of
@@ -380,7 +383,7 @@ impl Band {
         let of = [GIANT_STEPS_TOOTS, FIRED_UP_NUGGETS, 3];
         let summons = std::array::from_fn(|i| {
             let full = self.charged[i].is_some();
-            let active = held.filter(|&(h, _)| h == SUMMON_ORDER[i]).map(|(_, until)| ((until - now) / SUMMON_HOLD_SECS).clamp(0.0, 1.0));
+            let active = held.filter(|&(h, _)| h == SUMMON_ORDER[i]).map(|(_, until)| ((until - now) / self.hold_len()).clamp(0.0, 1.0));
             Meter { lit: if full { of[i] } else { lit[i].min(of[i]) }, of: of[i], full, active }
         });
         let deaths = self.stats.mood_deaths.min(NERVOUS_DEATHS);
@@ -414,7 +417,7 @@ impl Band {
                 continue;
             }
             if held == Some(h) {
-                self.hold = Some((h, now + SUMMON_HOLD_SECS));
+                self.hold = Some((h, now + self.hold_len()));
                 ticks[i] = 0;
             } else if self.charged[i].is_some() {
                 self.charged[i] = Some(frame);
@@ -471,10 +474,15 @@ impl Band {
         Some(decided)
     }
 
+    /// How long a call holds.
+    pub fn hold_len(&self) -> f32 {
+        self.hold_secs.unwrap_or(SUMMON_HOLD_SECS)
+    }
+
     /// A call of `h` starts: its charge spent, its hold started, the mood forgotten.
     fn begin(&mut self, h: Harmony, now: f32) {
         self.charged[slot(h).expect("summonable")] = None;
-        self.hold = Some((h, now + SUMMON_HOLD_SECS));
+        self.hold = Some((h, now + self.hold_len()));
         self.stats.mood_deaths = 0;
         self.stats.last_summon = Some(h);
     }

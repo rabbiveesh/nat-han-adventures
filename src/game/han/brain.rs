@@ -813,21 +813,35 @@ fn cling_wall(level: &Level, nat: (i32, i32), side: f32) -> Option<(f32, f32)> {
     None
 }
 
-/// Side B's charge: run `dir`; jump at a wall or an edge (or nothing under him ahead), hold it,
-/// and toot at the top. No looking where he's going.
+/// Side B: Han just goes for it. Run `dir`; jump at a wall, an edge or spikes ahead; a full
+/// jump and a toot at the top, unless there's a ceiling over him (then a hop). No looking
+/// where he's going: the music decides how far a jump gets him.
 fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> HanInput {
     // (His own size: melting shrinks him.)
     let half = body.half;
-    let ahead = |dy: f32| {
-        let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 3.0), dy));
-        level.tile(c, r).is_solid()
+    let tile_at = |dx: f32, dy: f32| {
+        let (c, r) = level.cell_at(*pos + Vec2::new(dx, dy));
+        level.tile(c, r)
     };
-    let wall = ahead(0.0) || ahead(-half.y + 2.0);
+    let wall = tile_at(dir * (half.x + 3.0), 0.0).is_solid() || tile_at(dir * (half.x + 3.0), -half.y + 2.0).is_solid();
+    // A gap ahead: nothing to land on under the next step (a drop with a floor he walks off).
     let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 2.0), -half.y - 2.0));
-    let edge = !floor_at(level, c, r);
-    let jump = body.on_ground && (wall || edge);
-    let toot = !body.on_ground && body.vel.y <= 0.0 && ctl.toots_left > 0;
-    HanInput { dir, speed: 1.0, jump, hold: true, toot }
+    let edge = !(r..level.height as i32).any(|r| floor_at(level, c, r));
+    let spikes = tile_at(dir * (half.x + 6.0), -half.y + 2.0) == Tile::SpikesUp;
+    // A ceiling (spikes, or solid with air under it) within `n` tiles over his head, here or
+    // just ahead (a wall's face doesn't count).
+    let ceiling = |n: i32| {
+        (1..=n).any(|k| {
+            [0.0, dir * TILE, dir * 2.0 * TILE].into_iter().any(|dx| {
+                let dy = half.y + (k as f32 - 0.5) * TILE;
+                let t = tile_at(dx, dy);
+                t == Tile::SpikesDown || (t.is_solid() && !tile_at(dx, dy - TILE).is_solid())
+            })
+        })
+    };
+    let jump = body.on_ground && (wall || edge || spikes);
+    let toot = !body.on_ground && body.vel.y <= 0.0 && ctl.toots_left > 0 && !ceiling(5);
+    HanInput { dir, speed: 1.0, jump, hold: !ceiling(1), toot }
 }
 
 fn set_anim(anim: &mut HanAnim, pose: HanPose, facing_left: bool, groove: &Groove, hidden: bool) {

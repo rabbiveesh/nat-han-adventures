@@ -1,9 +1,0 @@
-# Side B level 3, Drip Pipe (NATHAN_SIDE_B=3), for `scripts/record-run --capture`.
-
-# Try 1: full size. Han ducks, and the drips get him anyway.
-wait 5
-
-# Try 2: melt. The band holds its melting phrase, Han shrinks and scoots under.
-wait 300ms
-tap Down
-wait 8
