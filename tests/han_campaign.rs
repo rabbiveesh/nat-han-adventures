@@ -1,5 +1,5 @@
 //! The campaign's Han gates, played headless in the real levels with the real Han: each
-//! buddy ledge, shield row, fired-up chasm and buddy raft pool (found by its `gate:` mark). The
+//! mega wall, shield row, fired-up chasm and buddy raft pool (found by its `gate:` mark). The
 //! same for free play's Han rooms (`free_play_*`), at a few bands and seeds.
 
 use std::time::Duration;
@@ -139,51 +139,60 @@ fn room_marks(template: &str, topic: Topic) -> Vec<(String, Level, GateMark)> {
 }
 
 #[test]
-fn buddy_ledges_in_the_campaign() {
-    let ms = marks(Topic::Boost);
+fn mega_walls_in_the_campaign() {
+    let ms = marks(Topic::Mega);
     assert!(ms.len() >= 3);
-    for (what, level, m) in ms {
-        play_ledge(&what, &level, m);
+    for (what, level, m) in &ms {
+        assert!(play_mega(what, level, *m, true), "{what}: not on top");
     }
+    // Without Giant Steps it's his weak boost there: no way up.
+    let (what, level, m) = &ms[0];
+    assert!(!play_mega(what, level, *m, false), "{what}: on top without Giant Steps");
 }
 
 #[test]
-fn free_play_buddy_ledges() {
-    for (what, level, m) in room_marks("buddy ledge", Topic::Boost) {
-        play_ledge(&what, &level, m);
+fn free_play_mega_walls() {
+    for (what, level, m) in room_marks("mega wall", Topic::Mega) {
+        assert!(play_mega(&what, &level, m, true), "{what}: not on top");
     }
 }
 
-fn play_ledge(what: &str, level: &Level, m: GateMark) {
+/// Boost off Han by mega wall `m` (the band playing Giant Steps or not): on top of it?
+fn play_mega(what: &str, level: &Level, m: GateMark, giant_steps: bool) -> bool {
     let mut app = app(level);
+    if giant_steps {
+        app.world_mut().insert_resource(Groove::of(nat_han_adventures::audio::Harmony::Coltrane));
+    }
     // The mesa: the first column in the mark solid at Nat's height.
     let r = m.r1;
-    let face = (m.c0..=m.c1).find(|&c| level.tile(c, r).is_solid()).expect("a ledge face");
+    let face = (m.c0..=m.c1).find(|&c| level.tile(c, r).is_solid()).expect("a wall face");
+    let height = (0..).take_while(|k| level.tile(face, r - k).is_solid()).count() as i32;
+    assert!(height >= 11, "{what}: a mega wall is 11+ tall, not {height}");
     put::<Player>(&mut app, stand(level, face - 2, r));
     wait_for_han(&mut app, what);
-    // Hop onto Han's head (he's in his slot behind), and boost, toot near the top.
+    // Hop onto Han's head (he's in his slot behind), and mega-boost, toot near the top.
     let h = pos::<Han>(&mut app);
     put::<Player>(&mut app, h + Vec2::new(0.0, 1.5 * TILE));
     step(&mut app, 0.4);
     assert_eq!(body::<Player>(&mut app).riding, Some(single::<Han>(&mut app)), "{what}: on Han");
     RIGHT.press(app.world_mut());
     tap(&mut app);
-    step(&mut app, 0.42);
+    step(&mut app, 0.6);
     tap(&mut app);
     // Let go once over the mesa (a narrow top is easy to overshoot).
     let over = level.tile_center(face as usize, 0).x + TILE / 2.0;
-    for _ in 0..(0.6 / DT) as usize {
+    for _ in 0..(1.0 / DT) as usize {
         app.update();
         if pos::<Player>(&mut app).x > over {
             break;
         }
     }
     RIGHT.release(app.world_mut());
-    step(&mut app, 1.0);
+    step(&mut app, 1.5);
     let p = pos::<Player>(&mut app);
-    let top = level.tile_center(face as usize, (r - 9) as usize).y - TILE / 2.0;
-    assert!(p.y > top && body::<Player>(&mut app).on_ground, "{what}: on top of the ledge at {p} (top {top})");
-    assert_eq!(deaths(&app), 0);
+    let top = level.tile_center(face as usize, (r - height) as usize).y - TILE / 2.0;
+    assert_eq!(deaths(&app), 0, "{what}");
+    p.y > top && body::<Player>(&mut app).on_ground
 }
 
 #[test]

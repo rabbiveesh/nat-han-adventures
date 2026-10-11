@@ -390,7 +390,7 @@ pub fn waltz_emblem() -> Vec<Pixels> {
     vec![grid(EMBLEM, MARK_PAL)]
 }
 
-/// Buddy ledge face: red plunger-handle notches (overlay, 16 x 16).
+/// Mega wall face: red plunger-handle notches (overlay, 16 x 16).
 pub fn ledge_notches() -> Vec<Pixels> {
     const NOTCH: &[&str] = &[
         "................",
@@ -413,7 +413,7 @@ pub fn ledge_notches() -> Vec<Pixels> {
     vec![grid(NOTCH, MARK_PAL)]
 }
 
-/// Han's yellow plumber's tape, wound along a buddy ledge's top edge (overlay, 16 x 16).
+/// Han's yellow plumber's tape, wound along a mega wall's top edge (overlay, 16 x 16).
 pub fn plumber_tape() -> Vec<Pixels> {
     const TAPE: &[&str] = &[
         "yyYyyyYyyyYyyyYy",

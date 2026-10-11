@@ -661,7 +661,7 @@ pub(super) fn think(
     }
     // --- His head: a perch for Nat (standing, or, fired up, in mid-air not too high up and not
     // in a band zone, see `head_holds`), the plunger boost (fired up: the throw), the weak one
-    // in a band zone.
+    // in a band zone (but a mega wall's while Giant Steps plays).
     if body.on_ground {
         brain.floor_y = pos.0.y;
     }
@@ -674,7 +674,9 @@ pub(super) fn think(
         solid: up && holds,
         boost: up && holds && brain.winded == 0.0,
         block: matches!(brain.mode, HanMode::Ahead { .. }),
-        weak: zone,
+        // (By a mega wall, while Giant Steps plays, the mega-boost: full strength.)
+        weak: level.weak_boost(my_cell, groove.giant_steps())
+            || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.giant_steps()),
     };
 
     // --- Pose.

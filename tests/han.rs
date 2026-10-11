@@ -323,32 +323,21 @@ fn boost_launches_and_refreshes_the_toot() {
     assert!((6.5..7.5).contains(&rise), "launched {rise} tiles");
 }
 
-/// Boost + toot clears a 9-tile buddy ledge; a Giant Steps double jump can't (validator), and
-/// the game agrees.
-#[test]
-fn boost_and_toot_climb_a_buddy_ledge() {
-    let lvl = level(
-        "",
-        &[
-            "....................................",
-            "....................................",
-            "....................................",
-            "....................................",
-            "....................................",
-            ".........................###########",
-            ".........................###########",
-            ".........................###########",
-            ".........................###########",
-            ".........................###########",
-            ".........................###########",
-            ".........................###########",
-            ".........................###########",
-            ".P.......................##########G",
-            "####################################",
-        ],
-    );
+/// An 11-tile mega wall: Han at its foot, Nat on his head. While Giant Steps plays it's the
+/// mega-boost (full strength in its zone, Giant Steps' low gravity): with a toot, on top. The
+/// band not playing it, his boost there is the weak one: nowhere near.
+fn mega_climb(giant_steps: bool) -> Vec2 {
+    let mut rows = vec![".".repeat(36); 3];
+    rows.extend((0..10).map(|_| format!("{}{}", ".".repeat(25), "#".repeat(11))));
+    rows.push(format!(".P{}{}G", ".".repeat(23), "#".repeat(10)));
+    rows.push("#".repeat(36));
+    let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
+    let lvl = level("gate: mega 20,1 35,13\n", &rows);
     let mut app = app(&lvl);
-    // Han right at the foot of the ledge, Nat on him.
+    if giant_steps {
+        set_groove(&mut app, Harmony::Coltrane, false);
+    }
+    // Han right at the foot of the wall, Nat on him.
     put::<Han>(&mut app, Vec2::new(24.0 * TILE + 8.0, standing(TILE)));
     step(&mut app, 0.2);
     let h = han(&mut app);
@@ -356,11 +345,18 @@ fn boost_and_toot_climb_a_buddy_ledge() {
     step(&mut app, 0.5);
     press(&mut app, RIGHT);
     tap(&mut app);
-    step(&mut app, 0.42);
+    step(&mut app, 0.6);
     tap(&mut app); // the toot near the top
-    step(&mut app, 1.5);
-    let p = nat(&mut app);
-    assert!(p.y > standing(9.0 * TILE) - 1.0 && p.x > 25.0 * TILE, "on the ledge: {p}");
+    step(&mut app, 2.0);
+    nat(&mut app)
+}
+
+#[test]
+fn giant_steps_mega_boost_climbs_a_mega_wall() {
+    let p = mega_climb(true);
+    assert!(p.y > standing(11.0 * TILE) - 1.0 && p.x > 25.0 * TILE, "on the wall: {p}");
+    let p = mega_climb(false);
+    assert!(p.y < standing(TILE) + 1.0, "the weak boost: still at the foot, {p}");
 }
 
 // --- Fired up: the running throw ---------------------------------------------------------------

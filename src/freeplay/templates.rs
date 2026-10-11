@@ -57,7 +57,7 @@ pub const TEMPLATES: &[Template] = &[
     Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, height: H, build: glide_launch },
     Template { name: "stain pit", skill: Skill::Stains, unlock: 2, height: H, build: stain_pit },
     Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
-    Template { name: "buddy ledge", skill: Skill::Buddy, unlock: 2, height: H, build: buddy_ledge },
+    Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, height: MEGA_H, build: mega_wall },
     Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
     Template { name: "shield row", skill: Skill::Buddy, unlock: 7, height: H, build: shield_row },
     Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
@@ -595,17 +595,21 @@ fn han_lead(c: &mut Canvas) -> Option<(usize, usize)> {
     checkpoint
 }
 
-/// A buddy ledge: a 9-tile mesa (out of Giant Steps' reach, in the plunger boost's) after a
-/// flat approach (6 → 4 tiles; a hop on the way from band 4); the top narrows (6 → 2 tiles)
-/// and from band 6 has a hop along it.
-fn buddy_ledge(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+/// A mega wall room's rows: headroom over the wall.
+pub const MEGA_H: usize = H + 4;
+
+/// A mega wall: an 11-tile mesa (out of Giant Steps' reach and the plain boost's, in Giant
+/// Steps' mega-boost off Han) after a flat approach long enough to toot up Giant Steps (10 → 9
+/// tiles; a hop on the way from band 4); the top narrows (6 → 2 tiles) and from band 6 has a
+/// hop along it.
+fn mega_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let floor = c.floor();
     let checkpoint = han_lead(c);
     if band >= 4 {
         c.pit(d.int(2, 3) as usize);
-        c.ground(3, FLOOR);
     }
-    c.ground(lerpi(band, 6.0, 4.0) + d.int(0, 1) as usize, FLOOR);
-    let top = FLOOR - 9;
+    c.ground(lerpi(band, 10.0, 9.0) + d.int(0, 1) as usize, floor);
+    let top = floor - 11;
     let x = c.width();
     let thick = (lerpi(band, 6.0, 2.0) + d.int(0, 1) as usize).max(2);
     c.ground(thick, top);
@@ -621,8 +625,9 @@ fn buddy_ledge(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     }
     // Down the far side in steps.
     c.ground(2, top + 4);
-    c.ground(HAN_TAIL, FLOOR);
-    Built { hint: Some((&[Topic::Boost], "Need a lift? Land on my head and JUMP! Oof, my back.")), checkpoint }
+    c.ground(2, top + 8);
+    c.ground(HAN_TAIL, floor);
+    Built { hint: Some((&[Topic::Mega], "Giant Steps? Hop on me: MEGA boost!")), checkpoint }
 }
 
 /// Where a buddy raft pool starts (column in the room, from the entry checkpoint near 0).

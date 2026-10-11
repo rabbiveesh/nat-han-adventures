@@ -317,6 +317,20 @@ fn giant_recipes(g: &Groove) -> Vec<Recipe> {
     out
 }
 
+/// Recipes for a mega wall: a giant wall's (five jump-toots and a call), but the jump after
+/// `wait` is a hop onto Han's head, and the mega-boost off it (the take-off): Giant Steps must
+/// still play for the boost's flight.
+fn mega_recipes(g: &Groove) -> Vec<Recipe> {
+    let hop = air_time(g, f32::INFINITY, None);
+    giant_recipes(g)
+        .into_iter()
+        .map(|mut r| {
+            r.acts.push(Act::Wait(ticks(hop).max(1) as u16));
+            Recipe { name: format!("{}: a hop onto Han, the mega-boost", r.name), cross: ticks(1.5) + 1, ..r }
+        })
+        .collect()
+}
+
 /// Recipes for a long gap: the level's nugget line (times at a human 90% run in `g`), a call
 /// with the last nugget, the run-up, and the jump after `wait`.
 fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
@@ -499,6 +513,7 @@ fn band_gates(level: &Level) -> Vec<(GateMark, Need, &'static str)> {
                 Topic::Waltz => (Need::Band(Harmony::Waltz), "glide launch"),
                 Topic::Grip => (Need::Grip, "grease chute"),
                 Topic::Chain => (Need::Band(Harmony::Quartal), "fired-up chasm"),
+                Topic::Mega => (Need::Band(Harmony::Coltrane), "mega wall"),
                 _ => return None,
             };
             Some((*m, need, what))
@@ -510,6 +525,7 @@ fn band_gates(level: &Level) -> Vec<(GateMark, Need, &'static str)> {
 fn recipes(level: &Level, m: &GateMark, g: &Groove) -> Vec<Recipe> {
     match m.topic {
         Topic::Giant => giant_recipes(g),
+        Topic::Mega => mega_recipes(g),
         Topic::Gap => {
             let (line, run_up) = nugget_line(level, m);
             gap_recipes(g, &line, run_up)
@@ -632,7 +648,7 @@ fn deep_boost_chains_cant_bypass_band_gates() {
         let mut tried = 0;
         for (li, level) in levels.iter().enumerate() {
             let map = Map::new(level);
-            for (m, _, what) in band_gates(level).into_iter().filter(|g| g.0.topic != Topic::Chain) {
+            for (m, _, what) in band_gates(level).into_iter().filter(|g| !matches!(g.0.topic, Topic::Chain | Topic::Mega)) {
                 // Heading the way you come to it from the start; take-offs on the mark's rows
                 // up to two chasms' width (28 tiles) before it; landing past its far side.
                 let dir = if (level.start.0 as i32) < m.c0 { 1 } else { -1 };
@@ -745,10 +761,12 @@ fn deep_han_reaches_his_gates() {
             for m in level
                 .gates
                 .iter()
-                .filter(|g| matches!(g.topic, Topic::Boost | Topic::Shield | Topic::Chain | Topic::BuddyRaft))
+                .filter(|g| matches!(g.topic, Topic::Mega | Topic::Shield | Topic::Chain | Topic::BuddyRaft))
             {
-                // His spots: the mark's cells he can stand in.
-                let spots: Vec<(i32, i32)> = (m.r0..=m.r1)
+                // His spots: the mark's cells he can stand in (a mega wall's: at its foot, he
+                // boosts from there).
+                let r0 = if m.topic == Topic::Mega { m.r1 } else { m.r0 };
+                let spots: Vec<(i32, i32)> = (r0..=m.r1)
                     .flat_map(|r| (m.c0..=m.c1).map(move |c| (c, r)))
                     .filter(|&c| Nav::node(&map, level, c))
                     .collect();

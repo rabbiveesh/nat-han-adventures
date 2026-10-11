@@ -78,13 +78,15 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
 | Laughing band | rolls along laughing, bouncier (not while the band sobers up for a phrase) |
 
 ## Level design (gates the validator must prove are exclusive)
-- **Buddy ledges** (need the plunger boost): marked with **red plunger-handle notches and Han's
-  yellow plumber's tape**; shaped beyond Giant Steps' reach (taller/overhanging).
+- **Mega walls** (need Giant Steps and Han's mega-boost): marked with **red plunger-handle
+  notches and Han's yellow plumber's tape**; 11 tiles, beyond Giant Steps' reach and the plain
+  boost's. Their zone weakens his boost like a band gate's, except while Giant Steps plays.
+  (They replaced buddy ledges, which the plain boost climbed.)
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
 - **Shield rows** (need Han to go ahead): a **"PLUMBERS ONLY"** sign at the start.
 - **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
   inside).
-- Free play gets all of these as rooms (`src/freeplay/templates.rs`: buddy ledge, buddy raft
+- Free play gets all of these as rooms (`src/freeplay/templates.rs`: mega wall, buddy raft
   pool, shield row, fired-up chasm), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
   width from the room's ends, so a neighbouring room's band gate never weakens Han there.
@@ -101,8 +103,12 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   and Han. Han: run 165 px/s (Nat 150), 3 toots, invulnerable to spikes/flies/sprays; his
   jumps write no `Jumped` (the band never counts him). Han's head is a one-way carrier for Nat.
 - **Plunger boost**: 560 px/s, 7 tiles above Han's head (~7.9 above his floor); the refreshed
-  toot adds ~2.4: ~10.3 tiles ideal, >= 9.3 for a human. Buddy ledges are 9 tiles: out of
-  Giant Steps' reach (~8.7), comfortably in the boost's. Not a `Jumped`: a `HanBoosted`.
+  toot adds ~2.4: ~10.3 tiles ideal, >= 9.3 for a human. Not a `Jumped`: a `HanBoosted`.
+- **The mega-boost** (Giant Steps): the same 560 px/s in Giant Steps' gravity (x0.65): ~10.8
+  tiles over Han's head, ~15 over his floor with the toot (the level's ceiling caps it). By a
+  mega wall (`gate: mega`) his boost is full strength only while Giant Steps plays
+  (`Level::weak_boost`). Mega walls are 11 tiles: out of Giant Steps' reach (~8.7) and the
+  plain boost's (~10.3), comfortably in the mega-boost's.
 - **The running throw** (fired up): `THROW_SPEED` 380 px/s up, `THROW_CARRY` 120 px/s kept
   (`Body::launch`) towards where Nat faces; `HanBoosted { throw: true }`. Han runs at
   165 x 1.35 px/s then (his own nav graph for it, `HanNav::fired`); his goalkeeper dive brakes
@@ -160,7 +166,11 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
 - **Modes**: Giant Steps gravity x0.8 more than Nat's and paddling; fired up he speeds up as
   Nat does (x1.35) and throws, the waltz: steps only in the first 40% of each beat;
   nervous: 0.8-tile follow gap, trembling; laughing band: bounces (x1.3), rolls.
-- **Gates**: buddy ledges (a boost reaches it, no mode does); shield rows (24+ adjacent cans
+- **Gates**: mega walls (the mega-boost reaches it from a mega wall's zone with room to toot
+  up Giant Steps; no mode alone, no plain boost from outside a zone and no weak one inside
+  it; unmarked, a plain boost from outside any zone that climbs something is reported as one,
+  to be marked; tier 2 checks Giant Steps can be summoned there from every music state, with a
+  hop onto Han); shield rows (24+ adjacent cans
   on the floor or under a grating, with a low ceiling: no mode dashes them, the waltz
   included; Han plugs both the jets and the cans); fired-up chasms
   (14+ bottomless columns with a nugget line before them, as a long gap has; crossed by a
