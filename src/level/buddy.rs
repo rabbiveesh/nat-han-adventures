@@ -101,7 +101,9 @@ impl HanPhys {
             air_accel: AIR_ACCEL * g.speed_scale,
             jump_speed: JUMP_SPEED * g.jump_scale(),
             toot_speed: DOUBLE_JUMP_SPEED,
-            bounce: g.bouncy(),
+            // No laughing-band bounce on Side B: melting is his size, and a bounce at a drip pipe's
+            // mouth would make it a coin toss.
+            bounce: false,
             on_the_beat: g.waltz(),
             toots: 1,
         }

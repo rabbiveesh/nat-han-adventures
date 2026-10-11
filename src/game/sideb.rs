@@ -36,10 +36,11 @@ use crate::level::{Level, TILE, Tile, Topic};
 use crate::state::{AppState, PlayState};
 
 /// Side B's levels, in play order.
-pub static SIDE_B_SOURCES: [&str; 3] = [
+pub static SIDE_B_SOURCES: [&str; 4] = [
     include_str!("../../levels/side-b/b1.txt"),
     include_str!("../../levels/side-b/b2.txt"),
     include_str!("../../levels/side-b/b3.txt"),
+    include_str!("../../levels/side-b/b4.txt"),
 ];
 
 /// A level rewinds this long after Han's death (the needle scratch).
@@ -53,7 +54,11 @@ const SEARCH_BUDGET: usize = 120;
 /// shrinks, enough to duck under a row of ceiling spikes).
 pub const MELT_SIZE: f32 = 0.65;
 /// How long a melting call holds (s).
-pub const MELT_SECS: f32 = 12.0;
+pub const MELT_SECS: f32 = HOLD_SECS;
+
+/// How long a set-list call holds the band: a few bars, so the calls have to be timed (the
+/// story's calls hold for 20 s).
+pub const HOLD_SECS: f32 = 6.0;
 /// Charging this long without getting anywhere: he's done for.
 pub const CHARGE_GIVE_UP: f32 = 8.0;
 
@@ -345,13 +350,16 @@ fn beacon(
                 side.target = Some(goal);
                 side.frontier = false;
                 side.charging = None;
-                brain.charge = None;
             }
             crate::level::nav::Route::NoRoute => {
                 side.target = Some(nearest);
                 side.frontier = true;
             }
             crate::level::nav::Route::Budget => {}
+        }
+        // Got somewhere since he charged (up the wall, over the gap): that charge is over.
+        if side.charging.is_some() && (hpos.0.x - side.charge_x).abs() > 3.0 * TILE {
+            side.charging = None;
         }
         // At the frontier: charge!
         let there = side.target.is_some_and(|t| (t.0 - from.0) * dir as i32 <= 1 && t.1 == from.1);
@@ -364,8 +372,10 @@ fn beacon(
     }
     if let Some(t) = &mut side.charging {
         *t += time.delta_secs();
-        brain.charge = Some(dir);
     }
+    // He always just goes for it (`han::brain::charge`); the charge at the frontier is when he
+    // yells about it, and how long he keeps it up.
+    brain.charge = (side.phase == Phase::Playing).then_some(dir);
     if hbody.on_ground && !side.was_grounded && side.charging.is_some() {
         side.charge_landings += 1;
     }

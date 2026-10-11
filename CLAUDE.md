@@ -67,7 +67,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/game/sideb.rs` SIDE B, a hidden prototype: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
   header; Left/Right pick, Down call; `melt` holds the laughing band on its melting phrase and
-  shrinks Han). A wrong call and Han comically dies, the level rewinds. Ways in: Up Up Down Down on
+  shrinks Han; a call holds 6 s, not the story's 20). Han just runs and jumps at what's ahead
+  (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
+  level's solution is a plan in `tests/side_b.rs` (`try_a_plan` tries one). Ways in: Up Up Down Down on
   the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
