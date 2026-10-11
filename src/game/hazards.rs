@@ -15,8 +15,9 @@ use super::{
     ActiveLevel, Fly, GameSet, Groove, Han, LevelEntity, LevelRun, MovingPlatform, Nugget, Player, Pos, PrevPos,
     Raft, SimClock, Spray, Stain, groove::fly_angle, tuning,
 };
-use crate::events::{HanSays, PlayerDied, PlayerRespawned};
-use crate::level::{PlatformKind, TILE, Tile};
+use crate::adapt::Skill;
+use crate::events::{DeathCause, HanSays, PlayerDied, PlayerRespawned};
+use crate::level::{Level, PlatformKind, TILE, Tile, Topic};
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<RaftLife>().add_systems(
@@ -230,6 +231,7 @@ pub(super) fn check_hazards(
     sprays: Query<(&Spray, &Transform, Option<&SprayPlug>)>,
     mut run: ResMut<LevelRun>,
     assists: Res<super::Assists>,
+    easy: Res<super::adaptive::EasySkills>,
     mut died: MessageWriter<PlayerDied>,
     mut says: MessageWriter<HanSays>,
     side_stains: Query<&SideStain>,
@@ -241,7 +243,7 @@ pub(super) fn check_hazards(
     let min = pos.0 - body.half + FORGIVE + extra;
     let max = pos.0 + body.half - FORGIVE - extra;
 
-    let mut dead = max.y + extra < 0.0; // Fell into the pit.
+    let mut cause = (max.y + extra < 0.0).then_some(DeathCause::Pit); // Fell into the pit.
 
     // Deadly tiles. The one nearest Nat's middle takes the stain.
     let (xs, ys) = cells(min, max);
@@ -249,10 +251,10 @@ pub(super) fn check_hazards(
     for j in ys {
         for i in xs.clone() {
             let (x0, y0) = (i as f32 * TILE, j as f32 * TILE);
-            let (lo, hi) = match tile_at(level, i, j) {
-                Tile::SpikesUp => (y0, y0 + TILE / 2.0),
-                Tile::SpikesDown => (y0 + TILE / 2.0, y0 + TILE),
-                Tile::Liquid => (y0, y0 + TILE),
+            let (lo, hi, what) = match tile_at(level, i, j) {
+                Tile::SpikesUp => (y0, y0 + TILE / 2.0, DeathCause::Spikes),
+                Tile::SpikesDown => (y0 + TILE / 2.0, y0 + TILE, DeathCause::Spikes),
+                Tile::Liquid => (y0, y0 + TILE, DeathCause::Sewage),
                 _ => continue,
             };
             // A fresh side splat shields this tile from that side.
@@ -261,10 +263,10 @@ pub(super) fn check_hazards(
                 continue;
             }
             if rects_overlap(min, max, Vec2::new(x0, lo), Vec2::new(x0 + TILE, hi)) {
-                dead = true;
                 let d = (Vec2::new(x0, y0) + TILE / 2.0).distance(pos.0);
                 if splat_on.is_none_or(|(best, _, _)| d < best) {
                     splat_on = Some((d, i, j));
+                    cause = Some(what);
                 }
             }
         }
@@ -272,19 +274,22 @@ pub(super) fn check_hazards(
 
     // Flies.
     let fh = Vec2::splat(FLY_HITBOX / 2.0);
-    dead |= flies.iter().any(|f| rects_overlap(min, max, f.0 - fh, f.0 + fh));
+    if flies.iter().any(|f| rects_overlap(min, max, f.0 - fh, f.0 + fh)) {
+        cause = Some(DeathCause::Fly);
+    }
 
     // Spray jets, and the cans firing them.
     // (Han's body stops a jet: it's cut off above him, and stays plugged a moment after; a
     // jet plugged right down to the nozzle silences its can too.)
-    dead |= sprays.iter().any(|(spray, tf, plug)| {
+    if sprays.iter().any(|(spray, tf, plug)| {
         let floor = tf.translation.truncate();
         spray.on && SprayPlug::danger(plug, floor).into_iter().flatten().any(|(lo, hi)| rects_overlap(min, max, lo, hi))
-    });
-
-    if !dead {
-        return;
+    }) {
+        cause = Some(DeathCause::Spray);
     }
+
+    let Some(cause) = cause else { return };
+    let skill = death_skill(level, pos.0, cause);
     // Sliding on grease into spikes splats their side (short-lived, so the chute keeps killing
     // until grip comes); any other death on spikes leaves a lasting stain on top.
     let under = tile_at(&active.level, (pos.0.x / TILE).floor() as i32, ((pos.0.y - body.half.y - 1.0) / TILE).floor() as i32);
@@ -307,12 +312,42 @@ pub(super) fn check_hazards(
     }
     commands.entity(entity).insert(Dead { remaining: tuning::RESPAWN_DELAY });
     run.deaths += 1;
-    died.write(PlayerDied { pos: pos.0 });
+    died.write(PlayerDied { pos: pos.0, cause, skill, slip: easy.slip(skill) });
     // Han pipes up on the 1st, 4th, 7th... death.
     if run.deaths % 3 == 1 {
         let line = DEATH_LINES[(run.deaths as usize / 3) % DEATH_LINES.len()];
         says.write(HanSays { text: line.to_string() });
     }
+}
+
+/// The skill a death at `pos` by `cause` was a failure at: the gate whose mark it's at (a
+/// fall counts by column), else the hazard (flies, sprays), else a moving platform's run, else
+/// plain platforming.
+pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
+    let (c, r) = level.cell_at(pos);
+    let pit = cause == DeathCause::Pit;
+    let near = |c0: i32, r0: i32, c1: i32, r1: i32| {
+        (c0 - 2..=c1 + 2).contains(&c) && (pit || (r0 - 2..=r1 + 2).contains(&r))
+    };
+    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray);
+    if let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1)) {
+        // Flies and sprays only count against a gate built of them.
+        let tunnel = matches!(g.topic, Topic::Waltz | Topic::Shield);
+        if (!hazard || tunnel)
+            && let Some(skill) = super::adaptive::skill_of(g.topic)
+        {
+            return skill;
+        }
+    }
+    if hazard {
+        return Skill::HazardTiming;
+    }
+    let on_platform_run = level.platforms.iter().any(|p| {
+        let (c0, r0) = (p.col as i32, p.row as i32);
+        let (dx, dy) = (p.dx.round() as i32, p.dy.round() as i32);
+        near(c0.min(c0 + dx), r0.min(r0 - dy), (c0 + p.width as i32 - 1).max(c0 + p.width as i32 - 1 + dx), r0.max(r0 - dy))
+    });
+    if on_platform_run { Skill::MovingPlatforms } else { Skill::Precision }
 }
 
 #[allow(clippy::type_complexity)]
@@ -359,5 +394,32 @@ pub(super) fn respawn(
             Nugget,
             Transform::from_translation(c.extend(2.0)),
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::level::Levels;
+
+    fn at(col: f32, row_from_top: f32, l: &Level) -> Vec2 {
+        Vec2::new(col * TILE + TILE / 2.0, (l.height as f32 - row_from_top - 0.5) * TILE)
+    }
+
+    /// Deaths count against the gate they're at: a fall by column (level 5's long gap at
+    /// 234-246), spikes in a stain pit (77-104, row 11); flies and sprays are hazard timing
+    /// unless the gate is built of them; elsewhere plain platforming.
+    #[test]
+    fn a_death_counts_against_its_gate() {
+        let levels = Levels::default();
+        let l = &levels.0[4];
+        let fell = Vec2::new(240.0 * TILE, -20.0);
+        assert_eq!(death_skill(l, fell, DeathCause::Pit), Skill::FiredUp);
+        assert_eq!(death_skill(l, at(90.0, 11.0, l), DeathCause::Spikes), Skill::Stains);
+        assert_eq!(death_skill(l, at(90.0, 9.0, l), DeathCause::Fly), Skill::HazardTiming);
+        assert_eq!(death_skill(l, Vec2::new(20.0 * TILE, -20.0), DeathCause::Pit), Skill::Precision);
+        // Level 7's waltz row (3-24, row 10) is built of sprays.
+        let l = &levels.0[6];
+        assert_eq!(death_skill(l, at(10.0, 10.0, l), DeathCause::Spray), Skill::Waltz);
     }
 }

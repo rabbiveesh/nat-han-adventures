@@ -26,6 +26,8 @@ struct Heard {
     says: Vec<String>,
     freedom: usize,
     deaths: usize,
+    slips: usize,
+    skills: Vec<nat_han_adventures::adapt::Skill>,
     respawns: Vec<Vec2>,
     toots: usize,
     ground_jumps: usize,
@@ -41,7 +43,11 @@ fn listen(
 ) {
     heard.says.extend(says.read().map(|s| s.text.clone()));
     heard.freedom += freedom.read().count();
-    heard.deaths += died.read().count();
+    for d in died.read() {
+        heard.deaths += 1;
+        heard.slips += d.slip as usize;
+        heard.skills.push(d.skill);
+    }
     heard.respawns.extend(respawned.read().map(|r| r.pos));
     for j in jumped.read() {
         if j.double {
@@ -421,4 +427,83 @@ fn han_repeats_the_nearest_hint_after_repeated_deaths() {
     until(&mut app, |a| heard(a).deaths >= 4);
     app.update();
     assert_eq!(count(&app), 2, "{:?}", heard(&app).says);
+}
+
+// ─── Story evidence and slips ────────────────────────────────────────────────
+
+use nat_han_adventures::adapt::{AdaptEvent, Outcome, PlayerProfile, Skill, reduce};
+use nat_han_adventures::game::AdaptiveProfile;
+
+const WALK: &str = "name: Walk
+---
+..........................
+..........................
+..P.........C............G
+##########################
+";
+
+fn profile(app: &App) -> &PlayerProfile {
+    &app.world().resource::<AdaptiveProfile>().0
+}
+
+/// Each finished story segment is evidence for the skills it exercised, at the level's number.
+#[test]
+fn story_segments_feed_the_skill_profile() {
+    let mut app = app_with(&[WALK, WALK, WALK], |w| w.resource_mut::<CurrentLevel>().0 = 2);
+    RIGHT.press(app.world_mut());
+    until(&mut app, |a| profile(a).skill(Skill::Precision).window.entries.len() == 1);
+    let e = profile(&app).skill(Skill::Precision).window.entries[0];
+    assert_eq!((e.outcome, e.band), (Outcome::Clean, 3), "level 3 is band 3");
+    until(&mut app, |a| profile(a).skill(Skill::Precision).window.entries.len() == 2);
+    assert!(profile(&app).skill(Skill::HazardTiming).window.entries.is_empty(), "nothing hazardous here");
+}
+
+/// A profile that finds platforming easy at band 1.
+fn easy_precision(w: &mut World) {
+    let mut p = PlayerProfile::new();
+    for _ in 0..4 {
+        p = reduce(p, AdaptEvent::Evidence { skills: vec![(Skill::Precision, 1, Outcome::Clean)], assists: 0.0 });
+    }
+    w.insert_resource(AdaptiveProfile(p));
+}
+
+/// A death at a skill the profile finds easy is a slip (the band laughs); the same death
+/// without the evidence isn't.
+#[test]
+fn deaths_at_easy_skills_are_slips() {
+    let mut easy = app_with(&[SPIKY], easy_precision);
+    RIGHT.press(easy.world_mut());
+    until(&mut easy, |a| heard(a).deaths >= 1);
+    assert_eq!((heard(&easy).slips, heard(&easy).skills[0]), (1, Skill::Precision));
+    let mut fresh = app(SPIKY);
+    RIGHT.press(fresh.world_mut());
+    until(&mut fresh, |a| heard(a).deaths >= 1);
+    assert_eq!(heard(&fresh).slips, 0);
+}
+
+const STAIN_PIT: &str = "name: Stain pit
+deaths: 2
+gate: stain 9,2 13,3
+---
+........................
+........................
+..P....................G
+#########^^^^^##########
+";
+
+/// Designed deaths are never slips, however easy everything is.
+#[test]
+fn stain_pit_deaths_are_never_slips() {
+    let mut app = app_with(&[STAIN_PIT], |w| {
+        let mut p = PlayerProfile::new();
+        for _ in 0..4 {
+            let skills = Skill::ALL.iter().map(|&s| (s, 1, Outcome::Clean)).collect();
+            p = reduce(p, AdaptEvent::Evidence { skills, assists: 0.0 });
+        }
+        w.insert_resource(AdaptiveProfile(p));
+    });
+    RIGHT.press(app.world_mut());
+    until(&mut app, |a| heard(a).deaths >= 2);
+    assert_eq!(heard(&app).skills[..2], [Skill::Stains, Skill::Stains]);
+    assert_eq!(heard(&app).slips, 0);
 }

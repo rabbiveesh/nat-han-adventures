@@ -10,6 +10,18 @@
 //!   line, and its [`adapt::band_mood`] into the band's freedom.
 //! - [`AssistMode::Manual`]: nothing writes [`Assists`] (tests, tools).
 //!
+//! Story mode also tracks per-skill difficulty in the same [`AdaptiveProfile`] as free play:
+//! each finished checkpoint segment is evidence ([`AdaptEvent::Evidence`]) for the skills it
+//! exercised ([`segment_skills`]: its gates, hazards, moving platforms, plain platforming, and
+//! whatever killed Nat in it), at the level's number as the band: clean, or a struggle for a
+//! skill that killed Nat (beyond the segment's designed deaths, for stain pits and chutes).
+//! Every death carries the skill it was a failure at (`hazards::death_skill`).
+//!
+//! **The laughing band** follows the profile: [`EasySkills`] holds the skills the player finds
+//! easy at the current difficulty ([`PlayerProfile::finds_easy`]: the level's number in story,
+//! each skill's center in free play), and a death at one of them is a *slip* (never a designed
+//! death: [`Skill::Stains`], [`Skill::Grease`]). The director laughs at slips only.
+//!
 //! Every lever only loosens things above the floors the level validator proves solvable
 //! ([`Assists::default`]); the validator never reads any of this.
 //!
@@ -32,12 +44,13 @@ use super::physics::{Body, Dead, Finished, PlayerControl};
 use super::{ActiveLevel, Assists, Checkpoint, Fly, GameSet, Goal, Groove, HintSpot, LevelRun, Player, Pos, Raft, Spray};
 use crate::adapt::frustration::IDLE_SECS;
 use crate::adapt::profile::{ASSIST_EPS, RecentRoom};
-use crate::adapt::{self, AssistLevers, BandMood, Cue, Outcome, PlayerProfile, StoryAssist, StoryEvent, reduce_story};
+use crate::adapt::skill::{Band, MAX_BAND, MIN_BAND};
+use crate::adapt::{self, AdaptEvent, AssistLevers, BandMood, Cue, Outcome, PlayerProfile, Skill, StoryAssist, StoryEvent, reduce_story};
 use crate::audio::Harmony;
 use crate::events::{BandFreedom, CheckpointReached, HanSays, Jumped, LevelCompleted, LevelStarted, PlayerDied};
 use crate::input::Action;
-use crate::level::{Level, TILE};
-use crate::state::PlayState;
+use crate::level::{Level, TILE, ThingKind, Topic};
+use crate::state::{CurrentLevel, PlayState};
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<StoryAssistState>()
@@ -45,10 +58,11 @@ pub(super) fn plugin(app: &mut App) {
         .init_resource::<AssistMode>()
         .init_resource::<HiddenRespawn>()
         .init_resource::<Tracker>()
+        .init_resource::<EasySkills>()
         .add_systems(Startup, register_debug)
         .add_systems(
             Update,
-            (feed_story, idle_after_death, profile_cues, decide_music, write_assists, sync_raft_life).chain(),
+            (feed_story, idle_after_death, profile_cues, decide_music, write_assists, sync_raft_life, judge_easy).chain(),
         )
         .add_systems(
             FixedUpdate,
@@ -77,6 +91,87 @@ pub enum AssistMode {
     FreePlay,
     /// Nothing writes [`Assists`] (tests, tools).
     Manual,
+}
+
+/// The skills the player finds easy right now (see the module docs): a death at one is a
+/// slip, and the band laughs. Written from the profile in story and free play; left alone in
+/// [`AssistMode::Manual`] (tests set it).
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct EasySkills(pub [bool; Skill::COUNT]);
+
+impl EasySkills {
+    /// Is a death at `skill` a slip? Never for designed deaths (stain pits, grease chutes).
+    pub fn slip(&self, skill: Skill) -> bool {
+        self.0[skill.index()] && !matches!(skill, Skill::Stains | Skill::Grease)
+    }
+}
+
+/// The skill a gate (or a hint topic) exercises.
+pub fn skill_of(topic: Topic) -> Option<Skill> {
+    Some(match topic {
+        Topic::Toot | Topic::OneWay => Skill::Precision,
+        Topic::Platform => Skill::MovingPlatforms,
+        Topic::Fly | Topic::Spray => Skill::HazardTiming,
+        Topic::Giant => Skill::GiantSteps,
+        Topic::Gap => Skill::FiredUp,
+        Topic::Waltz => Skill::Waltz,
+        Topic::Stain => Skill::Stains,
+        Topic::Grease | Topic::Grip => Skill::Grease,
+        Topic::Boost | Topic::Shield | Topic::Chain | Topic::BuddyRaft => Skill::Buddy,
+    })
+}
+
+/// The band a story level stands for: its number (level 1 is band 1 ... level 10 band 10).
+pub fn story_band(level_index: usize) -> Band {
+    (level_index + 1).clamp(MIN_BAND as usize, MAX_BAND as usize) as Band
+}
+
+/// The skills the columns `c0..=c1` of `level` exercise: plain platforming always, the gates
+/// marked there, flies or sprays, moving platforms.
+pub fn segment_skills(level: &Level, c0: i32, c1: i32) -> Vec<Skill> {
+    let (c0, c1) = (c0.min(c1), c0.max(c1));
+    let cols = c0..=c1;
+    let mut out = vec![Skill::Precision];
+    let mut add = |s: Skill| {
+        if !out.contains(&s) {
+            out.push(s);
+        }
+    };
+    for g in &level.gates {
+        if g.c1 >= c0 && g.c0 <= c1 {
+            add(skill_of(g.topic).expect("every gate has a skill"));
+        }
+    }
+    if level.things.iter().any(|t| matches!(t.kind, ThingKind::Fly | ThingKind::Spray) && cols.contains(&(t.col as i32))) {
+        add(Skill::HazardTiming);
+    }
+    if level.platforms.iter().any(|p| {
+        let a = p.col as i32;
+        let b = a + p.width as i32 - 1 + p.dx.round() as i32;
+        a.min(b) <= c1 && a.max(b) >= c0
+    }) {
+        add(Skill::MovingPlatforms);
+    }
+    out
+}
+
+/// How a segment went per skill: each skill it exercised (and each that killed Nat in it), a
+/// struggle where Nat died at it more than the segment's designed deaths allow (only stain
+/// pits and grease chutes have any), else clean.
+pub fn segment_outcomes(exercised: &[Skill], deaths: &[u32; Skill::COUNT], designed: u32) -> Vec<(Skill, Outcome)> {
+    let mut skills = exercised.to_vec();
+    for s in Skill::ALL {
+        if deaths[s.index()] > 0 && !skills.contains(&s) {
+            skills.push(s);
+        }
+    }
+    skills
+        .into_iter()
+        .map(|s| {
+            let allowed = if matches!(s, Skill::Stains | Skill::Grease) { designed } else { 0 };
+            (s, if deaths[s.index()] > allowed { Outcome::Struggle } else { Outcome::Clean })
+        })
+        .collect()
 }
 
 /// A hidden extra respawn point (the `extra_checkpoint` lever): the first safe spot Nat stood
@@ -220,6 +315,9 @@ struct Tracker {
     death_spot: Option<(Vec2, u32)>,
     /// Hints already repeated in this segment.
     repeated: Vec<Vec2>,
+    /// The segment's deaths per skill, and the column it started at.
+    skill_deaths: [u32; Skill::COUNT],
+    segment_col: i32,
     next_encourage: usize,
     /// A music decision is due.
     decide: bool,
@@ -257,6 +355,25 @@ impl Tracker {
         self.repeated.clear();
         self.death_spot = None;
     }
+
+    /// The evidence a story segment that ended at column `col` gives the profile (and the next
+    /// segment starts there).
+    fn segment_evidence(&mut self, level: &Level, col: i32, designed: u32) -> Vec<(Skill, Outcome)> {
+        let exercised = segment_skills(level, self.segment_col, col);
+        let out = segment_outcomes(&exercised, &self.skill_deaths, designed);
+        self.skill_deaths = [0; Skill::COUNT];
+        self.segment_col = col;
+        out
+    }
+}
+
+/// Story evidence → the shared profile.
+fn give_evidence(profile: &mut AdaptiveProfile, played: Vec<(Skill, Outcome)>, band: Band, assists: f32) {
+    if played.is_empty() {
+        return;
+    }
+    let skills = played.into_iter().map(|(s, o)| (s, band, o)).collect();
+    profile.0 = adapt::reduce(std::mem::take(&mut profile.0), AdaptEvent::Evidence { skills, assists });
 }
 
 fn step(story: &mut StoryAssistState, t: &mut Tracker, says: &mut MessageWriter<HanSays>, event: StoryEvent) {
@@ -271,7 +388,8 @@ fn feed_story(
     mode: Res<AssistMode>,
     active: Option<Res<ActiveLevel>>,
     run: Option<Res<LevelRun>>,
-    profile: Res<AdaptiveProfile>,
+    current: Option<Res<CurrentLevel>>,
+    mut profile: ResMut<AdaptiveProfile>,
     hints: Query<&HintSpot>,
     mut story: ResMut<StoryAssistState>,
     mut t: ResMut<Tracker>,
@@ -285,8 +403,18 @@ fn feed_story(
 ) {
     let story_mode = *mode == AssistMode::Story;
     let now = run.as_ref().map_or(0.0, |r| r.time);
+    let band = story_band(current.map_or(0, |c| c.0));
     let t = &mut *t;
     for s in started.read() {
+        // A restart abandons the segment: what killed Nat in it still counts against those
+        // skills (and nothing else, unfinished).
+        if story_mode && s.restart && t.skill_deaths.iter().any(|&d| d > 0) {
+            let designed = story.0.expected_deaths;
+            let struggles = segment_outcomes(&[], &t.skill_deaths, designed);
+            give_evidence(&mut profile, struggles, band, story.0.assists);
+        }
+        t.skill_deaths = [0; Skill::COUNT];
+        t.segment_col = active.as_ref().map_or(0, |a| a.level.start.0 as i32);
         t.decide = true;
         t.last_decision = 0.0;
         t.deaths_in_level = 0;
@@ -321,6 +449,7 @@ fn feed_story(
             _ => 1,
         };
         t.death_spot = Some((d.pos, count));
+        t.skill_deaths[d.skill.index()] += 1;
         if story_mode {
             step(&mut story, t, &mut says, StoryEvent::Died);
         }
@@ -342,9 +471,13 @@ fn feed_story(
             }
         }
     }
-    for _ in checkpoints.read() {
+    for c in checkpoints.read() {
         t.decide = true;
         if story_mode {
+            if let Some(a) = active.as_ref() {
+                let played = t.segment_evidence(&a.level, (c.pos.x / TILE).floor() as i32, story.0.expected_deaths);
+                give_evidence(&mut profile, played, band, story.0.assists);
+            }
             t.end_segment(&story.0, now);
             step(&mut story, t, &mut says, StoryEvent::CheckpointReached);
             story.0.expected_deaths = t.expected_now();
@@ -352,6 +485,11 @@ fn feed_story(
     }
     for _ in completed.read() {
         if story_mode {
+            if let Some(a) = active.as_ref() {
+                let goal = a.level.width as i32 - 1;
+                let played = t.segment_evidence(&a.level, goal, story.0.expected_deaths);
+                give_evidence(&mut profile, played, band, story.0.assists);
+            }
             t.end_segment(&story.0, now);
             step(&mut story, t, &mut says, StoryEvent::LevelCompleted);
         }
@@ -464,6 +602,20 @@ fn sync_raft_life(assists: Res<Assists>, mut life: ResMut<RaftLife>) {
     if life.scale != scale {
         life.scale = scale;
     }
+}
+
+/// [`EasySkills`] from the profile, at the current difficulty: the story level's number, or
+/// each skill's center in free play.
+fn judge_easy(mode: Res<AssistMode>, current: Option<Res<CurrentLevel>>, profile: Res<AdaptiveProfile>, mut easy: ResMut<EasySkills>) {
+    let band = |s: Skill| match *mode {
+        AssistMode::FreePlay => profile.0.center(s),
+        _ => story_band(current.as_ref().map_or(0, |c| c.0)),
+    };
+    if *mode == AssistMode::Manual {
+        return;
+    }
+    let want = EasySkills(Skill::ALL.map(|s| profile.0.finds_easy(s, band(s))));
+    easy.set_if_neq(want);
 }
 
 // ─── The hidden respawn point ────────────────────────────────────────────────
@@ -652,5 +804,55 @@ mod tests {
         assert!((neutral.lead - 0.35).abs() < 0.02 && (neutral.drums - 0.35).abs() < 0.03, "{neutral:?}");
         assert!(flying.lead > 0.5 && flying.lead <= 0.75 && flying.drums <= 0.75, "{flying:?}");
         assert!(struggling.lead <= 0.2 && struggling.comp <= 0.2, "{struggling:?}");
+    }
+}
+
+#[cfg(test)]
+mod evidence_tests {
+    use super::*;
+    use crate::level::Levels;
+
+    #[test]
+    fn every_topic_has_a_skill() {
+        for t in Topic::ALL {
+            assert!(skill_of(t).is_some(), "{t:?}");
+        }
+    }
+
+    /// A segment exercises plain platforming, the gates in its columns, its hazards and moving
+    /// platforms (level 5: a stain pit at columns 77-104, a buddy raft pool at 144-159).
+    #[test]
+    fn a_segment_exercises_what_it_holds() {
+        let levels = Levels::default();
+        let l = &levels.0[4];
+        let s = segment_skills(l, 70, 110);
+        assert_eq!(s[0], Skill::Precision);
+        assert!(s.contains(&Skill::Stains) && !s.contains(&Skill::Buddy), "{s:?}");
+        let s = segment_skills(l, 140, 160);
+        assert!(s.contains(&Skill::Buddy) && !s.contains(&Skill::Stains), "{s:?}");
+    }
+
+    /// Designed deaths (stain pits, chutes) are allowed up to the segment's expectation; any
+    /// other death makes that skill a struggle.
+    #[test]
+    fn deaths_beyond_the_design_are_struggles() {
+        let mut deaths = [0; Skill::COUNT];
+        deaths[Skill::Stains.index()] = 2;
+        deaths[Skill::HazardTiming.index()] = 1;
+        let out = segment_outcomes(&[Skill::Precision, Skill::Stains], &deaths, 2);
+        assert_eq!(
+            out,
+            [(Skill::Precision, Outcome::Clean), (Skill::Stains, Outcome::Clean), (Skill::HazardTiming, Outcome::Struggle)]
+        );
+        let out = segment_outcomes(&[Skill::Stains], &deaths, 1);
+        assert_eq!(out[0], (Skill::Stains, Outcome::Struggle));
+    }
+
+    #[test]
+    fn designed_deaths_are_never_slips() {
+        let easy = EasySkills([true; Skill::COUNT]);
+        assert!(easy.slip(Skill::Precision) && easy.slip(Skill::GiantSteps));
+        assert!(!easy.slip(Skill::Stains) && !easy.slip(Skill::Grease));
+        assert!(!EasySkills::default().slip(Skill::Precision));
     }
 }

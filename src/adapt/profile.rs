@@ -57,6 +57,13 @@ pub const CARELESS_AFTER_CLEAN: usize = 2;
 /// A newly unlocked skill starts this many bands under the mean played center.
 pub const UNLOCK_OFFSET: u8 = 1;
 
+/// The laughing band's judgement ([`PlayerProfile::finds_easy`]): a skill is easy at a band
+/// once at least this share of its remembered rooms (and story segments) at that band or
+/// harder were clean...
+pub const EASY_AT: f32 = 0.75;
+/// ...over at least this many.
+pub const EASY_EVIDENCE: usize = 4;
+
 /// Rooms remembered globally (carelessness filter, music mood).
 pub const RECENT_ROOMS: usize = 8;
 
@@ -210,6 +217,14 @@ impl PlayerProfile {
     pub fn calibrating(&self) -> bool {
         !self.calibration.done
     }
+
+    /// Does the player find `skill` easy at `band`? At least [`EASY_AT`] clean over at least
+    /// [`EASY_EVIDENCE`] remembered rooms (and story segments) at that band or harder. A death
+    /// at an easy skill is a slip the band laughs at (`crate::game::adaptive::EasySkills`).
+    pub fn finds_easy(&self, skill: Skill, band: Band) -> bool {
+        let (rate, n) = self.skill(skill).window.at_or_above(band);
+        n >= EASY_EVIDENCE && rate.unwrap_or(0.0) >= EASY_AT
+    }
 }
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -244,6 +259,11 @@ pub enum AdaptEvent {
     /// A frustration signal the caller noticed live, mid-room (e.g. idling after a splat).
     /// Handled at most once per room; [`AdaptEvent::RoomFinished`] also checks by itself.
     Frustrated(FrustrationSignal),
+    /// Evidence from outside free play (a story checkpoint segment): how each skill it
+    /// exercised went, at the band it stands for (the level's number), with the assist dial it
+    /// was played at. Joins the skills' windows like a room; once calibrated, a skill's band can
+    /// move on it the same way (promote, demote, widen). Never touches the free-play dial.
+    Evidence { skills: Vec<(Skill, Band, Outcome)>, assists: f32 },
     /// A skill became available to free play. If it was never played, its center starts at the
     /// mean center of the skills that have been played, minus [`UNLOCK_OFFSET`] (so a strong
     /// player doesn't grind a new mechanic up from band 1).
@@ -271,7 +291,25 @@ pub fn reduce(state: PlayerProfile, event: AdaptEvent) -> PlayerProfile {
             None => ease(state, &[], signal),
         },
         AdaptEvent::SkillUnlocked(skill) => skill_unlocked(state, skill),
+        AdaptEvent::Evidence { skills, assists } => evidence(state, &skills, assists),
     }
+}
+
+fn evidence(state: PlayerProfile, played: &[(Skill, Band, Outcome)], assists: f32) -> PlayerProfile {
+    let mut skills = state.skills.clone();
+    for &(skill, band, outcome) in played {
+        let st = &skills[skill.index()];
+        let entry = WindowEntry { outcome, band: band.clamp(MIN_BAND, MAX_BAND), center: st.center, epoch: st.epoch, assists };
+        skills[skill.index()] = SkillState { window: st.window.push(entry), ..st.clone() };
+    }
+    let s = PlayerProfile { skills, ..state };
+    if s.calibrating() {
+        return s;
+    }
+    let mut judged: Vec<Skill> = played.iter().map(|p| p.0).collect();
+    judged.sort();
+    judged.dedup();
+    judge(s, &judged)
 }
 
 fn skill_unlocked(state: PlayerProfile, skill: Skill) -> PlayerProfile {
@@ -396,7 +434,7 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
         let entry = WindowEntry { outcome, band: rs.band, center: rs.center, epoch: rs.epoch, assists: room.assists };
         skills[rs.skill.index()] = SkillState { window: st.window.push(entry), ..st.clone() };
     }
-    let mut s = PlayerProfile { skills, assists, ..s };
+    let s = PlayerProfile { skills, assists, ..s };
 
     if let Some(signal) = signal {
         return ease(s, &room.skills, signal);
@@ -405,13 +443,18 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
         return s;
     }
 
-    // Promote / demote / widen, per skill the room exercised.
+    let judged: Vec<Skill> = room.skills.iter().map(|rs| rs.skill).collect();
+    judge(s, &judged)
+}
+
+/// Promote / demote / widen each of `judged` (the skills a room or segment exercised).
+fn judge(mut s: PlayerProfile, judged: &[Skill]) -> PlayerProfile {
     let mut cues = Vec::new();
     let mut skills = s.skills.clone();
-    for rs in &room.skills {
-        let st = &skills[rs.skill.index()];
+    for &skill in judged {
+        let st = &skills[skill.index()];
         let next = if st.center < MAX_BAND && s.assists <= ASSIST_EPS && should_promote(st) {
-            cues.push(Cue::Promoted(rs.skill, st.center + 1));
+            cues.push(Cue::Promoted(skill, st.center + 1));
             SkillState {
                 center: st.center + 1,
                 spread: (st.spread - PROMOTE_NARROW).max(PROMOTE_SPREAD_MIN),
@@ -420,7 +463,7 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
                 ..st.clone()
             }
         } else if st.center > MIN_BAND && should_demote(st) {
-            cues.push(Cue::Demoted(rs.skill, st.center - 1));
+            cues.push(Cue::Demoted(skill, st.center - 1));
             SkillState {
                 center: st.center - 1,
                 spread: (st.spread - DEMOTE_NARROW).max(DEMOTE_SPREAD_MIN),
@@ -436,7 +479,7 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
                 _ => st.clone(),
             }
         };
-        skills[rs.skill.index()] = next;
+        skills[skill.index()] = next;
     }
     s.skills = skills;
     s.cues = cues;

@@ -36,7 +36,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/adapt/` the adaptive difficulty engine (pure reducers); `src/game/adaptive.rs` wires it
   into play: story deaths/checkpoints → the invisible `Assists` (coyote, buffer, hitboxes, rafts,
   Han's eagerness, a hidden midway respawn, hint repeats), Han's encouragement, the band's
-  freedom. `AssistMode` picks story / free play / manual (tests). Never shown on screen.
+  freedom. Story segments are also per-skill evidence in the profile free play uses (every
+  `PlayerDied` carries its cause and skill, `hazards::death_skill` from the gate marks); a death
+  at a skill the profile finds easy is a *slip*, and only slips set the band laughing
+  (`EasySkills`). `AssistMode` picks story / free play / manual (tests). Never shown on screen.
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
 - `src/audio/` MML parser, NES-style synth blocks, sfx, the director, and the Bevy plugin
   (`audio::plugin`: music + sfx on one kira manager; `AudioOutput::Headless` for tests).
@@ -120,13 +123,14 @@ you can never summon, grip that never comes) are caught before a player finds th
 - **Tier 1** (`tests/formal.rs`, every `cargo test` / `cargo nextest run`, ≤ 2 s CPU, enforced by
   `tier1_director_properties_within_budget`): the real `director::Band` (driven as
   `audio::plugin` does, physics via `Groove` + the grip layer) explored breadth-first over
-  toots, nuggets, deaths, checkpoints, ground jumps, calls, restarts and waits on a 0.25 s grid
-  (depth 5, ~35k distinct states, deduplicated by an abstraction of the band that a test
+  toots, nuggets, deaths, slips, checkpoints, ground jumps, calls, restarts and waits on a 0.25 s
+  grid (depth 5, ~48k distinct states, deduplicated by an abstraction of the band that a test
   proves sound). From every state: (a) deaths always reach grip (also with ghost nuggets
   re-grabbed every lap); (b) 5 toots / 4 quick nuggets / 3 even ground jumps put their mode on
   the call (the full counter ticked last) and a call plays it at once; (c) with no input the harmony changes at most once; (d) holds expire without
   keep-alive input; (e) restart returns to the initial state; (f) the laughing band never
-  blocks grip. Mutants (the old chute soft-lock, a leaky restart, lazy calls) must be caught.
+  blocks grip; (g) only a slip starts the laughing band. Mutants (the old chute soft-lock, a
+  leaky restart, lazy calls, a band laughing at every death) must be caught.
 - **Tier 2** (`tests/deep.rs`, `#[ignore]`d: `scripts/check-deep`, or `cargo nextest run --test
   deep --run-ignored only --no-capture`): the director deeper and with two events per frame;
   every campaign band gate crossable from every tier-1 music state with the level's own runway

@@ -2,6 +2,8 @@
 
 use bevy::prelude::*;
 
+use crate::adapt::Skill;
+
 pub fn plugin(app: &mut App) {
     app.add_message::<NuggetCollected>()
         .add_message::<Jumped>()
@@ -43,6 +45,31 @@ pub struct Landed {
 #[derive(Message, Debug, Clone, Copy)]
 pub struct PlayerDied {
     pub pos: Vec2,
+    pub cause: DeathCause,
+    /// The skill the death was a failure at (`crate::game::hazards::death_skill`).
+    pub skill: Skill,
+    /// A death at something the adaptive engine rates easy for the player (never a designed
+    /// death: a stain pit, a grease chute): the band laughs.
+    pub slip: bool,
+}
+
+impl PlayerDied {
+    /// A plain fall into the pit (tests, tools).
+    pub fn at(pos: Vec2) -> Self {
+        PlayerDied { pos, cause: DeathCause::Pit, skill: Skill::Precision, slip: false }
+    }
+}
+
+/// What splatted Nat.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum DeathCause {
+    /// Fell out of the bottom of the level.
+    Pit,
+    /// Spikes (toilet brushes), floor or ceiling.
+    Spikes,
+    Sewage,
+    Fly,
+    Spray,
 }
 
 #[derive(Message, Debug, Clone, Copy)]

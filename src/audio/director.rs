@@ -41,9 +41,12 @@
 //!    nervous until a call or a restart;
 //! 2. otherwise as written.
 //!
-//! The laughing band (the tuning medley, [`Filters::just_intonation`]) plays when deaths
-//! since the last checkpoint ≥ [`LAUGHING_DEATHS`] ("THE BAND CAN'T STOP LAUGHING"); it goes
-//! with any harmony, the waltz included.
+//! The laughing band (the tuning medley, [`Filters::just_intonation`]) plays when *slips*
+//! since the last checkpoint ≥ [`LAUGHING_SLIPS`] ("THE BAND CAN'T STOP LAUGHING"): a slip
+//! ([`Events::slips`]) is a death at something the game rates easy for the player (the
+//! adaptive engine's per-skill judgement, `crate::game::adaptive`), never a designed one (a
+//! stain pit, a grease chute). It wears off after [`LAUGH_DECAY_SECS`] without another, and
+//! goes with any harmony, the waltz included.
 
 use std::collections::VecDeque;
 
@@ -56,7 +59,8 @@ pub const NERVOUS_DEATHS: u32 = 3;
 pub const GIANT_STEPS_TOOTS: u32 = 5;
 pub const FIRED_UP_NUGGETS: u32 = 4;
 pub const FIRED_UP_SECS_PER_NUGGET: f32 = 5.0;
-pub const LAUGHING_DEATHS: u32 = 2;
+/// Slips since the checkpoint that set the band laughing.
+pub const LAUGHING_SLIPS: u32 = 1;
 /// A called mode holds this long (play seconds), and each use of its move refills the hold to
 /// this long from then.
 pub const SUMMON_HOLD_SECS: f32 = MUSIC_CHECK_SECS;
@@ -83,8 +87,9 @@ pub struct PlayStats {
     /// Deaths since the level started or the last call, not counting those while a called
     /// mode was held (the nervous rule).
     pub mood_deaths: u32,
-    /// Deaths since the last checkpoint (or the level start).
-    pub checkpoint_deaths: u32,
+    /// Slips since the last checkpoint (or the level start), less those worn off, at most
+    /// [`LAUGHING_SLIPS`] (the laughing band).
+    pub checkpoint_slips: u32,
     /// In the rolling window:
     pub stretch_toots: u32,
     pub stretch_nuggets: u32,
@@ -231,7 +236,7 @@ fn reason_of(h: Harmony) -> &'static str {
 pub fn choose_filters(s: &PlayStats) -> (Filters, &'static str) {
     let harmony = if s.mood_deaths >= NERVOUS_DEATHS { Harmony::MelodicMinor } else { Harmony::Original };
     let reason = reason_of(harmony);
-    let just_intonation = s.checkpoint_deaths >= LAUGHING_DEATHS;
+    let just_intonation = s.checkpoint_slips >= LAUGHING_SLIPS;
     let reason = if reason.is_empty() && just_intonation { REASON_LAUGHING } else { reason };
     (Filters { harmony, just_intonation }, reason)
 }
@@ -249,6 +254,8 @@ pub struct Events {
     pub ground_jumps: u32,
     pub nuggets: u32,
     pub deaths: u32,
+    /// Of `deaths`, those at something the game rates easy for the player (the laughing band).
+    pub slips: u32,
     pub checkpoints: u32,
     /// Jumps in threes spotted elsewhere (an editor's "waltz step" button): each counts as one
     /// completed, on top of those [`Band`] spots in `ground_jumps`.
@@ -298,13 +305,14 @@ pub struct Band {
     frames_ticked: u64,
     level_start: f32,
     next_check: f32,
-    /// When the laughing band's death count next eases off by one (see [`LAUGH_DECAY_SECS`]).
+    /// When the laughing band's slip count next eases off by one (see [`LAUGH_DECAY_SECS`]).
     laugh_decay_at: f32,
 }
 
-/// The laughing band wears off: every this many seconds without dying, one death comes off
-/// the since-checkpoint count (so 2 deaths then 10 clean seconds bring equal temperament back
-/// before the next checkpoint). Grip is a level-long safety net and doesn't decay.
+/// The laughing band wears off: every this many seconds without a slip, one slip comes off
+/// the since-checkpoint count (so a slip then 10 seconds without another bring equal
+/// temperament back before the next checkpoint). Grip is a level-long safety net and doesn't
+/// decay.
 pub const LAUGH_DECAY_SECS: f32 = 10.0;
 
 /// The rolling-window column of a summon's counter.
@@ -412,14 +420,16 @@ impl Band {
         }
         self.window.record(now, ticks[0], ticks[1], ev.deaths, ticks[2]);
         self.stats.level_deaths += ev.deaths;
-        self.stats.checkpoint_deaths += ev.deaths;
-        // The laughing band wears off with clean play.
+        let slips = ev.slips.min(ev.deaths);
+        // (Capped: the band laughs until the last slip wears off, however many there were.)
+        self.stats.checkpoint_slips = (self.stats.checkpoint_slips + slips).min(LAUGHING_SLIPS);
+        // The laughing band wears off without more slips.
         let mut sobered = false;
-        if ev.deaths > 0 {
+        if slips > 0 {
             self.laugh_decay_at = now + LAUGH_DECAY_SECS;
-        } else if self.stats.checkpoint_deaths > 0 && now >= self.laugh_decay_at {
-            sobered = self.stats.checkpoint_deaths == LAUGHING_DEATHS;
-            self.stats.checkpoint_deaths -= 1;
+        } else if self.stats.checkpoint_slips > 0 && now >= self.laugh_decay_at {
+            sobered = self.stats.checkpoint_slips == LAUGHING_SLIPS;
+            self.stats.checkpoint_slips -= 1;
             self.laugh_decay_at = now + LAUGH_DECAY_SECS;
         }
         // Deaths while a mode is held don't count toward a mood.
@@ -453,7 +463,7 @@ impl Band {
         let decided = self.decide(now);
         self.next_check = now + MUSIC_CHECK_SECS;
         if ev.checkpoints > 0 {
-            self.stats.checkpoint_deaths = 0;
+            self.stats.checkpoint_slips = 0;
         }
         Some(decided)
     }
@@ -486,11 +496,11 @@ impl Band {
 mod tests {
     use super::*;
 
-    fn st(level_deaths: u32, checkpoint_deaths: u32, toots: u32, nuggets: u32, secs: f32) -> PlayStats {
+    fn st(level_deaths: u32, checkpoint_slips: u32, toots: u32, nuggets: u32, secs: f32) -> PlayStats {
         PlayStats {
             level_deaths,
             mood_deaths: level_deaths,
-            checkpoint_deaths,
+            checkpoint_slips,
             stretch_toots: toots,
             stretch_nuggets: nuggets,
             stretch_secs: secs,
@@ -506,9 +516,9 @@ mod tests {
             (st(0, 0, 0, 0, 10.0), Original, false, ""),
             (st(0, 0, 9, 9, 1.0), Original, false, ""),
             (st(3, 0, 9, 9, 1.0), MelodicMinor, false, REASON_NERVOUS),
-            (st(2, 2, 0, 0, 30.0), Original, true, REASON_LAUGHING),
-            (st(1, 1, 0, 0, 30.0), Original, false, ""),
-            (st(3, 2, 0, 0, 30.0), MelodicMinor, true, REASON_NERVOUS),
+            (st(2, 1, 0, 0, 30.0), Original, true, REASON_LAUGHING),
+            (st(2, 0, 0, 0, 30.0), Original, false, ""),
+            (st(3, 1, 0, 0, 30.0), MelodicMinor, true, REASON_NERVOUS),
         ];
         for (s, h, ji, why) in cases {
             let (f, reason) = choose_filters(s);
@@ -595,9 +605,10 @@ mod tests {
     const HOP: Events = Events { ground_jumps: 1, ..NOTHING };
     const NUGGET: Events = Events { nuggets: 1, ..NOTHING };
     const DEATH: Events = Events { deaths: 1, ..NOTHING };
+    const SLIP: Events = Events { deaths: 1, slips: 1, ..NOTHING };
     const CHECKPOINT: Events = Events { checkpoints: 1, ..NOTHING };
     const CALL: Events = Events { calls: 1, ..NOTHING };
-    const NOTHING: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, checkpoints: 0, waltz_steps: 0, calls: 0 };
+    const NOTHING: Events = Events { toots: 0, ground_jumps: 0, nuggets: 0, deaths: 0, slips: 0, checkpoints: 0, waltz_steps: 0, calls: 0 };
 
     fn harmony(d: Option<(Filters, &'static str)>) -> Option<Harmony> {
         d.map(|d| d.0.harmony)
@@ -730,9 +741,9 @@ mod tests {
     #[test]
     fn deaths_and_checkpoints_dont_change_a_held_harmony() {
         let mut b = giant_steps();
-        // Three deaths would make the band nervous, two at a checkpoint laughing.
+        // Three deaths would make the band nervous, a slip laughing.
         assert_eq!(b.step(7.0, DEATH), Some((Filters { harmony: Harmony::Coltrane, just_intonation: false }, REASON_GIANT_STEPS)));
-        let d = b.step(8.0, DEATH).unwrap();
+        let d = b.step(8.0, SLIP).unwrap();
         assert_eq!(d.0, Filters { harmony: Harmony::Coltrane, just_intonation: true }, "the laughing band layers on top");
         assert_eq!(harmony(b.step(9.0, DEATH)), Some(Harmony::Coltrane));
         assert_eq!(harmony(b.step(10.0, CHECKPOINT)), Some(Harmony::Coltrane));
@@ -819,9 +830,9 @@ mod tests {
 mod chute_tests {
     use super::*;
 
-    /// A grease chute: quick successive deaths with nothing called. The laughing band comes at
-    /// 2 and the nervous band at 3 (the physics give grip from 3 level deaths regardless: see
-    /// `Groove::nervous`).
+    /// A grease chute: quick successive deaths with nothing called. The nervous band comes at 3
+    /// (the physics give grip from 3 level deaths regardless: see `Groove::nervous`); designed
+    /// deaths aren't slips, so the band doesn't laugh.
     #[test]
     fn quick_deaths_reach_nervous() {
         let mut b = Band::default();
@@ -831,7 +842,7 @@ mod chute_tests {
         for t in [2.0f32, 4.5, 7.0, 9.5] {
             last = b.step(t, death);
         }
-        assert_eq!(last.unwrap().0.harmony, Harmony::MelodicMinor);
+        assert_eq!(last.unwrap().0, Filters { harmony: Harmony::MelodicMinor, just_intonation: false });
         assert!(b.stats.level_deaths >= NERVOUS_DEATHS);
     }
 }
@@ -840,17 +851,17 @@ mod chute_tests {
 mod laugh_decay_tests {
     use super::*;
 
-    /// Two quick deaths start the laughing band; a clean stretch wears it off before any
-    /// checkpoint; dying again restarts the clock.
+    /// Plain deaths don't start the laughing band, a slip does; ten seconds without another
+    /// wear it off before any checkpoint.
     #[test]
     fn the_laughing_band_wears_off() {
         let mut b = Band::default();
         b.start(0.0);
-        let death = Events { deaths: 1, ..Default::default() };
-        b.step(1.0, death);
-        let (f, _) = b.step(2.0, death).unwrap();
-        assert!(f.just_intonation, "laughing after 2 deaths");
-        // Quiet frames: at 2 + 10 s one death comes off and the band sobers up right away.
+        let (f, _) = b.step(1.0, Events { deaths: 1, ..Default::default() }).unwrap();
+        assert!(!f.just_intonation, "a plain death isn't funny");
+        let (f, _) = b.step(2.0, Events { deaths: 1, slips: 1, ..Default::default() }).unwrap();
+        assert!(f.just_intonation, "laughing after a slip");
+        // Quiet frames: at 2 + 10 s the slip comes off and the band sobers up right away.
         let mut sober_at = None;
         let mut t = 2.25;
         while t < 40.0 {

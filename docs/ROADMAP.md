@@ -29,7 +29,7 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   | Fired up (quartal) | 4 quick nuggets | run ×1.35 | 11-tile long gaps |
   | Waltz (3/4) | 3 evenly spaced plain hops | world on the beat; jump on ONE ×1.15 + weak toot | waltz rows (spray tunnels) |
   | Nervous (melodic minor) | 3+ deaths (grip is a level-long layer) | slow-mo; **sweaty grip** on grease | grease chutes |
-  | Laughing band (tuning medley) | 2+ deaths since checkpoint; wears off 1 death / 10 s | bouncy landings, a nudge per phrase (below) | — |
+  | Laughing band (tuning medley) | a slip: a death at a skill the profile finds easy (never a stain pit or chute); wears off 10 s after the last | bouncy landings, a nudge per phrase (below) | — |
   Charge, then call: a full counter holds its charge until Down calls the band, which plays
   the full counter ticked last; a called mode holds 20 s, refilled by its own move (HUD strip:
   `src/ui/strip.rs`).

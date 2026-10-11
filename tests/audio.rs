@@ -559,6 +559,22 @@ mod plugin {
         assert!(!app.world().resource::<Groove>().giant_steps());
     }
 
+    /// A plain death doesn't set the band laughing; a slip (a death at something easy) does.
+    #[test]
+    fn a_slip_sets_the_band_laughing() {
+        use nat_han_adventures::events::PlayerDied;
+        let mut app = app();
+        app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        go(&mut app, AppState::Playing);
+        app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
+        app.update();
+        let pending = |app: &App| app.world().resource::<LivePlayer>().pending_filters().or(app.world().resource::<LivePlayer>().filters());
+        assert_eq!(pending(&app).map(|f| f.just_intonation), Some(false));
+        app.world_mut().write_message(PlayerDied { slip: true, ..PlayerDied::at(Vec2::ZERO) });
+        app.update();
+        assert_eq!(pending(&app).map(|f| f.just_intonation), Some(true));
+    }
+
     /// `NATHAN_MUSIC` forcing: every looping song starts in the forced filters (not the
     /// fanfare), physics and all; the laughing band's phrase tuning is readable every frame.
     #[test]
@@ -581,7 +597,7 @@ mod plugin {
         assert_ne!(t, Tuning::Medley);
         assert_eq!(Some(t), app.world().resource::<LiveClock>().clock.position.song_beat.is_finite().then_some(t));
         // The director's decisions are overridden too (a death decides).
-        app.world_mut().write_message(nat_han_adventures::events::PlayerDied { pos: Vec2::ZERO });
+        app.world_mut().write_message(nat_han_adventures::events::PlayerDied::at(Vec2::ZERO));
         for _ in 0..200 {
             app.update();
         }
@@ -620,7 +636,7 @@ mod plugin {
         app.update();
         let start = app.world().resource::<LivePlayer>().freedom().expect("posted at level start");
         for _ in 0..4 {
-            app.world_mut().write_message(nat_han_adventures::events::PlayerDied { pos: Vec2::ZERO });
+            app.world_mut().write_message(nat_han_adventures::events::PlayerDied::at(Vec2::ZERO));
             app.update();
         }
         let after = app.world().resource::<LivePlayer>().freedom().unwrap();

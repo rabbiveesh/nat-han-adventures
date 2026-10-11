@@ -439,7 +439,7 @@ fn forward(
     inputs.extend(jumped.read().map(|j| if j.double { Input::Toot } else { Input::Jump { on_ground: true } }));
     inputs.extend(landed.read().map(|l| Input::Land { speed: l.speed }));
     inputs.extend(nuggets.read().map(|_| Input::Nugget));
-    inputs.extend(died.read().map(|_| Input::Death));
+    inputs.extend(died.read().map(|d| if d.slip { Input::Slip } else { Input::Death }));
     inputs.extend(checkpoints.read().map(|_| Input::Checkpoint));
     inputs.extend(restart.read().map(|_| Input::Restart));
     if let Some(f) = freedom.read().last().copied() {
@@ -483,7 +483,10 @@ fn direct(
         }
     }
     ev.nuggets = nuggets.read().count() as u32;
-    ev.deaths = died.read().count() as u32;
+    for d in died.read() {
+        ev.deaths += 1;
+        ev.slips += d.slip as u32;
+    }
     ev.checkpoints = checkpoints.read().count() as u32;
     ev.calls = calls.read().count() as u32;
     // Play time (pause excluded): the director's clock.

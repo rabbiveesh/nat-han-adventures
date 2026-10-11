@@ -687,3 +687,46 @@ fn strong_players_climb_and_drop_assists() {
         }
     }
 }
+
+// ─── Story evidence and the laughing band's judgement ────────────────────────
+
+fn story(p: PlayerProfile, skills: &[(Skill, u8, Outcome)]) -> PlayerProfile {
+    reduce(p, AdaptEvent::Evidence { skills: skills.to_vec(), assists: 0.0 })
+}
+
+/// Story segments join the skills' windows like rooms, never touch the free-play dial, and
+/// once calibrated move bands the same way.
+#[test]
+fn story_evidence_joins_the_windows() {
+    let mut p = PlayerProfile::new();
+    p.assists = 0.3;
+    let p = story(p, &[(Skill::Precision, 3, Outcome::Clean), (Skill::HazardTiming, 3, Outcome::Struggle)]);
+    assert_eq!(p.skill(Skill::Precision).window.entries.len(), 1);
+    assert_eq!(p.skill(Skill::HazardTiming).window.entries[0].outcome, Outcome::Struggle);
+    assert_eq!((p.assists, p.rooms_played), (0.3, 0), "the dial and the room count are free play's");
+    assert_eq!(p.center(Skill::Precision), 1, "calibrating: evidence only");
+    // Calibrated at band 3: four clean segments at the center promote.
+    let mut p = PlayerProfile::calibrated(3);
+    for _ in 0..4 {
+        p = story(p, &[(Skill::Precision, 3, Outcome::Clean)]);
+    }
+    assert_eq!(p.center(Skill::Precision), 4);
+    assert!(p.cues.contains(&Cue::Promoted(Skill::Precision, 4)));
+}
+
+/// Easy: at least 75% clean over at least 4 remembered rooms or segments at the band or harder.
+#[test]
+fn a_skill_is_easy_once_cleared_at_that_band_or_harder() {
+    let mut p = PlayerProfile::new();
+    for _ in 0..3 {
+        p = story(p, &[(Skill::Precision, 4, Outcome::Clean)]);
+    }
+    assert!(!p.finds_easy(Skill::Precision, 4), "3 isn't enough evidence");
+    p = story(p, &[(Skill::Precision, 5, Outcome::Struggle)]);
+    assert!(p.finds_easy(Skill::Precision, 4), "3 of 4 clean");
+    assert!(!p.finds_easy(Skill::Precision, 5), "only one at band 5");
+    assert!(p.finds_easy(Skill::Precision, 2), "harder evidence counts for easier bands");
+    p = story(p, &[(Skill::Precision, 4, Outcome::Struggle)]);
+    assert!(!p.finds_easy(Skill::Precision, 4), "3 of 5");
+    assert!(!p.finds_easy(Skill::Waltz, 1), "never played");
+}
