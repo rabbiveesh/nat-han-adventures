@@ -14,8 +14,10 @@ use crate::save::{BandCounter, Progress};
 use crate::state::AppState;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::Playing), spawn_strip)
-        .add_systems(Update, update_strip.run_if(in_state(AppState::Playing)));
+    use crate::game::sideb::SideB;
+    // (Side B has its set list instead: `ui::sideb`.)
+    app.add_systems(OnEnter(AppState::Playing), spawn_strip.run_if(not(resource_exists::<SideB>)))
+        .add_systems(Update, update_strip.run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))));
 }
 
 /// Where the strip's panel sits (virtual px from the top).

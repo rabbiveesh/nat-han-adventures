@@ -55,7 +55,7 @@ mod world;
 
 use bevy::prelude::*;
 
-pub use brain::{HanBrain, HanMode, HanNav};
+pub use brain::{HanBrain, HanMode, HanNav, nav_cell, stand};
 pub use world::{FlySpin, HanRaft, SprayPlug, han_raft_life};
 
 use super::{ActiveLevel, GameSet};
