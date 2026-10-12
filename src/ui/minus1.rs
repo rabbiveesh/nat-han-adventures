@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use super::{palette::*, *};
 use crate::game::ActiveLevel;
 use crate::game::LevelTile;
-use crate::game::minus1::{ENTRIES, Freeze, GlitchMenu, MinusOne, TileRewrite};
+use crate::game::minus1::{ENTRIES, Effect, Freeze, GlitchMenu, MinusOne, TileRewrite};
 use crate::level::Tile;
 use crate::state::PlayState;
 
@@ -32,7 +32,7 @@ pub fn plugin(app: &mut App) {
             Update,
             (
                 (highlight, jitter).run_if(in_state(PlayState::Paused).and_then(resource_exists::<GlitchMenu>)),
-                (flash_on_rewrite, fade_flash, flicker, escaped_card).run_if(resource_exists::<MinusOne>),
+                (flash_on_rewrite, fade_flash, flicker, springy, escaped_card).run_if(resource_exists::<MinusOne>),
             ),
         );
 }
@@ -63,8 +63,12 @@ struct Flash(f32);
 #[derive(Component)]
 struct Flicker(f32);
 
-fn tile_icon(tile: Option<Tile>, world: u8) -> Option<SpriteId> {
-    Some(match tile? {
+fn tile_icon(effect: Option<Effect>, world: u8) -> Option<SpriteId> {
+    let tile = match effect? {
+        Effect::Tile(t) => t,
+        Effect::Bounce => return Some(SpriteId::TootPuff),
+    };
+    Some(match tile {
         Tile::SpikesUp => SpriteId::SpikesUp,
         Tile::Liquid => SpriteId::LiquidTop(world),
         Tile::OneWay => SpriteId::OneWay(world),
@@ -130,7 +134,7 @@ fn spawn_menu(
                 for (i, e) in ENTRIES.iter().enumerate() {
                     p.spawn(Node { column_gap: px(4.0), align_items: AlignItems::Center, height: px(16.0), ..default() })
                         .with_children(|row| {
-                            match tile_icon(e.tile, world) {
+                            match tile_icon(e.effect, world) {
                                 Some(id) => {
                                     row.spawn(icon(sprites.as_deref(), id, 16.0, 16.0));
                                 }
@@ -233,5 +237,24 @@ fn escaped_card(mut commands: Commands, font: Res<UiFont>, minus: Res<MinusOne>,
         .with_children(|root| {
             root.spawn(label(&font, "OUT...?", 16.0, JUNK[1]));
         });
+    }
+}
+
+/// Bouncy tiles keep their art but shimmer in the wrong colours, a row at a time, like a
+/// spring.
+fn springy(
+    time: Res<Time>,
+    minus: Res<MinusOne>,
+    mut q: Query<(&LevelTile, &mut Sprite), Without<Flicker>>,
+) {
+    if minus.bouncy.is_empty() {
+        return;
+    }
+    let t = time.elapsed_secs();
+    for (tile, mut sprite) in &mut q {
+        if minus.bouncy.contains(&tile.tile) {
+            let wave = ((t * 6.0 - tile.col as f32 * 0.5).sin() + 1.0) / 2.0;
+            sprite.color = Color::WHITE.mix(&JUNK[0], 0.25 + 0.5 * wave);
+        }
     }
 }

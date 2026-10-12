@@ -246,7 +246,12 @@ fn spawn_intro(
                 .with_children(|p| {
                     p.spawn(label(f, title, 16.0, GOLD));
                     p.spawn(label(f, name, 8.0, CREAM));
-                    p.spawn(label(f, format!("WORLD {world}: {}", world_name(world)), 8.0, DIM_CREAM));
+                    let world_line = if minus_one.is_some() {
+                        "WORLD -1: ?????".to_string()
+                    } else {
+                        format!("WORLD {world}: {}", world_name(world))
+                    };
+                    p.spawn(label(f, world_line, 8.0, DIM_CREAM));
                 });
         });
 }

@@ -19,17 +19,18 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use super::lifecycle::spawn_tiles;
-use super::physics::Body;
+use super::physics::{Body, PlayerControl};
 use super::{ActiveLevel, GameSet, GeneratedLevel, Han, LevelTile, Player, Pos, RestartLevel, SimClock, Stain};
 use crate::events::{CheckpointReached, Jumped};
 use crate::input::Action;
 use crate::level::{Level, Tile};
 use crate::state::{AppState, PlayState};
 
-pub static MINUS_ONE_SOURCES: [&str; 3] = [
+pub static MINUS_ONE_SOURCES: [&str; 4] = [
     include_str!("../../levels/minus-1/m1.txt"),
     include_str!("../../levels/minus-1/m2.txt"),
     include_str!("../../levels/minus-1/m3.txt"),
+    include_str!("../../levels/minus-1/m4.txt"),
 ];
 
 /// A pause this long after a toot (still in the air) is a mid-toot pause.
@@ -39,22 +40,37 @@ pub const ARRIVAL_SECS: f32 = 0.25;
 /// On the goal this long, then back to the title.
 pub const ESCAPED_SECS: f32 = 3.0;
 
-/// One line of the corrupted menu: its junk text, and the tile it writes (`None`: nothing,
+/// One line of the corrupted menu: its junk text, and what picking it does (`None`: nothing,
 /// the menu just closes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Entry {
     pub text: &'static str,
-    pub tile: Option<Tile>,
+    pub effect: Option<Effect>,
 }
 
+/// What a corrupted menu pick does to the takeoff tile's kind.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Effect {
+    /// Every tile of the kind becomes this tile (look and behaviour).
+    Tile(Tile),
+    /// The kind keeps its look and its collision, but its physics glitch: it's a trampoline.
+    /// Standing on it launches Nat ([`BOUNCE_LOW`], [`BOUNCE_HIGH`] holding jump).
+    Bounce,
+}
+
+/// Launch speed (px/s) off a bouncy tile: ~4.3 tiles up, or ~8 holding jump.
+pub const BOUNCE_LOW: f32 = 440.0;
+pub const BOUNCE_HIGH: f32 = 600.0;
+
 /// The corrupted menu's entries, top to bottom.
-pub const ENTRIES: [Entry; 6] = [
-    Entry { text: "R3$UM#", tile: None },
-    Entry { text: "^^^^^^", tile: Some(Tile::SpikesUp) },
-    Entry { text: "~~~~~~", tile: Some(Tile::Liquid) },
-    Entry { text: "      ", tile: Some(Tile::Empty) },
-    Entry { text: "======", tile: Some(Tile::OneWay) },
-    Entry { text: "#_#_#_", tile: Some(Tile::Grease) },
+pub const ENTRIES: [Entry; 7] = [
+    Entry { text: "R3$UM#", effect: None },
+    Entry { text: "^^^^^^", effect: Some(Effect::Tile(Tile::SpikesUp)) },
+    Entry { text: "~~~~~~", effect: Some(Effect::Tile(Tile::Liquid)) },
+    Entry { text: "      ", effect: Some(Effect::Tile(Tile::Empty)) },
+    Entry { text: "======", effect: Some(Effect::Tile(Tile::OneWay)) },
+    Entry { text: "#_#_#_", effect: Some(Effect::Tile(Tile::Grease)) },
+    Entry { text: "B0NC3!", effect: Some(Effect::Bounce) },
 ];
 
 /// World -1 is on. Exists while a World -1 level is being played.
@@ -71,6 +87,9 @@ pub struct MinusOne {
     /// The arrival crash happened for this load.
     pub arrived: bool,
     pub writes: u32,
+    /// Tile kinds whose physics glitched into trampolines ([`Effect::Bounce`]).
+    #[reflect(ignore)]
+    pub bouncy: Vec<Tile>,
     /// Seconds since Nat reached the goal (then back to the title, [`ESCAPED_SECS`]).
     pub escaped: Option<f32>,
 }
@@ -84,6 +103,7 @@ impl MinusOne {
             since_toot: f32::INFINITY,
             arrived: false,
             writes: 0,
+            bouncy: Vec::new(),
             escaped: None,
         }
     }
@@ -180,7 +200,7 @@ pub(super) fn plugin(app: &mut App) {
         )
         .add_systems(
             FixedUpdate,
-            (track, arrival, saving).chain().in_set(GameSet::Follow).run_if(resource_exists::<MinusOne>),
+            (track, bounce, arrival, saving).chain().in_set(GameSet::Follow).run_if(resource_exists::<MinusOne>),
         );
     for s in [AppState::Title, AppState::LevelSelect, AppState::FreePlaySetup] {
         app.add_systems(OnEnter(s), leave);
@@ -277,14 +297,40 @@ fn track(
 
 /// The tile under Nat's feet, if it's something (not a moving platform's empty cell). A splat
 /// is only paint on the spikes: standing on one, Nat's footing is the spikes under it.
+/// Straddling two tiles, it's the one he can stand on (centre first).
 fn footing(level: &Level, pos: Vec2, body: &Body) -> Option<Tile> {
-    let (c, r) = level.cell_at(pos - Vec2::new(0.0, body.half.y + 0.5));
-    let t = match level.tile(c, r) {
-        Tile::StainUp => Tile::SpikesUp,
-        Tile::StainDown => Tile::SpikesDown,
-        t => t,
-    };
-    Some(t).filter(|&t| t != Tile::Empty && r >= 0 && (r as usize) < level.height)
+    let feet = pos.y - body.half.y - 0.5;
+    [0.0, -body.half.x + 1.0, body.half.x - 1.0].into_iter().find_map(|dx| {
+        let (c, r) = level.cell_at(Vec2::new(pos.x + dx, feet));
+        let t = level.tile(c, r);
+        let inside = r >= 0 && (r as usize) < level.height;
+        (inside && (t.is_solid() || t.is_one_way())).then_some(match t {
+            Tile::StainUp => Tile::SpikesUp,
+            Tile::StainDown => Tile::SpikesDown,
+            t => t,
+        })
+    })
+}
+
+/// Standing on a bouncy kind launches Nat (the toot comes back, like a landing).
+fn bounce(
+    minus: Res<MinusOne>,
+    active: Res<ActiveLevel>,
+    input: Single<&ActionState<Action>>,
+    mut nat: Query<(&Pos, &mut Body, &mut PlayerControl), With<Player>>,
+) {
+    if minus.bouncy.is_empty() {
+        return;
+    }
+    let Ok((pos, mut body, mut ctl)) = nat.single_mut() else { return };
+    if !body.on_ground || !footing(&active.level, pos.0, &body).is_some_and(|t| minus.bouncy.contains(&t)) {
+        return;
+    }
+    body.vel.y = if input.pressed(&Action::Jump) { BOUNCE_HIGH } else { BOUNCE_LOW };
+    body.on_ground = false;
+    body.riding = None;
+    ctl.has_toot = true;
+    ctl.coyote = 0.0;
 }
 
 /// A checkpoint touched in mid-air freezes the game to save, and the save screen is the same
@@ -358,8 +404,13 @@ fn menu_input(
     } else if input.just_pressed(&Action::Back) {
         close(&mut commands, &mut next);
     } else if input.just_pressed(&Action::Confirm) {
-        if let Some(to) = ENTRIES[menu.cursor].tile {
-            let from = menu.target;
+        let from = menu.target;
+        if ENTRIES[menu.cursor].effect == Some(Effect::Bounce) && !minus.bouncy.contains(&from) {
+            minus.bouncy.push(from);
+            minus.writes += 1;
+            rewrites.write(TileRewrite { from, to: from });
+        }
+        if let Some(Effect::Tile(to)) = ENTRIES[menu.cursor].effect {
             if rewrite(&mut active.level, from, to) {
                 for e in &tiles {
                     commands.entity(e).despawn();

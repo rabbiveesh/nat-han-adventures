@@ -1,0 +1,26 @@
+# World -1 room 4 (Boing), for `NATHAN_MINUS_ONE=4 scripts/record-run --capture`.
+# A physics glitch instead of a tile swap: pause mid-toot off the ground and pick B0NC3!. The
+# ground keeps its look and collision but turns into a trampoline: Nat can't stop bouncing.
+# Low bounces under the ceiling brushes (one pause in the air to time the sewage), then hold
+# jump for a high bounce onto the goal's ledge.
+wait 1.5
+tap Enter
+wait 0.6
+hold Space 140ms
+wait 120ms
+hold Space 100ms
+wait 90ms
+tap Esc
+wait 0.8
+repeat 6
+  tap Down
+  wait 0.3
+end
+wait 0.5
+tap Enter
+wait 0.1
+hold Right 0.9
+wait 0.5
+hold Right 1.6
+hold Right Space 1.0
+wait 4
