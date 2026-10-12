@@ -36,11 +36,14 @@ use crate::level::{Level, TILE, Tile, Topic};
 use crate::state::{AppState, PlayState};
 
 /// Side B's levels, in play order.
-pub static SIDE_B_SOURCES: [&str; 4] = [
+pub static SIDE_B_SOURCES: [&str; 7] = [
     include_str!("../../levels/side-b/b1.txt"),
     include_str!("../../levels/side-b/b2.txt"),
     include_str!("../../levels/side-b/b3.txt"),
     include_str!("../../levels/side-b/b4.txt"),
+    include_str!("../../levels/side-b/b5.txt"),
+    include_str!("../../levels/side-b/b6.txt"),
+    include_str!("../../levels/side-b/b7.txt"),
 ];
 
 /// A level rewinds this long after Han's death (the needle scratch).

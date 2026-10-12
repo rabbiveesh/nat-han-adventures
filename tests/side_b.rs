@@ -105,6 +105,26 @@ const L1: [(f32, usize); 3] = [(3.0, 0), (22.0, 1), (50.0, 0)];
 const L2: [(f32, usize); 3] = [(30.0, 0), (55.0, 1), (80.0, 2)];
 const L3: [(f32, usize); 4] = [(3.0, 0), (42.0, 1), (56.0, 2), (100.0, 0)];
 const L4: [(f32, usize); 7] = [(3.0, 0), (22.0, 1), (78.0, 0), (92.0, 2), (125.0, 1), (160.0, 2), (190.0, 0)];
+// The crushing ones, set lists with nothing to spare (found by `solve_a_level`). Rush Hour:
+// giant ×2, gap, melt ×2. Double Trouble: giant ×3, gap ×2, melt ×3. The Royal Flush: giant ×6,
+// gap ×3, melt ×4.
+const L5: [(f32, usize); 5] = [(1.0, 0), (32.6, 1), (52.9, 2), (100.8, 0), (110.8, 2)];
+const L6: [(f32, usize); 8] = [(1.0, 2), (2.0, 1), (23.8, 0), (27.8, 2), (86.6, 0), (87.9, 2), (107.6, 1), (141.6, 0)];
+const L7: [(f32, usize); 13] = [
+    (1.0, 0),
+    (23.0, 1),
+    (43.6, 0),
+    (44.6, 2),
+    (61.6, 1),
+    (94.6, 0),
+    (120.8, 2),
+    (136.8, 0),
+    (143.8, 2),
+    (167.6, 1),
+    (200.6, 0),
+    (221.8, 2),
+    (222.8, 0),
+];
 
 fn died(r: Result<(), (Option<Fate>, f32)>) -> (Fate, f32) {
     match r {
@@ -121,7 +141,7 @@ fn level_one_parses_with_its_set_list() {
 
 #[test]
 fn every_level_has_a_solution() {
-    for (n, plan) in [&L1[..], &L2, &L3, &L4].into_iter().enumerate() {
+    for (n, plan) in [&L1[..], &L2, &L3, &L4, &L5, &L6, &L7].into_iter().enumerate() {
         assert_eq!(play(n, plan), Ok(()), "level {}", n + 1);
     }
 }
@@ -270,4 +290,88 @@ fn try_a_plan() {
         })
         .collect();
     eprintln!("{:?}", play(lvl.trim().parse::<usize>().unwrap() - 1, &plan));
+}
+
+/// Plan search for a level (to find a new level's solution): a beam of the plans that get Han
+/// furthest, each grown by one call (any left in the set list, at columns back to 40 before
+/// where he died). `SIDE_B_SOLVE=5 [SIDE_B_BEAM=4] cargo test --test side_b solve_a_level --
+/// --ignored --nocapture`.
+#[test]
+#[ignore]
+fn solve_a_level() {
+    let n: usize = std::env::var("SIDE_B_SOLVE").unwrap().parse::<usize>().unwrap() - 1;
+    let beam: usize = std::env::var("SIDE_B_BEAM").ok().and_then(|v| v.parse().ok()).unwrap_or(4);
+    let setlist = sideb::SideBLevel::load(n).setlist;
+    let score = |p: &[(f32, usize)]| match play(n, p) {
+        Ok(()) => f32::INFINITY,
+        Err((_, d)) => d,
+    };
+    // (`SIDE_B_PREFIX="3/0 22/1"`: start from these calls.)
+    let prefix: Vec<(f32, usize)> = std::env::var("SIDE_B_PREFIX")
+        .unwrap_or_default()
+        .split_whitespace()
+        .map(|p| {
+            let (c, k) = p.split_once('/').unwrap();
+            (c.parse().unwrap(), k.parse().unwrap())
+        })
+        .collect();
+    let mut states: Vec<(Vec<(f32, usize)>, f32)> = vec![(prefix.clone(), score(&prefix))];
+    loop {
+        let mut children: Vec<(Vec<(f32, usize)>, f32)> = Vec::new();
+        for (plan, at) in &states {
+            let from = plan.last().map_or(1.0, |p| p.0 + 1.0).max(at - 40.0);
+            for (k, &(_, count)) in setlist.iter().enumerate() {
+                if plan.iter().filter(|p| p.1 == k).count() >= count as usize {
+                    continue;
+                }
+                let mut c = from;
+                while c < *at {
+                    let mut p = plan.clone();
+                    p.push((c, k));
+                    let got = score(&p);
+                    if got.is_infinite() {
+                        return eprintln!("SOLVED: {p:?}");
+                    }
+                    if got > at + 0.5 {
+                        children.push((p, got));
+                    }
+                    c += 3.0;
+                }
+            }
+        }
+        if children.is_empty() {
+            return eprintln!("stuck: {states:?}");
+        }
+        children.sort_by(|a, b| b.1.total_cmp(&a.1));
+        // Distinct outcomes first (many plans die in the same spot).
+        let mut next: Vec<(Vec<(f32, usize)>, f32)> = Vec::new();
+        for c in &children {
+            if next.len() < beam && next.iter().all(|x| (x.1 - c.1).abs() > 0.3) {
+                next.push(c.clone());
+            }
+        }
+        eprintln!("best {:.1}: {:?}", next[0].1, next[0].0);
+        states = next;
+    }
+}
+
+/// How much slack each call of a level's solution has: the shifts (in columns) that still clear
+/// it, with the others where they are. `SIDE_B_TIGHT=5 cargo test --test side_b how_tight --
+/// --ignored --nocapture`.
+#[test]
+#[ignore]
+fn how_tight() {
+    let n: usize = std::env::var("SIDE_B_TIGHT").unwrap().parse().unwrap();
+    let plan: &[(f32, usize)] = [&L1[..], &L2, &L3, &L4, &L5, &L6, &L7][n - 1];
+    for i in 0..plan.len() {
+        let ok: Vec<i32> = [-6, -4, -2, 2, 4, 6]
+            .into_iter()
+            .filter(|&d| {
+                let mut p = plan.to_vec();
+                p[i].0 += d as f32;
+                (i == 0 || p[i].0 > p[i - 1].0) && play(n - 1, &p).is_ok()
+            })
+            .collect();
+        eprintln!("call {i} {:?}: clears with shifts {ok:?}", plan[i]);
+    }
 }
