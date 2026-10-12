@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# SessionStart hook for Claude Code cloud sessions (.claude/settings.json).
+# A fresh cloud container has Rust but none of the native build deps, and no
+# build cache, so this installs the deps and, when the environment names a
+# shared S3 bucket, kache pointed at it (a fresh session then restores most
+# crates instead of compiling them):
+#   KACHE_S3_BUCKET            bucket name (unset: no kache; a cache that dies
+#                              with the container only slows the build down)
+#   KACHE_S3_REGION            bucket region (default us-east-1)
+#   KACHE_S3_PREFIX            key prefix (default artifacts)
+#   KACHE_S3_ENDPOINT          for S3-compatible stores (R2, MinIO, ...; region "auto" for R2)
+#   KACHE_S3_ACCESS_KEY / KACHE_S3_SECRET_KEY   (or AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY)
+# Set them as environment variables of the cloud environment, never in the repo.
+# Does nothing outside cloud sessions (your own machine is yours to configure).
+set -euo pipefail
+
+[[ "${CLAUDE_CODE_REMOTE:-}" == "true" ]] || exit 0
+
+KACHE_VERSION=1.0.0
+KACHE_SHA256=756e9701a6afb8354fd8b1d76164e13272d320354d84f01197e57d8a3b4be397
+root="$(cd "$(dirname "$0")/.." && pwd)"
+log() { echo "cloud-session-setup: $*" >&2; }
+
+# Native deps: the same list CI installs (.github/workflows/test.yml), plus mold
+# (.cargo/config.toml links with clang + mold).
+if ! command -v mold >/dev/null || ! pkg-config --exists alsa libudev 2>/dev/null; then
+  log "installing build deps"
+  sudo=""; [[ $(id -u) == 0 ]] || sudo="sudo"
+  $sudo apt-get update -qq >/dev/null
+  DEBIAN_FRONTEND=noninteractive $sudo apt-get install -y -qq \
+    mold pkg-config libudev-dev libasound2-dev libwayland-dev libxkbcommon-dev >/dev/null
+fi
+
+[[ -n "${KACHE_S3_BUCKET:-}" ]] || exit 0
+
+bin="${CARGO_HOME:-$HOME/.cargo}/bin"
+if ! "$bin/kache" --version 2>/dev/null | grep -qx "kache $KACHE_VERSION"; then
+  log "installing kache $KACHE_VERSION"
+  tmp="$(mktemp -d)"
+  curl -sSfL -o "$tmp/kache.tar.gz" \
+    "https://github.com/kunobi-ninja/kache/releases/download/v$KACHE_VERSION/kache-x86_64-unknown-linux-musl.tar.gz"
+  echo "$KACHE_SHA256  $tmp/kache.tar.gz" | sha256sum -c --quiet
+  tar xzf "$tmp/kache.tar.gz" -C "$tmp" kache
+  install -m 755 "$tmp/kache" "$bin/kache"
+  rm -rf "$tmp"
+fi
+
+# The remote has to be in the config file: a daemon a build starts drops the
+# KACHE_S3_* settings from its environment (credentials it keeps).
+conf="${XDG_CONFIG_HOME:-$HOME/.config}/kache/config.toml"
+mkdir -p "$(dirname "$conf")"
+cat > "$conf" <<EOF
+[cache.remote]
+type = "s3"
+bucket = "$KACHE_S3_BUCKET"
+region = "${KACHE_S3_REGION:-us-east-1}"
+prefix = "${KACHE_S3_PREFIX:-artifacts}"
+EOF
+if [[ -n "${KACHE_S3_ENDPOINT:-}" ]]; then
+  echo "endpoint = \"$KACHE_S3_ENDPOINT\"" >> "$conf"
+fi
+log "kache remote: s3://$KACHE_S3_BUCKET/${KACHE_S3_PREFIX:-artifacts}"
+
+# The checkout's own wrapper setting (the same gitignored file a laptop uses).
+local_conf="$root/.cargo/config.local.toml"
+if [[ ! -e "$local_conf" ]]; then
+  printf '[build]\nrustc-wrapper = "kache"\n' > "$local_conf"
+fi
