@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use super::{palette::*, *};
 use crate::game::ActiveLevel;
 use crate::game::LevelTile;
-use crate::game::minus1::{ENTRIES, GlitchMenu, MinusOne, TileRewrite};
+use crate::game::minus1::{ENTRIES, Freeze, GlitchMenu, MinusOne, TileRewrite};
 use crate::level::Tile;
 use crate::state::PlayState;
 
@@ -99,6 +99,7 @@ fn spawn_menu(
     sprites: Option<Res<Sprites>>,
     active: Option<Res<ActiveLevel>>,
     minus: Res<MinusOne>,
+    menu: Res<GlitchMenu>,
 ) {
     let f = &*font;
     let world = active.map_or(1, |a| a.level.world);
@@ -123,7 +124,8 @@ fn spawn_menu(
                 BorderColor::all(JUNK[1]),
             ))
             .with_children(|p| {
-                p.spawn((label(f, "PA@$E#", 16.0, JUNK[1]), Node { margin: UiRect::bottom(px(4.0)), ..default() }));
+                let title = if menu.freeze == Freeze::Saving { "SAV1NG.." } else { "PA@$E#" };
+                p.spawn((label(f, title, 16.0, JUNK[1]), Node { margin: UiRect::bottom(px(4.0)), ..default() }));
                 p.spawn(label(f, "0F 00 FF 3C", 8.0, JUNK[3]));
                 for (i, e) in ENTRIES.iter().enumerate() {
                     p.spawn(Node { column_gap: px(4.0), align_items: AlignItems::Center, height: px(16.0), ..default() })
@@ -215,8 +217,12 @@ fn flicker(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &Level
 struct EscapedCard;
 
 /// On the goal: not "FLUSHED IT!", just a question.
-fn escaped_card(mut commands: Commands, font: Res<UiFont>, minus: Res<MinusOne>, card: Query<(), With<EscapedCard>>) {
-    if minus.escaped.is_some() && card.is_empty() {
+fn escaped_card(mut commands: Commands, font: Res<UiFont>, minus: Res<MinusOne>, card: Query<Entity, With<EscapedCard>>) {
+    if minus.escaped.is_none() {
+        for e in &card {
+            commands.entity(e).despawn();
+        }
+    } else if card.is_empty() {
         commands.spawn((
             Name::new("EscapedCard"),
             EscapedCard,

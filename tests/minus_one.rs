@@ -129,3 +129,20 @@ fn pausing_mid_toot_opens_the_corrupted_menu_aimed_at_the_takeoff_tile() {
     assert_eq!(count(&app, Tile::Solid), 0, "the ground is gone");
 }
 
+
+#[test]
+fn every_world_minus_one_level_parses() {
+    for n in 0..minus1::MINUS_ONE_SOURCES.len() {
+        minus1::load(n);
+    }
+}
+
+#[test]
+fn splats_are_paint_rewriting_spikes_takes_them_too() {
+    let (mut level, _) = minus1::load(2);
+    let at = level.tiles.iter().position(|&t| t == Tile::SpikesUp).unwrap();
+    level.tiles[at] = Tile::StainUp;
+    assert!(minus1::rewrite(&mut level, Tile::SpikesUp, Tile::OneWay));
+    assert!(!level.tiles.iter().any(|&t| matches!(t, Tile::SpikesUp | Tile::StainUp)));
+    assert_eq!(level.tiles[at], Tile::OneWay);
+}

@@ -1,0 +1,28 @@
+# World -1 room 3 (Brush Off), for `NATHAN_MINUS_ONE=3 scripts/record-run --capture`.
+# A spike strip too long to jump. Splat on it on purpose; the splat is only paint, so tooting
+# off it aims at the spikes under it. Pause mid-toot, pick the one-way platforms: every spike
+# in the level is a platform. Walk over.
+wait 1.5
+tap Enter
+wait 1.0
+hold Right 0.5
+hold Right Space 200ms
+wait 1.8
+hold Right 0.5
+hold Right Space 200ms
+wait 0.8
+hold Space 140ms
+wait 120ms
+hold Space 100ms
+wait 90ms
+tap Esc
+wait 1.0
+repeat 4
+  tap Down
+  wait 0.4
+end
+wait 0.4
+tap Enter
+wait 1.0
+hold Right 2.5
+wait 3

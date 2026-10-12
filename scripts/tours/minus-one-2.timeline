@@ -1,0 +1,21 @@
+# World -1 room 2 (Save Point), for `NATHAN_MINUS_ONE=2 scripts/record-run --capture`.
+# The arrival crash aims at the one-way floor (resume). Hop on the ground pad, jump into the
+# checkpoint hanging overhead: it freezes to save, the save screen is corrupted too, aimed at
+# the pad's ground. Blank it: the goal's box goes with it.
+wait 1.5
+tap Enter
+wait 1.0
+hold Right 0.4
+hold Right Space 300ms
+wait 0.4
+hold Space 300ms
+wait 1.5
+repeat 3
+  tap Down
+  wait 0.4
+end
+wait 0.4
+tap Enter
+wait 1.2
+hold Right 2.5
+wait 3

@@ -83,7 +83,7 @@ fn level_hotkeys(
     }
 }
 
-fn restart_level(
+pub(super) fn restart_level(
     mut requests: MessageReader<RestartLevel>,
     mut commands: Commands,
     levels: Res<Levels>,

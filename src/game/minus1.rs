@@ -20,13 +20,17 @@ use leafwing_input_manager::prelude::*;
 
 use super::lifecycle::spawn_tiles;
 use super::physics::Body;
-use super::{ActiveLevel, GameSet, GeneratedLevel, Han, LevelTile, Player, Pos, RestartLevel, SimClock};
-use crate::events::Jumped;
+use super::{ActiveLevel, GameSet, GeneratedLevel, Han, LevelTile, Player, Pos, RestartLevel, SimClock, Stain};
+use crate::events::{CheckpointReached, Jumped};
 use crate::input::Action;
 use crate::level::{Level, Tile};
 use crate::state::{AppState, PlayState};
 
-pub static MINUS_ONE_SOURCES: [&str; 1] = [include_str!("../../levels/minus-1/m1.txt")];
+pub static MINUS_ONE_SOURCES: [&str; 3] = [
+    include_str!("../../levels/minus-1/m1.txt"),
+    include_str!("../../levels/minus-1/m2.txt"),
+    include_str!("../../levels/minus-1/m3.txt"),
+];
 
 /// A pause this long after a toot (still in the air) is a mid-toot pause.
 pub const TOOT_WINDOW: f32 = 0.6;
@@ -58,8 +62,10 @@ pub const ENTRIES: [Entry; 6] = [
 #[reflect(Resource)]
 pub struct MinusOne {
     pub level: usize,
-    /// The tile Nat last stood on (uninitialized: ground).
+    /// The tile Nat last stood on (uninitialized: the level's `crash:` garbage).
     pub takeoff: Tile,
+    /// What the takeoff register holds before Nat stands anywhere (`crash:`, default ground).
+    pub crash: Tile,
     /// Seconds since the last toot (large: none lately).
     pub since_toot: f32,
     /// The arrival crash happened for this load.
@@ -70,8 +76,16 @@ pub struct MinusOne {
 }
 
 impl MinusOne {
-    pub fn new(level: usize) -> Self {
-        MinusOne { level, takeoff: Tile::Solid, since_toot: f32::INFINITY, arrived: false, writes: 0, escaped: None }
+    pub fn new(level: usize, crash: Tile) -> Self {
+        MinusOne {
+            level,
+            takeoff: crash,
+            crash,
+            since_toot: f32::INFINITY,
+            arrived: false,
+            writes: 0,
+            escaped: None,
+        }
     }
 }
 
@@ -80,6 +94,8 @@ impl MinusOne {
 pub enum Freeze {
     Arrival,
     MidToot,
+    /// A checkpoint touched in mid-air: "SAVING..." (don't turn off the power).
+    Saving,
 }
 
 /// The corrupted menu is up (with [`PlayState::Paused`]; the real pause menu stays away).
@@ -99,14 +115,50 @@ pub struct TileRewrite {
     pub to: Tile,
 }
 
-pub fn load(n: usize) -> Level {
-    Level::parse(MINUS_ONE_SOURCES[n]).unwrap_or_else(|e| panic!("World -1 level {}: {e}", n + 1))
+/// What a `crash:` word (and a level file's tile names) stands for.
+pub fn tile_of(word: &str) -> Option<Tile> {
+    Some(match word {
+        "ground" => Tile::Solid,
+        "oneway" => Tile::OneWay,
+        "spikes" => Tile::SpikesUp,
+        "sewage" => Tile::Liquid,
+        "grease" => Tile::Grease,
+        _ => return None,
+    })
+}
+
+/// A World -1 level: the usual format (`level` module docs) plus `crash: <tile>`, the garbage
+/// in the takeoff register when the level loads (what the arrival crash aims at).
+pub fn load(n: usize) -> (Level, Tile) {
+    parse(MINUS_ONE_SOURCES[n]).unwrap_or_else(|e| panic!("World -1 level {}: {e}", n + 1))
+}
+
+pub fn parse(src: &str) -> Result<(Level, Tile), String> {
+    let mut crash = Tile::Solid;
+    let mut rest = String::new();
+    let mut in_header = true;
+    for line in src.lines() {
+        if line.trim() == "---" {
+            in_header = false;
+        }
+        match line.split_once(':') {
+            Some((k, v)) if in_header && k.trim() == "crash" => {
+                crash = tile_of(v.trim()).ok_or_else(|| format!("no such tile `{}`", v.trim()))?;
+            }
+            _ => {
+                rest.push_str(line);
+                rest.push('\n');
+            }
+        }
+    }
+    Ok((Level::parse(&rest)?, crash))
 }
 
 /// Start World -1 level `n` (0-based).
 pub fn start(commands: &mut Commands, n: usize) {
-    commands.insert_resource(MinusOne::new(n));
-    commands.insert_resource(GeneratedLevel(load(n)));
+    let (level, crash) = load(n);
+    commands.insert_resource(MinusOne::new(n, crash));
+    commands.insert_resource(GeneratedLevel(level));
     commands.insert_resource(super::AssistMode::Manual);
     commands.queue(|w: &mut World| w.resource_mut::<NextState<AppState>>().set(AppState::Playing));
 }
@@ -121,14 +173,14 @@ pub(super) fn plugin(app: &mut App) {
             Update,
             (
                 pause_mid_toot.run_if(in_state(PlayState::Running)),
-                escape,
+                escape.before(super::lifecycle::restart_level),
                 menu_input.run_if(in_state(PlayState::Paused).and_then(resource_exists::<GlitchMenu>)),
             )
                 .run_if(resource_exists::<MinusOne>),
         )
         .add_systems(
             FixedUpdate,
-            (track, arrival).chain().in_set(GameSet::Follow).run_if(resource_exists::<MinusOne>),
+            (track, arrival, saving).chain().in_set(GameSet::Follow).run_if(resource_exists::<MinusOne>),
         );
     for s in [AppState::Title, AppState::LevelSelect, AppState::FreePlaySetup] {
         app.add_systems(OnEnter(s), leave);
@@ -173,17 +225,33 @@ fn no_han(add: On<Add, Han>, minus: Option<Res<MinusOne>>, mut commands: Command
 /// A (re)load: the registers are garbage again, and the arrival crash comes back.
 fn fresh_load(_: On<Add, Player>, minus: Option<ResMut<MinusOne>>, mut commands: Commands) {
     if let Some(mut m) = minus {
-        *m = MinusOne { writes: m.writes, ..MinusOne::new(m.level) };
+        *m = MinusOne { writes: m.writes, ..MinusOne::new(m.level, m.crash) };
         commands.remove_resource::<GlitchMenu>();
     }
 }
 
-fn escape(time: Res<Time>, mut minus: ResMut<MinusOne>, mut next: ResMut<NextState<AppState>>) {
-    if let Some(t) = &mut minus.escaped {
-        *t += time.delta_secs();
-        if *t >= ESCAPED_SECS {
-            next.set(AppState::Title);
-        }
+/// On the goal a moment, then the next World -1 level (after the last: the title).
+fn escape(
+    time: Res<Time>,
+    mut minus: ResMut<MinusOne>,
+    mut commands: Commands,
+    mut next: ResMut<NextState<AppState>>,
+    mut restart: MessageWriter<RestartLevel>,
+) {
+    let Some(t) = &mut minus.escaped else { return };
+    *t += time.delta_secs();
+    if *t < ESCAPED_SECS {
+        return;
+    }
+    let n = minus.level + 1;
+    if n < MINUS_ONE_SOURCES.len() {
+        let (level, crash) = load(n);
+        *minus = MinusOne::new(n, crash);
+        commands.insert_resource(GeneratedLevel(level));
+        restart.write(RestartLevel);
+    } else {
+        minus.escaped = None;
+        next.set(AppState::Title);
     }
 }
 
@@ -207,10 +275,32 @@ fn track(
     }
 }
 
-/// The tile under Nat's feet, if it's something (not a moving platform's empty cell).
+/// The tile under Nat's feet, if it's something (not a moving platform's empty cell). A splat
+/// is only paint on the spikes: standing on one, Nat's footing is the spikes under it.
 fn footing(level: &Level, pos: Vec2, body: &Body) -> Option<Tile> {
     let (c, r) = level.cell_at(pos - Vec2::new(0.0, body.half.y + 0.5));
-    Some(level.tile(c, r)).filter(|&t| t != Tile::Empty && r >= 0 && (r as usize) < level.height)
+    let t = match level.tile(c, r) {
+        Tile::StainUp => Tile::SpikesUp,
+        Tile::StainDown => Tile::SpikesDown,
+        t => t,
+    };
+    Some(t).filter(|&t| t != Tile::Empty && r >= 0 && (r as usize) < level.height)
+}
+
+/// A checkpoint touched in mid-air freezes the game to save, and the save screen is the same
+/// corrupted menu.
+fn saving(
+    mut reached: MessageReader<CheckpointReached>,
+    minus: Res<MinusOne>,
+    nat: Query<&Body, With<Player>>,
+    mut commands: Commands,
+    mut next: ResMut<NextState<PlayState>>,
+) {
+    let airborne = nat.single().is_ok_and(|b| !b.on_ground);
+    if reached.read().count() > 0 && airborne {
+        commands.insert_resource(GlitchMenu { cursor: 0, freeze: Freeze::Saving, target: minus.takeoff });
+        next.set(PlayState::Paused);
+    }
 }
 
 fn arrival(
@@ -245,6 +335,7 @@ fn menu_input(
     mut minus: ResMut<MinusOne>,
     mut active: ResMut<ActiveLevel>,
     tiles: Query<Entity, With<LevelTile>>,
+    stains: Query<(Entity, &Stain)>,
     mut commands: Commands,
     mut next: ResMut<NextState<PlayState>>,
     mut restart: MessageWriter<RestartLevel>,
@@ -273,6 +364,12 @@ fn menu_input(
                 for e in &tiles {
                     commands.entity(e).despawn();
                 }
+                // Splats on rewritten spikes go with them.
+                for (e, st) in &stains {
+                    if active.level.tile(st.col as i32, st.row as i32) != st.tile {
+                        commands.entity(e).despawn();
+                    }
+                }
                 let w = active.level.width;
                 spawn_tiles(&mut commands, &active.level, 0..w);
                 minus.writes += 1;
@@ -283,13 +380,15 @@ fn menu_input(
     }
 }
 
-/// Every `from` cell becomes `to`. False if nothing changed.
+/// Every `from` cell becomes `to` (spikes take their splats with them: the paint goes with the
+/// tile). False if nothing changed.
 pub fn rewrite(level: &mut Level, from: Tile, to: Tile) -> bool {
     if from == to {
         return false;
     }
+    let paint = from.stained();
     let mut any = false;
-    for t in level.tiles.iter_mut().filter(|t| **t == from) {
+    for t in level.tiles.iter_mut().filter(|t| **t == from || Some(**t) == paint) {
         *t = to;
         any = true;
     }
