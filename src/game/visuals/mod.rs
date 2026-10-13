@@ -5,6 +5,7 @@
 //! gameplay components are added (and only if the [`Sprites`] resource exists).
 
 mod camera;
+mod gadgets;
 mod particles;
 
 use bevy::prelude::*;
@@ -75,6 +76,7 @@ pub(super) fn plugin(app: &mut App) {
     );
     camera::plugin(app);
     particles::plugin(app);
+    gadgets::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
 }
@@ -150,6 +152,9 @@ fn tile_sprite(
         Tile::Grease => (SpriteId::GroundFill(w), false),
         Tile::StainUp => (SpriteId::StainUp, false),
         Tile::StainDown => (SpriteId::StainDown, false),
+        Tile::Brick => (SpriteId::Brick, false),
+        Tile::Crumble => (SpriteId::Crumble, false),
+        Tile::Trampoline => (SpriteId::Trampoline, false),
     };
     let mut e = commands.entity(add.entity);
     e.insert(sprite(&sprites, id));

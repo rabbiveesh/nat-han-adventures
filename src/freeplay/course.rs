@@ -75,6 +75,7 @@ impl Course {
             goal: (width - 2, COURSE_STAND),
             things: Vec::new(),
             platforms: Vec::new(),
+            crushers: Vec::new(),
             gates: Vec::new(),
         };
         (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)
@@ -110,6 +111,9 @@ impl Course {
         level.things.extend(things);
         for p in &room.platforms {
             level.platforms.push(crate::level::MovingPlatformDef { col: p.col + col0, row: p.row + dr, ..p.clone() });
+        }
+        for c in &room.crushers {
+            level.crushers.push(crate::level::CrusherDef { col: c.col + col0, row: c.row + dr, ..*c });
         }
         for s in &room.hints {
             level.hints.push(crate::level::Spot { col: s.col + col0, row: s.row + dr, ..s.clone() });

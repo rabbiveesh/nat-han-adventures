@@ -77,6 +77,8 @@ pub enum Fate {
     Bonk,
     /// Charged about for ages and got nowhere.
     Pooped,
+    /// Flattened by a crusher.
+    Squashed,
 }
 
 impl Fate {
@@ -87,6 +89,7 @@ impl Fate {
             Fate::Sewage => "Glub. I'm a pro. Glub.",
             Fate::Bonk => "Who put a WALL there?!",
             Fate::Pooped => "I'm pooped. And not the good kind.",
+            Fate::Squashed => "I'm a pancake. A plumber pancake.",
         }
     }
 }
@@ -228,7 +231,11 @@ impl SideB {
 
 /// Start Side B level `n` (0-based): the run's resources, then [`AppState::Playing`].
 pub fn start(commands: &mut Commands, n: usize) {
-    let b = SideBLevel::load(n);
+    start_level(commands, SideBLevel::load(n), n);
+}
+
+/// Start `b` as Side B level `n` (tests and tools play their own levels this way).
+pub fn start_level(commands: &mut Commands, b: SideBLevel, n: usize) {
     commands.insert_resource(SideB::new(n, b.setlist));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
@@ -460,6 +467,7 @@ fn han_fate(
     mut side: ResMut<SideB>,
     mut han: Query<(&Pos, &Body, &mut HanBrain), With<Han>>,
     goal: Query<&Transform, With<Goal>>,
+    crushers: Query<(&super::crushers::CrusherBlock, &Pos), Without<Han>>,
     mut says: MessageWriter<HanSays>,
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
@@ -514,7 +522,10 @@ fn han_fate(
             return;
         }
     }
-    let fate = if matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. }) {
+    let flat = crushers.iter().any(|(b, p)| super::crushers::squashed(pos.0, body.half, b.bounds(p.0)));
+    let fate = if flat {
+        Some(Fate::Squashed)
+    } else if matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. }) {
         Some(if pos.0.y + HALF.y < 0.0 { Fate::Pit } else { Fate::Sewage })
     } else if pos.0.y + body.half.y < 0.0 {
         Some(Fate::Pit)
@@ -528,7 +539,7 @@ fn han_fate(
         None
     };
     if let Some(f) = fate {
-        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped) {
+        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped | Fate::Squashed) {
             brain.mode = HanMode::Sinking { t: 30.0 };
         }
         brain.charge = None;

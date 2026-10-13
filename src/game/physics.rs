@@ -37,10 +37,11 @@ use leafwing_input_manager::prelude::*;
 use super::groove::{
     BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
 };
+use super::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
-use crate::level::{Level, TILE, Tile};
+use crate::level::{Level, SPRING_SPEED, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<HanBoosted>().add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
@@ -233,15 +234,47 @@ pub struct Contact {
     /// Left a moving platform into the air this step: its horizontal speed (px/s), for the
     /// caller to keep as [`Body::launch`] (Nat does, Han doesn't).
     pub launch: Option<f32>,
+    /// Landed on a trampoline and sprang off it ([`SPRING_SPEED`]).
+    pub sprung: bool,
+    /// Bricks (grid col, row) rising into them smashed this step: the caller breaks them
+    /// (the body is already inside them).
+    pub bricks: [Option<(i32, i32)>; 4],
+}
+
+impl Contact {
+    pub fn smashed(&self) -> impl Iterator<Item = (i32, i32)> + '_ {
+        self.bricks.iter().flatten().copied()
+    }
+}
+
+/// Did a landing on the floor tiles `landed` (grid columns and their tiles, the box center's
+/// column `center`) spring off a trampoline? Off the one under the middle of the box, or,
+/// with nothing under the middle, if every tile underfoot is one. (`level::validate` lands
+/// the same way.)
+pub fn springs(landed: impl Iterator<Item = (i32, Tile)>, center: i32) -> bool {
+    let (mut mid, mut any, mut other) = (None, false, false);
+    for (c, t) in landed {
+        if c == center {
+            mid = Some(t == Tile::Trampoline);
+        }
+        any |= t == Tile::Trampoline;
+        other |= t != Tile::Trampoline;
+    }
+    mid.unwrap_or(any && !other)
 }
 
 /// One fixed step of the shared body physics (Nat and Han): gravity, being carried by the
 /// carrier stood on, then tile AABB collision X then Y (solid tiles, one-way tiles from above),
 /// then the carriers (one-way, from above). `blockers` are extra boxes (min, max) that stop
-/// horizontal motion into them (a body already overlapping one isn't pushed). Sets
+/// horizontal motion into them (a body already overlapping one isn't pushed); `solids` (the
+/// crushers' blocks) stop it too, and a head rising into their underside. Sets
 /// `body.on_ground`/`riding` and zeroes the vertical speed on landing; landing effects (events,
 /// toot refresh, bounces) are the caller's. [`Body::launch`] moves the body too, and is
 /// dropped on landing or against a wall.
+///
+/// Rising into a brick smashes through it (`Contact::bricks`: the caller breaks them); landing
+/// on a trampoline ([`springs`]) springs the body up at [`SPRING_SPEED`] (`Contact::sprung`).
+#[allow(clippy::too_many_arguments)]
 pub fn step_body(
     level: &Level,
     pos: &mut Vec2,
@@ -249,6 +282,7 @@ pub fn step_body(
     fall: Fall,
     carriers: &[Carrier],
     blockers: &[(Vec2, Vec2)],
+    solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Contact {
     // --- Gravity.
@@ -284,7 +318,7 @@ pub fn step_body(
                 blocked_x = true;
             }
         }
-        for &(min, max) in blockers {
+        for &(min, max) in blockers.iter().chain(solids) {
             let overlaps = |x: f32| x + half.x > min.x && x - half.x < max.x;
             let y_overlaps = pos.y + half.y > min.y + EPS && pos.y - half.y < max.y - EPS;
             if !y_overlaps || overlaps(x_before) || !overlaps(pos.x) {
@@ -303,6 +337,8 @@ pub fn step_body(
     pos.y += dy;
     let mut ground = false;
     let mut riding = None;
+    let mut bricks = [None; 4];
+    let mut landed: [Option<(i32, Tile)>; 4] = [None; 4];
     if dy != 0.0 {
         let (xs, ys) = cells(*pos - half, *pos + half);
         for j in ys {
@@ -313,6 +349,15 @@ pub fn step_body(
                     t if t.is_solid() && dy < 0.0 => {
                         pos.y = pos.y.max(top + half.y);
                         ground = true;
+                        if let Some(slot) = landed.iter_mut().find(|s| s.is_none()) {
+                            *slot = Some((i, t));
+                        }
+                    }
+                    Tile::Brick => {
+                        // Smashed through from below: the caller breaks it.
+                        if let Some(slot) = bricks.iter_mut().find(|s| s.is_none()) {
+                            *slot = Some((i, row_of(level, j)));
+                        }
                     }
                     t if t.is_solid() => {
                         pos.y = pos.y.min(j as f32 * TILE - half.y);
@@ -325,11 +370,34 @@ pub fn step_body(
                     {
                         pos.y = top + half.y;
                         ground = true;
+                        if let Some(slot) = landed.iter_mut().find(|s| s.is_none()) {
+                            *slot = Some((i, t));
+                        }
                     }
                     _ => {}
                 }
             }
         }
+        // A head rising into a solid box's underside.
+        if dy > 0.0 {
+            let head_before = pos.y - dy + half.y;
+            for &(min, max) in solids {
+                let x_overlaps = pos.x + half.x > min.x + EPS && pos.x - half.x < max.x - EPS;
+                if x_overlaps && head_before <= min.y + ONE_WAY_SLACK && pos.y + half.y > min.y {
+                    pos.y = min.y - half.y;
+                    body.vel.y = body.vel.y.min(0.0);
+                }
+            }
+        }
+    }
+    // A trampoline underfoot: up we go.
+    let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x));
+    if sprung {
+        body.vel.y = SPRING_SPEED;
+        body.launch = 0.0;
+        body.on_ground = false;
+        body.riding = None;
+        return Contact { ground: false, riding: None, was_on_ground, fall_speed, blocked_x, launch: None, sprung, bricks };
     }
     // Carriers (one-way).
     if body.vel.y <= 0.0 {
@@ -353,7 +421,7 @@ pub fn step_body(
     let launch = (!ground && !blocked_x).then_some(carrier).flatten().filter(|c| c.launches).map(|c| c.carry.x / dt);
     body.on_ground = ground;
     body.riding = riding;
-    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch }
+    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch, sprung: false, bricks }
 }
 
 /// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;
@@ -429,7 +497,7 @@ pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn player_step(
     time: Res<Time>,
-    active: Res<ActiveLevel>,
+    mut active: ResMut<ActiveLevel>,
     groove: Res<Groove>,
     assists: Res<super::Assists>,
     input: Single<&ActionState<Action>>,
@@ -443,6 +511,9 @@ fn player_step(
     mut landed: MessageWriter<Landed>,
     mut on_one: MessageWriter<JumpedOnOne>,
     mut boosted: MessageWriter<HanBoosted>,
+    crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Player>, Without<MovingPlatform>)>,
+    mut smashed: MessageWriter<BrickSmashed>,
+    mut sprung: MessageWriter<Sprung>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
@@ -573,7 +644,25 @@ fn player_step(
             blockers.push((p.0 - h, p.0 + h));
         }
     }
-    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, dt);
+    let mut solids = Vec::new();
+    for (e, block, p, prev) in &crushers {
+        carriers.push(block.carrier(e, p.0, prev.0));
+        solids.push(block.bounds(p.0));
+    }
+    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, &solids, dt);
+    if contact.bricks.iter().any(Option::is_some) {
+        smash(&mut active, contact.smashed(), &mut smashed);
+    }
+    let level = &active.level;
+    if contact.sprung {
+        // Off a trampoline: way up, and the toot's back.
+        ctl.has_toot = true;
+        ctl.weak_toot = false;
+        ctl.cut_armed = false;
+        ctl.bouncing = false;
+        ctl.coyote = 0.0;
+        sprung.write(Sprung { pos: pos.0, han: false });
+    }
     if let Some(v) = contact.launch {
         body.launch = v.clamp(-LAUNCH_MAX, LAUNCH_MAX);
     }

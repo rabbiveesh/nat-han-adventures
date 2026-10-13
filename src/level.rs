@@ -31,6 +31,8 @@
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
 //! - `N: ...` (a digit): a moving platform, see below.
+//! - `crusher@<col>,<row>: phase=<0..1>`: shift the cycle of the crusher covering that cell
+//!   (so neighbours don't slam in lockstep). See "Crushers" below.
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
 //!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `mega`
@@ -57,6 +59,10 @@
 //! | `F` | fly swarm: hovers in a circle (radius ~1 tile) around its tile, deadly |
 //! | `S` | air-freshener spray: a can on the floor firing a jet straight up 3 tiles; the can and its jet are deadly while on (harmless while off). All cans share one on/off clock (while the band waltzes: the music's). 4+ adjacent cans are too many to time: the validator counts them deadly |
 //! | `1`-`9` | moving platform: a horizontal run of the same digit is one platform, configured by its `N:` header line |
+//! | `%` | breakable brick: solid, but rising into it from below (a jump, a toot, a boost) smashes it and carries on up. Gone for the level visit (back on a restart) |
+//! | `-` | crumbling platform: one-way like `=`; [`CRUMBLE_DELAY`] s after someone stands on it, it falls, and comes back [`CRUMBLE_BACK`] s later |
+//! | `T` | trampoline: a solid block; landing on its top springs you up ([`SPRING_SPEED`], ~6.5 tiles; the toot comes back) |
+//! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
 //! The platform ping-pongs between its grid position and that position + (dx, dy) tiles
@@ -96,6 +102,15 @@
 //!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red
 //!   plunger-handle notches and yellow plumber's tape.
 //!
+//! # Crushers
+//! A crusher ([`CrusherDef`]) rests at home [`CRUSH_WAIT`] s, slams [`CRUSH_SLAM_SPEED`] px/s
+//! towards its stop (the first tile in its way, at most [`CRUSH_MAX_TRAVEL`] tiles), holds
+//! there [`CRUSH_HOLD`] s and creeps home at [`CRUSH_RISE_SPEED`] (`phase` shifts its cycle).
+//! Everyone in its way when it slams gets squashed: Nat dies, Han goes flat (on Side B that's
+//! his end). Its block is solid at every point of its cycle, and carries whoever stands on it.
+//! The validator treats its home as solid and its sweep like a spray can's jet: a timed
+//! hazard you can run through, unless it's too big to time ([`Crusher::timeable`]).
+//!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is a solid ceiling (the top of the screen: the camera never shows above row 0, so
 //! nobody may go there, or a wall reaching row 0 could be walked over on its roof, unseen),
@@ -132,6 +147,28 @@ pub fn is_bark(line: &str) -> bool {
     line.split_whitespace().count() <= MAX_BARK_WORDS
 }
 pub const LEVEL_COUNT: usize = 10;
+/// A crumbling platform (`-`) falls this long (s) after someone stands on it...
+pub const CRUMBLE_DELAY: f32 = 0.5;
+/// ...and comes back this long (s) after it fell (once nobody's in its way).
+pub const CRUMBLE_BACK: f32 = 3.0;
+/// Upward speed (px/s) a trampoline (`T`) springs you up at: 540²/2800 ≈ 104 px ≈ 6.5 tiles
+/// in normal gravity, and the toot comes back on top.
+pub const SPRING_SPEED: f32 = 540.0;
+/// A crusher rests at home this long (s)...
+pub const CRUSH_WAIT: f32 = 1.6;
+/// ...slams at this speed (px/s)...
+pub const CRUSH_SLAM_SPEED: f32 = 480.0;
+/// ...holds at its stop this long (s)...
+pub const CRUSH_HOLD: f32 = 0.6;
+/// ...and creeps home at this speed (px/s).
+pub const CRUSH_RISE_SPEED: f32 = 48.0;
+/// The farthest (tiles) a crusher slams, with nothing in its way.
+pub const CRUSH_MAX_TRAVEL: i32 = 10;
+/// The validator times its way past a crusher whose face is at most this many tiles across...
+pub const CRUSH_MAX_FACE: i32 = 3;
+/// ...and (one slamming sideways, whose lane you run along) that slams at most this far.
+pub const CRUSH_MAX_LANE: i32 = 6;
+
 /// How many rows above the floor Han's feet cling in a cling shaft.
 pub const CLING_ROWS: i32 = 3;
 
@@ -187,6 +224,12 @@ pub enum Tile {
     StainUp,
     /// Ceiling spikes splatted over: safe, solid on top (one-way). Only made at runtime.
     StainDown,
+    /// Breakable brick (`%`): solid, smashed by rising into it from below.
+    Brick,
+    /// Crumbling platform (`-`): one-way; falls a moment after someone stands on it.
+    Crumble,
+    /// Trampoline (`T`): a solid block that springs whoever lands on top up high.
+    Trampoline,
 }
 
 impl Tile {
@@ -194,14 +237,16 @@ impl Tile {
         matches!(self, Tile::SpikesUp | Tile::SpikesDown | Tile::Liquid)
     }
 
-    /// Blocks from every side (ground, grease).
+    /// Blocks from every side (ground, grease, bricks, trampolines). (A brick gives way to
+    /// anyone rising into it: `game::step_body`.)
     pub fn is_solid(self) -> bool {
-        matches!(self, Tile::Solid | Tile::Grease)
+        matches!(self, Tile::Solid | Tile::Grease | Tile::Brick | Tile::Trampoline)
     }
 
-    /// Solid on top only: you jump up through it and stand on it (`=`, stains).
+    /// Solid on top only: you jump up through it and stand on it (`=`, stains, crumbling
+    /// platforms).
     pub fn is_one_way(self) -> bool {
-        matches!(self, Tile::OneWay | Tile::StainUp | Tile::StainDown)
+        matches!(self, Tile::OneWay | Tile::StainUp | Tile::StainDown | Tile::Crumble)
     }
 
     /// The stain a splat on this tile leaves, if it's spikes.
@@ -252,10 +297,18 @@ pub enum Topic {
     Chain,
     /// Buddy raft pools: Han wades in and leaves a big raft (`buddyraft`).
     BuddyRaft,
+    /// Breakable bricks `%` (`brick`).
+    Brick,
+    /// Crumbling platforms `-` (`crumble`).
+    Crumble,
+    /// Trampolines `T` (`spring`).
+    Spring,
+    /// Crushers `X` `<` `>` (`crusher`).
+    Crusher,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 16] = [
+    pub const ALL: [Topic; 20] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -272,7 +325,15 @@ impl Topic {
         Topic::Trapeze,
         Topic::Chain,
         Topic::BuddyRaft,
+        Topic::Brick,
+        Topic::Crumble,
+        Topic::Spring,
+        Topic::Crusher,
     ];
+
+    /// The gadget tiles: not in the campaign yet (only `levels/playground/gadgets.txt`), so the
+    /// campaign doesn't owe them a lesson until a level uses one.
+    pub const GADGETS: [Topic; 4] = [Topic::Brick, Topic::Crumble, Topic::Spring, Topic::Crusher];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -292,6 +353,10 @@ impl Topic {
             Topic::Trapeze => "trapeze",
             Topic::Chain => "chain",
             Topic::BuddyRaft => "buddyraft",
+            Topic::Brick => "brick",
+            Topic::Crumble => "crumble",
+            Topic::Spring => "spring",
+            Topic::Crusher => "crusher",
         }
     }
 
@@ -435,6 +500,116 @@ pub struct MovingPlatformDef {
     pub kind: PlatformKind,
 }
 
+/// Which way a crusher slams.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum CrushDir {
+    /// `X`
+    Down,
+    /// `<`
+    Left,
+    /// `>`
+    Right,
+}
+
+impl CrushDir {
+    /// Its grid char.
+    pub fn char(self) -> char {
+        match self {
+            CrushDir::Down => 'X',
+            CrushDir::Left => '<',
+            CrushDir::Right => '>',
+        }
+    }
+
+    /// One tile of travel, in grid steps (col, row; row down).
+    pub fn step(self) -> (i32, i32) {
+        match self {
+            CrushDir::Down => (0, 1),
+            CrushDir::Left => (-1, 0),
+            CrushDir::Right => (1, 0),
+        }
+    }
+}
+
+/// A crusher (`X`, `<`, `>`): its block at home is the cells `col..col+w` × `row..row+h`; it
+/// slams `travel` tiles `dir`. Its timing is the `CRUSH_*` constants (see "Crushers" above).
+#[derive(Debug, Clone, Copy, PartialEq, Reflect)]
+pub struct CrusherDef {
+    pub col: usize,
+    pub row: usize,
+    pub w: usize,
+    pub h: usize,
+    pub dir: CrushDir,
+    /// Tiles from home to its stop.
+    pub travel: i32,
+    /// Starting point in its cycle, 0..1 (0: the start of its rest at home).
+    pub phase: f32,
+}
+
+/// A crusher's cycle (pure, shared by the game, Han and the validator).
+pub struct Crusher;
+
+impl Crusher {
+    /// Seconds per cycle for a crusher slamming `travel` tiles.
+    pub fn period(travel: i32) -> f32 {
+        let d = travel as f32 * TILE;
+        CRUSH_WAIT + d / CRUSH_SLAM_SPEED + CRUSH_HOLD + d / CRUSH_RISE_SPEED
+    }
+
+    /// How far (px) from home `def` is at sim time `t`, and whether it's slamming then.
+    pub fn offset(def: &CrusherDef, t: f32) -> (f32, bool) {
+        let d = def.travel as f32 * TILE;
+        let period = Crusher::period(def.travel);
+        let mut u = (t + def.phase * period).rem_euclid(period);
+        if u < CRUSH_WAIT {
+            return (0.0, false);
+        }
+        u -= CRUSH_WAIT;
+        let slam = d / CRUSH_SLAM_SPEED;
+        if u < slam {
+            return (u * CRUSH_SLAM_SPEED, true);
+        }
+        u -= slam;
+        if u < CRUSH_HOLD {
+            return (d, false);
+        }
+        u -= CRUSH_HOLD;
+        ((d - u * CRUSH_RISE_SPEED).max(0.0), false)
+    }
+
+    /// Seconds left of its rest at home at sim time `t` (`None`: it's not resting).
+    pub fn rest_left(def: &CrusherDef, t: f32) -> Option<f32> {
+        let period = Crusher::period(def.travel);
+        let u = (t + def.phase * period).rem_euclid(period);
+        (u < CRUSH_WAIT).then(|| CRUSH_WAIT - u)
+    }
+
+    /// Can a player time their way past it (the validator's call, like a lone spray can's)?
+    /// Its face at most [`CRUSH_MAX_FACE`] tiles across; slamming sideways, at most
+    /// [`CRUSH_MAX_LANE`] tiles far.
+    pub fn timeable(def: &CrusherDef) -> bool {
+        match def.dir {
+            CrushDir::Down => def.w as i32 <= CRUSH_MAX_FACE,
+            CrushDir::Left | CrushDir::Right => def.h as i32 <= CRUSH_MAX_FACE && def.travel <= CRUSH_MAX_LANE,
+        }
+    }
+
+    /// Every cell its block covers somewhere in its cycle, home included.
+    pub fn sweep(def: &CrusherDef) -> impl Iterator<Item = (i32, i32)> + '_ {
+        let (dc, dr) = def.dir.step();
+        (0..=def.travel).flat_map(move |k| {
+            (0..def.h as i32).flat_map(move |r| {
+                (0..def.w as i32).map(move |c| (def.col as i32 + c + dc * k, def.row as i32 + r + dr * k))
+            })
+        })
+    }
+
+    /// The cells of its block at home.
+    pub fn home(def: &CrusherDef) -> impl Iterator<Item = (i32, i32)> + '_ {
+        (0..def.h as i32).flat_map(move |r| (0..def.w as i32).map(move |c| (def.col as i32 + c, def.row as i32 + r)))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
 pub enum ThingKind {
     Nugget,
@@ -476,6 +651,8 @@ pub struct Level {
     /// `ThingKind::Checkpoint` things.
     pub things: Vec<Thing>,
     pub platforms: Vec<MovingPlatformDef>,
+    /// Crushers (`X`, `<`, `>`).
+    pub crushers: Vec<CrusherDef>,
     /// `gate:` marks.
     pub gates: Vec<GateMark>,
 }
@@ -603,6 +780,7 @@ impl Level {
         let mut deaths = None;
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
+        let mut crusher_phase: Vec<((i32, i32), f32)> = Vec::new();
 
         for (n, line) in header.lines().enumerate() {
             let line = line.trim();
@@ -639,6 +817,18 @@ impl Level {
                     };
                     let ((c0, r0), (c1, r1)) = (cell(a).ok_or_else(bad)?, cell(b).ok_or_else(bad)?);
                     gates.push(GateMark { topic, c0: c0.min(c1), r0: r0.min(r1), c1: c0.max(c1), r1: r0.max(r1) });
+                }
+                k if k.starts_with("crusher@") => {
+                    let at = &k["crusher@".len()..];
+                    let cell = at
+                        .split_once(',')
+                        .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
+                        .ok_or_else(|| format!("expected `crusher@<col>,<row>`, got `{k}`"))?;
+                    let phase = value
+                        .strip_prefix("phase=")
+                        .and_then(|v| v.trim().parse::<f32>().ok())
+                        .ok_or_else(|| format!("{k}: expected `phase=<0..1>`, got `{value}`"))?;
+                    crusher_phase.push((cell, phase));
                 }
                 k if k.starts_with("say@") || k.starts_with("hint@") => {
                     let (what, rest) = k.split_once('@').unwrap();
@@ -715,6 +905,7 @@ impl Level {
         let mut goal = None;
         let mut things = Vec::new();
         let mut platforms = Vec::new();
+        let mut crusher_cells: Vec<(CrushDir, usize, usize)> = Vec::new();
 
         for (row, line) in rows.iter().enumerate() {
             let chars: Vec<char> = line.chars().collect();
@@ -730,6 +921,12 @@ impl Level {
                     'v' => *tile = Tile::SpikesDown,
                     '~' => *tile = Tile::Liquid,
                     '_' => *tile = Tile::Grease,
+                    '%' => *tile = Tile::Brick,
+                    '-' => *tile = Tile::Crumble,
+                    'T' => *tile = Tile::Trampoline,
+                    'X' => crusher_cells.push((CrushDir::Down, col, row)),
+                    '<' => crusher_cells.push((CrushDir::Left, col, row)),
+                    '>' => crusher_cells.push((CrushDir::Right, col, row)),
                     'P' => {
                         if start.replace((col, row)).is_some() {
                             return Err("more than one `P`".into());
@@ -772,6 +969,15 @@ impl Level {
             }
         }
 
+        let mut crushers = group_crushers(&crusher_cells, &tiles, width, height)?;
+        for ((c, r), phase) in crusher_phase {
+            let k = crushers
+                .iter()
+                .position(|d| Crusher::home(d).any(|h| h == (c, r)))
+                .ok_or_else(|| format!("crusher@{c},{r}: no crusher there"))?;
+            crushers[k].phase = phase;
+        }
+
         for s in say_at.iter().chain(&hints) {
             if s.col >= width || s.row >= height {
                 return Err(format!("line at col {} row {} is outside the grid", s.col, s.row));
@@ -792,9 +998,75 @@ impl Level {
             goal: goal.ok_or("missing `G` (goal flag)")?,
             things,
             platforms,
+            crushers,
             gates,
         })
     }
+}
+
+/// Group crusher cells into blocks: each connected group of the same char must be a filled
+/// rectangle. Its travel runs from home until a tile (anything not empty) is in its way, the
+/// level's edge (walls left and right; below, the pit: [`CRUSH_MAX_TRAVEL`]), or another
+/// crusher's home.
+fn group_crushers(cells: &[(CrushDir, usize, usize)], tiles: &[Tile], width: usize, height: usize) -> Result<Vec<CrusherDef>, String> {
+    use std::collections::HashSet;
+    let all: HashSet<(usize, usize)> = cells.iter().map(|&(_, c, r)| (c, r)).collect();
+    let mut seen: HashSet<(usize, usize)> = HashSet::new();
+    let mut out = Vec::new();
+    for &(dir, c, r) in cells {
+        if seen.contains(&(c, r)) {
+            continue;
+        }
+        // Flood the same char.
+        let same: HashSet<(usize, usize)> = cells.iter().filter(|x| x.0 == dir).map(|&(_, c, r)| (c, r)).collect();
+        let mut group = vec![(c, r)];
+        seen.insert((c, r));
+        let mut i = 0;
+        while i < group.len() {
+            let (gc, gr) = group[i];
+            i += 1;
+            let ns = [(gc.wrapping_sub(1), gr), (gc + 1, gr), (gc, gr.wrapping_sub(1)), (gc, gr + 1)];
+            for n in ns {
+                if same.contains(&n) && seen.insert(n) {
+                    group.push(n);
+                }
+            }
+        }
+        let (c0, c1) = (group.iter().map(|g| g.0).min().unwrap(), group.iter().map(|g| g.0).max().unwrap());
+        let (r0, r1) = (group.iter().map(|g| g.1).min().unwrap(), group.iter().map(|g| g.1).max().unwrap());
+        let (w, h) = (c1 - c0 + 1, r1 - r0 + 1);
+        if group.len() != w * h {
+            return Err(format!("crusher `{}` at row {r0}, col {c0} isn't a filled rectangle", dir.char()));
+        }
+        let mut def = CrusherDef { col: c0, row: r0, w, h, dir, travel: 0, phase: 0.0 };
+        let blocked = |cc: i32, rr: i32| {
+            if cc < 0 || cc >= width as i32 || rr < 0 {
+                return true;
+            }
+            if rr >= height as i32 {
+                return false;
+            }
+            let (cu, ru) = (cc as usize, rr as usize);
+            tiles[ru * width + cu] != Tile::Empty || (all.contains(&(cu, ru)) && !group.contains(&(cu, ru)))
+        };
+        let (dc, dr) = dir.step();
+        while def.travel < CRUSH_MAX_TRAVEL {
+            let k = def.travel + 1;
+            let hit = Crusher::home(&def).any(|(hc, hr)| {
+                let (nc, nr) = (hc + dc * k, hr + dr * k);
+                blocked(nc, nr) && !Crusher::home(&def).any(|x| x == (nc, nr))
+            });
+            if hit {
+                break;
+            }
+            def.travel = k;
+        }
+        if def.travel == 0 {
+            return Err(format!("crusher `{}` at row {r0}, col {c0} has no room to slam", dir.char()));
+        }
+        out.push(def);
+    }
+    Ok(out)
 }
 
 #[cfg(test)]

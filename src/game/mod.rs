@@ -12,6 +12,7 @@ use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
 pub mod adaptive;
+pub mod crushers;
 mod groove;
 mod han;
 mod hazards;
@@ -48,7 +49,7 @@ pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{
     BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY, PlayerControl, THROW_CARRY, THROW_SPEED,
     WEAK_BOOST_SPEED, han_carrier,
-    move_towards, step_body,
+    move_towards, springs, step_body,
 };
 pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
 
@@ -120,6 +121,7 @@ pub fn plugin(app: &mut App) {
             han::plugin,
             adaptive::plugin,
             sideb::plugin,
+            crushers::plugin,
         ));
 }
 

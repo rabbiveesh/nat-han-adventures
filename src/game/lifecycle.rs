@@ -171,12 +171,15 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
                 Tile::Liquid => above != Tile::Liquid,
                 _ => true,
             };
-            commands.spawn((
+            let mut e = commands.spawn((
                 Name::new("Tile"),
                 LevelEntity,
                 LevelTile { col, row, tile, top, world: level.world },
                 Transform::from_translation(level.tile_center(col, row).extend(0.0)),
             ));
+            if tile == Tile::Crumble {
+                e.insert(super::crushers::Crumble::default());
+            }
         }
     }
 
@@ -243,6 +246,20 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
                 topics: hint.topics.clone(),
                 said: false,
             },
+        ));
+    }
+
+    // Crushers: Pos is the center of the block.
+    for &def in level.crushers.iter().filter(|c| cols.contains(&c.col)) {
+        let block = super::crushers::CrusherBlock::new(level, def);
+        let pos = block.at(0.0);
+        commands.spawn((
+            Name::new("Crusher"),
+            LevelEntity,
+            block,
+            Pos(pos),
+            PrevPos(pos),
+            Transform::from_translation(pos.extend(1.0)),
         ));
     }
 

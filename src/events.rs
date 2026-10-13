@@ -71,6 +71,8 @@ pub enum DeathCause {
     Sewage,
     Fly,
     Spray,
+    /// Squashed by a crusher.
+    Crusher,
 }
 
 #[derive(Message, Debug, Clone, Copy)]

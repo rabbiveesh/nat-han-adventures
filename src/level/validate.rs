@@ -77,7 +77,7 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
-use super::{CLING_ROWS, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, TILE, ThingKind, Tile, Topic};
+use super::{CLING_ROWS, Crusher, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
     ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, DRUNK_SWAY, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
@@ -320,6 +320,9 @@ pub struct Env {
     /// A kick off Han clinging to a wall ([`Launch::Boost`]): the boost, plus this horizontal
     /// speed (px/s, signed: away from the wall), kept like a platform's.
     pub kick: f32,
+    /// A trampoline gives the toot back (Nat's does; Han's toots aren't refreshed by one, so
+    /// his nav replays his moves' toot times as planned).
+    pub spring_toot: bool,
 }
 
 /// How much faster than normal the waltz's platforms glide at the peak of ONE
@@ -365,6 +368,7 @@ impl Env {
             ideal,
             throw: g.fired_up(),
             kick: 0.0,
+            spring_toot: true,
         }
     }
 
@@ -379,6 +383,7 @@ impl Env {
     pub fn han(mode: Mode) -> Env {
         let p = HanPhys::of(&mode.groove());
         Env {
+            spring_toot: false,
             gravity: p.fall.gravity,
             max_fall: p.fall.max_fall,
             air_accel: p.air_accel,
@@ -419,6 +424,15 @@ const JET: u16 = 256;
 const SPRAY: u16 = 512;
 const FLY: u16 = 1024;
 const RAFT: u16 = 2048;
+/// A breakable brick (also `SOLID`): rising into it smashes it.
+const BRICK: u16 = 4096;
+/// A trampoline (also `SOLID`): landing on it springs you up.
+const SPRING: u16 = 8192;
+/// A crumbling platform (also `ONEWAY`): fine to land on and jump off, no place to linger.
+const CRUMBLE: u16 = 16384;
+/// A crusher's sweep (its home is `SOLID`): a timed hazard, no place to linger (and, too big
+/// to time, `JET`: deadly).
+const CRUSH: u16 = 32768;
 const DEADLY_TILE: u16 = SPIKE_UP | SPIKE_DOWN | LIQUID;
 const FLOOR_ONEWAY: u16 = ONEWAY | VIRT | STAIN | RAFT;
 
@@ -494,6 +508,9 @@ pub struct Map<'a> {
     pub pools: Vec<Pool>,
     pub chasms: Vec<Chasm>,
     has_grease: bool,
+    /// Trampolines bounce arcs up mid-flight, so the free-flight envelopes ([`Arcs`]) don't
+    /// bound them: no pruning by envelope.
+    has_springs: bool,
     /// Per cell: the top horizontal speed (px/s, normal time) of a moving platform you can
     /// stand on there (0: none). See [`Map::carry`].
     carry: Vec<f32>,
@@ -519,7 +536,29 @@ impl<'a> Map<'a> {
                     Tile::SpikesUp => SPIKE_UP,
                     Tile::SpikesDown => SPIKE_DOWN,
                     Tile::Liquid => LIQUID,
+                    Tile::Brick => SOLID | BRICK,
+                    Tile::Trampoline => SOLID | SPRING,
+                    Tile::Crumble => ONEWAY | CRUMBLE,
                 };
+            }
+        }
+        // Crushers: home is solid; the sweep a timed hazard (deadly when too big to time);
+        // their top rides along its path like a moving platform's.
+        for d in &level.crushers {
+            let deadly = if Crusher::timeable(d) { 0 } else { JET };
+            let home: Vec<Cell> = Crusher::home(d).collect();
+            for cell in Crusher::sweep(d) {
+                if let Some(i) = at(cell.0, cell.1) {
+                    flags[i] |= if home.contains(&cell) { SOLID } else { CRUSH | deadly };
+                }
+            }
+            let (dc, dr) = d.dir.step();
+            for k in 0..=d.travel {
+                for c in 0..d.w as i32 {
+                    if let Some(i) = at(d.col as i32 + c + dc * k, d.row as i32 + dr * k) {
+                        flags[i] |= VIRT;
+                    }
+                }
             }
         }
         for p in &level.platforms {
@@ -634,6 +673,7 @@ impl<'a> Map<'a> {
             pools,
             chasms,
             has_grease: level.has_grease(),
+            has_springs: level.tiles.contains(&Tile::Trampoline),
             carry,
             derive_marks: false,
             derived: Vec::new(),
@@ -718,6 +758,16 @@ impl<'a> Map<'a> {
     /// Does a player box centered at (x, y) overlap anything solid?
     pub fn overlaps_solid(&self, x: f32, y: f32) -> bool {
         cells(x - HALF_W, x + HALF_W).any(|c| cells(y - HALF_H, y + HALF_H).any(|r| self.is_solid(c, r)))
+    }
+
+    /// A trampoline at (c, r)?
+    fn spring(&self, c: i32, r: i32) -> bool {
+        self.f(c, r) & SPRING != 0
+    }
+
+    /// A brick at (c, r)?
+    fn brick(&self, c: i32, r: i32) -> bool {
+        self.f(c, r) & BRICK != 0
     }
 
     fn floor(&self, c: i32, r: i32) -> Floor {
@@ -818,6 +868,7 @@ impl<'a> Map<'a> {
         f & SOLID == 0
             && f & DEADLY_TILE == 0
             && self.floor(c, r + 1) != Floor::None
+            && !self.spring(c, r + 1)
             && !self.deadly(c as f32 * TILE + 8.0, (r + 1) as f32 * TILE - HALF_H)
     }
 
@@ -828,9 +879,10 @@ impl<'a> Map<'a> {
         let below = self.f(c, r + 1);
         self.standable((c, r))
             && ((below & SOLID != 0 && below & GREASE == 0) || below & ONEWAY != 0)
+            && below & CRUMBLE == 0
             && (0..=RUNWAY_HEADROOM).all(|k| {
                 let f = self.f(c, r - k);
-                f & (DEADLY_TILE | SPRAY) == 0
+                f & (DEADLY_TILE | SPRAY | CRUSH) == 0
             })
             && !self.in_fly_zone(
                 c as f32 * TILE,
@@ -1312,10 +1364,15 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
     let mut carry = f.carry;
     let mut cut = f.cut;
     let mut tooted = [false; 3];
+    let mut toots = f.toots;
+    // Bricks smashed on the way up (gone for the rest of the flight).
+    let mut smashed: Vec<Cell> = Vec::new();
+    let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
     let mut t = 0.0;
     while t < MAX_T {
         t += DT;
-        air_controls(env, f, t, &mut vx, &mut vy, &mut cut, &mut tooted);
+        let g = Flight { toots, ..*f };
+        air_controls(env, &g, t, &mut vx, &mut vy, &mut cut, &mut tooted);
 
         // Horizontal move against solids.
         let nx = x + (vx + carry) * DT;
@@ -1324,7 +1381,7 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
         let mut blocked = false;
         for col in cells(nx - HALF_W, nx + HALF_W) {
             for row in cells(y0, y1) {
-                if map.is_solid(col, row) {
+                if solid(&smashed, col, row) {
                     blocked = true;
                     x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
                 }
@@ -1351,28 +1408,54 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
                 }
                 let center = (x / TILE).floor() as i32;
                 let mut hit = None;
-                for col in cells(x - HALF_W, x + HALF_W) {
-                    if map.floor(col, row) != Floor::None && (hit.is_none() || col == center) {
+                let mut under: [Option<(i32, Tile)>; 4] = [None; 4];
+                for (k, col) in cells(x - HALF_W, x + HALF_W).enumerate() {
+                    let floor = map.floor(col, row) != Floor::None && !smashed.contains(&(col, row));
+                    if floor && (hit.is_none() || col == center) {
                         hit = Some(col);
+                    }
+                    if floor && k < 4 {
+                        under[k] = Some((col, if map.spring(col, row) { Tile::Trampoline } else { Tile::Solid }));
                     }
                 }
                 if let Some(col) = hit {
                     y = top - HALF_H;
-                    landed = Some((col, row - 1));
+                    if crate::game::springs(under.iter().flatten().copied(), center) {
+                        // A trampoline: up again (the game's `step_body`), the toot back.
+                        vy = -SPRING_SPEED;
+                        carry = 0.0;
+                        cut = true;
+                        if env.spring_toot {
+                            for k in 0..3 {
+                                if f.toots[k].is_finite() {
+                                    toots[k] = t + f.toots[k];
+                                    tooted[k] = false;
+                                }
+                            }
+                        }
+                    } else {
+                        landed = Some((col, row - 1));
+                    }
                     break 'rows;
                 }
             }
-            if landed.is_none() {
+            if landed.is_none() && vy > 0.0 {
                 y = ny;
             }
         } else {
             let mut hit = false;
             for col in cells(x - HALF_W, x + HALF_W) {
                 for row in cells(ny - HALF_H, ny + HALF_H) {
-                    if map.is_solid(col, row) {
-                        hit = true;
-                        y = (row + 1) as f32 * TILE + HALF_H;
+                    if !solid(&smashed, col, row) {
+                        continue;
                     }
+                    if map.brick(col, row) {
+                        // Smashed through from below.
+                        smashed.push((col, row));
+                        continue;
+                    }
+                    hit = true;
+                    y = (row + 1) as f32 * TILE + HALF_H;
                 }
             }
             if hit {
@@ -1391,7 +1474,7 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
             }
         }
         if let Some(cell) = landed {
-            return (if map.standable(cell) { Outcome::Land(cell) } else { Outcome::Nothing }, t);
+            return (if map.standable(cell) && !smashed.contains(&(cell.0, cell.1 + 1)) { Outcome::Land(cell) } else { Outcome::Nothing }, t);
         }
     }
     (Outcome::Nothing, t)
@@ -2252,7 +2335,7 @@ fn leak(
         for &from in &frontier {
             for (k, s) in arcs.at(map, from).iter().enumerate() {
                 let Some(f) = arcs.flight(map, from, s) else { continue };
-                if !rows.iter().any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1)) {
+                if !map.has_springs && !rows.iter().any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1)) {
                     continue;
                 }
                 if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
@@ -2453,7 +2536,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>, m: Mode| -> Option<Cell> {
         for (k, s) in arcs.at(map, from).iter().enumerate() {
             let Some(f) = arcs.flight(map, from, s) else { continue };
-            if !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
+            if !map.has_springs && !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
                 continue;
             }
             if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
@@ -2782,6 +2865,15 @@ pub fn check_room(level: &Level, phys: &Physics) -> Report {
     check_impl(level, &Options::default(), phys, false)
 }
 
+/// Can Nat get from the start to stand in `cell`, in any mode (gates, stains and all)? Just
+/// the reachability, none of a campaign level's rules (size, nuggets, checkpoints): for tools
+/// and tests.
+pub fn reachable(level: &Level, cell: Cell) -> bool {
+    let mut map = Map::new(level);
+    let (g, _) = reach(&mut map, &Physics::default(), (level.start.0 as i32, level.start.1 as i32));
+    g.reached(cell)
+}
+
 fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool) -> Report {
     let mut errs = line_errors(level);
     let mut map = Map::new(level);
@@ -3063,8 +3155,11 @@ fn lessons(
     };
     for &cell in &g.order {
         let below = map.f(cell.0, cell.1 + 1);
-        if below & ONEWAY != 0 {
+        if below & ONEWAY != 0 && below & CRUMBLE == 0 {
             see(Topic::OneWay, cell);
+        }
+        if below & CRUMBLE != 0 {
+            see(Topic::Crumble, cell);
         }
         if below & VIRT != 0 && below & (SOLID | ONEWAY) == 0 {
             see(Topic::Platform, cell);
@@ -3082,6 +3177,27 @@ fn lessons(
         for &cell in &g.order {
             if (cell.0 - t.col as i32).abs() <= THING_NEAR && (cell.1 - t.row as i32).abs() <= THING_NEAR {
                 see(topic, cell);
+            }
+        }
+    }
+    // Bricks, trampolines and crushers: first within a few tiles.
+    let mut near: Vec<(Topic, Cell)> = Vec::new();
+    for r in 0..level.height as i32 {
+        for c in 0..level.width as i32 {
+            match level.tile(c, r) {
+                Tile::Brick => near.push((Topic::Brick, (c, r))),
+                Tile::Trampoline => near.push((Topic::Spring, (c, r))),
+                _ => {}
+            }
+        }
+    }
+    for d in &level.crushers {
+        near.extend(Crusher::home(d).map(|h| (Topic::Crusher, h)));
+    }
+    for &cell in &g.order {
+        for &(t, at) in &near {
+            if (cell.0 - at.0).abs() <= THING_NEAR && (cell.1 - at.1).abs() <= THING_NEAR {
+                see(t, cell);
             }
         }
     }

@@ -325,6 +325,10 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Spray => vec!["A CAN PUFFS ON A BEAT.".into(), "WAIT TILL THE PSSHT STOPS,".into(), "THEN GO!".into()],
         Topic::Stain => vec!["TOO WIDE TO JUMP? SPLAT".into(), "ON THE SPIKES: YOUR STAIN".into(), "IS A STEP!".into()],
         Topic::Grease => vec!["ON GREASE YOU CAN'T STOP".into(), "OR JUMP. SPLAT A FEW AND".into(), "THE BAND GETS NERVOUS.".into()],
+        Topic::Brick => vec!["JUMP UP INTO A BAR OF".into(), "SOAP: IT SMASHES!".into()],
+        Topic::Crumble => vec!["SOGGY CARDBOARD SAGS".into(), "UNDER YOU. KEEP MOVING!".into()],
+        Topic::Spring => vec!["LAND ON A CUSHION:".into(), "PFFFT! UP YOU GO!".into()],
+        Topic::Crusher => vec!["A CRUSHER SLAMS, THEN".into(), "CREEPS BACK. GO THEN!".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -335,6 +339,10 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Spray => "NEW: SPRAY CANS",
         Topic::Stain => "NEW: SPLAT STAINS",
         Topic::Grease => "NEW: GREASE",
+        Topic::Brick => "NEW: SOAP BRICKS",
+        Topic::Crumble => "NEW: SOGGY BOXES",
+        Topic::Spring => "NEW: WHOOPEE CUSHIONS",
+        Topic::Crusher => "NEW: CRUSHERS",
         _ => "NEW!",
     };
     (title, lines)
