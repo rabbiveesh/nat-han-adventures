@@ -102,14 +102,20 @@ fn said(app: &App, line: &str) -> bool {
 // Level 1's set list: giant ×2, gap. Level 2: giant, melt, gap. Level 3: melt ×2, giant, gap.
 // Level 4: giant ×3, gap ×2, melt ×2.
 const L1: [(f32, usize); 3] = [(3.0, 0), (22.0, 1), (50.0, 0)];
-const L2: [(f32, usize); 3] = [(30.0, 0), (55.0, 1), (80.0, 2)];
-const L3: [(f32, usize); 4] = [(3.0, 0), (42.0, 1), (56.0, 2), (100.0, 0)];
+const L2: [(f32, usize); 3] = [(30.0, 0), (55.0, 2), (80.0, 1)];
+const L3: [(f32, usize); 4] = [(3.0, 2), (42.0, 0), (56.0, 1), (100.0, 2)];
 const L4: [(f32, usize); 7] = [(3.0, 0), (22.0, 1), (78.0, 0), (92.0, 2), (125.0, 1), (160.0, 2), (190.0, 0)];
 // The crushing ones, set lists with nothing to spare (found by `solve_a_level`). Rush Hour:
 // giant ×2, gap, melt ×2. Double Trouble: giant ×3, gap ×2, melt ×3. The Royal Flush: giant ×6,
 // gap ×3, melt ×4.
 const L5: [(f32, usize); 5] = [(1.0, 0), (32.6, 1), (52.9, 2), (100.8, 0), (110.8, 2)];
 const L6: [(f32, usize); 8] = [(1.0, 2), (2.0, 1), (23.8, 0), (27.8, 2), (86.6, 0), (87.9, 2), (107.6, 1), (141.6, 0)];
+/// Fork in the Pipe's three routes (with the cursor left where a call puts it, the deck's
+/// nuggets go to Giant Steps, the far deck's to fired up): over the pipe and leaping the deck's
+/// gap; over, then down the gap and melting under the second pipe; under both pipes melting.
+const L8_OVER: [(f32, usize); 4] = [(1.0, 0), (46.0, 1), (95.0, 0), (118.0, 1)];
+const L8_DROP: [(f32, usize); 4] = [(1.0, 0), (50.0, 2), (95.0, 0), (118.0, 1)];
+const L8_UNDER: [(f32, usize); 4] = [(2.0, 2), (48.0, 2), (95.0, 0), (118.0, 1)];
 const L7: [(f32, usize); 13] = [
     (1.0, 0),
     (23.0, 1),
@@ -140,8 +146,65 @@ fn level_one_parses_with_its_set_list() {
 }
 
 #[test]
+fn set_lists_come_in_one_order() {
+    let b = sideb::SideBLevel::parse("name: x\nworld: 2\nsetlist: melt=1 gap=2 giant=3\n---\nP..G\n####\n").unwrap();
+    let calls: Vec<SetCall> = b.setlist.iter().map(|c| c.0).collect();
+    assert_eq!(calls, [SetCall::Mode(Harmony::Coltrane), SetCall::Mode(Harmony::Quartal), SetCall::Melt]);
+}
+
+#[test]
+fn every_route_through_the_fork() {
+    for plan in [L8_OVER, L8_DROP, L8_UNDER] {
+        assert_eq!(play(7, &plan), Ok(()), "{plan:?}");
+    }
+}
+
+#[test]
+fn nuggets_add_to_the_picked_call() {
+    let mut app = app(7);
+    until(&mut app, 5.0, |a| col(a) >= 1.0).unwrap();
+    call(&mut app, 0);
+    until(&mut app, 10.0, |a| col(a) >= 30.0).expect("over the pipe");
+    pick(&mut app, 2);
+    until(&mut app, 10.0, |a| col(a) >= 45.0).expect("along the deck");
+    assert_eq!(side(&app).refills, 2);
+    assert_eq!(side(&app).left, vec![0, 1, 4], "both nuggets to melting");
+}
+
+#[test]
+fn the_deck_nuggets_spent_on_melting_leave_no_giant_steps_for_the_wall() {
+    let (f, c) = died(play(7, &[(1.0, 0), (30.0, PICK + 2), (50.0, 2), (95.0, 0), (118.0, 1)]));
+    assert_eq!(f, Fate::Bonk);
+    assert!((100.0..110.0).contains(&c), "at the wall, not {c}");
+}
+
+#[test]
+fn jump_calls_the_band_too() {
+    let mut app = app(0);
+    until(&mut app, 0.5, |_| false);
+    tap(&mut app, KeyCode::Space);
+    assert_eq!(side(&app).calls, 1);
+    assert_eq!(side(&app).left, vec![1, 1]);
+}
+
+#[test]
+fn a_rewind_starts_the_tune_over() {
+    let mut app = app(0);
+    app.init_resource::<Started>()
+        .add_systems(Last, |mut n: ResMut<Started>, mut s: MessageReader<nat_han_adventures::audio::MusicStarted>| n.0 += s.read().count());
+    until(&mut app, 10.0, rewound).unwrap();
+    let before = app.world().resource::<Started>().0;
+    until(&mut app, 4.0, |a| side(a).rewinds == 1).unwrap();
+    until(&mut app, 0.2, |_| false);
+    assert_eq!(app.world().resource::<Started>().0, before + 1, "the tune starts over");
+}
+
+#[derive(Resource, Default)]
+struct Started(usize);
+
+#[test]
 fn every_level_has_a_solution() {
-    for (n, plan) in [&L1[..], &L2, &L3, &L4, &L5, &L6, &L7].into_iter().enumerate() {
+    for (n, plan) in [&L1[..], &L2, &L3, &L4, &L5, &L6, &L7, &L8_UNDER].into_iter().enumerate() {
         assert_eq!(play(n, plan), Ok(()), "level {}", n + 1);
     }
 }
@@ -214,7 +277,7 @@ fn full_size_han_loses_his_cap_in_the_drip_pipe() {
 #[test]
 fn melting_too_late_is_too_late() {
     // The second drip pipe, melting called as he reaches it: the bar line's too far off.
-    let (f, c) = died(play(2, &[(3.0, 0), (42.0, 1), (56.0, 2), (112.0, 0)]));
+    let (f, c) = died(play(2, &[(3.0, 2), (42.0, 0), (56.0, 1), (112.0, 2)]));
     assert_eq!(f, Fate::Spikes);
     assert!(c > 110.0, "at the second pipe, not {c}");
 }
@@ -222,7 +285,7 @@ fn melting_too_late_is_too_late() {
 #[test]
 fn giant_steps_still_on_in_the_second_alley_is_spikes() {
     // Giant Steps for the wall, nothing to take over before the alley.
-    let (f, c) = died(play(2, &[(3.0, 0), (42.0, 1)]));
+    let (f, c) = died(play(2, &[(3.0, 2), (42.0, 0)]));
     assert_eq!(f, Fate::Spikes);
     assert!((64.0..83.0).contains(&c), "in the alley, not {c}");
 }
@@ -244,14 +307,22 @@ fn a_cleared_level_goes_on_to_the_next() {
 
 /// Pick set-list call `k` (Left/Right) and call it (Down).
 fn call(app: &mut App, k: usize) {
+    pick(app, k);
+    tap(app, KeyCode::ArrowDown);
+}
+
+/// Pick set-list call `k` (Left/Right), not calling it: the call Han's next nugget adds to.
+fn pick(app: &mut App, k: usize) {
     while side(app).selected < k {
         tap(app, KeyCode::ArrowRight);
     }
     while side(app).selected > k {
         tap(app, KeyCode::ArrowLeft);
     }
-    tap(app, KeyCode::ArrowDown);
 }
+
+/// In a plan, `(col, PICK + k)` only picks call `k` ([`pick`]).
+const PICK: usize = 10;
 
 /// Play Side B level `level`, calling set-list call `k` once Han's past column `col`, for each
 /// `(col, k)` in turn: cleared, or how Han met his end (and where).
@@ -266,7 +337,11 @@ fn play(level: usize, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> 
             let t = app.world().resource::<nat_han_adventures::game::LevelRun>().time;
             eprintln!("call {k} at t={t:.2}");
         }
-        call(&mut app, k);
+        if k >= PICK {
+            pick(&mut app, k - PICK);
+        } else {
+            call(&mut app, k);
+        }
     }
     until(&mut app, 40.0, |a| side(a).phase != Phase::Playing);
     match side(&app).phase {
@@ -362,7 +437,7 @@ fn solve_a_level() {
 #[ignore]
 fn how_tight() {
     let n: usize = std::env::var("SIDE_B_TIGHT").unwrap().parse().unwrap();
-    let plan: &[(f32, usize)] = [&L1[..], &L2, &L3, &L4, &L5, &L6, &L7][n - 1];
+    let plan: &[(f32, usize)] = [&L1[..], &L2, &L3, &L4, &L5, &L6, &L7, &L8_OVER][n - 1];
     for i in 0..plan.len() {
         let ok: Vec<i32> = [-6, -4, -2, 2, 4, 6]
             .into_iter()

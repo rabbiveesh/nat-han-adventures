@@ -36,7 +36,7 @@ use crate::level::{Level, TILE, Tile, Topic};
 use crate::state::{AppState, PlayState};
 
 /// Side B's levels, in play order.
-pub static SIDE_B_SOURCES: [&str; 7] = [
+pub static SIDE_B_SOURCES: [&str; 8] = [
     include_str!("../../levels/side-b/b1.txt"),
     include_str!("../../levels/side-b/b2.txt"),
     include_str!("../../levels/side-b/b3.txt"),
@@ -44,6 +44,7 @@ pub static SIDE_B_SOURCES: [&str; 7] = [
     include_str!("../../levels/side-b/b5.txt"),
     include_str!("../../levels/side-b/b6.txt"),
     include_str!("../../levels/side-b/b7.txt"),
+    include_str!("../../levels/side-b/b8.txt"),
 ];
 
 /// A level rewinds this long after Han's death (the needle scratch).
@@ -114,6 +115,16 @@ pub fn call_of(word: &str) -> Option<SetCall> {
     }
 }
 
+/// Where a call sits on every set list: Giant Steps, fired up, melting.
+fn set_list_rank(c: SetCall) -> u8 {
+    match c {
+        SetCall::Mode(Harmony::Coltrane) => 0,
+        SetCall::Mode(Harmony::Quartal) => 1,
+        SetCall::Mode(_) => 2,
+        SetCall::Melt => 3,
+    }
+}
+
 /// A Side B level: the level, and its set list.
 #[derive(Debug, Clone)]
 pub struct SideBLevel {
@@ -147,6 +158,9 @@ impl SideBLevel {
                 }
             }
         }
+        // Always in the same order, whatever the header says: the strip mustn't give the
+        // solution's order away.
+        setlist.sort_by_key(|&(c, _)| set_list_rank(c));
         Ok(SideBLevel { level: Level::parse(&rest)?, setlist })
     }
 
@@ -188,6 +202,8 @@ pub struct SideB {
     pub fate: Option<Fate>,
     pub rewinds: u32,
     pub calls: u32,
+    /// Nuggets Han's grabbed this try (each one more call).
+    pub refills: u32,
 }
 
 impl SideB {
@@ -208,6 +224,7 @@ impl SideB {
             fate: None,
             rewinds: 0,
             calls: 0,
+            refills: 0,
         }
     }
 
@@ -250,7 +267,7 @@ pub(super) fn plugin(app: &mut App) {
             FixedUpdate,
             (
                 (beacon, melt).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
-                han_fate.in_set(GameSet::Interact),
+                (han_fate, han_grabs_nuggets).chain().in_set(GameSet::Interact),
             )
                 .run_if(resource_exists::<SideB>),
         );
@@ -288,7 +305,8 @@ fn leave(mut commands: Commands, side: Option<Res<SideB>>, mut mode: ResMut<supe
     }
 }
 
-/// Left/Right picks a call on the set list, Down plays it.
+/// Left/Right picks a call on the set list, Down or Jump plays it (Han jumps by himself, and
+/// on a phone the jump zone is the big button).
 fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>, mut calls: MessageWriter<CallMode>) {
     let n = side.setlist.len();
     if n == 0 {
@@ -300,7 +318,8 @@ fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>,
     if input.just_pressed(&Action::Right) {
         side.selected = (side.selected + 1) % n;
     }
-    if input.just_pressed(&Action::Down) && side.phase == Phase::Playing {
+    let call = input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
+    if call && side.phase == Phase::Playing {
         let k = side.selected;
         if side.left[k] > 0 {
             side.left[k] -= 1;
@@ -420,6 +439,32 @@ fn melt(time: Res<Time>, groove: Res<Groove>, mut han: Query<(&mut Pos, &mut Bod
     if new != body.half {
         pos.0.y += new.y - body.half.y;
         body.half = new;
+    }
+}
+
+/// A nugget Han grabs is one more of the call that's picked on the set list: steer the cursor
+/// before he gets there.
+fn han_grabs_nuggets(
+    mut commands: Commands,
+    mut side: ResMut<SideB>,
+    han: Query<(&Pos, &Body), With<Han>>,
+    nuggets: Query<(Entity, &Transform), With<super::Nugget>>,
+    mut sfx: MessageWriter<crate::events::PlaySfx>,
+) {
+    if side.phase != Phase::Playing || side.left.is_empty() {
+        return;
+    }
+    let Ok((pos, body)) = han.single() else { return };
+    let h = super::pickups::NUGGET_BOX / 2.0;
+    for (e, tf) in &nuggets {
+        let c = tf.translation.truncate();
+        if (pos.0.x - c.x).abs() < body.half.x + h && (pos.0.y - c.y).abs() < body.half.y + h {
+            commands.entity(e).despawn();
+            let k = side.selected;
+            side.left[k] += 1;
+            side.refills += 1;
+            sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Nugget));
+        }
     }
 }
 

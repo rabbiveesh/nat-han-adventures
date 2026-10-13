@@ -66,7 +66,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
 - `src/game/sideb.rs` SIDE B, a hidden prototype: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
-  header; Left/Right pick, Down call; `melt` holds the laughing band on its melting phrase and
+  header, shown in one fixed order; Left/Right pick, Down or Jump call; a nugget Han grabs is one more of the picked call; a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
   shrinks Han; a call holds 6 s, not the story's 20). Han just runs and jumps at what's ahead
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
   level's solution is a plan in `tests/side_b.rs` (`try_a_plan` tries one). Ways in: Up Up Down Down on

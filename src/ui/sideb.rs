@@ -1,6 +1,6 @@
 //! Side B's set list strip (in place of the band's counter strip): one cell per call, the
 //! horn for Giant Steps, the nugget for fired up, with the calls left; the picked one in a gold
-//! frame with "DOWN" under it; the playing mode's timer drains under its cell. And the banner:
+//! frame with "CALL" under it (Down or Jump calls); the playing mode's timer drains under its cell. And the banner:
 //! REWIND! when Han's done for, CLEAR! at the goal.
 
 use bevy::prelude::*;
@@ -122,7 +122,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             });
             root.spawn(Node { column_gap: px(4.0), ..default() }).with_children(|row| {
                 for k in 0..side.setlist.len() {
-                    row.spawn((CallPick(k), label(&font, "DOWN", 8.0, GOLD), Visibility::Hidden));
+                    row.spawn((CallPick(k), label(&font, "CALL", 8.0, GOLD), Visibility::Hidden));
                 }
             });
         });
