@@ -19,6 +19,7 @@ mod lifecycle;
 mod physics;
 mod pickups;
 mod platforms;
+pub mod playtest;
 pub mod sideb;
 mod visuals;
 
@@ -120,6 +121,7 @@ pub fn plugin(app: &mut App) {
             han::plugin,
             adaptive::plugin,
             sideb::plugin,
+            playtest::plugin,
         ));
 }
 

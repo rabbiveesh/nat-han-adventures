@@ -26,7 +26,7 @@ fn main() {
         let r = validate(&level);
         let mut l = level.clone();
         l.deaths = Some(r.deaths);
-        let rep = check_with(&l, &Options { dump: true }, physics());
+        let rep = check_with(&l, &Options { dump: true, ..Options::default() }, physics());
         println!("{}\nerrors: {:#?}", rep.dump.unwrap_or_default(), r.errs);
         return;
     }

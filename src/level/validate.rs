@@ -2704,6 +2704,8 @@ pub struct Report {
     pub segments: Vec<u32>,
     /// The map with reachable cells marked (if asked for).
     pub dump: Option<String>,
+    /// The story's house rules broken, with [`Options::rules_apart`] (else they're in `errs`).
+    pub rules: Vec<String>,
     /// The level's gate marks; for a generated room ([`check_room`]), the marks it needs (its
     /// gates, found): copy them into the room so the game's Han is feeble around its band gates.
     pub marks: Vec<GateMark>,
@@ -2713,6 +2715,10 @@ pub struct Report {
 pub struct Options {
     /// Render [`Report::dump`].
     pub dump: bool,
+    /// Put the story's house rules (checkpoint and nugget counts, the level's size, Han's
+    /// lines) in [`Report::rules`] instead of [`Report::errs`], so they don't stop the
+    /// reachability search (the level editor: a level in progress, or Side B's).
+    pub rules_apart: bool,
 }
 
 fn line_errors(level: &Level) -> Vec<String> {
@@ -2783,19 +2789,23 @@ pub fn check_room(level: &Level, phys: &Physics) -> Report {
 }
 
 fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool) -> Report {
-    let mut errs = line_errors(level);
+    let mut rules = line_errors(level);
     let mut map = Map::new(level);
     map.derive_marks = !check_deaths;
     let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
     if !(1..=3).contains(&cps.len()) {
-        errs.push(format!("{} checkpoints (want 1..=3)", cps.len()));
+        rules.push(format!("{} checkpoints (want 1..=3)", cps.len()));
     }
     let n = level.nugget_count();
     if !NUGGETS.contains(&n) {
-        errs.push(format!("{n} nuggets (want {NUGGETS:?})"));
+        rules.push(format!("{n} nuggets (want {NUGGETS:?})"));
     }
     if level.height < 14 || level.width < 40 {
-        errs.push(format!("level is only {}x{}", level.width, level.height));
+        rules.push(format!("level is only {}x{}", level.width, level.height));
+    }
+    let mut errs = Vec::new();
+    if !opts.rules_apart {
+        errs.append(&mut rules);
     }
 
     let start = (level.start.0 as i32, level.start.1 as i32);
@@ -2835,7 +2845,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     }
     if !errs.is_empty() {
         // Structural problems: reachability would just add noise.
-        return Report { errs, ..Report::default() };
+        return Report { errs, rules, ..Report::default() };
     }
 
     let base = map.clone();
@@ -3039,7 +3049,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             dump(level, &map, &g, &crossings)
         )
     });
-    Report { errs, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
+    Report { errs, rules, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
 }
 
 /// Every mechanic's first appearance (by path cost from the start), with its best hint.

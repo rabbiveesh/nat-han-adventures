@@ -2,7 +2,8 @@
 name = "nat-han-adventures"
 version = "0.1.0"
 edition = "2024"
-# `cargo run` is the game; the music editor is `cargo run --bin editor`.
+# `cargo run` is the game; the music editor is `cargo run --bin editor`, the level editor
+# `cargo run --bin level-editor`.
 default-run = "nat-han-adventures"
 
 [dependencies]
@@ -36,6 +37,12 @@ capture = ["bevy/png"]
 [[bin]]
 name = "editor"
 path = "src/bin/editor/main.rs"
+required-features = ["editor"]
+
+# The level editor (`cargo run --bin level-editor`), same feature: native only.
+[[bin]]
+name = "level-editor"
+path = "src/bin/level_editor/main.rs"
 required-features = ["editor"]
 
 # Optimise deps even in dev; our own crate stays fast to compile.

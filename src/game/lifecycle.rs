@@ -91,6 +91,7 @@ fn restart_level(
     current: Res<CurrentLevel>,
     generated: Option<Res<GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    playtest: Option<Res<super::playtest::Playtest>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
     if requests.read().count() == 0 {
@@ -98,12 +99,13 @@ fn restart_level(
     }
     let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
     // Side B rewinds its own level (free play restarts a room itself).
-    match (generated, side_b) {
-        (Some(g), Some(_)) => {
+    // (And a playtest its file's.)
+    match (generated, side_b.is_some() || playtest.is_some()) {
+        (Some(g), true) => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
-        (Some(_), None) => return,
+        (Some(_), false) => return,
         _ => {}
     }
     load(&mut commands, levels.0[index].clone(), index, &old);

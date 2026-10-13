@@ -96,6 +96,30 @@
 //!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red
 //!   plunger-handle notches and yellow plumber's tape.
 //!
+//! # Tweaks
+//! Per-tile physics: `tweak <letter>: key=value ...` header lines (letters `a`-`z`), and an
+//! optional second `---` section after the grid, a layer of the same shape holding a letter
+//! (or `.`) per cell. Surface keys (`friction`, `bounce`, `belt`, `jump`) apply while standing on
+//! a tile painted with the letter; volume keys (`gravity`, `run`, `wind`) while a body's center is
+//! in a painted cell. Keys, ranges and meaning: [`tweak`]. Nat and Han obey them; the validator
+//! and Han's nav don't model them.
+//!
+//! ```text
+//! name: Bouncy Castle
+//! tweak a: bounce=1
+//! tweak b: gravity=0.4
+//! ---
+//! ..........
+//! .P.....G..
+//! ##########
+//! ---
+//! ....bbb...
+//! ....bbb...
+//! ..aa......
+//! ```
+//!
+//! Every grid char is a row of [`GLYPHS`] (the editor's palette reads it too).
+//!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is a solid ceiling (the top of the screen: the camera never shows above row 0, so
 //! nobody may go there, or a wall reaching row 0 could be walked over on its roof, unseen),
@@ -115,8 +139,12 @@ use bevy::prelude::*;
 
 
 pub mod buddy;
+pub mod doc;
 pub mod nav;
+pub mod tweak;
 pub mod validate;
+
+pub use tweak::Tweak;
 
 pub const TILE: f32 = 16.0;
 /// Han says a hint when Nat comes this close (px) to its cell's center.
@@ -154,6 +182,74 @@ pub static LEVEL_SOURCES: [&str; LEVEL_COUNT] = [
     include_str!("../levels/09.txt"),
     include_str!("../levels/10.txt"),
 ];
+
+/// What a grid char puts in its cell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Glyph {
+    Tile(Tile),
+    Thing(ThingKind),
+    /// `P`, the player start.
+    Start,
+    /// `G`, the goal flag.
+    Goal,
+    /// `1`-`9`, a moving platform configured by its digit's header line.
+    Platform(u8),
+}
+
+/// Groups of the editor's palette.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GlyphGroup {
+    Terrain,
+    Hazard,
+    Thing,
+    Platform,
+}
+
+/// One grid char: what it is, a name and a line on it.
+#[derive(Debug, Clone, Copy)]
+pub struct GlyphInfo {
+    pub ch: char,
+    pub glyph: Glyph,
+    pub group: GlyphGroup,
+    pub name: &'static str,
+    pub about: &'static str,
+}
+
+const fn g(ch: char, glyph: Glyph, group: GlyphGroup, name: &'static str, about: &'static str) -> GlyphInfo {
+    GlyphInfo { ch, glyph, group, name, about }
+}
+
+/// Every grid char but empty (`.` or space): the format's legend (see the table above), read by
+/// the parser and the editor's palette. A new tile is a [`Tile`] (or [`ThingKind`]) and a row
+/// here.
+pub const GLYPHS: &[GlyphInfo] = &[
+    g('#', Glyph::Tile(Tile::Solid), GlyphGroup::Terrain, "ground", "solid from every side"),
+    g('=', Glyph::Tile(Tile::OneWay), GlyphGroup::Terrain, "one-way", "jump up through it, stand on top"),
+    g('_', Glyph::Tile(Tile::Grease), GlyphGroup::Terrain, "grease", "slick ground: no braking or jumping off it (grip fixes it)"),
+    g('^', Glyph::Tile(Tile::SpikesUp), GlyphGroup::Hazard, "floor spikes", "toilet brushes, bottom half; a splat stains them"),
+    g('v', Glyph::Tile(Tile::SpikesDown), GlyphGroup::Hazard, "ceiling spikes", "top half; a splat stains them"),
+    g('~', Glyph::Tile(Tile::Liquid), GlyphGroup::Hazard, "sewage", "deadly liquid; a splat leaves a raft"),
+    g('F', Glyph::Thing(ThingKind::Fly), GlyphGroup::Hazard, "fly swarm", "circles its tile, deadly"),
+    g('S', Glyph::Thing(ThingKind::Spray), GlyphGroup::Hazard, "spray can", "jet 3 tiles up, on/off on a shared clock"),
+    g('P', Glyph::Start, GlyphGroup::Thing, "start", "Nat and Han start here (exactly one)"),
+    g('G', Glyph::Goal, GlyphGroup::Thing, "goal", "the plunger flag (exactly one)"),
+    g('o', Glyph::Thing(ThingKind::Nugget), GlyphGroup::Thing, "nugget", "golden nugget, the coin"),
+    g('C', Glyph::Thing(ThingKind::Checkpoint), GlyphGroup::Thing, "checkpoint", "toilet-paper holder"),
+    g('1', Glyph::Platform(1), GlyphGroup::Platform, "platform 1", "moving platform, see its `1:` line"),
+    g('2', Glyph::Platform(2), GlyphGroup::Platform, "platform 2", "moving platform, see its `2:` line"),
+    g('3', Glyph::Platform(3), GlyphGroup::Platform, "platform 3", "moving platform, see its `3:` line"),
+    g('4', Glyph::Platform(4), GlyphGroup::Platform, "platform 4", "moving platform, see its `4:` line"),
+    g('5', Glyph::Platform(5), GlyphGroup::Platform, "platform 5", "moving platform, see its `5:` line"),
+    g('6', Glyph::Platform(6), GlyphGroup::Platform, "platform 6", "moving platform, see its `6:` line"),
+    g('7', Glyph::Platform(7), GlyphGroup::Platform, "platform 7", "moving platform, see its `7:` line"),
+    g('8', Glyph::Platform(8), GlyphGroup::Platform, "platform 8", "moving platform, see its `8:` line"),
+    g('9', Glyph::Platform(9), GlyphGroup::Platform, "platform 9", "moving platform, see its `9:` line"),
+];
+
+/// The row of [`GLYPHS`] for grid char `ch` (`None`: empty, or not a grid char).
+pub fn glyph_info(ch: char) -> Option<&'static GlyphInfo> {
+    GLYPHS.iter().find(|g| g.ch == ch)
+}
 
 /// All levels, parsed once at startup.
 #[derive(Resource, Debug, Clone)]
@@ -478,6 +574,11 @@ pub struct Level {
     pub platforms: Vec<MovingPlatformDef>,
     /// `gate:` marks.
     pub gates: Vec<GateMark>,
+    /// `tweak <letter>:` lines, in header order.
+    pub tweaks: Vec<(char, Tweak)>,
+    /// The tweak layer, row-major like `tiles`: 0 for none, else 1 + an index into `tweaks`.
+    /// Empty when the level has no tweaks.
+    pub tweak_cells: Vec<u8>,
 }
 
 impl Level {
@@ -496,8 +597,13 @@ impl Level {
     /// zone, but in a mega wall's only while Giant Steps doesn't play (there it's the
     /// mega-boost), in a cling shaft's only without the grip, in a trapeze's only out of the
     /// waltz.
+    /// A Han zone (`han=weak` / `han=boost`, [`tweak::HanZone`]) has the last word.
     pub fn weak_boost(&self, cell: (i32, i32), granted: Granted) -> bool {
-        self.gates.iter().any(|g| g.weakens(cell, granted))
+        match self.han_zone(cell) {
+            Some(tweak::HanZone::Weak) => true,
+            Some(tweak::HanZone::Boost) => false,
+            _ => self.gates.iter().any(|g| g.weakens(cell, granted)),
+        }
     }
 
     /// Is `cell` inside a cling shaft's mark (Han clings to its walls there, nervous)?
@@ -518,7 +624,11 @@ impl Level {
 
     /// Cells Han won't stand in: grease in a grease chute's zone (Nat on his head would be
     /// jumping off the grease).
+    /// And a Han zone painted `han=avoid` ([`tweak::HanZone`]).
     pub fn han_keeps_out(&self, (c, r): (i32, i32)) -> bool {
+        if self.han_zone((c, r)) == Some(tweak::HanZone::Avoid) {
+            return true;
+        }
         let greasy = self.tile(c, r + 1) == Tile::Grease;
         self.gates.iter().any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
     }
@@ -593,6 +703,14 @@ impl Level {
         let (header, grid) = src
             .split_once("\n---\n")
             .ok_or("missing `---` line between header and grid")?;
+        // An optional second `---`: the tweak layer.
+        let (grid, layer) = match grid.split_once("\n---\n") {
+            Some((g, l)) => (g, Some(l)),
+            None => match grid.strip_suffix("\n---") {
+                Some(g) => (g, Some("")),
+                None => (grid, None),
+            },
+        };
 
         let mut name = None;
         let mut world = 1u8;
@@ -602,6 +720,7 @@ impl Level {
         let mut hints = Vec::new();
         let mut deaths = None;
         let mut gates = Vec::new();
+        let mut tweaks: Vec<(char, Tweak)> = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
 
         for (n, line) in header.lines().enumerate() {
@@ -639,6 +758,21 @@ impl Level {
                     };
                     let ((c0, r0), (c1, r1)) = (cell(a).ok_or_else(bad)?, cell(b).ok_or_else(bad)?);
                     gates.push(GateMark { topic, c0: c0.min(c1), r0: r0.min(r1), c1: c0.max(c1), r1: r0.max(r1) });
+                }
+                k if k.starts_with("tweak ") => {
+                    let letter = k["tweak ".len()..].trim();
+                    let mut cs = letter.chars();
+                    let (Some(ch), None) = (cs.next(), cs.next()) else {
+                        return Err(format!("expected `tweak <letter>: ...`, got `{k}`"));
+                    };
+                    if !ch.is_ascii_lowercase() {
+                        return Err(format!("tweak `{ch}`: letters are a-z"));
+                    }
+                    if tweaks.iter().any(|(c, _)| *c == ch) {
+                        return Err(format!("tweak `{ch}` is defined twice"));
+                    }
+                    let t = Tweak::parse(value).map_err(|e| format!("tweak {ch}: {e}"))?;
+                    tweaks.push((ch, t));
                 }
                 k if k.starts_with("say@") || k.starts_with("hint@") => {
                     let (what, rest) = k.split_once('@').unwrap();
@@ -722,30 +856,22 @@ impl Level {
             while col < chars.len() {
                 let c = chars[col];
                 let tile = &mut tiles[row * width + col];
-                match c {
-                    '.' | ' ' => {}
-                    '#' => *tile = Tile::Solid,
-                    '=' => *tile = Tile::OneWay,
-                    '^' => *tile = Tile::SpikesUp,
-                    'v' => *tile = Tile::SpikesDown,
-                    '~' => *tile = Tile::Liquid,
-                    '_' => *tile = Tile::Grease,
-                    'P' => {
+                match glyph_info(c).map(|g| g.glyph) {
+                    _ if c == '.' || c == ' ' => {}
+                    Some(Glyph::Tile(t)) => *tile = t,
+                    Some(Glyph::Start) => {
                         if start.replace((col, row)).is_some() {
                             return Err("more than one `P`".into());
                         }
                     }
-                    'G' => {
+                    Some(Glyph::Goal) => {
                         if goal.replace((col, row)).is_some() {
                             return Err("more than one `G`".into());
                         }
                     }
-                    'o' => things.push(Thing { kind: ThingKind::Nugget, col, row }),
-                    'C' => things.push(Thing { kind: ThingKind::Checkpoint, col, row }),
-                    'F' => things.push(Thing { kind: ThingKind::Fly, col, row }),
-                    'S' => things.push(Thing { kind: ThingKind::Spray, col, row }),
-                    '1'..='9' => {
-                        let digit = c.to_digit(10).unwrap() as usize;
+                    Some(Glyph::Thing(kind)) => things.push(Thing { kind, col, row }),
+                    Some(Glyph::Platform(d)) => {
+                        let digit = d as usize;
                         let start_col = col;
                         while col + 1 < chars.len() && chars[col + 1] == c {
                             col += 1;
@@ -764,12 +890,39 @@ impl Level {
                             kind,
                         });
                     }
-                    other => {
-                        return Err(format!("unknown tile `{other}` at row {row}, col {col}"));
+                    None => {
+                        return Err(format!("unknown tile `{c}` at row {row}, col {col}"));
                     }
                 }
                 col += 1;
             }
+        }
+
+        let mut tweak_cells = Vec::new();
+        if let Some(layer) = layer {
+            if tweaks.is_empty() && layer.trim().is_empty() {
+                // An empty layer: nothing painted.
+            } else {
+                tweak_cells = vec![0u8; width * height];
+                for (row, line) in layer.lines().map(|l| l.trim_end_matches('\r')).enumerate() {
+                    for (col, c) in line.chars().enumerate() {
+                        if c == '.' || c == ' ' {
+                            continue;
+                        }
+                        if row >= height || col >= width {
+                            return Err(format!("tweak layer: `{c}` at row {row}, col {col} is outside the grid"));
+                        }
+                        let k = tweaks
+                            .iter()
+                            .position(|(t, _)| *t == c)
+                            .ok_or_else(|| format!("tweak layer: `{c}` at row {row}, col {col} has no `tweak {c}:` line"))?;
+                        tweak_cells[row * width + col] = k as u8 + 1;
+                    }
+                }
+            }
+        }
+        if tweak_cells.is_empty() {
+            tweaks.clear();
         }
 
         for s in say_at.iter().chain(&hints) {
@@ -793,6 +946,8 @@ impl Level {
             things,
             platforms,
             gates,
+            tweaks,
+            tweak_cells,
         })
     }
 }

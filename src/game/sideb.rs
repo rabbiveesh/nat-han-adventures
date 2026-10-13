@@ -228,7 +228,11 @@ impl SideB {
 
 /// Start Side B level `n` (0-based): the run's resources, then [`AppState::Playing`].
 pub fn start(commands: &mut Commands, n: usize) {
-    let b = SideBLevel::load(n);
+    start_with(commands, n, SideBLevel::load(n));
+}
+
+/// Start Side B on level `b` (numbered `n`: a playtest's is 0).
+pub fn start_with(commands: &mut Commands, n: usize, b: SideBLevel) {
     commands.insert_resource(SideB::new(n, b.setlist));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
@@ -463,7 +467,9 @@ fn han_fate(
     mut says: MessageWriter<HanSays>,
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
+    playtest: Option<Res<super::playtest::Playtest>>,
 ) {
+    let playtest = playtest.is_some();
     let dt = time.delta_secs();
     let level = &active.level;
     let say = |says: &mut MessageWriter<HanSays>, t: &str| {
@@ -483,7 +489,12 @@ fn han_fate(
                 // On to the next Side B level (the strip and the level redraw), or the title
                 // after the last.
                 let n = side.level + 1;
-                if n < SIDE_B_SOURCES.len() {
+                if playtest {
+                    // A playtest plays its one level again.
+                    side.rewound();
+                    side.rewinds = 0;
+                    restart.write(RestartLevel);
+                } else if n < SIDE_B_SOURCES.len() {
                     commands.queue(move |w: &mut World| {
                         let b = SideBLevel::load(n);
                         w.insert_resource(SideB::new(n, b.setlist));

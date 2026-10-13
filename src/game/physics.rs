@@ -40,6 +40,7 @@ use super::groove::{
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
+use crate::level::tweak::{BOUNCE_MAX, Here};
 use crate::level::{Level, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
@@ -99,6 +100,8 @@ pub struct PlayerControl {
     pub cut_armed: bool,
     /// In the air from a laughing-band landing bounce: still counts as grounded for jumping.
     pub bouncing: bool,
+    /// ...from a bounce tweak's spring (a jump then keeps the spring's speed if it's more).
+    pub springing: bool,
     /// The toot left after a waltz jump on ONE: a weak one ([`WALTZ_ONE_TOOT_SPEED`]).
     pub weak_toot: bool,
     /// Standing on grease (as of the last step's landing check).
@@ -123,6 +126,7 @@ impl Default for PlayerControl {
             has_toot: true,
             cut_armed: false,
             bouncing: false,
+            springing: false,
             weak_toot: false,
             on_grease: false,
             weak_ground: false,
@@ -208,12 +212,21 @@ impl Carrier {
 pub struct Fall {
     pub gravity: f32,
     pub max_fall: f32,
+    /// Horizontal drift (px/s) on top of the body's own speed: a tweak's wind or conveyor
+    /// belt (`level::tweak`).
+    pub drift: f32,
 }
 
 impl Fall {
     /// Nat's gravity under `groove`.
     pub fn of(groove: &Groove) -> Self {
-        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale() }
+        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale(), drift: 0.0 }
+    }
+
+    /// Under the level's tweaks where the body is ([`Here`]): gravity scaled, wind and belt
+    /// drifting it.
+    pub fn here(self, here: &Here) -> Self {
+        Fall { gravity: self.gravity * here.gravity, drift: self.drift + here.wind + here.belt, ..self }
     }
 }
 
@@ -251,8 +264,12 @@ pub fn step_body(
     blockers: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Contact {
-    // --- Gravity.
+    // --- Gravity (a tweak's negative gravity floats you up, as fast as you'd fall).
+    let rise = body.vel.y;
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
+    if fall.gravity < 0.0 {
+        body.vel.y = body.vel.y.min(rise.max(fall.max_fall));
+    }
 
     // --- Carried by what we stood on.
     let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
@@ -264,7 +281,7 @@ pub fn step_body(
     let mut blocked_x = false;
 
     // --- X.
-    let dx = (body.vel.x + body.launch) * dt + carry.x;
+    let dx = (body.vel.x + body.launch + fall.drift) * dt + carry.x;
     let x_before = pos.x;
     pos.x += dx;
     if dx != 0.0 {
@@ -456,7 +473,9 @@ fn player_step(
     if axis != 0.0 {
         ctl.facing = axis;
     }
-    let run = groove.run_scale();
+    // Per-tile tweaks (`level::tweak`): the air Nat's in, the floor he's on.
+    let here = level.here(pos.0, body.half, body.on_ground && body.riding.is_none());
+    let run = groove.run_scale() * here.run;
     let target = axis * RUN_SPEED * run;
     // Slipping on grease (no sweaty grip): can't brake, steers weakly, can't jump.
     let slipping = body.on_ground && ctl.on_grease && !groove.grip();
@@ -466,9 +485,9 @@ fn player_step(
         * if !body.on_ground {
             AIR_ACCEL
         } else if axis == 0.0 || axis * body.vel.x < 0.0 {
-            GROUND_DECEL * if slipping { GREASE_DECEL } else { groove.landing_decel(ctl.since_landing) }
+            GROUND_DECEL * here.friction * if slipping { GREASE_DECEL } else { groove.landing_decel(ctl.since_landing) }
         } else {
-            GROUND_ACCEL * if slipping { GREASE_STEER } else { 1.0 }
+            GROUND_ACCEL * here.friction.max(0.1) * if slipping { GREASE_STEER } else { 1.0 }
         };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
 
@@ -521,7 +540,9 @@ fn player_step(
             ctl.weak_toot = false;
             boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false, boing: false });
         } else {
-            body.vel.y = JUMP_SPEED * groove.jump_scale();
+            // Off a spring (a bounce tweak) the jump keeps the spring's speed if that's more.
+            let spring = if ctl.springing { body.vel.y } else { 0.0 };
+            body.vel.y = (JUMP_SPEED * groove.jump_scale() * here.jump).max(spring);
             if groove.on_the_one() {
                 // A waltz step on ONE: higher, golden, and its toot is a weak one.
                 body.vel.y *= WALTZ_ONE_BOOST;
@@ -535,6 +556,7 @@ fn player_step(
         ctl.cut_armed = true;
         ctl.uncut = 0.0;
         ctl.bouncing = false;
+        ctl.springing = false;
         // Still riding for this step: `step_body` carries the jump off with the platform and
         // hands over its speed.
         body.on_ground = false;
@@ -573,9 +595,12 @@ fn player_step(
             blockers.push((p.0 - h, p.0 + h));
         }
     }
-    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, dt);
+    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove).here(&here), &carriers, &blockers, dt);
     if let Some(v) = contact.launch {
         body.launch = v.clamp(-LAUNCH_MAX, LAUNCH_MAX);
+    } else if contact.was_on_ground && !contact.ground && !contact.blocked_x && here.belt != 0.0 {
+        // Off a conveyor belt: keep its speed, like a platform's.
+        body.launch = here.belt.clamp(-LAUNCH_MAX, LAUNCH_MAX);
     }
     let mut ground = contact.ground;
     let on_grease = ground && contact.riding.is_none() && grease_underfoot(level, pos.0, body.half);
@@ -591,6 +616,17 @@ fn player_step(
         ctl.weak_toot = false;
         let was_bouncing = ctl.bouncing;
         ctl.bouncing = false;
+        ctl.springing = false;
+        // A bounce tweak's floor: spring back up (a jump off it keeps the spring's speed).
+        let spring = level.bounce_underfoot(pos.0, body.half);
+        if spring > 0.0 && contact.riding.is_none() && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN_SPEED {
+            body.vel.y = (contact.fall_speed * spring).min(BOUNCE_MAX);
+            ctl.bouncing = true;
+            ctl.springing = true;
+            body.on_ground = false;
+            body.riding = None;
+            return;
+        }
         ctl.weak_ground = contact.riding.and_then(|e| han.get(e).ok()).is_some_and(|(_, _, _, h)| h.weak);
         // The laughing band's boing: dropping onto Han's head (where he'd boost) springs Nat
         // off it at the full boost, no jump needed (fired up, a jump off him is the throw).

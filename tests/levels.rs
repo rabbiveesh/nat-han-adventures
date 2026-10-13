@@ -48,7 +48,7 @@ fn levels_are_valid_and_beatable() {
             .map(|(i, l)| {
                 let phys = &phys;
                 scope.spawn(move || {
-                    let opts = Options { dump: dump && only.is_none_or(|o| o == i + 1) };
+                    let opts = Options { dump: dump && only.is_none_or(|o| o == i + 1), ..Options::default() };
                     l.as_ref().ok().map(|l| check_with(l, &opts, phys))
                 })
             })

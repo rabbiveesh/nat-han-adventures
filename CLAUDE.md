@@ -71,6 +71,14 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
   level's solution is a plan in `tests/side_b.rs` (`try_a_plan` tries one). Ways in: Up Up Down Down on
   the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
+- `src/bin/level_editor/` the native level editor (`cargo run --bin level-editor [-- levels/x.txt]`;
+  the `editor` feature): egui on Bevy, the level drawn with the game's sprites, palette from
+  `level::GLYPHS` (a new tile is a `Tile` + a row there), gate marks, Han's lines, the tweak
+  layer, Side B set lists; Validate (F7, on demand) draws the validator's reach map; Play (F5)
+  runs the real game on it in a second window (`NATHAN_LEVEL=<file> cargo run`, reloads on
+  save). Its document (`level::doc`) saves untouched lines byte for byte; new levels go in
+  `levels/custom/`. Per-tile physics and Han's zones: `level::tweak` (a second `---` grid of
+  letters); Nat and Han obey them, the validator and Han's nav don't. `tests/tweaks.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.
