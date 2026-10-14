@@ -1,12 +1,13 @@
 //! Title screen: big title, the stars bobbing, blinking "PRESS ENTER", and the choice of
-//! STORY (level select) or FREE PLAY.
+//! STORY (level select), FREE PLAY, or SIDE B once the story's last level is cleared.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use super::{palette::*, *};
 use crate::input::Action;
-use crate::state::AppState;
+use crate::save::Progress;
+use crate::state::{AppState, Shelf};
 
 pub fn plugin(app: &mut App) {
     // Spawned from Update (not OnEnter): the initial state's OnEnter runs before PreStartup,
@@ -23,13 +24,18 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 struct TitleScreen;
 
-/// The menu: story mode or free play.
-const OPTIONS: [&str; 2] = ["STORY", "FREE PLAY"];
+/// The menu: story mode, free play, and Side B (only shown once unlocked).
+const OPTIONS: [&str; 3] = ["STORY", "FREE PLAY", "SIDE B"];
+
+/// How many of `OPTIONS` the title shows.
+fn shown(progress: Option<&Progress>) -> usize {
+    if progress.is_some_and(Progress::side_b_unlocked) { 3 } else { 2 }
+}
 
 #[derive(Resource, Default)]
 struct TitleCursor(usize, Vec<i32>);
 
-/// The hidden way into Side B (a prototype, `game::sideb`): Up Up Down Down on the title.
+/// The hidden way into Side B (`game::sideb`) before it's unlocked: Up Up Down Down on the title.
 const SIDE_B_COMBO: [i32; 4] = [-1, -1, 1, 1];
 
 #[derive(Component)]
@@ -41,7 +47,7 @@ struct Bob {
     phase: f32,
 }
 
-fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>) {
+fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, progress: Option<Res<Progress>>) {
     let sprites = sprites.as_deref();
     let f = &*font;
     commands
@@ -52,7 +58,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn((label(f, GAME_SUBTITLE, 16.0, GOLD), Node { margin: UiRect::top(px(8.0)), ..default() }));
             // The stars, bobbing on a little stage.
             root.spawn(Node {
-                margin: UiRect::vertical(px(16.0)),
+                margin: UiRect::vertical(px(12.0)),
                 column_gap: px(32.0),
                 align_items: AlignItems::End,
                 ..default()
@@ -76,11 +82,11 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn(label(f, GAME_TAGLINE, 8.0, DIM_CREAM));
             root.spawn((
                 label(f, "PRESS ENTER", 8.0, GOLD),
-                Node { margin: UiRect::top(px(16.0)), ..default() },
+                Node { margin: UiRect::top(px(12.0)), ..default() },
                 Blink(1.0),
             ));
-            for (i, o) in OPTIONS.iter().enumerate() {
-                root.spawn((label(f, *o, 8.0, CREAM), TitleOption(i), Node { margin: UiRect::top(px(6.0)), ..default() }));
+            for (i, o) in OPTIONS.iter().enumerate().take(shown(progress.as_deref())) {
+                root.spawn((label(f, *o, 8.0, CREAM), TitleOption(i), Node { margin: UiRect::top(px(4.0)), ..default() }));
             }
             root.spawn(Node { flex_grow: 1.0, ..default() });
             root.spawn((
@@ -105,14 +111,16 @@ fn input(
     mut commands: Commands,
     mut next: ResMut<NextState<AppState>>,
     mut sfx_w: MessageWriter<PlaySfx>,
+    progress: Option<Res<Progress>>,
 ) {
+    let options = shown(progress.as_deref());
     let Some(mut cursor) = cursor else {
         commands.init_resource::<TitleCursor>();
         return;
     };
     let d = nav(&action).y;
     if d != 0 {
-        cursor.0 = (cursor.0 as i32 + d).rem_euclid(OPTIONS.len() as i32) as usize;
+        cursor.0 = (cursor.0 as i32 + d).rem_euclid(options as i32) as usize;
         sfx(&mut sfx_w, Sfx::MenuMove);
         cursor.1.push(d);
         let n = cursor.1.len();
@@ -122,7 +130,8 @@ fn input(
         if cursor.1 == SIDE_B_COMBO {
             cursor.1.clear();
             sfx(&mut sfx_w, Sfx::MenuSelect);
-            crate::game::sideb::start(&mut commands, 0);
+            commands.insert_resource(Shelf::SideB);
+            next.set(AppState::LevelSelect);
             return;
         }
     }
@@ -131,7 +140,13 @@ fn input(
     }
     if action.just_pressed(&Action::Confirm) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
-        next.set(if cursor.0 == 1 { AppState::FreePlaySetup } else { AppState::LevelSelect });
+        match cursor.0 {
+            1 => next.set(AppState::FreePlaySetup),
+            i => {
+                commands.insert_resource(if i == 0 { Shelf::Story } else { Shelf::SideB });
+                next.set(AppState::LevelSelect);
+            }
+        }
     }
 }
 
