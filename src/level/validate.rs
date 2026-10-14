@@ -3209,7 +3209,8 @@ fn line_errors(level: &Level) -> Vec<String> {
     let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
     let lines = level.checkpoint_lines();
     for (k, l) in lines.iter().enumerate() {
-        if l.is_none() {
+        // (Nat alone: nobody to say it.)
+        if l.is_none() && !level.solo {
             errs.push(format!("checkpoint at col {} row {} has no line (say@)", cps[k].0, cps[k].1));
         }
     }
