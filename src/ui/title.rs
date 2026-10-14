@@ -7,7 +7,7 @@ use leafwing_input_manager::prelude::*;
 use super::{palette::*, *};
 use crate::input::Action;
 use crate::save::Progress;
-use crate::state::AppState;
+use crate::state::{AppState, Shelf};
 
 pub fn plugin(app: &mut App) {
     // Spawned from Update (not OnEnter): the initial state's OnEnter runs before PreStartup,
@@ -58,7 +58,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn((label(f, GAME_SUBTITLE, 16.0, GOLD), Node { margin: UiRect::top(px(8.0)), ..default() }));
             // The stars, bobbing on a little stage.
             root.spawn(Node {
-                margin: UiRect::vertical(px(16.0)),
+                margin: UiRect::vertical(px(12.0)),
                 column_gap: px(32.0),
                 align_items: AlignItems::End,
                 ..default()
@@ -82,11 +82,11 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn(label(f, GAME_TAGLINE, 8.0, DIM_CREAM));
             root.spawn((
                 label(f, "PRESS ENTER", 8.0, GOLD),
-                Node { margin: UiRect::top(px(16.0)), ..default() },
+                Node { margin: UiRect::top(px(12.0)), ..default() },
                 Blink(1.0),
             ));
             for (i, o) in OPTIONS.iter().enumerate().take(shown(progress.as_deref())) {
-                root.spawn((label(f, *o, 8.0, CREAM), TitleOption(i), Node { margin: UiRect::top(px(6.0)), ..default() }));
+                root.spawn((label(f, *o, 8.0, CREAM), TitleOption(i), Node { margin: UiRect::top(px(4.0)), ..default() }));
             }
             root.spawn(Node { flex_grow: 1.0, ..default() });
             root.spawn((
@@ -130,7 +130,8 @@ fn input(
         if cursor.1 == SIDE_B_COMBO {
             cursor.1.clear();
             sfx(&mut sfx_w, Sfx::MenuSelect);
-            crate::game::sideb::start(&mut commands, 0);
+            commands.insert_resource(Shelf::SideB);
+            next.set(AppState::LevelSelect);
             return;
         }
     }
@@ -140,9 +141,11 @@ fn input(
     if action.just_pressed(&Action::Confirm) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
         match cursor.0 {
-            0 => next.set(AppState::LevelSelect),
             1 => next.set(AppState::FreePlaySetup),
-            _ => crate::game::sideb::start(&mut commands, 0),
+            i => {
+                commands.insert_resource(if i == 0 { Shelf::Story } else { Shelf::SideB });
+                next.set(AppState::LevelSelect);
+            }
         }
     }
 }

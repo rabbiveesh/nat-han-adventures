@@ -38,7 +38,10 @@ use crate::level::{Level, TILE, Tile, Topic};
 use crate::state::{AppState, PlayState};
 
 /// Side B's levels, in play order.
-pub static SIDE_B_SOURCES: [&str; 8] = [
+/// How many Side B levels there are.
+pub const SIDE_B_COUNT: usize = 10;
+
+pub static SIDE_B_SOURCES: [&str; SIDE_B_COUNT] = [
     include_str!("../../levels/side-b/b1.txt"),
     include_str!("../../levels/side-b/b2.txt"),
     include_str!("../../levels/side-b/b3.txt"),
@@ -47,6 +50,8 @@ pub static SIDE_B_SOURCES: [&str; 8] = [
     include_str!("../../levels/side-b/b6.txt"),
     include_str!("../../levels/side-b/b7.txt"),
     include_str!("../../levels/side-b/b8.txt"),
+    include_str!("../../levels/side-b/b9.txt"),
+    include_str!("../../levels/side-b/b10.txt"),
 ];
 
 /// A level rewinds this long after Han's death (the needle scratch).
@@ -167,6 +172,11 @@ impl SideBLevel {
         Ok(SideBLevel { level: Level::parse(&rest)?, setlist })
     }
 
+    /// Level `n`'s name (its `name:` header), without parsing the rest.
+    pub fn name(n: usize) -> &'static str {
+        SIDE_B_SOURCES[n].lines().find_map(|l| l.strip_prefix("name:")).map_or("???", str::trim)
+    }
+
     pub fn load(n: usize) -> SideBLevel {
         SideBLevel::parse(SIDE_B_SOURCES[n]).unwrap_or_else(|e| panic!("side B level {}: {e}", n + 1))
     }
@@ -252,6 +262,7 @@ pub fn start(commands: &mut Commands, n: usize) {
     commands.insert_resource(SideB::new(n, b.setlist));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
+    commands.insert_resource(crate::state::Shelf::SideB);
     commands.queue(|w: &mut World| w.resource_mut::<NextState<AppState>>().set(AppState::Playing));
 }
 
@@ -517,6 +528,7 @@ fn han_fate(
     mut says: MessageWriter<HanSays>,
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
+    progress: Option<ResMut<crate::save::Progress>>,
 ) {
     let dt = time.delta_secs();
     let level = &active.level;
@@ -545,7 +557,7 @@ fn han_fate(
                         w.write_message(RestartLevel);
                     });
                 } else {
-                    next.set(AppState::Title);
+                    next.set(AppState::LevelSelect);
                 }
             } else {
                 side.phase = Phase::Cleared { t: t - dt };
@@ -564,6 +576,9 @@ fn han_fate(
         let (min, max) = (floor - Vec2::new(5.0, 0.0), floor + Vec2::new(5.0, 2.0 * TILE));
         if pos.0.x + HALF.x > min.x && pos.0.x - HALF.x < max.x && pos.0.y + HALF.y > min.y && pos.0.y - HALF.y < max.y {
             side.phase = Phase::Cleared { t: CLEARED_SECS };
+            if let Some(mut progress) = progress {
+                progress.record_side_b(side.level, side.rewinds);
+            }
             say(&mut says, CLEARED_LINE);
             return;
         }

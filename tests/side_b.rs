@@ -10,9 +10,11 @@ use nat_han_adventures::{
     events::HanSays,
     game::{
         Groove, Han, Pos,
-        sideb::{self, Fate, Phase, SetCall, SideB},
+        sideb::{self, Fate, Phase, SIDE_B_COUNT, SetCall, SideB},
     },
     level::TILE,
+    save::Progress,
+    state::{AppState, Shelf},
 };
 
 const DT: f64 = 1.0 / 60.0;
@@ -101,7 +103,7 @@ fn said(app: &App, line: &str) -> bool {
 // Every level's routes are `play` plans, written as `try_a_plan` takes them: `col/k` calls
 // set-list call `k` (0 giant, 1 gap, 2 melt) once Han's past column `col`; `col/1k` only picks
 // it, for the nuggets ahead. The set lists start empty: every call is a nugget Han grabbed.
-const ROUTES: [&[(&str, &str)]; 8] = [
+const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
     // Down the Drain: over the deck (its nuggets) or through the tunnel (one).
     &[("over", "7/0 52/0 75/11 95/10 106/1 136/0"), ("under", "5/11 7/0 106/1 136/0")],
     // Spike Alley: over the alley's roof or through it.
@@ -146,6 +148,35 @@ const ROUTES: [&[(&str, &str)]; 8] = [
         ("leap", "5.5/11 9/0 57/1 106/0 129/1"),
         ("drop", "5.5/12 9/0 61/2 73.5/11 106/0 129/1"),
         ("under", "1.5/12 9/2 56.5/10 62/2 73.5/11 106/0 129/1"),
+    ],
+    // Clog Dance: the deck fork (three ways), then the alley (two), all six combinations clear.
+    &[
+        ("leap, over", "5/11 9/0 38/12 45/1 90/0 125/0 182/2 214/0 244/1"),
+        ("drop, under", "5/12 7/11 9/0 38/12 50/2 90/0 182/2 214/0 244/1"),
+        ("under, over", "3/12 7/11 9/2 50/2 52/10 90/0 125/0 182/2 214/0 244/1"),
+    ],
+    // The Final Flush: the deck fork, the alley, the deck fork again.
+    &[
+        (
+            "leap, over, leap",
+            "4.5/11 7.5/10 14/0 50.5/12 59/1 104/0 139/0 162.5/11 172.5/10 196/2 221.5/11 226/1 256/0 \
+             292.5/12 301/1 346/0 353/2 379.5/11 396/1",
+        ),
+        (
+            "under, over, leap",
+            "1.5/12 7.5/10 16/2 58.5/10 63/2 104/0 139/0 162.5/11 172.5/10 196/2 221.5/11 226/1 256/0 \
+             292.5/12 301/1 346/0 353/2 379.5/11 396/1",
+        ),
+        (
+            "leap, under, under",
+            "4.5/11 7.5/10 14/0 45.5/12 50.5/11 59/1 104/0 169.5/12 192/2 226/1 258/2 300.5/10 305/2 \
+             346/0 353/2 379.5/11 396/1",
+        ),
+        (
+            "drop, over, drop",
+            "7.5/12 14/0 50.5/11 62/2 104/0 139/0 162.5/12 172.5/10 196/2 226/1 256/0 292.5/12 304/2 \
+             346/0 353/2 379.5/11 396/1",
+        ),
     ],
 ];
 
@@ -330,6 +361,26 @@ fn a_cleared_level_goes_on_to_the_next() {
     assert_eq!(side(&app).phase, Phase::Playing);
     assert_eq!(side(&app).left, vec![0, 0, 0], "Spike Alley's set list, empty");
     assert!(col(&mut app) < 5.0, "Han's at its start");
+    let progress = app.world().resource::<Progress>();
+    assert_eq!((progress.side_b_unlocked, progress.side_b_rewinds[0]), (2, Some(0)), "saved: B2 open");
+}
+
+#[test]
+fn the_last_level_goes_back_to_side_bs_level_select() {
+    let n = SIDE_B_COUNT - 1;
+    let mut app = app(n);
+    for (c, k) in plan(ROUTES[n][0].1) {
+        until(&mut app, 60.0, |a| col(a) >= c).unwrap();
+        if k >= PICK {
+            pick(&mut app, k - PICK);
+        } else {
+            call(&mut app, k);
+        }
+    }
+    until(&mut app, 60.0, |a| a.world().get_resource::<SideB>().is_none()).expect("left Side B");
+    assert_eq!(*app.world().resource::<State<AppState>>().get(), AppState::LevelSelect);
+    assert_eq!(*app.world().resource::<Shelf>(), Shelf::SideB);
+    assert_eq!(app.world().resource::<Progress>().side_b_rewinds[n], Some(0));
 }
 
 /// Pick set-list call `k` (Left/Right) and call it (Down).

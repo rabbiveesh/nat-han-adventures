@@ -10,6 +10,7 @@
 use bevy::prelude::*;
 
 use crate::adapt::{Calibration, Outcome, PlayerProfile, Probe, Skill, StoryAssist, WindowEntry};
+use crate::game::sideb::SIDE_B_COUNT;
 use crate::game::{AdaptiveProfile, StoryAssistState};
 use crate::level::{LEVEL_COUNT, Topic};
 
@@ -47,6 +48,10 @@ pub struct Progress {
     /// The other mechanics (a toot, shelves, rides, flies, cans, stains, grease) the player has
     /// been shown on a lesson card, per [`Topic`] (`Topic::ALL` order; only those topics are set).
     pub taught_tips: [bool; Topic::ALL.len()],
+    /// Side B levels `0..side_b_unlocked` are playable. Always >= 1.
+    pub side_b_unlocked: usize,
+    /// The fewest rewinds per cleared Side B level.
+    pub side_b_rewinds: [Option<u32>; SIDE_B_COUNT],
 }
 
 /// Han's tricks, each taught by a lesson card at its first hint spot (`ui::lesson`).
@@ -126,6 +131,8 @@ impl Default for Progress {
             taught_call: false,
             taught_tricks: [false; HanTrick::ALL.len()],
             taught_tips: [false; Topic::ALL.len()],
+            side_b_unlocked: 1,
+            side_b_rewinds: [None; SIDE_B_COUNT],
         }
     }
 }
@@ -170,6 +177,20 @@ impl Progress {
         level < self.unlocked
     }
 
+    /// Record a cleared Side B level after `rewinds` rewinds: unlock the next one and keep the
+    /// fewest. Whether it's a new best.
+    pub fn record_side_b(&mut self, level: usize, rewinds: u32) -> bool {
+        if level >= SIDE_B_COUNT {
+            return false;
+        }
+        self.side_b_unlocked = self.side_b_unlocked.max((level + 2).min(SIDE_B_COUNT));
+        let best = self.side_b_rewinds[level].is_none_or(|b| rewinds < b);
+        if best {
+            self.side_b_rewinds[level] = Some(rewinds);
+        }
+        best
+    }
+
     /// Side B (`game::sideb`) opens on the title once the last story level is cleared.
     pub fn side_b_unlocked(&self) -> bool {
         self.best_nuggets[LEVEL_COUNT - 1].is_some()
@@ -185,11 +206,14 @@ impl Progress {
     /// taught-call
     /// tricks throw
     /// tips toot oneway
+    /// sideb-unlocked 2
+    /// sideb-level 0 14
     /// ```
     /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
     /// `audio-delay <ms>` only when set; `taught` the band counters taught, `taught-call` the
     /// call lesson seen, `tricks` Han's tricks taught, `tips` the other mechanics' cards seen, only
-    /// when any.)
+    /// when any; `sideb-unlocked`, and `sideb-level <index> <fewest rewinds>` per cleared Side B
+    /// level, once Side B's been cleared at all.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -217,6 +241,14 @@ impl Progress {
         let tips: Vec<&str> = Topic::ALL.iter().filter(|t| self.taught_tips[t.index()]).map(|t| t.word()).collect();
         if !tips.is_empty() {
             s.push_str(&format!("tips {}\n", tips.join(" ")));
+        }
+        if self.side_b_unlocked > 1 {
+            s.push_str(&format!("sideb-unlocked {}\n", self.side_b_unlocked));
+        }
+        for (i, r) in self.side_b_rewinds.iter().enumerate() {
+            if let Some(r) = r {
+                s.push_str(&format!("sideb-level {i} {r}\n"));
+            }
         }
         s
     }
@@ -256,6 +288,18 @@ impl Progress {
                     }
                 }
                 ["taught-call"] => p.taught_call = true,
+                ["sideb-unlocked", n] => {
+                    if let Ok(n) = n.parse::<usize>() {
+                        p.side_b_unlocked = n.clamp(1, SIDE_B_COUNT);
+                    }
+                }
+                ["sideb-level", i, r] => {
+                    if let (Ok(i), Ok(r)) = (i.parse::<usize>(), r.parse())
+                        && i < SIDE_B_COUNT
+                    {
+                        p.side_b_rewinds[i] = Some(r);
+                    }
+                }
                 ["tricks", words @ ..] => {
                     for w in words {
                         if let Some(t) = HanTrick::ALL.iter().find(|t| t.name() == *w) {
@@ -530,6 +574,19 @@ mod tests {
         p.record(LEVEL_COUNT - 1, 0, 1.0);
         assert!(p.side_b_unlocked());
         assert!(Progress::from_text(&p.to_text()).unwrap().side_b_unlocked(), "it survives a save");
+    }
+
+    #[test]
+    fn side_b_keeps_its_own_progress() {
+        let mut p = Progress::default();
+        assert!(p.record_side_b(0, 14));
+        assert!(!p.record_side_b(0, 20), "more rewinds is no best");
+        assert!(p.record_side_b(0, 3));
+        assert_eq!((p.side_b_unlocked, p.side_b_rewinds[0]), (2, Some(3)));
+        p.record_side_b(SIDE_B_COUNT - 1, 0);
+        assert_eq!(p.side_b_unlocked, SIDE_B_COUNT);
+        assert_eq!(p.unlocked, 1, "the story's untouched");
+        assert_eq!(Progress::from_text(&p.to_text()).unwrap(), p, "it survives a save");
     }
 
     #[test]
