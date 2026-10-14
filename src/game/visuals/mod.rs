@@ -88,16 +88,29 @@ fn hide_nat(mut nat: Query<&mut Visibility, With<Player>>) {
     }
 }
 
-/// Dev shortcut: `NATHAN_LEVEL=3 cargo run` starts straight in level 3.
+/// Dev shortcut: `NATHAN_LEVEL=3 cargo run` starts straight in level 3, and
+/// `NATHAN_LEVEL_FILE=levels/secret/gauntlet.txt` plays that file in its place (level 1 if
+/// `NATHAN_LEVEL` isn't set).
 #[cfg(not(target_arch = "wasm32"))]
 fn dev_jump_to_level(
     mut current: ResMut<crate::state::CurrentLevel>,
     mut next: ResMut<NextState<crate::state::AppState>>,
+    mut levels: ResMut<crate::level::Levels>,
 ) {
-    if let Some(n) = std::env::var("NATHAN_LEVEL").ok().and_then(|v| v.parse::<usize>().ok()) {
-        current.0 = n.saturating_sub(1);
-        next.set(crate::state::AppState::Playing);
+    let n = std::env::var("NATHAN_LEVEL").ok().and_then(|v| v.parse::<usize>().ok());
+    let file = std::env::var("NATHAN_LEVEL_FILE").ok();
+    if n.is_none() && file.is_none() {
+        return;
     }
+    current.0 = n.unwrap_or(1).saturating_sub(1);
+    if let Some(path) = file {
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("NATHAN_LEVEL_FILE {path}: {e}"));
+        let level = crate::level::Level::parse(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
+        if let Some(slot) = levels.0.get_mut(current.0) {
+            *slot = level;
+        }
+    }
+    next.set(crate::state::AppState::Playing);
 }
 
 /// Loops through the frames of `id` at `fps`.
