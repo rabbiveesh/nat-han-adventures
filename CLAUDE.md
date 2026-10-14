@@ -78,7 +78,8 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   runs the real game on it in a second window (`NATHAN_LEVEL=<file> cargo run`, reloads on
   save). Its document (`level::doc`) saves untouched lines byte for byte; new levels go in
   `levels/custom/`. Per-tile physics and Han's zones: `level::tweak` (a second `---` grid of
-  letters); Nat and Han obey them, the validator and Han's nav don't. `tests/tweaks.rs`.
+  letters); Nat, Han, the validator and Han's nav obey them (not friction, for the validator; no cost
+  without tweaks). `tests/tweaks.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

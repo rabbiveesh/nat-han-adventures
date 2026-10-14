@@ -21,6 +21,8 @@ mod pickups;
 mod platforms;
 pub mod playtest;
 pub mod sideb;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod sideb_solve;
 mod visuals;
 
 pub mod assist;

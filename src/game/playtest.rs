@@ -34,7 +34,7 @@ pub enum Loaded {
 /// Parse a level file: Side B if it has a `setlist:` line.
 pub fn load_text(text: &str) -> Result<Loaded, String> {
     let side_b = text.lines().take_while(|l| l.trim() != "---").any(|l| l.split_once(':').is_some_and(|(k, _)| k.trim() == "setlist"));
-    if side_b { SideBLevel::parse(text).map(Loaded::SideB) } else { Level::parse(text).map(Loaded::SideA) }
+    if side_b { SideBLevel::parse(&strip_solution(text)).map(Loaded::SideB) } else { Level::parse(text).map(Loaded::SideA) }
 }
 
 pub(super) fn plugin(app: &mut App) {
@@ -164,4 +164,16 @@ fn again(input: Single<&ActionState<Action>>, mut next: ResMut<NextState<AppStat
 
 fn quit(mut exit: MessageWriter<AppExit>) {
     exit.write(AppExit::Success);
+}
+
+/// A Side B level's `solution:` line (the editor's: `sideb_solve`) is no part of the level.
+fn strip_solution(text: &str) -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        super::sideb_solve::split_solution(text).0
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        text.to_string()
+    }
 }

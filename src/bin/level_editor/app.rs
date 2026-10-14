@@ -6,6 +6,8 @@ use std::io::BufRead;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc::{Receiver, channel};
+
+use nat_han_adventures::game::sideb_solve;
 use std::sync::{Arc, OnceLock};
 
 use nat_han_adventures::game::sideb::SideBLevel;
@@ -36,6 +38,24 @@ pub struct Entry {
     pub label: String,
 }
 
+/// Han's proof of a Side B level (`game::sideb_solve`).
+#[derive(Debug, Clone)]
+pub enum HanProof {
+    /// Replaying the level's `solution:` line, or searching for a plan (plays so far, and the
+    /// furthest Han got).
+    Replaying,
+    Searching { plays: usize, best_col: f32 },
+    /// The `solution:` line clears it.
+    Holds,
+    /// The `solution:` line doesn't: how it ended.
+    Fails { fate: String, col: f32 },
+    /// The search found a plan (not yet the level's `solution:`).
+    Found { plan: String },
+    /// No plan found: the furthest one and how it ended.
+    Stuck { plan: String, fate: String, col: f32, plays: usize },
+    Error(String),
+}
+
 /// A validator run's findings, for the doc text it ran on.
 pub struct Validation {
     pub text: String,
@@ -46,6 +66,15 @@ pub struct Validation {
     /// The reach map (`validate` module's dump): one row of chars per grid row.
     pub reach: Vec<Vec<char>>,
     pub secs: f32,
+    /// Side B: Han's proof (it comes in after the rest, from `HanRun`).
+    pub han: Option<HanProof>,
+}
+
+/// Han's proof running: its updates, and how to stop it.
+pub struct HanRun {
+    rx: Receiver<HanProof>,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    text: String,
 }
 
 /// The doc, parsed (or why not).
@@ -102,6 +131,7 @@ pub struct Editor {
 
     pub validation: Option<Validation>,
     validating: Option<Receiver<Validation>>,
+    han_run: Option<HanRun>,
     pub validate_started: Option<std::time::Instant>,
 
     pub child: Option<Child>,
@@ -159,9 +189,14 @@ pub fn slug(name: &str) -> String {
     if s.is_empty() { "untitled".into() } else { s }
 }
 
+/// The doc as a Side B level (its `solution:` line aside).
+pub fn side_b_level(doc: &LevelDoc) -> Result<SideBLevel, String> {
+    SideBLevel::parse(&sideb_solve::split_solution(&doc.text()).0)
+}
+
 pub fn parse(doc: &LevelDoc) -> Parsed {
     let side_b = doc.is_side_b();
-    let level = if side_b { SideBLevel::parse(&doc.text()).map(|b| b.level) } else { doc.level() };
+    let level = if side_b { side_b_level(doc).map(|b| b.level) } else { doc.level() };
     Parsed { level, side_b }
 }
 
@@ -200,6 +235,7 @@ impl Editor {
             child: None,
             play_log: Vec::new(),
             play_rx: None,
+            han_run: None,
             live: false,
             pushed: String::new(),
             status: String::new(),
@@ -365,7 +401,7 @@ impl Editor {
                 summary.push("Side B: the story's house rules (nuggets, checkpoints, lines) don't apply".into());
             }
             if !level.tweaks.is_empty() {
-                summary.push("the validator doesn't model tweaks: playtest them".into());
+                summary.push("tweaks: the validator models them (not friction)".into());
             }
             for (gate, to_goal, nuggets, splats) in &report.gates {
                 summary.push(format!(
@@ -400,11 +436,88 @@ impl Editor {
                 })
                 .collect();
             let rules = if side_b { Vec::new() } else { report.rules };
-            let _ = tx.send(Validation { text, errs: report.errs, rules, summary, reach, secs: t0.elapsed().as_secs_f32() });
+            let han = side_b.then_some(HanProof::Replaying);
+            let _ = tx.send(Validation { text, errs: report.errs, rules, summary, reach, secs: t0.elapsed().as_secs_f32(), han });
         });
         self.validating = Some(rx);
+        self.stop_han();
+        if side_b {
+            self.prove_with_han();
+        }
         self.validate_started = Some(std::time::Instant::now());
         self.status = "validating...".into();
+    }
+
+    /// Side B: Han replays the `solution:` line, or (none) searches for a plan, in the real
+    /// game, headless (`game::sideb_solve`), on its own threads.
+    fn prove_with_han(&mut self) {
+        let text = self.doc.text();
+        let (rest, solution) = sideb_solve::split_solution(&text);
+        let b = match SideBLevel::parse(&rest) {
+            Ok(b) => b,
+            Err(e) => return self.han_result(HanProof::Error(e)),
+        };
+        let (tx, rx) = channel();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let stop = cancel.clone();
+        let fate = |r: &sideb_solve::Run| r.fate.map_or("ran out of time".to_string(), |f| format!("{f:?}").to_lowercase());
+        std::thread::spawn(move || {
+            let proof = match solution {
+                Some(s) => match sideb_solve::parse_plan(&b, &s) {
+                    Ok(plan) => {
+                        let r = sideb_solve::play(&b, &plan);
+                        if r.cleared { HanProof::Holds } else { HanProof::Fails { fate: fate(&r), col: r.col } }
+                    }
+                    Err(e) => HanProof::Error(format!("solution: {e}")),
+                },
+                None => {
+                    let progress = |p: &sideb_solve::Progress| {
+                        let _ = tx.send(HanProof::Searching { plays: p.plays, best_col: p.best_col });
+                    };
+                    let progress = std::sync::Mutex::new(progress);
+                    match sideb_solve::solve(&b, sideb_solve::SolveOpts::default(), &|p| (progress.lock().unwrap())(p), &stop) {
+                        sideb_solve::Solved::Cleared(plan) => {
+                            HanProof::Found { plan: sideb_solve::plan_text(&b, &plan) }
+                        }
+                        sideb_solve::Solved::Stuck { plan, run, plays } => {
+                            HanProof::Stuck { plan: sideb_solve::plan_text(&b, &plan), fate: fate(&run), col: run.col, plays }
+                        }
+                    }
+                }
+            };
+            let _ = tx.send(proof);
+        });
+        self.han_run = Some(HanRun { rx, cancel, text });
+    }
+
+    fn han_result(&mut self, proof: HanProof) {
+        if let Some(v) = &mut self.validation {
+            v.han = Some(proof);
+        }
+    }
+
+    /// Han's proof is running.
+    pub fn proving(&self) -> bool {
+        self.han_run.is_some()
+    }
+
+    pub fn stop_han(&mut self) {
+        if let Some(r) = self.han_run.take() {
+            r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+            if self.validation.as_ref().is_some_and(|v| v.text == r.text) {
+                self.han_result(HanProof::Error("stopped".into()));
+            }
+        }
+    }
+
+    /// Write the plan Han's search found as the level's `solution:` line.
+    pub fn keep_solution(&mut self, plan: &str) {
+        let plan = plan.to_string();
+        self.field_edit("solution", |d| d.set_field("solution", Some(&plan)));
+        if let Some(v) = &mut self.validation {
+            v.han = Some(HanProof::Holds);
+            v.text = self.doc.text();
+        }
     }
 
     /// Is the last validation for the doc as it is now?
@@ -504,9 +617,39 @@ impl Editor {
             } else {
                 format!("{} problems ({:.1}s)", v.errs.len() + v.rules.len(), v.secs)
             };
-            self.validation = Some(v);
+            let han = self.validation.as_ref().and_then(|old| (old.text == v.text).then(|| old.han.clone()).flatten());
+            self.validation = Some(Validation { han: han.or(v.han.clone()), ..v });
             self.validating = None;
             self.show_reach = true;
+        }
+        if let Some(run) = &self.han_run {
+            let mut last = None;
+            let mut done = false;
+            loop {
+                match run.rx.try_recv() {
+                    Ok(p) => {
+                        done = !matches!(p, HanProof::Searching { .. });
+                        last = Some(p);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        done = true;
+                        break;
+                    }
+                }
+            }
+            let same = self.validation.as_ref().is_some_and(|v| v.text == run.text);
+            if let Some(p) = last
+                && same
+            {
+                if let HanProof::Found { plan, .. } = &p {
+                    self.status = format!("Han found a plan: {plan}");
+                }
+                self.han_result(p);
+            }
+            if done {
+                self.han_run = None;
+            }
         }
         if let Some(rx) = &self.play_rx {
             while let Ok(line) = rx.try_recv() {

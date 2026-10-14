@@ -10,7 +10,7 @@ use nat_han_adventures::level::doc::{LevelDoc, key_of, value_of};
 use nat_han_adventures::level::tweak::{HanZone, KEYS};
 use nat_han_adventures::level::{GLYPHS, Glyph, GlyphGroup, Topic, Tweak, glyph_info};
 
-use crate::app::{Editor, Tool, slug};
+use crate::app::{Editor, HanProof, Tool, slug};
 use crate::theme::*;
 
 /// The sprites the canvas draws, as egui textures.
@@ -618,6 +618,8 @@ fn validation(ed: &mut Editor, ui: &mut egui::Ui) {
     caption(ui, "VALIDATOR (F7)");
     let fresh = ed.validation_fresh();
     let mut goto = None;
+    let proving = ed.proving();
+    let mut han_act = None;
     match &ed.validation {
         None => {
             ui.label(egui::RichText::new("not run yet").color(TEXT_FAINT).size(11.0));
@@ -626,23 +628,32 @@ fn validation(ed: &mut Editor, ui: &mut egui::Ui) {
             if !fresh {
                 ui.label(egui::RichText::new("(stale: the level changed since)").color(TEXT_FAINT).size(11.0));
             }
-            if v.errs.is_empty() {
+            if v.errs.is_empty() && !ed.parsed.side_b {
                 ui.label(egui::RichText::new("OK: beatable, gates hold").color(GREEN));
             }
-            if ed.parsed.side_b && !v.errs.is_empty() {
-                ui.label(egui::RichText::new("Side B: these are Nat's rules (runways, nugget lines); Han's real test is Play").color(TEXT_FAINT).size(11.0));
+            if let Some(h) = &v.han {
+                han_act = han_proof(ui, h, proving);
             }
-            if !v.rules.is_empty() {
-                ui.label(egui::RichText::new("story house rules:").color(TEXT_FAINT).size(11.0));
-            }
-            for e in v.rules.iter().chain(&v.errs) {
-                let cell = find_cell(e);
-                let r = ui.add(egui::Label::new(egui::RichText::new(format!("• {e}")).color(ERR_TEXT).size(11.0)).sense(if cell.is_some() { Sense::click() } else { Sense::hover() }));
-                if let Some(c) = cell
-                    && r.on_hover_text("click: go there").clicked()
-                {
-                    goto = Some(c);
+            let side_b = ed.parsed.side_b;
+            let mut problems = |ui: &mut egui::Ui| {
+                if !v.rules.is_empty() {
+                    ui.label(egui::RichText::new("story house rules:").color(TEXT_FAINT).size(11.0));
                 }
+                for e in v.rules.iter().chain(&v.errs) {
+                    let cell = find_cell(e);
+                    let r = ui.add(egui::Label::new(egui::RichText::new(format!("• {e}")).color(ERR_TEXT).size(11.0)).sense(if cell.is_some() { Sense::click() } else { Sense::hover() }));
+                    if let Some(c) = cell
+                        && r.on_hover_text("click: go there").clicked()
+                    {
+                        goto = Some(c);
+                    }
+                }
+            };
+            if side_b && !v.errs.is_empty() {
+                // Han's proof is Side B's test; Nat's rules are only a hint there.
+                egui::CollapsingHeader::new(format!("Nat's rules ({}), for reference", v.errs.len())).id_salt("natrules").show(ui, problems);
+            } else {
+                problems(ui);
             }
             egui::CollapsingHeader::new("details").id_salt("vdetails").show(ui, |ui| {
                 for s in &v.summary {
@@ -655,6 +666,11 @@ fn validation(ed: &mut Editor, ui: &mut egui::Ui) {
     if let Some(c) = goto {
         ed.selected = Some(c);
         ed.center_on = Some(c);
+    }
+    match han_act {
+        Some(HanAct::Keep(plan)) => ed.keep_solution(&plan),
+        Some(HanAct::Stop) => ed.stop_han(),
+        None => {}
     }
 }
 
@@ -1137,3 +1153,41 @@ fn line(a: (usize, usize), b: (usize, usize)) -> Vec<(usize, usize)> {
         .collect()
 }
 
+
+enum HanAct {
+    Keep(String),
+    Stop,
+}
+
+/// Side B: Han's proof of the level (`game::sideb_solve`).
+fn han_proof(ui: &mut egui::Ui, h: &HanProof, proving: bool) -> Option<HanAct> {
+    let mut act = None;
+    let line = |ui: &mut egui::Ui, t: String, c: egui::Color32| {
+        ui.add(egui::Label::new(egui::RichText::new(t).color(c).size(11.0)).wrap());
+    };
+    match h {
+        HanProof::Replaying => line(ui, "Han: running the level...".into(), TEXT_DIM),
+        HanProof::Searching { plays, best_col } => {
+            line(ui, format!("Han: searching for a plan ({plays} plays, furthest col {best_col:.0})"), TEXT_DIM);
+        }
+        HanProof::Holds => line(ui, "Han: the solution clears it".into(), GREEN),
+        HanProof::Fails { fate, col } => line(ui, format!("Han: the solution fails: {fate} at col {col:.0}"), ERR_TEXT),
+        HanProof::Found { plan, .. } => {
+            line(ui, format!("Han clears it: {plan}"), GREEN);
+            if ui.button("keep as the solution").on_hover_text("write it as the level's `solution:` line; Validate replays it").clicked() {
+                act = Some(HanAct::Keep(plan.clone()));
+            }
+        }
+        HanProof::Stuck { plan, fate, col, plays } => {
+            line(ui, format!("Han: no plan clears it ({plays} plays); furthest: {fate} at col {col:.0}"), ERR_TEXT);
+            if !plan.is_empty() {
+                line(ui, format!("with {plan}"), TEXT_DIM);
+            }
+        }
+        HanProof::Error(e) => line(ui, format!("Han: {e}"), ERR_TEXT),
+    }
+    if proving && ui.small_button("stop Han").clicked() {
+        act = Some(HanAct::Stop);
+    }
+    act
+}

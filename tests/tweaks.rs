@@ -115,3 +115,71 @@ fn low_gravity_floats() {
     let floaty = fall(&"bbbbbbbbbbbbbbbbbbbb\n".repeat(14));
     assert!(floaty < plain * 0.5, "low gravity: fell {floaty} px vs {plain}");
 }
+
+/// The validator's arcs (`level::validate`) on a level: does Nat reach the goal on foot?
+fn validator_reaches(src: &str) -> bool {
+    use nat_han_adventures::level::validate::{self, Physics};
+    validate::on_foot(&Level::parse(src).expect("test level parses"), &Physics::default())
+}
+
+/// A level with a spiked pit `gap` tiles wide, the goal past it; `layer`: the tweak layer.
+fn pit(tweaks: &str, gap: usize, layer: &str) -> String {
+    let w = 10 + gap + 10;
+    let mut rows = vec![".".repeat(w); 12];
+    rows[11] = format!("{}{}{}", "#".repeat(10), "^".repeat(gap), "#".repeat(10));
+    rows.push("#".repeat(w));
+    rows[10].replace_range(2..3, "P");
+    rows[10].replace_range(w - 3..w - 2, "G");
+    rows[10].replace_range(5..6, "C");
+    format!("name: T\n{tweaks}---\n{}\n---\n{layer}", rows.join("\n"))
+}
+
+/// The tweak layer with `ch` painted over columns `c0..c1` of rows `r0..r1`.
+fn paint(ch: char, (c0, c1): (usize, usize), (r0, r1): (usize, usize)) -> String {
+    (0..r1).map(|r| if r < r0 { String::new() } else { format!("{}{}", ".".repeat(c0), ch.to_string().repeat(c1 - c0)) }).collect::<Vec<_>>().join("\n")
+}
+
+#[test]
+fn the_validator_flies_through_tweaked_air() {
+    let gap = 16;
+    assert!(!validator_reaches(&pit("", gap, "")), "the pit is too wide without tweaks");
+    let air = paint('a', (8, 12 + gap), (0, 11));
+    assert!(validator_reaches(&pit("tweak a: gravity=0.3\n", gap, &air)), "low gravity floats Nat over");
+    assert!(validator_reaches(&pit("tweak a: wind=10\n", gap, &air)), "a tailwind blows Nat over");
+    assert!(!validator_reaches(&pit("tweak a: wind=-10\n", gap, &air)), "a headwind doesn't");
+}
+
+#[test]
+fn the_validator_takes_off_from_tweaked_floors() {
+    let gap = 16;
+    let floor = paint('a', (0, 10), (11, 12));
+    assert!(validator_reaches(&pit("tweak a: belt=12\n", gap, &floor)), "a fast belt throws Nat over");
+    // (Higher jumps bonk the top of the level: a 10-tile pit, too wide for a plain jump.)
+    assert!(!validator_reaches(&pit("", 10, "")));
+    assert!(validator_reaches(&pit("tweak a: jump=2\n", 10, &floor)), "a springy floor jumps Nat over");
+    // A belt faster than he runs, the wrong way: the start can't walk to the pit's edge.
+    assert!(!validator_reaches(&pit("tweak a: belt=-12\n", 3, &paint('a', (3, 10), (11, 12)))), "up a fast belt");
+    assert!(validator_reaches(&pit("", 3, "")));
+}
+
+#[test]
+fn the_validator_bounces_on_trampolines() {
+    // A wall 9 tiles high: no jump clears it, but the springs of a trampoline Nat drops onto
+    // from a ledge do (and the toot the spring gives back).
+    let level = |tweaks: &str, layer: &str| {
+        let w = 30;
+        let mut rows = vec![".".repeat(w); 12];
+        rows.push("#".repeat(w));
+        for row in rows.iter_mut().take(12).skip(3) {
+            row.replace_range(15..17, "##");
+        }
+        rows[9].replace_range(2..8, "######");
+        rows[8].replace_range(2..3, "P");
+        rows[11].replace_range(w - 3..w - 2, "G");
+        format!("name: T\n{tweaks}---\n{}\n---\n{layer}", rows.join("\n"))
+    };
+    let tramp = paint('a', (8, 15), (12, 13));
+    assert!(!validator_reaches(&level("", "")), "the wall is too high");
+    assert!(!validator_reaches(&level("tweak a: bounce=1\n", &tramp)), "a plain trampoline gives back too little");
+    assert!(validator_reaches(&level("tweak a: bounce=1.5\n", &tramp)), "a springy one springs Nat over");
+}

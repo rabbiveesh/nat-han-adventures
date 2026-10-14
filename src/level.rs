@@ -101,8 +101,8 @@
 //! optional second `---` section after the grid, a layer of the same shape holding a letter
 //! (or `.`) per cell. Surface keys (`friction`, `bounce`, `belt`, `jump`) apply while standing on
 //! a tile painted with the letter; volume keys (`gravity`, `run`, `wind`) while a body's center is
-//! in a painted cell. Keys, ranges and meaning: [`tweak`]. Nat and Han obey them; the validator
-//! and Han's nav don't model them.
+//! in a painted cell. Keys, ranges and meaning: [`tweak`]. Nat, Han, the validator
+//! and Han's nav all obey them (friction aside: the validator ignores it).
 //!
 //! ```text
 //! name: Bouncy Castle

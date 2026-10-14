@@ -10,9 +10,11 @@
 //! - **Han's zones** (`han=avoid|weak|boost|wait`) change what Han does in the painted cells
 //!   ([`HanZone`]).
 //!
-//! Nat and Han obey them (`game::physics`, `level::buddy::drive`). The validator and Han's nav
-//! graph don't model them: a level with tweaks is checked as if they weren't there, so playtest
-//! it.
+//! Nat and Han obey them (`game::physics`, `level::buddy::drive`), and so do the validator's
+//! arcs and Han's nav graph (`validate::fly`: gravity, run and wind as the arc flies, a floor's
+//! jump and belt at take-off, a bounce floor's springs, no walking up a belt faster than you
+//! run). Friction isn't modelled: the validator's arcs take off at full speed either way. A
+//! level with no tweaks costs nothing extra (free play's rooms have none).
 
 use bevy::prelude::*;
 
