@@ -31,7 +31,8 @@ fn main() {
         return;
     }
     let seeds: u32 = args.first().and_then(|s| s.parse().ok()).unwrap_or(20);
-    for (ti, t) in TEMPLATES.iter().enumerate() {
+    // (Side B rooms aren't validated: `tests/side_b.rs` plays them.)
+    for (ti, t) in TEMPLATES.iter().enumerate().filter(|(_, t)| !t.alone()) {
         for band in [1u8, 5, 10] {
             let (mut ok, mut worst, mut total) = (0, 0u128, 0u128);
             let mut first_err = None;

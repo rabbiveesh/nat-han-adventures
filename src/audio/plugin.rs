@@ -363,13 +363,14 @@ fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'st
 }
 
 /// A Side B rewind is the needle back to the start: the tune starts over from the top (the
-/// story's restarts carry on where the band is).
+/// story's restarts carry on where the band is). So does a free play Side B room, for Han.
 fn side_b_rewind(
     side: Option<Res<crate::game::sideb::SideB>>,
     mut restart: MessageReader<RestartLevel>,
     mut player: ResMut<LivePlayer>,
 ) {
-    if restart.read().count() > 0 && side.is_some() {
+    let room_starts = side.as_ref().is_some_and(|s| s.is_added() && s.room.is_some());
+    if (restart.read().count() > 0 && side.is_some()) || room_starts {
         player.music = None;
     }
 }
@@ -489,9 +490,12 @@ fn direct(
     mut named_calls: MessageReader<crate::game::sideb::CallMode>,
     mut meters: ResMut<BandMeters>,
     mut groove_for_grip: Option<ResMut<Groove>>,
+    side: Option<Res<crate::game::sideb::SideB>>,
 ) {
     let playing = *state.get() == AppState::Playing;
-    let restarted = restart.read().count() > 0;
+    // (A free play Side B room starts the band afresh for Han, as a rewind does.)
+    let room_starts = side.is_some_and(|s| s.is_added() && s.room.is_some());
+    let restarted = restart.read().count() > 0 || room_starts;
     let mut ev = director::Events::default();
     for j in jumped.read() {
         if j.double {

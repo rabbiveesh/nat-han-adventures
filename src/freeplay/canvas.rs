@@ -224,14 +224,20 @@ impl Canvas {
     }
 
     /// Close the room: a stretch of floor, the exit pipe with the goal, and the level text.
-    pub fn finish(mut self, world: u8, checkpoint_line: &str) -> Level {
+    pub fn finish(self, world: u8, checkpoint_line: &str) -> Level {
+        self.finish_with(world, checkpoint_line, MIN_NUGGETS)
+    }
+
+    /// [`Canvas::finish`], topping the nuggets up to `min_nuggets` (a Side B room's nuggets are
+    /// its calls: `super::alone` puts in exactly those).
+    pub fn finish_with(mut self, world: u8, checkpoint_line: &str, min_nuggets: usize) -> Level {
         let (floor, stand) = (self.floor, self.stand());
         while self.width() + EXIT < MIN_WIDTH {
             self.ground(1, floor);
         }
-        self.fill_nuggets(MIN_NUGGETS);
+        self.fill_nuggets(min_nuggets);
         // Still short (a crowded room): a bit more floor with nuggets on it.
-        while self.nuggets() < MIN_NUGGETS {
+        while self.nuggets() < min_nuggets {
             let x = self.width();
             self.ground(2, floor);
             self.nugget(x, stand);

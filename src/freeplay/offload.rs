@@ -147,7 +147,7 @@ pub fn decode_job(text: &str) -> Option<(u64, u32, RoomPlan)> {
         return None;
     }
     let request = RoomRequest { skill, band, assists };
-    Some((id, seed, RoomPlan { index, request, template, hint, line, world }))
+    Some((id, seed, RoomPlan { index, request, template, hint, line, world, side_b: 0 }))
 }
 
 /// The worker's answer to job `id`: what it found and the room's [`fingerprint`].

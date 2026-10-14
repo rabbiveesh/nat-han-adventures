@@ -192,6 +192,11 @@ impl Progress {
     }
 
     /// Side B (`game::sideb`) opens on the title once the last story level is cleared.
+    /// Side B levels cleared (free play's Side B rooms use what they taught).
+    pub fn side_b_cleared(&self) -> usize {
+        self.side_b_rewinds.iter().filter(|r| r.is_some()).count()
+    }
+
     pub fn side_b_unlocked(&self) -> bool {
         self.best_nuggets[LEVEL_COUNT - 1].is_some()
     }

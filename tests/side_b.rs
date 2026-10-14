@@ -10,7 +10,7 @@ use nat_han_adventures::{
     events::HanSays,
     game::{
         Groove, Han, Pos,
-        sideb::{self, Fate, Phase, SIDE_B_COUNT, SetCall, SideB},
+        sideb::{self, Fate, Phase, SIDE_B_COUNT, SetCall, SideB, SideBLevel},
     },
     level::TILE,
     save::Progress,
@@ -23,6 +23,11 @@ const DT: f64 = 1.0 / 60.0;
 struct Heard(Vec<String>);
 
 fn app(level: usize) -> App {
+    app_starting(move |c| sideb::start(c, level))
+}
+
+/// An app that starts Side B with `start`.
+fn app_starting(start: impl FnOnce(&mut Commands) + Send + Sync + 'static) -> App {
     let mut app = App::new();
     app.add_plugins((
         MinimalPlugins,
@@ -36,7 +41,8 @@ fn app(level: usize) -> App {
     .init_resource::<Heard>()
     .add_systems(Last, |mut h: ResMut<Heard>, mut s: MessageReader<HanSays>| h.0.extend(s.read().map(|m| m.text.clone())));
     app.update();
-    app.world_mut().run_system_once(move |mut c: Commands| sideb::start(&mut c, level)).unwrap();
+    let mut start = Some(start);
+    app.world_mut().run_system_once(move |mut c: Commands| (start.take().unwrap())(&mut c)).unwrap();
     app.update();
     app.update();
     app
@@ -405,7 +411,10 @@ const PICK: usize = 10;
 /// Play Side B level `level`, calling set-list call `k` once Han's past column `col`, for each
 /// `(col, k)` in turn: cleared, or how Han met his end (and where).
 fn play(level: usize, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> {
-    let mut app = app(level);
+    play_in(app(level), plan)
+}
+
+fn play_in(mut app: App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> {
     for &(c, k) in plan {
         until(&mut app, 30.0, |a| col(a) >= c || side(a).phase != Phase::Playing);
         if side(&app).phase != Phase::Playing {
@@ -459,4 +468,200 @@ fn how_tight() {
             eprintln!("{name}: {i} {:?}: clears with shifts {ok:?}", plan[i]);
         }
     }
+}
+
+/// Free play's Side B room `seed` (band, Side B levels cleared) on its own, as a Side B level,
+/// with the plan it was drawn with.
+fn alone_room(seed: u64, band: u8, cleared: usize) -> (SideBLevel, Vec<(f32, usize)>) {
+    use nat_han_adventures::freeplay::{alone, canvas::Canvas, dice::Dice};
+    let mut c = Canvas::with_height(alone::ALONE_H);
+    let drawn = alone::draw(&mut c, &mut Dice::new(seed), band, cleared);
+    (SideBLevel { level: c.finish_with(2, "Go!", 0), setlist: alone::setlist(cleared) }, drawn.solution)
+}
+
+/// Every Side B room free play draws clears with the plan it was drawn with: every band, with
+/// each set of Side B pieces (B1's, B2's, B3's). `SIDE_B_ROOMS=n` plays n seeds of each.
+#[test]
+fn free_play_side_b_rooms_clear_with_their_plans() {
+    let n: u64 = std::env::var("SIDE_B_ROOMS").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
+    let mut failed = Vec::new();
+    for cleared in [1, 2, 3] {
+        for band in [1, 4, 7, 10] {
+            for seed in 0..n {
+                let seed = seed * 7919 + band as u64 * 31 + cleared as u64;
+                let (b, plan) = alone_room(seed, band, cleared);
+                let text: Vec<String> = plan.iter().map(|(c, k)| format!("{c}/{k}")).collect();
+                if let Err(e) = play_in(app_starting(move |c| sideb::start_level(c, 0, b)), &plan) {
+                    failed.push(format!("seed {seed} band {band} cleared {cleared}: {e:?}, plan {}", text.join(" ")));
+                }
+            }
+        }
+    }
+    assert!(failed.is_empty(), "{} rooms failed:\n{}", failed.len(), failed.join("\n"));
+}
+
+/// `SIDE_B_ROOM="seed band cleared"` prints a free play Side B room and plays its plan.
+#[test]
+#[ignore]
+fn try_a_room() {
+    let s = std::env::var("SIDE_B_ROOM").unwrap();
+    let v: Vec<u64> = s.split_whitespace().map(|w| w.parse().unwrap()).collect();
+    let (b, plan) = alone_room(v[0], v[1] as u8, v[2] as usize);
+    for r in 0..b.level.height {
+        use nat_han_adventures::level::Tile;
+        let row: String = (0..b.level.width)
+            .map(|c| match b.level.tile(c as i32, r as i32) {
+                Tile::Solid => '#',
+                Tile::SpikesUp => '^',
+                Tile::SpikesDown => 'v',
+                Tile::Empty => '.',
+                _ => '?',
+            })
+            .collect();
+        eprintln!("{row}");
+    }
+    eprintln!("{plan:?}");
+    eprintln!("{:?}", play_in(app_starting(move |c| sideb::start_level(c, 0, b)), &plan));
+}
+
+/// Free play, once Side B's been played: now and then the run hands a room to Han. Nat waits
+/// in the pipe (hidden), the set list comes up, a death rewinds only the room (Han back at its
+/// start, its nuggets back), and Han reaching its exit hands the run back to Nat there.
+#[test]
+fn free_play_mixes_in_a_side_b_room() {
+    use nat_han_adventures::freeplay::{FreePlayRun, StartFreePlay, alone, canvas::Canvas, course::COURSE_STAND, dice, generate::ROOM_STREAM};
+    use nat_han_adventures::game::{Nugget, Player, PrevPos, stand_pos};
+
+    fn run(app: &App) -> FreePlayRun {
+        app.world().resource::<FreePlayRun>().clone()
+    }
+    fn teleport(app: &mut App, col: usize) {
+        let at = stand_pos(&app.world().resource::<nat_han_adventures::game::ActiveLevel>().level, col, COURSE_STAND);
+        let mut q = app.world_mut().query_filtered::<(&mut Pos, &mut PrevPos), With<Player>>();
+        for (mut p, mut pp) in q.iter_mut(app.world_mut()) {
+            p.0 = at;
+            pp.0 = at;
+        }
+    }
+    fn nuggets_in(app: &mut App, cols: (usize, usize)) -> usize {
+        let mut q = app.world_mut().query_filtered::<&Transform, With<Nugget>>();
+        q.iter(app.world()).filter(|t| (cols.0 as f32 * TILE..cols.1 as f32 * TILE).contains(&t.translation.x)).count()
+    }
+
+    // Seeds until a run serves a Side B room (they come once the first rooms have placed the
+    // player).
+    for seed in 1..40u32 {
+        let mut app = app_starting(move |c| {
+            c.queue(move |w: &mut World| {
+                let mut p = w.resource_mut::<Progress>();
+                p.unlocked = 10;
+                for r in p.side_b_rewinds.iter_mut().take(3) {
+                    *r = Some(0);
+                }
+                w.write_message(StartFreePlay { seed, endless: false });
+            })
+        });
+        let mut k = 0;
+        let found = loop {
+            let mut frames = 0;
+            while run(&app).course.rooms.len() <= k {
+                app.update();
+                std::thread::sleep(Duration::from_millis(1));
+                frames += 1;
+                assert!(frames < 20_000, "room {k} never came");
+            }
+            // (Streamed in a few columns a frame.)
+            for _ in 0..40 {
+                app.update();
+            }
+            if run(&app).rooms[k].plan.template().alone() {
+                break true;
+            }
+            if k + 1 >= nat_han_adventures::freeplay::FIXED_ROOMS as usize {
+                break false;
+            }
+            let start = run(&app).course.rooms[k].start_col();
+            teleport(&mut app, start);
+            for _ in 0..3 {
+                app.update();
+            }
+            k += 1;
+        };
+        if !found {
+            continue;
+        }
+        // In through the pipe: Han's turn.
+        let r = run(&app);
+        let (room, placed) = (r.rooms[k].clone(), r.course.rooms[k]);
+        teleport(&mut app, placed.start_col());
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(run(&app).current, Some(k));
+        let s = side(&app).clone();
+        let cols = s.room.expect("a free play Side B room").cols;
+        assert_eq!(cols, (placed.col0, placed.col0 + placed.width));
+        assert_eq!(s.setlist, alone::setlist(3));
+        assert!(s.left.iter().all(|&n| n == 0), "the set list starts empty");
+        assert!(col(&mut app) < (placed.col0 + 4) as f32, "Han comes in through the pipe");
+        let nuggets = nuggets_in(&mut app, cols);
+
+        // No calls: Han's done for, and only the room rewinds.
+        until(&mut app, 30.0, rewound);
+        assert!(rewound(&mut app), "Han dies without the band");
+        until(&mut app, 5.0, |a| side(a).phase == Phase::Playing);
+        assert_eq!(side(&app).rewinds, 1);
+        assert!(col(&mut app) < (placed.col0 + 4) as f32, "back at the room's start");
+        assert_eq!(nuggets_in(&mut app, cols), nuggets, "the room's nuggets are back");
+        assert_eq!(run(&app).current, Some(k), "the run's where it was");
+
+        // The plan it was drawn with clears it.
+        let mut c = Canvas::with_height(alone::ALONE_H);
+        let mut d = dice::Dice::new(dice::stream(seed, ROOM_STREAM, room.plan.index as u64 * 1024 + room.attempts as u64 - 1));
+        let plan = alone::draw(&mut c, &mut d, room.plan.request.band, room.plan.side_b as usize).solution;
+        // (Han starts back at the pipe each try: the plan's columns are the room's.)
+        let at = |c: f32| c + placed.col0 as f32;
+        for &(c, k) in &plan {
+            until(&mut app, 30.0, |a| col(a) >= at(c) || side(a).phase != Phase::Playing);
+            let now = col(&mut app);
+            assert_eq!(side(&app).phase, Phase::Playing, "Han died at {now:.1} ({:?}), plan {plan:?}", fate(&app));
+            if k >= PICK {
+                pick(&mut app, k - PICK);
+            } else {
+                call(&mut app, k);
+            }
+        }
+        until(&mut app, 40.0, |a| a.world().get_resource::<SideB>().is_none());
+        assert!(app.world().get_resource::<SideB>().is_none(), "Han clears the room");
+        assert!(said(&app, sideb::ROOM_CLEARED_LINE));
+
+        // Nat's back, out of the room's exit, and the run carries on.
+        let nat = app.world_mut().query_filtered::<(&Pos, Option<&Visibility>), With<Player>>().single(app.world()).map(|(p, v)| (p.0, v.copied())).unwrap();
+        assert_ne!(nat.1, Some(Visibility::Hidden));
+        assert!(nat.0.x > (cols.1 - 8) as f32 * TILE && nat.0.x < cols.1 as f32 * TILE, "Nat at the exit: {}", nat.0.x / TILE);
+        KeyCode::ArrowRight.press(app.world_mut());
+        let before = nat.0.x;
+        for _ in 0..30 {
+            app.update();
+        }
+        KeyCode::ArrowRight.release(app.world_mut());
+        let after = app.world_mut().query_filtered::<&Pos, With<Player>>().single(app.world()).unwrap().0.x;
+        assert!(after > before + TILE, "Nat runs again");
+        let mut frames = 0;
+        while run(&app).course.rooms.len() <= k + 1 {
+            app.update();
+            std::thread::sleep(Duration::from_millis(1));
+            frames += 1;
+            assert!(frames < 20_000, "the next room never came");
+        }
+        let next = run(&app).course.rooms[k + 1].start_col();
+        teleport(&mut app, next);
+        for _ in 0..3 {
+            app.update();
+        }
+        assert_eq!(run(&app).current, Some(k + 1), "on to the next room");
+        assert!(run(&app).stats.deaths == 0 && run(&app).cleared as usize == k + 1);
+        return;
+    }
+    panic!("no run served a Side B room");
 }
