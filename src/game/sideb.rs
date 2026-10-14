@@ -1,10 +1,12 @@
 //! **Side B** (prototype): Nat's gone, Han goes after him alone, and the player is the band.
 //!
 //! Han walks the level on his own AI, heading for the goal (his nav graph, `level::nav`, with
-//! Nat's physics: [`HanPhys::side_b`], one toot). The player never moves him: each level hands
-//! out a *set list* of calls (`setlist: giant=1 gap=1` in the level header), Left/Right picks
-//! one, Down calls it ([`CallMode`]), and the band plays that mode as it does when Nat calls
-//! it. Han takes whatever route is quickest under the physics now, so calling a mode steers him.
+//! Nat's physics: [`HanPhys::side_b`], one toot). The player never moves him: each level has a
+//! *set list* of calls (`setlist: giant gap melt` in the level header), empty at the start:
+//! every nugget Han grabs is one more of the call that's picked (Left/Right), and Down or Jump
+//! calls it ([`CallMode`]); the band plays that mode as it does when Nat calls it. Han takes
+//! whatever route is quickest under the physics now, so calling a mode steers him, and the
+//! levels fork: over a pipe or under it, on the deck for its nuggets or through the tunnel.
 //!
 //! - **Han heads for the goal**, or, when no route gets there, for the reachable cell nearest
 //!   it (the *frontier*), and from there he **charges**: runs on, jumping at walls and edges,
@@ -66,7 +68,7 @@ pub const HOLD_SECS: f32 = 6.0;
 /// Charging this long without getting anywhere: he's done for.
 pub const CHARGE_GIVE_UP: f32 = 8.0;
 
-pub const CLEARED_LINE: &str = "Nat's hat! He went thataway!";
+pub const CLEARED_LINE: &str = "Nat's hat!";
 
 /// How Han met his end (each has its line).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
@@ -83,11 +85,11 @@ pub enum Fate {
 impl Fate {
     pub fn line(self) -> &'static str {
         match self {
-            Fate::Spikes => "OW! Pointy! POINTY!",
-            Fate::Pit => "Naaaat! I'm comiiiing...",
-            Fate::Sewage => "Glub. I'm a pro. Glub.",
-            Fate::Bonk => "Who put a WALL there?!",
-            Fate::Pooped => "I'm pooped. And not the good kind.",
+            Fate::Spikes => "OW! Pointy!",
+            Fate::Pit => "Naaaat!",
+            Fate::Sewage => "Glub.",
+            Fate::Bonk => "BONK!",
+            Fate::Pooped => "Pooped.",
         }
     }
 }
@@ -133,8 +135,8 @@ pub struct SideBLevel {
 }
 
 impl SideBLevel {
-    /// A level file with Side B's own header line (`setlist: giant=1 gap=1`) on top of the
-    /// usual format (`level` module docs).
+    /// A level file with Side B's own header line (`setlist: giant gap melt`, or `giant=1` to
+    /// start with one) on top of the usual format (`level` module docs).
     pub fn parse(src: &str) -> Result<SideBLevel, String> {
         let mut setlist = Vec::new();
         let mut rest = String::new();
@@ -146,7 +148,8 @@ impl SideBLevel {
             match line.split_once(':') {
                 Some((k, v)) if in_header && k.trim() == "setlist" => {
                     for item in v.split_whitespace() {
-                        let (word, n) = item.split_once('=').ok_or_else(|| format!("bad set list item `{item}`"))?;
+                        // `giant` (none to start: Han's nuggets bring them) or `giant=2`.
+                        let (word, n) = item.split_once('=').unwrap_or((item, "0"));
                         let h = call_of(word).ok_or_else(|| format!("no such call `{word}`"))?;
                         let n = n.parse().map_err(|_| format!("bad count `{n}`"))?;
                         setlist.push((h, n));
@@ -410,17 +413,23 @@ fn beacon(
     ctl.facing = dir;
 }
 
+/// Han's charge barks (he's nearly silent, as everywhere: `level::is_bark`).
+pub const DUCK_LINE: &str = "Duck!";
+pub const CLIMB_LINE: &str = "Up we go!";
+pub const LEAP_LINE: &str = "HYAAA!";
+pub const GO_LINE: &str = "Here goes!";
+
 /// What Han yells as he charges: at the gate right ahead of him, or ceiling spikes, or anything.
 pub fn charge_line(level: &Level, at: (i32, i32), dir: f32) -> &'static str {
     let d = if dir < 0.0 { -1 } else { 1 };
     if (1..=4).any(|k| level.tile(at.0 + k * d, at.1) == Tile::SpikesDown) {
-        return "Duck and run! Duck and run!";
+        return DUCK_LINE;
     }
     let near = |g: &&crate::level::GateMark| (g.c0 - 3..=g.c1 + 3).contains(&at.0);
     match level.gates.iter().find(near).map(|g| g.topic) {
-        Some(Topic::Giant) => "I can climb that. Probably!",
-        Some(Topic::Gap) => "Plumber's leap! HYAAA!",
-        _ => "Here goes nothin'!",
+        Some(Topic::Giant) => CLIMB_LINE,
+        Some(Topic::Gap) => LEAP_LINE,
+        _ => GO_LINE,
     }
 }
 

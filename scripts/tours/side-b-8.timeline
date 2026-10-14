@@ -1,10 +1,12 @@
-# Side B: Fork in the Pipe (NATHAN_SIDE_B=8), over the top, for `scripts/record-run --capture` (CAPTURE_FPS=60): the solution
-# from tests/side_b.rs, keys on the frames the test presses them. Set list: giant x1, gap x1, melt x2; the deck's nuggets refill the picked call.
-t=0.0500 tap Down 1f
-t=6.8700 tap Right 1f
-t=6.9033 tap Down 1f
-t=11.2000 tap Left 1f
-t=11.2333 tap Down 1f
-t=15.6700 tap Right 1f
-t=15.7033 tap Down 1f
-at 26.0
+# Side B: Fork in the Pipe (NATHAN_SIDE_B=8), over and leap, for `scripts/record-run --capture` (CAPTURE_FPS=60): a route from
+# tests/side_b.rs, keys on the frames the test presses them. The set list starts empty: each nugget is one more of the picked call.
+t=0.5300 tap Right 1f
+t=0.9000 tap Left 1f
+t=0.9333 tap Down 1f
+t=8.2700 tap Right 1f
+t=8.3033 tap Down 1f
+t=12.3800 tap Left 1f
+t=12.4133 tap Down 1f
+t=16.8300 tap Right 1f
+t=16.8633 tap Down 1f
+at 24.0

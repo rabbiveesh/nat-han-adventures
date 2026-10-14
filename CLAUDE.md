@@ -66,10 +66,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
 - `src/game/sideb.rs` SIDE B, a hidden prototype: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
-  header, shown in one fixed order; Left/Right pick, Down or Jump call; a nugget Han grabs is one more of the picked call; a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
+  header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
   shrinks Han; a call holds 6 s, not the story's 20). Han just runs and jumps at what's ahead
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
-  level's solution is a plan in `tests/side_b.rs` (`try_a_plan` tries one). Ways in: Up Up Down Down on
+  level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: Up Up Down Down on
   the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
