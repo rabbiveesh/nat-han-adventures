@@ -66,7 +66,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (follow_state, forward, direct, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -360,6 +360,18 @@ fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'st
         filters.harmony = Harmony::Original;
     }
     Ok((engine, title, filters))
+}
+
+/// A Side B rewind is the needle back to the start: the tune starts over from the top (the
+/// story's restarts carry on where the band is).
+fn side_b_rewind(
+    side: Option<Res<crate::game::sideb::SideB>>,
+    mut restart: MessageReader<RestartLevel>,
+    mut player: ResMut<LivePlayer>,
+) {
+    if restart.read().count() > 0 && side.is_some() {
+        player.music = None;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]

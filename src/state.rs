@@ -7,6 +7,7 @@ use bevy::prelude::*;
 pub fn plugin(app: &mut App) {
     app.init_state::<AppState>()
         .init_resource::<CurrentLevel>()
+        .init_resource::<Shelf>()
         .add_sub_state::<PlayState>();
 }
 
@@ -34,6 +35,15 @@ pub enum PlayState {
     Paused,
     /// A lesson card is up (`ui::lesson`): the game is frozen until it's dismissed.
     Lesson,
+}
+
+/// Which levels the level select shows: the story's, or Side B's (`game::sideb`).
+#[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect)]
+#[reflect(Resource)]
+pub enum Shelf {
+    #[default]
+    Story,
+    SideB,
 }
 
 /// Index (0-based) into [`crate::level::LEVELS`] of the level being played / selected.

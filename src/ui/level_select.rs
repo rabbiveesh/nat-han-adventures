@@ -1,4 +1,5 @@
-//! Level select: a 5x2 grid of levels; details of the highlighted one below.
+//! Level select: a 5x2 grid of levels; details of the highlighted one below. The story's
+//! levels, or Side B's (the [`Shelf`]: nuggets for the story, fewest rewinds for Side B).
 //! Hidden cheat: U unlocks everything.
 
 use bevy::prelude::*;
@@ -7,8 +8,9 @@ use leafwing_input_manager::prelude::*;
 use super::{palette::*, *};
 use crate::input::Action;
 use crate::level::{LEVEL_COUNT, Levels};
+use crate::game::sideb::{self, SIDE_B_COUNT, SideBLevel};
 use crate::save::Progress;
-use crate::state::{AppState, CurrentLevel};
+use crate::state::{AppState, CurrentLevel, Shelf};
 
 const COLS: usize = 5;
 
@@ -41,10 +43,29 @@ enum Detail {
     Best,
 }
 
-fn init_cursor(mut commands: Commands, current: Res<CurrentLevel>, progress: Res<Progress>) {
+/// How many levels the shelf has.
+fn count(shelf: Shelf) -> usize {
+    match shelf {
+        Shelf::Story => LEVEL_COUNT,
+        Shelf::SideB => SIDE_B_COUNT,
+    }
+}
+
+fn unlocked(shelf: Shelf, progress: &Progress, i: usize) -> bool {
+    match shelf {
+        Shelf::Story => progress.is_unlocked(i),
+        Shelf::SideB => i < progress.side_b_unlocked,
+    }
+}
+
+fn init_cursor(mut commands: Commands, current: Res<CurrentLevel>, progress: Res<Progress>, shelf: Res<Shelf>) {
     // Start on the last level played, or the newest unlocked one.
-    let i = if current.0 > 0 { current.0 } else { progress.unlocked - 1 };
-    commands.insert_resource(Cursor(i.min(LEVEL_COUNT - 1)));
+    let i = match *shelf {
+        Shelf::Story if current.0 > 0 => current.0,
+        Shelf::Story => progress.unlocked - 1,
+        Shelf::SideB => progress.side_b_unlocked - 1,
+    };
+    commands.insert_resource(Cursor(i.min(count(*shelf) - 1)));
 }
 
 fn spawn(
@@ -53,7 +74,9 @@ fn spawn(
     sprites: Option<Res<Sprites>>,
     progress: Res<Progress>,
     levels: Res<Levels>,
+    shelf: Res<Shelf>,
 ) {
+    let shelf = *shelf;
     let sprites = sprites.as_deref();
     let f = &*font;
     commands
@@ -64,7 +87,8 @@ fn spawn(
             fullscreen(),
         ))
         .with_children(|root| {
-            root.spawn((label(f, "PICK A PIPE", 16.0, GOLD), Node { margin: UiRect::bottom(px(6.0)), ..default() }));
+            let title = if shelf == Shelf::SideB { "SIDE B" } else { "PICK A PIPE" };
+            root.spawn((label(f, title, 16.0, GOLD), Node { margin: UiRect::bottom(px(6.0)), ..default() }));
             root.spawn((label(f, "", 8.0, DIM_CREAM), Detail::World, Node { margin: UiRect::bottom(px(8.0)), ..default() }));
             // The grid.
             root.spawn(Node {
@@ -75,8 +99,8 @@ fn spawn(
                 ..default()
             })
             .with_children(|grid| {
-                for i in 0..LEVEL_COUNT {
-                    let unlocked = progress.is_unlocked(i);
+                for i in 0..count(shelf) {
+                    let unlocked = unlocked(shelf, &progress, i);
                     grid.spawn((
                         Cell(i),
                         Node {
@@ -95,6 +119,11 @@ fn spawn(
                         cell.spawn(label(f, format!("{}", i + 1), 16.0, if unlocked { CREAM } else { DIM_CREAM }));
                         if !unlocked {
                             cell.spawn(icon(sprites, SpriteId::IconLock, 8.0, 8.0));
+                        } else if shelf == Shelf::SideB {
+                            match progress.side_b_rewinds[i] {
+                                Some(r) => cell.spawn(label(f, format!("R{r}"), 8.0, if r == 0 { GOLD } else { CREAM })),
+                                None => cell.spawn(label(f, "NEW", 8.0, GREEN)),
+                            };
                         } else if let Some(best) = progress.best_nuggets[i] {
                             let total = levels.0.get(i).map_or(0, |l| l.nugget_count());
                             let color = if best as usize >= total { GOLD } else { CREAM };
@@ -125,25 +154,32 @@ fn input(
     mut current: ResMut<CurrentLevel>,
     mut next: ResMut<NextState<AppState>>,
     mut sfx_w: MessageWriter<PlaySfx>,
+    shelf: Res<Shelf>,
+    mut commands: Commands,
 ) {
     let d = nav(&action);
     if d != IVec2::ZERO {
-        cursor.0 = step(cursor.0, d);
+        cursor.0 = step(cursor.0, d, count(*shelf));
         sfx(&mut sfx_w, Sfx::MenuMove);
     }
-    if action.just_pressed(&Action::Confirm) && progress.is_unlocked(cursor.0) {
+    if action.just_pressed(&Action::Confirm) && unlocked(*shelf, &progress, cursor.0) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
-        current.0 = cursor.0;
-        next.set(AppState::Playing);
+        match *shelf {
+            Shelf::Story => {
+                current.0 = cursor.0;
+                next.set(AppState::Playing);
+            }
+            Shelf::SideB => sideb::start(&mut commands, cursor.0),
+        }
     } else if action.just_pressed(&Action::Back) {
         sfx(&mut sfx_w, Sfx::MenuMove);
         next.set(AppState::Title);
     }
 }
 
-/// Move around the 5x2 grid, wrapping.
-fn step(i: usize, d: IVec2) -> usize {
-    let n = LEVEL_COUNT as i32;
+/// Move around the 5-wide grid of `n` levels, wrapping.
+fn step(i: usize, d: IVec2, n: usize) -> usize {
+    let n = n as i32;
     let i = i as i32 + d.x + d.y * COLS as i32;
     i.rem_euclid(n) as usize
 }
@@ -155,11 +191,16 @@ fn cheat(
     font: Res<UiFont>,
     screen: Query<Entity, With<LevelSelectScreen>>,
     mut sfx_w: MessageWriter<PlaySfx>,
+    shelf: Res<Shelf>,
 ) {
-    if !keys.is_some_and(|k| k.just_pressed(KeyCode::KeyU)) || progress.unlocked >= LEVEL_COUNT {
+    if !keys.is_some_and(|k| k.just_pressed(KeyCode::KeyU)) {
         return;
     }
-    progress.unlocked = LEVEL_COUNT;
+    match *shelf {
+        Shelf::Story if progress.unlocked < LEVEL_COUNT => progress.unlocked = LEVEL_COUNT,
+        Shelf::SideB if progress.side_b_unlocked < SIDE_B_COUNT => progress.side_b_unlocked = SIDE_B_COUNT,
+        _ => return,
+    }
     sfx(&mut sfx_w, Sfx::MenuSelect);
     spawn_toast(&mut commands, &font, "CHEATER! ALL PIPES UNBLOCKED", 2.5);
     // Rebuild the grid with the new locks.
@@ -174,6 +215,7 @@ fn highlight(
     levels: Res<Levels>,
     mut cells: Query<(&Cell, &mut BorderColor, &mut Outline)>,
     mut details: Query<(&Detail, &mut Text)>,
+    shelf: Res<Shelf>,
 ) {
     for (cell, mut border, mut outline) in &mut cells {
         let on = cell.0 == cursor.0;
@@ -183,7 +225,10 @@ fn highlight(
     let i = cursor.0;
     let level = levels.0.get(i);
     for (d, mut text) in &mut details {
-        let s = match d {
+        let s = if *shelf == Shelf::SideB {
+            side_b_detail(d, &progress, i)
+        } else {
+            match d {
             Detail::World => {
                 let w = level.map_or(1, |l| l.world);
                 format!("WORLD {w}: {}", world_name(w))
@@ -199,10 +244,25 @@ fn highlight(
                     "NOT FLUSHED YET".to_string()
                 }
             }
+            }
         };
         if text.0 != s {
             text.0 = s;
         }
+    }
+}
+
+fn side_b_detail(d: &Detail, progress: &Progress, i: usize) -> String {
+    match d {
+        Detail::World => "HAN ALONE: YOU'RE THE BAND".to_string(),
+        Detail::Name => format!("B{}. {}", i + 1, SideBLevel::name(i).to_uppercase()),
+        Detail::Best => match progress.side_b_rewinds[i] {
+            _ if i >= progress.side_b_unlocked => format!("LOCKED: BEAT B{i} FIRST"),
+            Some(0) => "FLUSHED WITH NO REWINDS!".to_string(),
+            Some(1) => "BEST: FLUSHED IN 1 REWIND".to_string(),
+            Some(r) => format!("BEST: FLUSHED IN {r} REWINDS"),
+            None => "NOT FLUSHED YET".to_string(),
+        },
     }
 }
 
@@ -212,11 +272,11 @@ mod tests {
 
     #[test]
     fn grid_navigation_wraps() {
-        assert_eq!(step(0, IVec2::X), 1);
-        assert_eq!(step(0, -IVec2::X), 9);
-        assert_eq!(step(2, IVec2::Y), 7);
-        assert_eq!(step(7, IVec2::Y), 2);
-        assert_eq!(step(7, -IVec2::Y), 2);
-        assert_eq!(step(9, IVec2::X), 0);
+        assert_eq!(step(0, IVec2::X, LEVEL_COUNT), 1);
+        assert_eq!(step(0, -IVec2::X, LEVEL_COUNT), 9);
+        assert_eq!(step(2, IVec2::Y, LEVEL_COUNT), 7);
+        assert_eq!(step(7, IVec2::Y, LEVEL_COUNT), 2);
+        assert_eq!(step(7, -IVec2::Y, LEVEL_COUNT), 2);
+        assert_eq!(step(9, IVec2::X, LEVEL_COUNT), 0);
     }
 }

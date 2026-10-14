@@ -1,10 +1,12 @@
 //! **Side B** (prototype): Nat's gone, Han goes after him alone, and the player is the band.
 //!
 //! Han walks the level on his own AI, heading for the goal (his nav graph, `level::nav`, with
-//! Nat's physics: [`HanPhys::side_b`], one toot). The player never moves him: each level hands
-//! out a *set list* of calls (`setlist: giant=1 gap=1` in the level header), Left/Right picks
-//! one, Down calls it ([`CallMode`]), and the band plays that mode as it does when Nat calls
-//! it. Han takes whatever route is quickest under the physics now, so calling a mode steers him.
+//! Nat's physics: [`HanPhys::side_b`], one toot). The player never moves him: each level has a
+//! *set list* of calls (`setlist: giant gap melt` in the level header), empty at the start:
+//! every nugget Han grabs is one more of the call that's picked (Left/Right), and Down or Jump
+//! calls it ([`CallMode`]); the band plays that mode as it does when Nat calls it. Han takes
+//! whatever route is quickest under the physics now, so calling a mode steers him, and the
+//! levels fork: over a pipe or under it, on the deck for its nuggets or through the tunnel.
 //!
 //! - **Han heads for the goal**, or, when no route gets there, for the reachable cell nearest
 //!   it (the *frontier*), and from there he **charges**: runs on, jumping at walls and edges,
@@ -36,7 +38,10 @@ use crate::level::{Level, TILE, Tile, Topic};
 use crate::state::{AppState, PlayState};
 
 /// Side B's levels, in play order.
-pub static SIDE_B_SOURCES: [&str; 7] = [
+/// How many Side B levels there are.
+pub const SIDE_B_COUNT: usize = 10;
+
+pub static SIDE_B_SOURCES: [&str; SIDE_B_COUNT] = [
     include_str!("../../levels/side-b/b1.txt"),
     include_str!("../../levels/side-b/b2.txt"),
     include_str!("../../levels/side-b/b3.txt"),
@@ -44,6 +49,9 @@ pub static SIDE_B_SOURCES: [&str; 7] = [
     include_str!("../../levels/side-b/b5.txt"),
     include_str!("../../levels/side-b/b6.txt"),
     include_str!("../../levels/side-b/b7.txt"),
+    include_str!("../../levels/side-b/b8.txt"),
+    include_str!("../../levels/side-b/b9.txt"),
+    include_str!("../../levels/side-b/b10.txt"),
 ];
 
 /// A level rewinds this long after Han's death (the needle scratch).
@@ -65,7 +73,7 @@ pub const HOLD_SECS: f32 = 6.0;
 /// Charging this long without getting anywhere: he's done for.
 pub const CHARGE_GIVE_UP: f32 = 8.0;
 
-pub const CLEARED_LINE: &str = "Nat's hat! He went thataway!";
+pub const CLEARED_LINE: &str = "Nat's hat!";
 
 /// How Han met his end (each has its line).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
@@ -84,12 +92,12 @@ pub enum Fate {
 impl Fate {
     pub fn line(self) -> &'static str {
         match self {
-            Fate::Spikes => "OW! Pointy! POINTY!",
-            Fate::Pit => "Naaaat! I'm comiiiing...",
-            Fate::Sewage => "Glub. I'm a pro. Glub.",
-            Fate::Bonk => "Who put a WALL there?!",
-            Fate::Pooped => "I'm pooped. And not the good kind.",
-            Fate::Squashed => "I'm a pancake. A plumber pancake.",
+            Fate::Spikes => "OW! Pointy!",
+            Fate::Pit => "Naaaat!",
+            Fate::Sewage => "Glub.",
+            Fate::Bonk => "BONK!",
+            Fate::Pooped => "Pooped.",
+            Fate::Squashed => "Pancake!",
         }
     }
 }
@@ -117,6 +125,16 @@ pub fn call_of(word: &str) -> Option<SetCall> {
     }
 }
 
+/// Where a call sits on every set list: Giant Steps, fired up, melting.
+fn set_list_rank(c: SetCall) -> u8 {
+    match c {
+        SetCall::Mode(Harmony::Coltrane) => 0,
+        SetCall::Mode(Harmony::Quartal) => 1,
+        SetCall::Mode(_) => 2,
+        SetCall::Melt => 3,
+    }
+}
+
 /// A Side B level: the level, and its set list.
 #[derive(Debug, Clone)]
 pub struct SideBLevel {
@@ -125,8 +143,8 @@ pub struct SideBLevel {
 }
 
 impl SideBLevel {
-    /// A level file with Side B's own header line (`setlist: giant=1 gap=1`) on top of the
-    /// usual format (`level` module docs).
+    /// A level file with Side B's own header line (`setlist: giant gap melt`, or `giant=1` to
+    /// start with one) on top of the usual format (`level` module docs).
     pub fn parse(src: &str) -> Result<SideBLevel, String> {
         let mut setlist = Vec::new();
         let mut rest = String::new();
@@ -138,7 +156,8 @@ impl SideBLevel {
             match line.split_once(':') {
                 Some((k, v)) if in_header && k.trim() == "setlist" => {
                     for item in v.split_whitespace() {
-                        let (word, n) = item.split_once('=').ok_or_else(|| format!("bad set list item `{item}`"))?;
+                        // `giant` (none to start: Han's nuggets bring them) or `giant=2`.
+                        let (word, n) = item.split_once('=').unwrap_or((item, "0"));
                         let h = call_of(word).ok_or_else(|| format!("no such call `{word}`"))?;
                         let n = n.parse().map_err(|_| format!("bad count `{n}`"))?;
                         setlist.push((h, n));
@@ -150,7 +169,15 @@ impl SideBLevel {
                 }
             }
         }
+        // Always in the same order, whatever the header says: the strip mustn't give the
+        // solution's order away.
+        setlist.sort_by_key(|&(c, _)| set_list_rank(c));
         Ok(SideBLevel { level: Level::parse(&rest)?, setlist })
+    }
+
+    /// Level `n`'s name (its `name:` header), without parsing the rest.
+    pub fn name(n: usize) -> &'static str {
+        SIDE_B_SOURCES[n].lines().find_map(|l| l.strip_prefix("name:")).map_or("???", str::trim)
     }
 
     pub fn load(n: usize) -> SideBLevel {
@@ -191,6 +218,8 @@ pub struct SideB {
     pub fate: Option<Fate>,
     pub rewinds: u32,
     pub calls: u32,
+    /// Nuggets Han's grabbed this try (each one more call).
+    pub refills: u32,
 }
 
 impl SideB {
@@ -211,6 +240,7 @@ impl SideB {
             fate: None,
             rewinds: 0,
             calls: 0,
+            refills: 0,
         }
     }
 
@@ -239,6 +269,7 @@ pub fn start_level(commands: &mut Commands, b: SideBLevel, n: usize) {
     commands.insert_resource(SideB::new(n, b.setlist));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
+    commands.insert_resource(crate::state::Shelf::SideB);
     commands.queue(|w: &mut World| w.resource_mut::<NextState<AppState>>().set(AppState::Playing));
 }
 
@@ -257,7 +288,7 @@ pub(super) fn plugin(app: &mut App) {
             FixedUpdate,
             (
                 (beacon, melt).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
-                han_fate.in_set(GameSet::Interact),
+                (han_fate, han_grabs_nuggets).chain().in_set(GameSet::Interact),
             )
                 .run_if(resource_exists::<SideB>),
         );
@@ -295,7 +326,8 @@ fn leave(mut commands: Commands, side: Option<Res<SideB>>, mut mode: ResMut<supe
     }
 }
 
-/// Left/Right picks a call on the set list, Down plays it.
+/// Left/Right picks a call on the set list, Down or Jump plays it (Han jumps by himself, and
+/// on a phone the jump zone is the big button).
 fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>, mut calls: MessageWriter<CallMode>) {
     let n = side.setlist.len();
     if n == 0 {
@@ -307,7 +339,8 @@ fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>,
     if input.just_pressed(&Action::Right) {
         side.selected = (side.selected + 1) % n;
     }
-    if input.just_pressed(&Action::Down) && side.phase == Phase::Playing {
+    let call = input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
+    if call && side.phase == Phase::Playing {
         let k = side.selected;
         if side.left[k] > 0 {
             side.left[k] -= 1;
@@ -398,17 +431,23 @@ fn beacon(
     ctl.facing = dir;
 }
 
+/// Han's charge barks (he's nearly silent, as everywhere: `level::is_bark`).
+pub const DUCK_LINE: &str = "Duck!";
+pub const CLIMB_LINE: &str = "Up we go!";
+pub const LEAP_LINE: &str = "HYAAA!";
+pub const GO_LINE: &str = "Here goes!";
+
 /// What Han yells as he charges: at the gate right ahead of him, or ceiling spikes, or anything.
 pub fn charge_line(level: &Level, at: (i32, i32), dir: f32) -> &'static str {
     let d = if dir < 0.0 { -1 } else { 1 };
     if (1..=4).any(|k| level.tile(at.0 + k * d, at.1) == Tile::SpikesDown) {
-        return "Duck and run! Duck and run!";
+        return DUCK_LINE;
     }
     let near = |g: &&crate::level::GateMark| (g.c0 - 3..=g.c1 + 3).contains(&at.0);
     match level.gates.iter().find(near).map(|g| g.topic) {
-        Some(Topic::Giant) => "I can climb that. Probably!",
-        Some(Topic::Gap) => "Plumber's leap! HYAAA!",
-        _ => "Here goes nothin'!",
+        Some(Topic::Giant) => CLIMB_LINE,
+        Some(Topic::Gap) => LEAP_LINE,
+        _ => GO_LINE,
     }
 }
 
@@ -427,6 +466,32 @@ fn melt(time: Res<Time>, groove: Res<Groove>, mut han: Query<(&mut Pos, &mut Bod
     if new != body.half {
         pos.0.y += new.y - body.half.y;
         body.half = new;
+    }
+}
+
+/// A nugget Han grabs is one more of the call that's picked on the set list: steer the cursor
+/// before he gets there.
+fn han_grabs_nuggets(
+    mut commands: Commands,
+    mut side: ResMut<SideB>,
+    han: Query<(&Pos, &Body), With<Han>>,
+    nuggets: Query<(Entity, &Transform), With<super::Nugget>>,
+    mut sfx: MessageWriter<crate::events::PlaySfx>,
+) {
+    if side.phase != Phase::Playing || side.left.is_empty() {
+        return;
+    }
+    let Ok((pos, body)) = han.single() else { return };
+    let h = super::pickups::NUGGET_BOX / 2.0;
+    for (e, tf) in &nuggets {
+        let c = tf.translation.truncate();
+        if (pos.0.x - c.x).abs() < body.half.x + h && (pos.0.y - c.y).abs() < body.half.y + h {
+            commands.entity(e).despawn();
+            let k = side.selected;
+            side.left[k] += 1;
+            side.refills += 1;
+            sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Nugget));
+        }
     }
 }
 
@@ -471,6 +536,7 @@ fn han_fate(
     mut says: MessageWriter<HanSays>,
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
+    progress: Option<ResMut<crate::save::Progress>>,
 ) {
     let dt = time.delta_secs();
     let level = &active.level;
@@ -499,7 +565,7 @@ fn han_fate(
                         w.write_message(RestartLevel);
                     });
                 } else {
-                    next.set(AppState::Title);
+                    next.set(AppState::LevelSelect);
                 }
             } else {
                 side.phase = Phase::Cleared { t: t - dt };
@@ -518,6 +584,9 @@ fn han_fate(
         let (min, max) = (floor - Vec2::new(5.0, 0.0), floor + Vec2::new(5.0, 2.0 * TILE));
         if pos.0.x + HALF.x > min.x && pos.0.x - HALF.x < max.x && pos.0.y + HALF.y > min.y && pos.0.y - HALF.y < max.y {
             side.phase = Phase::Cleared { t: CLEARED_SECS };
+            if let Some(mut progress) = progress {
+                progress.record_side_b(side.level, side.rewinds);
+            }
             say(&mut says, CLEARED_LINE);
             return;
         }
