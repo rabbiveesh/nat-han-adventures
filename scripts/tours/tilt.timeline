@@ -1,0 +1,22 @@
+# Tilt! (levels/solo/tilt.txt): three tries at the pinball level. Format: src/capture/timeline.rs.
+# 1. Hop off the perch and let the ducks do it: up A and into its spikes.
+wait 0.5
+hold Right Space 300ms
+hold Right 0.6
+# 2. Out of A's door, down R1's drain, up R2, out over R3 into the wide shaft... and in at
+#    the first door: spikes.
+at 5
+hold Right Space 300ms
+hold Right 2.6
+wait 0.45
+hold Right 6
+# 3. The same, but sink down the wide shaft (hold Left: every bounce loses a little) and
+#    turn into the bottom door: out onto the plunger.
+at 16
+hold Right Space 300ms
+hold Right 2.6
+wait 0.45
+hold Right 3.5
+hold Left 2.4
+hold Right 2
+wait 2

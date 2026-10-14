@@ -309,6 +309,9 @@ fn spawn_actors(commands: &mut Commands, level: &Level) {
         PrevPos(start),
         Transform::from_translation(start.extend(5.0)),
     ));
+    if level.solo {
+        return;
+    }
     let han = super::han::spawn_spot(level, start);
     let mut han_body = Body::player();
     han_body.on_ground = true;

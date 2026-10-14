@@ -27,6 +27,7 @@
 //!   does), Han barks the line and the lesson card of each [`Topic`] word comes up, once per
 //!   save (`ui::lesson`). The validator ([`validate`]) checks that every mechanic is taught by a
 //!   hint before the player first meets it, and that every hint names a topic.
+//! - `solo: nat`: Nat plays it alone (no Han: no barks, boosts or tricks).
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
@@ -822,6 +823,8 @@ pub struct Level {
     pub crushers: Vec<CrusherDef>,
     /// `gate:` marks.
     pub gates: Vec<GateMark>,
+    /// `solo: nat`: Nat alone, no Han in the level.
+    pub solo: bool,
 }
 
 impl Level {
@@ -961,6 +964,7 @@ impl Level {
         let mut say_at = Vec::new();
         let mut hints = Vec::new();
         let mut deaths = None;
+        let mut solo = false;
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
@@ -983,6 +987,12 @@ impl Level {
                     }
                 }
                 "intro" => intro = value.to_string(),
+                "solo" => {
+                    if value != "nat" {
+                        return Err(format!("expected `solo: nat`, got `{value}`"));
+                    }
+                    solo = true;
+                }
                 "say" => says.push(value.to_string()),
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
@@ -1199,6 +1209,7 @@ impl Level {
             platforms,
             crushers,
             gates,
+            solo,
         })
     }
 }
