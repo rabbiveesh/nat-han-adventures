@@ -170,6 +170,11 @@ impl Progress {
         level < self.unlocked
     }
 
+    /// Side B (`game::sideb`) opens on the title once the last story level is cleared.
+    pub fn side_b_unlocked(&self) -> bool {
+        self.best_nuggets[LEVEL_COUNT - 1].is_some()
+    }
+
     /// Tiny line-based text format:
     /// ```text
     /// nat-han-adventures-progress 1
@@ -513,6 +518,18 @@ mod tests {
         assert_eq!(p.unlocked, 1);
         let p = Progress::from_text("nat-han-adventures-progress 1\naudio-delay 9000\n").unwrap();
         assert_eq!(p.audio_delay_ms, MAX_AUDIO_DELAY_MS);
+    }
+
+    #[test]
+    fn side_b_opens_once_the_last_level_is_cleared() {
+        let mut p = Progress::default();
+        for level in 0..LEVEL_COUNT - 1 {
+            p.record(level, 0, 1.0);
+        }
+        assert!(!p.side_b_unlocked(), "playable is not cleared");
+        p.record(LEVEL_COUNT - 1, 0, 1.0);
+        assert!(p.side_b_unlocked());
+        assert!(Progress::from_text(&p.to_text()).unwrap().side_b_unlocked(), "it survives a save");
     }
 
     #[test]

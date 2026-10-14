@@ -107,6 +107,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                         r.spawn(label(f, format!("{got}/{total} NUGGETS"), 8.0, CREAM));
                         r.spawn(icon(sprites.as_deref(), SpriteId::HanIdle, 16.0, 16.0));
                     });
+                h.spawn((label(f, "SIDE B IS OPEN ON THE TITLE!", 8.0, CREAM), Blink(1.0)));
             });
             // The rolling credits, clipped to the space below the header.
             root.spawn(Node {
