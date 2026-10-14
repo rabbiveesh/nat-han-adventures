@@ -47,6 +47,8 @@ pub struct Canvas {
     platforms: Vec<String>,
     hints: Vec<String>,
     says: Vec<String>,
+    /// Deaths the room expects (`deaths:` in its header), when its template knows.
+    deaths: Option<u32>,
 }
 
 impl Default for Canvas {
@@ -65,7 +67,7 @@ impl Canvas {
     pub fn with_height(height: usize) -> Canvas {
         let height = height.max(H);
         let floor = height - (H - FLOOR);
-        let mut c = Canvas { grid: vec![Vec::new(); height], floor, platforms: Vec::new(), hints: Vec::new(), says: Vec::new() };
+        let mut c = Canvas { grid: vec![Vec::new(); height], floor, platforms: Vec::new(), hints: Vec::new(), says: Vec::new(), deaths: None };
         c.pipe(ENTRY);
         c.set(START_COL, c.stand(), b'P');
         c.set(CHECKPOINT_COL, c.stand(), b'C');
@@ -223,6 +225,12 @@ impl Canvas {
         }
     }
 
+    /// The deaths the room expects of the player, for a room the validator doesn't count them
+    /// in (a Side B room's rewinds: `super::alone`).
+    pub fn expect_deaths(&mut self, n: u32) {
+        self.deaths = Some(n);
+    }
+
     /// Close the room: a stretch of floor, the exit pipe with the goal, and the level text.
     pub fn finish(self, world: u8, checkpoint_line: &str) -> Level {
         self.finish_with(world, checkpoint_line, MIN_NUGGETS)
@@ -247,6 +255,9 @@ impl Canvas {
         let goal = self.width() - GOAL_FROM_END;
         self.set(goal, stand, b'G');
         let mut src = format!("name: Free Play\nworld: {world}\nintro: Free play!\n");
+        if let Some(d) = self.deaths {
+            src.push_str(&format!("deaths: {d}\n"));
+        }
         for l in self.platforms.iter().chain(&self.hints).chain(&self.says) {
             src.push_str(l);
             src.push('\n');

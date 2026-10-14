@@ -204,7 +204,11 @@ impl Room {
         level.deaths = Some(v.deaths);
         // The marks the validator found its gates by: the game's Han reads them.
         level.gates = v.marks;
-        let par_secs = level.width as f32 * TILE / 70.0 + 4.0 + 3.0 * v.deaths as f32;
+        let run = level.width as f32 * TILE / 70.0;
+        // (A Side B room's rewind replays the room up to it, on average half, after the
+        // needle scratch.)
+        let per_death = if plan.template().alone() { run / 2.0 + crate::game::sideb::REWIND_SECS } else { 3.0 };
+        let par_secs = run + 4.0 + per_death * v.deaths as f32;
         Room {
             plan,
             level,
@@ -294,10 +298,11 @@ impl Job {
             // Built with its solution (`super::alone`): nothing for the validator to prove.
             self.attempt += 1;
             self.micros += t0.elapsed().as_micros() as u64;
+            // (Its rewinds are its deaths: the ones learning its layout takes, `super::alone`.)
             let verdict = Verdict {
                 attempts: self.attempt,
                 fallback: false,
-                deaths: 0,
+                deaths: level.deaths.unwrap_or(0),
                 marks: level.gates.clone(),
                 micros: self.micros,
             };

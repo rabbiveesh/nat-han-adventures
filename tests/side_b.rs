@@ -665,3 +665,20 @@ fn free_play_mixes_in_a_side_b_room() {
     }
     panic!("no run served a Side B room");
 }
+
+/// A Side B room expects the rewinds learning it takes, as a grease chute expects its splats:
+/// one a piece, two a fork; and its par time allows for them.
+#[test]
+fn free_play_side_b_rooms_expect_rewinds() {
+    use nat_han_adventures::adapt::{AssistLevers, RoomRequest, Skill};
+    use nat_han_adventures::freeplay::generate::{Job, RoomPlan};
+    use nat_han_adventures::freeplay::templates::Unlocks;
+    for (band, cleared) in [(1, 1), (10, 3)] {
+        let request = RoomRequest { skill: Skill::Buddy, band, assists: AssistLevers::NONE };
+        let room = Job::new(7, RoomPlan::alone(7, 2, request, 1, Unlocks { levels: 10, side_b: cleared })).run();
+        assert!(room.plan.template().alone());
+        assert!((2..=12).contains(&room.expected_deaths), "band {band}: {}", room.expected_deaths);
+        let walk = room.level.width as f32 * TILE / 70.0;
+        assert!(room.par_secs > walk * (1.0 + room.expected_deaths as f32 / 2.0), "par {} for {} rewinds", room.par_secs, room.expected_deaths);
+    }
+}

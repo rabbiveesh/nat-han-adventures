@@ -334,6 +334,10 @@ pub fn draw(c: &mut Canvas, d: &mut Dice, band: Band, cleared: usize) -> Drawn {
     for col in c.width()..width {
         c.column(|r| g.get(col, r));
     }
+    // The rewinds it takes to learn the room: one a piece (a fork, two: its way in and its
+    // way on), as a grease chute expects its splats.
+    let rewinds = placed.iter().map(|(p, _)| if matches!(p, Piece::Fork { .. }) { 2 } else { 1 }).sum();
+    c.expect_deaths(rewinds);
     Drawn { built: Built { hint: None, checkpoint: None }, solution }
 }
 
