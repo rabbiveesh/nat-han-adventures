@@ -132,6 +132,16 @@ fn the_tour_beats_the_gauntlet_without_a_death() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 
+/// Tilt! passes the full check: the level checker steers through the ducks ([`validate`]'s
+/// pinball search) to the plunger and to the lures in the trap shaft and back out (a fixed
+/// jump can't), and Nat alone needs no intro, checkpoint or Han.
+#[test]
+fn tilt_is_a_valid_level() {
+    let level = Level::parse(TILT).unwrap();
+    let report = validate::check(&level, &validate::Options { dump: false });
+    assert!(report.errs.is_empty(), "{:#?}", report.errs);
+}
+
 /// Tilt!: no ground but the launch perch and the plunger's pedestal, only ducks. The tour
 /// climbs A into its spikes, then takes the wide shaft's first door (spikes again), then sinks
 /// to the bottom door and out onto the plunger. Nat alone: no Han.

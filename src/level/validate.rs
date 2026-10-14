@@ -520,6 +520,9 @@ pub struct Map<'a> {
     /// Trampolines, fans and bumpers bend arcs mid-flight, so the free-flight envelopes
     /// ([`Arcs`]) don't bound them: no pruning by envelope.
     has_springs: bool,
+    /// Pinball shafts: the empty cells between a duck facing right and one facing left a few
+    /// cells across from it ([`pinball`] flies through them).
+    shafts: Vec<Cell>,
     /// Per cell: the top horizontal speed (px/s, normal time) of a moving platform you can
     /// stand on there (0: none). See [`Map::carry`].
     carry: Vec<f32>,
@@ -689,6 +692,16 @@ impl<'a> Map<'a> {
             chasms,
             has_grease: level.has_grease(),
             has_springs: level.tiles.iter().any(|t| matches!(t, Tile::Trampoline | Tile::Fan) || t.bumper() != 0.0),
+            shafts: (0..h)
+                .flat_map(|r| (0..w).map(move |c| (c, r)))
+                .filter(|&(c, r)| level.tile(c, r).bumper() > 0.0)
+                .flat_map(|(c, r)| {
+                    let k = (1..=PIN_SHAFT)
+                        .find(|&k| level.tile(c + k, r) != Tile::Empty)
+                        .filter(|&k| k > 1 && level.tile(c + k, r).bumper() < 0.0);
+                    (1..k.unwrap_or(1)).map(move |j| (c + j, r))
+                })
+                .collect(),
             carry,
             derive_marks: false,
             derived: Vec::new(),
@@ -788,6 +801,12 @@ impl<'a> Map<'a> {
     /// A bumper's face at (c, r) (-1 its left, 1 its right, 0 none).
     fn bumper(&self, c: i32, r: i32) -> f32 {
         if self.f(c, r) & BUMPER == 0 { 0.0 } else { self.level.tile(c, r).bumper() }
+    }
+
+    /// Could a pinball flight ([`pinball`]) start in `cell`: a pinball shaft within
+    /// [`PIN_NEAR`] cells?
+    fn near_pinball(&self, (c, r): Cell) -> bool {
+        self.shafts.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
     }
 
     /// In a fan's updraft, the box centered at (x, y)?
@@ -1393,150 +1412,457 @@ pub(crate) fn fly_timed(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell
 
 fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outcome, f32) {
     touched.clear();
-    let (mut x, mut y) = (f.x0, f.y0);
-    if map.deadly(x, y) || map.overlaps_solid(x, y) {
+    if map.deadly(f.x0, f.y0) || map.overlaps_solid(f.x0, f.y0) {
         return (Outcome::Nothing, 0.0);
     }
-    let (mut vx, mut vy) = (f.vx0, f.vy0);
-    let mut carry = f.carry;
-    let mut cut = f.cut;
+    let mut b = Body { x: f.x0, y: f.y0, vx: f.vx0, vy: f.vy0, carry: f.carry, cut: f.cut };
     let mut tooted = [false; 3];
     let mut toots = f.toots;
-    // Bricks smashed on the way up (gone for the rest of the flight).
     let mut smashed: Vec<Cell> = Vec::new();
-    let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
     let mut t = 0.0;
     while t < MAX_T {
         t += DT;
         let g = Flight { toots, ..*f };
-        air_controls(env, &g, t, &mut vx, &mut vy, &mut cut, &mut tooted);
-        // A fan's updraft (the game's `step_body`).
-        if vy > -FAN_RISE && map.updraft(x, y) {
-            vy = (vy - FAN_LIFT * DT).max(-FAN_RISE);
-        }
-
-        // Horizontal move against solids.
-        let nx = x + (vx + carry) * DT;
-        let moving = vx + carry;
-        let (y0, y1) = (y - HALF_H, y + HALF_H);
-        let mut blocked = false;
-        let mut bumped = 0.0;
-        for col in cells(nx - HALF_W, nx + HALF_W) {
-            for row in cells(y0, y1) {
-                if solid(&smashed, col, row) {
-                    blocked = true;
-                    if map.bumper(col, row) == -moving.signum() {
-                        bumped = map.bumper(col, row);
-                    }
-                    x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
+        air_controls(env, &g, t, &mut b.vx, &mut b.vy, &mut b.cut, &mut tooted);
+        let moved = move_body(map, &mut b, &mut smashed, touched);
+        if moved.refilled && env.spring_toot {
+            // A bumper or trampoline gives the toot back: the planned toots again from now.
+            for k in 0..3 {
+                if f.toots[k].is_finite() {
+                    toots[k] = t + f.toots[k];
+                    tooted[k] = false;
                 }
             }
         }
-        if blocked {
-            vx = 0.0;
-            carry = 0.0;
-        } else {
-            x = nx;
-        }
-        if bumped != 0.0 {
-            // A bumper's face: batted back and up, the toot back (like a trampoline).
-            carry = bumped * BUMPER_SPEED;
-            vy = vy.min(-BUMPER_LIFT);
-            cut = true;
-            if env.spring_toot {
-                for k in 0..3 {
-                    if f.toots[k].is_finite() {
-                        toots[k] = t + f.toots[k];
-                        tooted[k] = false;
-                    }
-                }
-            }
-        }
-
-        // Vertical move.
-        let ny = y + vy * DT;
-        let mut landed = None;
-        if vy > 0.0 {
-            let (old_bottom, new_bottom) = (y + HALF_H, ny + HALF_H);
-            let first = (old_bottom / TILE).ceil() as i32;
-            let last = (new_bottom / TILE).floor() as i32;
-            'rows: for row in first.min(last + 1)..=last {
-                let top = row as f32 * TILE;
-                if top < old_bottom - 0.01 {
-                    continue;
-                }
-                let center = (x / TILE).floor() as i32;
-                let mut hit = None;
-                let mut under: [Option<(i32, Tile)>; 4] = [None; 4];
-                for (k, col) in cells(x - HALF_W, x + HALF_W).enumerate() {
-                    let floor = map.floor(col, row) != Floor::None && !smashed.contains(&(col, row));
-                    if floor && (hit.is_none() || col == center) {
-                        hit = Some(col);
-                    }
-                    if floor && k < 4 {
-                        under[k] = Some((col, if map.spring(col, row) { Tile::Trampoline } else { Tile::Solid }));
-                    }
-                }
-                if let Some(col) = hit {
-                    y = top - HALF_H;
-                    if crate::game::springs(under.iter().flatten().copied(), center) {
-                        // A trampoline: up again (the game's `step_body`), the toot back.
-                        vy = -SPRING_SPEED;
-                        carry = 0.0;
-                        cut = true;
-                        if env.spring_toot {
-                            for k in 0..3 {
-                                if f.toots[k].is_finite() {
-                                    toots[k] = t + f.toots[k];
-                                    tooted[k] = false;
-                                }
-                            }
-                        }
-                    } else {
-                        landed = Some((col, row - 1));
-                    }
-                    break 'rows;
-                }
-            }
-            if landed.is_none() && vy > 0.0 {
-                y = ny;
-            }
-        } else {
-            let mut hit = false;
-            for col in cells(x - HALF_W, x + HALF_W) {
-                for row in cells(ny - HALF_H, ny + HALF_H) {
-                    if !solid(&smashed, col, row) {
-                        continue;
-                    }
-                    if map.brick(col, row) {
-                        // Smashed through from below.
-                        smashed.push((col, row));
-                        continue;
-                    }
-                    hit = true;
-                    y = (row + 1) as f32 * TILE + HALF_H;
-                }
-            }
-            if hit {
-                vy = 0.0;
-            } else {
-                y = ny;
-            }
-        }
-
-        if let Some(death) = map.hazard(x, y) {
-            return (Outcome::Died(death), t);
-        }
-        for col in cells(x - HALF_W, x + HALF_W) {
-            for row in cells(y - HALF_H, y + HALF_H) {
-                touched.push((col, row));
-            }
-        }
-        if let Some(cell) = landed {
-            return (if map.standable(cell) && !smashed.contains(&(cell.0, cell.1 + 1)) { Outcome::Land(cell) } else { Outcome::Nothing }, t);
+        if let Some(o) = moved.end {
+            return (o, t);
         }
     }
     (Outcome::Nothing, t)
+}
+
+/// A body in the air ([`fly`], [`pinball`]): its box center (px, y down), its speed (px/s),
+/// the horizontal speed carried (a platform's, a bumper's, until a wall) and whether its
+/// jump's rise is cut already.
+#[derive(Clone, Copy, Debug)]
+struct Body {
+    x: f32,
+    y: f32,
+    vx: f32,
+    vy: f32,
+    carry: f32,
+    cut: bool,
+}
+
+/// What one frame of [`move_body`] came to.
+struct Moved {
+    /// Off a bumper or a trampoline (the toot comes back).
+    refilled: bool,
+    /// Landed (or on nothing standable), or died.
+    end: Option<Outcome>,
+}
+
+/// One frame of `b`'s move once its controls are in: a fan's updraft, the horizontal move
+/// (bumpers bat it back), the vertical one (trampolines bounce it, bricks smash from below,
+/// gone for the rest of the flight: `smashed`), hazards. The game's `step_body`; the cells the
+/// box is in go into `touched`.
+fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec<Cell>) -> Moved {
+    let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
+    let mut refilled = false;
+    // A fan's updraft (the game's `step_body`).
+    if b.vy > -FAN_RISE && map.updraft(b.x, b.y) {
+        b.vy = (b.vy - FAN_LIFT * DT).max(-FAN_RISE);
+    }
+
+    // Horizontal move against solids.
+    let nx = b.x + (b.vx + b.carry) * DT;
+    let moving = b.vx + b.carry;
+    let (y0, y1) = (b.y - HALF_H, b.y + HALF_H);
+    let mut blocked = false;
+    let mut bumped = 0.0;
+    for col in cells(nx - HALF_W, nx + HALF_W) {
+        for row in cells(y0, y1) {
+            if solid(smashed, col, row) {
+                blocked = true;
+                if map.bumper(col, row) == -moving.signum() {
+                    bumped = map.bumper(col, row);
+                }
+                b.x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
+            }
+        }
+    }
+    if blocked {
+        b.vx = 0.0;
+        b.carry = 0.0;
+    } else {
+        b.x = nx;
+    }
+    if bumped != 0.0 {
+        // A bumper's face: batted back and up, the toot back (like a trampoline).
+        b.carry = bumped * BUMPER_SPEED;
+        b.vy = b.vy.min(-BUMPER_LIFT);
+        b.cut = true;
+        refilled = true;
+    }
+
+    // Vertical move.
+    let ny = b.y + b.vy * DT;
+    let mut landed = None;
+    if b.vy > 0.0 {
+        let (old_bottom, new_bottom) = (b.y + HALF_H, ny + HALF_H);
+        let first = (old_bottom / TILE).ceil() as i32;
+        let last = (new_bottom / TILE).floor() as i32;
+        'rows: for row in first.min(last + 1)..=last {
+            let top = row as f32 * TILE;
+            if top < old_bottom - 0.01 {
+                continue;
+            }
+            let center = (b.x / TILE).floor() as i32;
+            let mut hit = None;
+            let mut under: [Option<(i32, Tile)>; 4] = [None; 4];
+            for (k, col) in cells(b.x - HALF_W, b.x + HALF_W).enumerate() {
+                let floor = map.floor(col, row) != Floor::None && !smashed.contains(&(col, row));
+                if floor && (hit.is_none() || col == center) {
+                    hit = Some(col);
+                }
+                if floor && k < 4 {
+                    under[k] = Some((col, if map.spring(col, row) { Tile::Trampoline } else { Tile::Solid }));
+                }
+            }
+            if let Some(col) = hit {
+                b.y = top - HALF_H;
+                if crate::game::springs(under.iter().flatten().copied(), center) {
+                    // A trampoline: up again (the game's `step_body`), the toot back.
+                    b.vy = -SPRING_SPEED;
+                    b.carry = 0.0;
+                    b.cut = true;
+                    refilled = true;
+                } else {
+                    landed = Some((col, row - 1));
+                }
+                break 'rows;
+            }
+        }
+        if landed.is_none() && b.vy > 0.0 {
+            b.y = ny;
+        }
+    } else {
+        let mut hit = false;
+        for col in cells(b.x - HALF_W, b.x + HALF_W) {
+            for row in cells(ny - HALF_H, ny + HALF_H) {
+                if !solid(smashed, col, row) {
+                    continue;
+                }
+                if map.brick(col, row) {
+                    // Smashed through from below.
+                    smashed.push((col, row));
+                    continue;
+                }
+                hit = true;
+                b.y = (row + 1) as f32 * TILE + HALF_H;
+            }
+        }
+        if hit {
+            b.vy = 0.0;
+        } else {
+            b.y = ny;
+        }
+    }
+
+    if let Some(death) = map.hazard(b.x, b.y) {
+        return Moved { refilled, end: Some(Outcome::Died(death)) };
+    }
+    for col in cells(b.x - HALF_W, b.x + HALF_W) {
+        for row in cells(b.y - HALF_H, b.y + HALF_H) {
+            touched.push((col, row));
+        }
+    }
+    let end = landed.map(|cell| {
+        if map.standable(cell) && !smashed.contains(&(cell.0, cell.1 + 1)) { Outcome::Land(cell) } else { Outcome::Nothing }
+    });
+    Moved { refilled, end }
+}
+
+/// Pinball ([`pinball`]): the widest gap (cells) between two ducks facing each other that
+/// still makes a shaft, how near one (cells) a flight may start, how often (frames) the keys
+/// are picked again, and how many air states one graph's flights may visit.
+const PIN_SHAFT: i32 = 6;
+const PIN_NEAR: i32 = 4;
+const PIN_FRAMES: u32 = 6;
+const PIN_STATES: usize = 400_000;
+/// How finely (px, px/s) the pinball search tells its air states apart: their position, their
+/// speed, the speed a duck bats them with.
+const PIN_PX: f32 = 8.0;
+const PIN_SPEED: f32 = 100.0;
+const PIN_CARRY: f32 = 120.0;
+
+/// Where pinball flights from a cell can go.
+#[derive(Default)]
+struct Pin {
+    /// Standable cells landed in.
+    lands: Vec<Cell>,
+    /// Spike/liquid cells died on.
+    deaths: Vec<Cell>,
+}
+
+/// One air state of a pinball flight: the body, the toot still in hand, the bricks smashed
+/// so far.
+#[derive(Clone)]
+struct Ball {
+    b: Body,
+    toot: bool,
+    smashed: Vec<Cell>,
+}
+
+/// The keys held for one stretch of a pinball flight: a direction, a toot at its start, the
+/// jump let go at its start.
+#[derive(Clone, Copy, Debug, Default)]
+struct Keys {
+    dir: i8,
+    toot: bool,
+    release: bool,
+}
+
+/// Where a stretch of a pinball flight goes: on to another air state, or to its end.
+#[derive(Clone, Copy, PartialEq)]
+enum PinNext {
+    Air(u32),
+    End(Outcome),
+}
+
+/// An air state of the pinball search: the first flight's to get there, and (once flown) the
+/// stretches from it.
+struct PinNode {
+    ball: Ball,
+    next: Option<Vec<(Keys, PinNext)>>,
+    /// The states with a stretch to this one.
+    preds: Vec<u32>,
+    /// Goes on to a landing (its cells, and those of the stretches to it, are in the graph).
+    good: bool,
+    /// The flight from a cell that saw it last ([`pinball`]'s walk).
+    seen: u32,
+}
+
+/// The pinball search's air states, shared by the flights from every cell of a [`Graph`]
+/// (built on the map's flags then, with or without toots: anew when either changes). Every
+/// state is one a flight from a reached cell gets to, so the cells of any stretch that goes on
+/// to a landing are touched safely.
+#[derive(Default)]
+struct PinMemo {
+    flags: Vec<u32>,
+    toots: bool,
+    ids: HashMap<u64, u32>,
+    nodes: Vec<PinNode>,
+    walks: u32,
+}
+
+impl PinMemo {
+    /// The air state `ball` falls in (states rounded to a few px and px/s).
+    fn intern(&mut self, ball: Ball) -> u32 {
+        let q = |v: f32, s: f32| ((v / s).round() as i64 & 0x3ff) as u64;
+        let key = q(ball.b.x, PIN_PX)
+            | q(ball.b.y, PIN_PX) << 10
+            | q(ball.b.vx, PIN_SPEED) << 20
+            | q(ball.b.vy, PIN_SPEED) << 30
+            | q(ball.b.carry, PIN_CARRY) << 40
+            | (ball.toot as u64) << 50
+            | (ball.b.cut as u64) << 51;
+        *self.ids.entry(key).or_insert_with(|| {
+            self.nodes.push(PinNode { ball, next: None, preds: Vec::new(), good: false, seen: 0 });
+            (self.nodes.len() - 1) as u32
+        })
+    }
+
+    /// Fly every stretch from state `id`.
+    fn expand(&mut self, map: &Map, env: &Env, id: u32, g: &mut Graph) {
+        let ball = self.nodes[id as usize].ball.clone();
+        let mut next = Vec::new();
+        let mut touched = Vec::new();
+        let mut lands = false;
+        for dir in [-1, 0, 1] {
+            for toot in [false, true] {
+                for release in [false, true] {
+                    if (toot && !ball.toot) || (release && ball.b.cut) {
+                        continue;
+                    }
+                    let keys = Keys { dir, toot, release };
+                    let mut b = ball.clone();
+                    let to = match pin_stretch(map, env, &mut b, keys, &mut touched) {
+                        Some(o) => {
+                            if matches!(o, Outcome::Land(_)) {
+                                lands = true;
+                                for &t in &touched {
+                                    g.touch(t);
+                                }
+                            }
+                            PinNext::End(o)
+                        }
+                        None => {
+                            let n = self.intern(b);
+                            let preds = &mut self.nodes[n as usize].preds;
+                            if preds.last() != Some(&id) {
+                                preds.push(id);
+                            }
+                            PinNext::Air(n)
+                        }
+                    };
+                    next.push((keys, to));
+                }
+            }
+        }
+        self.nodes[id as usize].next = Some(next);
+        let goes_on = self.nodes[id as usize].next.iter().flatten().any(|(_, to)| match to {
+            PinNext::Air(n) => self.nodes[*n as usize].good,
+            PinNext::End(_) => false,
+        });
+        if lands || goes_on {
+            self.make_good(map, env, id, g);
+        }
+    }
+
+    /// State `id` goes on to a landing: so do the states before it. Their stretches to it
+    /// touch their cells safely.
+    fn make_good(&mut self, map: &Map, env: &Env, id: u32, g: &mut Graph) {
+        if self.nodes[id as usize].good {
+            return;
+        }
+        self.nodes[id as usize].good = true;
+        let mut todo = vec![id];
+        let mut touched = Vec::new();
+        while let Some(v) = todo.pop() {
+            // The stretches into `v` and on from it to good states (or landings: touched
+            // already).
+            let mut into: Vec<(u32, Keys)> = Vec::new();
+            for &u in &self.nodes[v as usize].preds {
+                for (keys, to) in self.nodes[u as usize].next.iter().flatten() {
+                    if matches!(to, PinNext::Air(n) if *n == v) {
+                        into.push((u, *keys));
+                    }
+                }
+            }
+            for (u, keys) in into {
+                pin_stretch(map, env, &mut self.nodes[u as usize].ball.clone(), keys, &mut touched);
+                for &t in &touched {
+                    g.touch(t);
+                }
+                if !self.nodes[u as usize].good {
+                    self.nodes[u as usize].good = true;
+                    todo.push(u);
+                }
+            }
+        }
+    }
+}
+
+/// Flights from `from` that steer as they go: through a shaft of ducks the way out depends on
+/// when you hold which way and when you toot (each duck gives the toot back), more than any
+/// [`Strategy`] fixed at take-off can say. A breadth-first search over air states (rounded to
+/// [`PIN_PX`] and [`PIN_SPEED`]), picking the keys again every [`PIN_FRAMES`] frames; each
+/// state flies on as the first flight to get to it did. The cells on the way to a landing go
+/// into `g`.
+fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin {
+    let mut memo = std::mem::take(&mut g.pin);
+    if memo.flags != map.flags || memo.toots != toots {
+        memo = PinMemo { flags: map.flags.clone(), toots, ..PinMemo::default() };
+    }
+    memo.walks += 1;
+    let walk = memo.walks;
+    let mut pin = Pin::default();
+    let (c, r) = from;
+    let x = c as f32 * TILE + 8.0;
+    let y = (r + 1) as f32 * TILE - HALF_H;
+    let belt = if env.carry > 0.0 { map.belt(from) } else { 0.0 };
+    let mut starts = Vec::new();
+    for dir in [-1.0, 0.0, 1.0] {
+        if env.grip || !map.greasy(from) {
+            starts.push(Body { x, y, vx: dir * env.vx, vy: -JUMP_SPEED * env.boost, carry: belt, cut: false });
+        }
+        // Stepping off the ledge.
+        let n = (c + dir as i32, r);
+        if dir != 0.0 && !map.is_solid(n.0, n.1) && !map.standable(n) {
+            let x = x + dir * (8.0 + env.overhang - HALF_W);
+            starts.push(Body { x, y, vx: dir * env.vx, vy: 0.0, carry: belt, cut: true });
+        }
+    }
+    let mut queue: Vec<u32> = Vec::new();
+    for b in starts {
+        if !map.deadly(b.x, b.y) && !map.overlaps_solid(b.x, b.y) {
+            let id = memo.intern(Ball { b, toot: toots, smashed: Vec::new() });
+            if memo.nodes[id as usize].seen != walk {
+                memo.nodes[id as usize].seen = walk;
+                queue.push(id);
+            }
+        }
+    }
+    let mut k = 0;
+    while k < queue.len() {
+        let id = queue[k];
+        k += 1;
+        if memo.nodes[id as usize].next.is_none() {
+            if memo.nodes.len() >= PIN_STATES {
+                continue;
+            }
+            memo.expand(map, env, id, g);
+        }
+        let n = memo.nodes[id as usize].next.as_ref().unwrap().len();
+        for e in 0..n {
+            match memo.nodes[id as usize].next.as_ref().unwrap()[e].1 {
+                PinNext::Air(n) => {
+                    if memo.nodes[n as usize].seen != walk {
+                        memo.nodes[n as usize].seen = walk;
+                        queue.push(n);
+                    }
+                }
+                PinNext::End(Outcome::Land(l)) => {
+                    if l != from && !pin.lands.contains(&l) {
+                        pin.lands.push(l);
+                    }
+                }
+                PinNext::End(Outcome::Died(Some(d))) => {
+                    if !pin.deaths.contains(&d) {
+                        pin.deaths.push(d);
+                    }
+                }
+                PinNext::End(_) => {}
+            }
+        }
+    }
+    g.pin = memo;
+    pin
+}
+
+/// Fly `ball` one stretch of [`PIN_FRAMES`] frames with `keys`; the cells the box touched go
+/// into `touched`. `None`: still flying.
+fn pin_stretch(map: &Map, env: &Env, ball: &mut Ball, keys: Keys, touched: &mut Vec<Cell>) -> Option<Outcome> {
+    touched.clear();
+    let mut frame = Vec::new();
+    for k in 0..PIN_FRAMES {
+        let b = &mut ball.b;
+        // The controls ([`air_controls`]): the key's way, the jump let go, a toot, gravity.
+        let target = keys.dir as f32 * env.vx;
+        let dv = env.air_accel * DT;
+        b.vx = if (target - b.vx).abs() <= dv { target } else { b.vx + dv * (target - b.vx).signum() };
+        if k == 0 && keys.release && !b.cut {
+            b.cut = true;
+            if b.vy < 0.0 {
+                b.vy *= JUMP_CUT;
+            }
+        }
+        if k == 0 && keys.toot && ball.toot {
+            ball.toot = false;
+            b.vy = -env.toot;
+        }
+        b.vy = (b.vy + env.gravity * DT).min(env.max_fall);
+        let moved = move_body(map, b, &mut ball.smashed, &mut frame);
+        touched.append(&mut frame);
+        if moved.refilled && env.spring_toot {
+            ball.toot = true;
+        }
+        if moved.end.is_some() {
+            return moved.end;
+        }
+    }
+    None
 }
 
 /// The reachability graph.
@@ -1555,6 +1881,8 @@ pub struct Graph {
     /// Spike/liquid cells some human arc from a reached cell dies on: the origin of the first
     /// such take-off cell, and up to a few take-off cells.
     deaths: HashMap<Cell, (Option<usize>, Vec<Cell>)>,
+    /// The pinball flights' air states so far.
+    pin: PinMemo,
 }
 
 impl Graph {
@@ -1568,6 +1896,7 @@ impl Graph {
             origin: vec![None; n],
             order: Vec::new(),
             deaths: HashMap::new(),
+            pin: PinMemo::default(),
         }
     }
 
@@ -1618,6 +1947,21 @@ fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &
             let n = (cell.0 + d, cell.1);
             if map.standable(n) {
                 out.push(n);
+            }
+        }
+        if arcs.launch == Launch::Ground && !arcs.env.ideal && map.near_pinball(cell) {
+            let toots = arcs.strategies.iter().any(|s| s.toot.is_some());
+            let pin = pinball(map, &arcs.env, toots, cell, g);
+            for land in pin.lands {
+                if !out.contains(&land) {
+                    out.push(land);
+                }
+            }
+            for d in pin.deaths {
+                let e = g.deaths.entry(d).or_insert((origin, Vec::new()));
+                if e.1.len() < 3 && !e.1.contains(&cell) {
+                    e.1.push(cell);
+                }
             }
         }
         for s in arcs.at(map, cell) {
@@ -2068,7 +2412,10 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                 }
             }
             if !crossed {
-                // Still nothing: Han's gates.
+                // Still nothing: Han's gates (Nat alone has no Han).
+                if map.level.solo {
+                    break;
+                }
                 let found = buddy_found(map, phys, &g, &mut buddy_tried);
                 if found.is_empty() {
                     break;
@@ -2880,7 +3227,8 @@ fn line_errors(level: &Level) -> Vec<String> {
             errs.push(format!("hint@{},{} is inside the ground", h.col, h.row));
         }
     }
-    if level.intro.is_empty() {
+    // Han says the intro; Nat alone has nobody to say it.
+    if level.intro.is_empty() && !level.solo {
         errs.push("missing intro".into());
     }
     let all = std::iter::once(&level.intro)
@@ -2948,7 +3296,8 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let mut map = Map::new(level);
     map.derive_marks = !check_deaths;
     let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
-    if !(1..=3).contains(&cps.len()) {
+    // Nat alone may play a short level without a checkpoint.
+    if !(if level.solo { 0..=3 } else { 1..=3 }).contains(&cps.len()) {
         errs.push(format!("{} checkpoints (want 1..=3)", cps.len()));
     }
     let n = level.nugget_count();
