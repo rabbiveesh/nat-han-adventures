@@ -32,9 +32,13 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   validator). Pure and wasm-safe; `tests/levels.rs` runs the validator on the campaign.
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
   `src/game/crushers.rs` the gadget tiles that move or break: crushers (`X`/`<`/`>` blocks on a
-  slam/hold/creep cycle, `crusher@c,r: phase=`), crumbling platforms (`-`) and bricks (`%`,
-  smashed from below); trampolines (`T`) are all `physics::springs`. `levels/playground/gadgets.txt`
-  has every one (not in the campaign yet: `Topic::GADGETS`); `tests/gadgets.rs`.
+  slam/hold/creep cycle, `crusher@c,r: phase= beat=N`: `beat` slams on the music's ONE every N
+  bars), crumbling platforms (`-`), bricks (`%`, smashed from below) and beat blocks (`[` red on
+  even bars, `]` blue on odd ones, swapped from `Groove::clock`); trampolines (`T`), conveyor
+  belts (`{` `}`), fans (`*`, `Level::updraft`) and bumpers (`(` `)`, rubber ducks) are all
+  `step_body`. `levels/playground/gadgets.txt` has every one (not in the campaign yet:
+  `Topic::GADGETS`); free play's "gadget run" and "beat hall" rooms use them; `tests/gadgets.rs`
+  (headless tests set `Groove::clock` themselves: nothing plays the music there).
   `src/game/han/` is Han, the AI buddy (`docs/han-buddy.md`); `tests/han.rs` and
   `tests/han_campaign.rs` play him headless.
 - `src/adapt/` the adaptive difficulty engine (pure reducers); `src/game/adaptive.rs` wires it

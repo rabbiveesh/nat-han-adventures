@@ -155,11 +155,24 @@ fn tile_sprite(
         Tile::Brick => (SpriteId::Brick, false),
         Tile::Crumble => (SpriteId::Crumble, false),
         Tile::Trampoline => (SpriteId::Trampoline, false),
+        Tile::BeltLeft | Tile::BeltRight => (SpriteId::Belt, true),
+        Tile::Fan => (SpriteId::Fan, true),
+        Tile::BumperLeft | Tile::BumperRight => (SpriteId::Bumper, false),
+        Tile::BeatRed | Tile::BeatRedOff => (SpriteId::BeatRed, false),
+        Tile::BeatBlue | Tile::BeatBlueOff => (SpriteId::BeatBlue, false),
     };
     let mut e = commands.entity(add.entity);
-    e.insert(sprite(&sprites, id));
+    let mut s = sprite(&sprites, id);
+    // Left-moving belts and left-facing bumpers are the right ones mirrored.
+    s.flip_x = matches!(t.tile, Tile::BeltLeft | Tile::BumperLeft);
+    if t.tile.is_beat() && !t.tile.is_solid() {
+        s.image = sprites.frame(id, 1);
+    }
+    e.insert(s);
     if anim {
-        e.insert(FrameAnim { id, fps: 4.0, offset: t.col as f32 * 0.13 });
+        let fps = if id == SpriteId::Belt { crate::level::BELT_SPEED / 2.0 } else { 4.0 };
+        let offset = if id == SpriteId::Belt { 0.0 } else { t.col as f32 * 0.13 };
+        e.insert(FrameAnim { id, fps, offset });
     }
 }
 

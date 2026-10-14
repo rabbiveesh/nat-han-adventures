@@ -329,6 +329,10 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Crumble => vec!["SOGGY CARDBOARD SAGS".into(), "UNDER YOU. KEEP MOVING!".into()],
         Topic::Spring => vec!["LAND ON A CUSHION:".into(), "PFFFT! UP YOU GO!".into()],
         Topic::Crusher => vec!["A CRUSHER SLAMS, THEN".into(), "CREEPS BACK. GO THEN!".into()],
+        Topic::Belt => vec!["A CONVEYOR CARRIES YOU.".into(), "JUMP OFF IT FOR A BOOST!".into()],
+        Topic::Fan => vec!["A FAN BLOWS YOU UP.".into(), "FLOAT, THEN STEER OFF!".into()],
+        Topic::Bumper => vec!["BUMP A RUBBER DUCK".into(), "AND BOING! IT BATS BACK!".into()],
+        Topic::Beat => vec!["RED AND BLUE BLOCKS".into(), "SWAP ON EVERY BAR!".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -343,6 +347,10 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Crumble => "NEW: SOGGY BOXES",
         Topic::Spring => "NEW: WHOOPEE CUSHIONS",
         Topic::Crusher => "NEW: CRUSHERS",
+        Topic::Belt => "NEW: CONVEYORS",
+        Topic::Fan => "NEW: FANS",
+        Topic::Bumper => "NEW: BUMPERS",
+        Topic::Beat => "NEW: BEAT BLOCKS",
         _ => "NEW!",
     };
     (title, lines)

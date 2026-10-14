@@ -120,6 +120,17 @@ pub enum SpriteId {
     CrusherBody,
     CrusherFace,
     CrusherStripes,
+    /// Conveyor belt moving right (flip it for left), 4 frames. 16x16.
+    Belt,
+    /// Fan in its grate, 2 frames. 16x16.
+    Fan,
+    /// A puff of a fan's updraft (white; tint it). 4x6.
+    Wisp,
+    /// Bumper: a rubber duck, its springy face on the right (flip it for left). 16x16.
+    Bumper,
+    /// Beat blocks: there, and gone (an outline). 16x16.
+    BeatRed,
+    BeatBlue,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -155,7 +166,7 @@ impl SpriteId {
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
-            CrusherStripes,
+            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue,
         ];
         for w in tiles::WORLDS {
             v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
@@ -174,6 +185,7 @@ impl SpriteId {
             Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
+            Wisp => (4, 6),
             Backdrop(_) => (backdrops::W as u32, backdrops::H as u32),
             _ => (16, 16),
         }
@@ -244,6 +256,12 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         CrusherBody => gadgets::crusher_body(),
         CrusherFace => gadgets::crusher_face(),
         CrusherStripes => gadgets::crusher_stripes(),
+        Belt => gadgets::belt(),
+        Fan => gadgets::fan(),
+        Wisp => gadgets::wisp(),
+        Bumper => gadgets::bumper(),
+        BeatRed => gadgets::beat_red(),
+        BeatBlue => gadgets::beat_blue(),
     }
 }
 

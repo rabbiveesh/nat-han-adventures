@@ -77,7 +77,10 @@
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
-use super::{CLING_ROWS, Crusher, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic};
+use super::{
+    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, Crusher, FAN_LIFT, FAN_RISE, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE,
+    SPRING_SPEED, TILE, ThingKind, Tile, Topic,
+};
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
     ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, DRUNK_SWAY, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
@@ -412,29 +415,35 @@ impl Env {
 }
 
 // Cell flags.
-const SOLID: u16 = 1;
-const ONEWAY: u16 = 2;
-const VIRT: u16 = 4;
-const STAIN: u16 = 8;
-const GREASE: u16 = 16;
-const SPIKE_UP: u16 = 32;
-const SPIKE_DOWN: u16 = 64;
-const LIQUID: u16 = 128;
-const JET: u16 = 256;
-const SPRAY: u16 = 512;
-const FLY: u16 = 1024;
-const RAFT: u16 = 2048;
+const SOLID: u32 = 1;
+const ONEWAY: u32 = 2;
+const VIRT: u32 = 4;
+const STAIN: u32 = 8;
+const GREASE: u32 = 16;
+const SPIKE_UP: u32 = 32;
+const SPIKE_DOWN: u32 = 64;
+const LIQUID: u32 = 128;
+const JET: u32 = 256;
+const SPRAY: u32 = 512;
+const FLY: u32 = 1024;
+const RAFT: u32 = 2048;
 /// A breakable brick (also `SOLID`): rising into it smashes it.
-const BRICK: u16 = 4096;
+const BRICK: u32 = 4096;
 /// A trampoline (also `SOLID`): landing on it springs you up.
-const SPRING: u16 = 8192;
+const SPRING: u32 = 8192;
 /// A crumbling platform (also `ONEWAY`): fine to land on and jump off, no place to linger.
-const CRUMBLE: u16 = 16384;
+const CRUMBLE: u32 = 16384;
 /// A crusher's sweep (its home is `SOLID`): a timed hazard, no place to linger (and, too big
 /// to time, `JET`: deadly).
-const CRUSH: u16 = 32768;
-const DEADLY_TILE: u16 = SPIKE_UP | SPIKE_DOWN | LIQUID;
-const FLOOR_ONEWAY: u16 = ONEWAY | VIRT | STAIN | RAFT;
+const CRUSH: u32 = 32768;
+/// In a fan's updraft ([`Level::updraft`]): it lifts you; no place to stand.
+const UPDRAFT: u32 = 65536;
+/// A bumper (also `SOLID`): its face bats you back ([`Tile::bumper`]).
+const BUMPER: u32 = 131072;
+/// A conveyor belt (also `SOLID`): it carries you ([`Map::belt`]); no place to linger.
+const BELT: u32 = 262144;
+const DEADLY_TILE: u32 = SPIKE_UP | SPIKE_DOWN | LIQUID;
+const FLOOR_ONEWAY: u32 = ONEWAY | VIRT | STAIN | RAFT;
 
 /// A run of adjacent spray cans `c0..=c1` sitting in row `row`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -499,7 +508,7 @@ pub struct Map<'a> {
     pub level: &'a Level,
     w: i32,
     h: i32,
-    flags: Vec<u16>,
+    flags: Vec<u32>,
     flies: Vec<(f32, f32)>,
     /// Runs of [`CAN_ROW_MIN`]+ adjacent cans: too much to time your way through, so (unlike
     /// a lone can) deadly for the validator.
@@ -508,8 +517,8 @@ pub struct Map<'a> {
     pub pools: Vec<Pool>,
     pub chasms: Vec<Chasm>,
     has_grease: bool,
-    /// Trampolines bounce arcs up mid-flight, so the free-flight envelopes ([`Arcs`]) don't
-    /// bound them: no pruning by envelope.
+    /// Trampolines, fans and bumpers bend arcs mid-flight, so the free-flight envelopes
+    /// ([`Arcs`]) don't bound them: no pruning by envelope.
     has_springs: bool,
     /// Per cell: the top horizontal speed (px/s, normal time) of a moving platform you can
     /// stand on there (0: none). See [`Map::carry`].
@@ -523,7 +532,7 @@ pub struct Map<'a> {
 impl<'a> Map<'a> {
     pub fn new(level: &'a Level) -> Self {
         let (w, h) = (level.width as i32, level.height as i32);
-        let mut flags = vec![0u16; (w * h) as usize];
+        let mut flags = vec![0u32; (w * h) as usize];
         let at = |c: i32, r: i32| (c >= 0 && r >= 0 && c < w && r < h).then(|| (r * w + c) as usize);
         for r in 0..h {
             for c in 0..w {
@@ -539,7 +548,13 @@ impl<'a> Map<'a> {
                     Tile::Brick => SOLID | BRICK,
                     Tile::Trampoline => SOLID | SPRING,
                     Tile::Crumble => ONEWAY | CRUMBLE,
-                };
+                    Tile::BeltLeft | Tile::BeltRight => SOLID | BELT,
+                    Tile::Fan => SOLID,
+                    Tile::BumperLeft | Tile::BumperRight => SOLID | BUMPER,
+                    // Beat blocks come and go with the bars: fine to land on and jump off (a
+                    // bar is long), no place to linger, never in your way for long.
+                    Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff => ONEWAY | CRUMBLE,
+                } | if level.updraft(c, r) { UPDRAFT } else { 0 };
             }
         }
         // Crushers: home is solid; the sweep a timed hazard (deadly when too big to time);
@@ -673,7 +688,7 @@ impl<'a> Map<'a> {
             pools,
             chasms,
             has_grease: level.has_grease(),
-            has_springs: level.tiles.contains(&Tile::Trampoline),
+            has_springs: level.tiles.iter().any(|t| matches!(t, Tile::Trampoline | Tile::Fan) || t.bumper() != 0.0),
             carry,
             derive_marks: false,
             derived: Vec::new(),
@@ -692,7 +707,7 @@ impl<'a> Map<'a> {
     }
 
     #[inline(always)]
-    fn f(&self, c: i32, r: i32) -> u16 {
+    fn f(&self, c: i32, r: i32) -> u32 {
         if c < 0 || c >= self.w || r < 0 {
             SOLID
         } else if r >= self.h {
@@ -702,7 +717,7 @@ impl<'a> Map<'a> {
         }
     }
 
-    fn set(&mut self, (c, r): Cell, on: u16, off: u16) {
+    fn set(&mut self, (c, r): Cell, on: u32, off: u32) {
         if c >= 0 && r >= 0 && c < self.w && r < self.h {
             let i = (r * self.w + c) as usize;
             self.flags[i] = (self.flags[i] & !off) | on;
@@ -768,6 +783,21 @@ impl<'a> Map<'a> {
     /// A brick at (c, r)?
     fn brick(&self, c: i32, r: i32) -> bool {
         self.f(c, r) & BRICK != 0
+    }
+
+    /// A bumper's face at (c, r) (-1 its left, 1 its right, 0 none).
+    fn bumper(&self, c: i32, r: i32) -> f32 {
+        if self.f(c, r) & BUMPER == 0 { 0.0 } else { self.level.tile(c, r).bumper() }
+    }
+
+    /// In a fan's updraft, the box centered at (x, y)?
+    fn updraft(&self, x: f32, y: f32) -> bool {
+        self.f((x / TILE).floor() as i32, (y / TILE).floor() as i32) & UPDRAFT != 0
+    }
+
+    /// The conveyor belt's speed (px/s) under `cell` (0: not on one).
+    pub fn belt(&self, (c, r): Cell) -> f32 {
+        if self.f(c, r + 1) & BELT == 0 { 0.0 } else { self.level.tile(c, r + 1).belt() }
     }
 
     fn floor(&self, c: i32, r: i32) -> Floor {
@@ -865,8 +895,7 @@ impl<'a> Map<'a> {
             return false;
         }
         let f = self.f(c, r);
-        f & SOLID == 0
-            && f & DEADLY_TILE == 0
+        f & (SOLID | DEADLY_TILE | UPDRAFT) == 0
             && self.floor(c, r + 1) != Floor::None
             && !self.spring(c, r + 1)
             && !self.deadly(c as f32 * TILE + 8.0, (r + 1) as f32 * TILE - HALF_H)
@@ -879,10 +908,10 @@ impl<'a> Map<'a> {
         let below = self.f(c, r + 1);
         self.standable((c, r))
             && ((below & SOLID != 0 && below & GREASE == 0) || below & ONEWAY != 0)
-            && below & CRUMBLE == 0
+            && below & (CRUMBLE | BELT) == 0
             && (0..=RUNWAY_HEADROOM).all(|k| {
                 let f = self.f(c, r - k);
-                f & (DEADLY_TILE | SPRAY | CRUSH) == 0
+                f & (DEADLY_TILE | SPRAY | CRUSH | UPDRAFT) == 0
             })
             && !self.in_fly_zone(
                 c as f32 * TILE,
@@ -938,7 +967,7 @@ fn find_pools(level: &Level) -> Vec<Pool> {
 
 /// Fired-up chasms: at least [`CHASM_MIN`] columns with nothing at all from the walk row
 /// down (bottomless), between two floors at the same height.
-fn find_chasms(level: &Level, flags: &[u16]) -> Vec<Chasm> {
+fn find_chasms(level: &Level, flags: &[u32]) -> Vec<Chasm> {
     let (w, h) = (level.width as i32, level.height as i32);
     let open = |c: i32, r: i32| (r..h).all(|k| flags[(k * w + c) as usize] == 0);
     let floor = |c: i32, r: i32| {
@@ -1301,6 +1330,9 @@ fn take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> Option<f32> {
     if s.jump && !env.grip && map.greasy((c, r)) {
         return None; // can't jump off grease
     }
+    if s.carry != 0.0 && map.belt((c, r)) != 0.0 {
+        return None; // a belt's speed is the carry (`simulate`)
+    }
     if s.carry != 0.0 {
         // As fast as the platform under the cell goes (ideal: the next step up, a human's:
         // the step at or below).
@@ -1338,9 +1370,14 @@ fn weak_take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> f32 {
 }
 
 /// One arc from cell (c, r); the cells the box touched go into `touched`.
-fn simulate(map: &Map, env: &Env, (_, r): Cell, s: &Strategy, x0: f32, touched: &mut Vec<Cell>) -> Outcome {
+fn simulate(map: &Map, env: &Env, (c, r): Cell, s: &Strategy, x0: f32, touched: &mut Vec<Cell>) -> Outcome {
     let y0 = (r + 1) as f32 * TILE - HALF_H;
-    fly(map, env, &Flight::of(env, s, Launch::Ground, x0, y0), touched)
+    let mut f = Flight::of(env, s, Launch::Ground, x0, y0);
+    // Off a conveyor belt: its speed comes along (Nat keeps it, Han doesn't).
+    if env.carry > 0.0 && s.carry == 0.0 {
+        f.carry = map.belt((c, r));
+    }
+    fly(map, env, &f, touched)
 }
 
 /// Fly `f` until it lands, dies or times out; the cells the box touched go into `touched`.
@@ -1373,16 +1410,24 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
         t += DT;
         let g = Flight { toots, ..*f };
         air_controls(env, &g, t, &mut vx, &mut vy, &mut cut, &mut tooted);
+        // A fan's updraft (the game's `step_body`).
+        if vy > -FAN_RISE && map.updraft(x, y) {
+            vy = (vy - FAN_LIFT * DT).max(-FAN_RISE);
+        }
 
         // Horizontal move against solids.
         let nx = x + (vx + carry) * DT;
         let moving = vx + carry;
         let (y0, y1) = (y - HALF_H, y + HALF_H);
         let mut blocked = false;
+        let mut bumped = 0.0;
         for col in cells(nx - HALF_W, nx + HALF_W) {
             for row in cells(y0, y1) {
                 if solid(&smashed, col, row) {
                     blocked = true;
+                    if map.bumper(col, row) == -moving.signum() {
+                        bumped = map.bumper(col, row);
+                    }
                     x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
                 }
             }
@@ -1392,6 +1437,20 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
             carry = 0.0;
         } else {
             x = nx;
+        }
+        if bumped != 0.0 {
+            // A bumper's face: batted back and up, the toot back (like a trampoline).
+            carry = bumped * BUMPER_SPEED;
+            vy = vy.min(-BUMPER_LIFT);
+            cut = true;
+            if env.spring_toot {
+                for k in 0..3 {
+                    if f.toots[k].is_finite() {
+                        toots[k] = t + f.toots[k];
+                        tooted[k] = false;
+                    }
+                }
+            }
         }
 
         // Vertical move.
@@ -1619,7 +1678,7 @@ pub struct Crossing {
     /// Splats it takes (stain pits), and where the stains go.
     pub stains: Vec<Cell>,
     /// The map's flags just before it (stains made by then).
-    flags: Vec<u16>,
+    flags: Vec<u32>,
 }
 
 /// Can the player be in `mode` when taking off from `cell` in direction `dir`?
@@ -2874,6 +2933,16 @@ pub fn reachable(level: &Level, cell: Cell) -> bool {
     g.reached(cell)
 }
 
+/// [`reachable`] in a human's normal physics alone: no band modes, no Han, no stains (for tests
+/// of a tile's own physics).
+pub fn reachable_plain(level: &Level, cell: Cell) -> bool {
+    let map = Map::new(level);
+    let phys = Physics::default();
+    let mut g = Graph::new(map.w, map.h);
+    explore(&map, phys.human(Mode::Normal), vec![(level.start.0 as i32, level.start.1 as i32)], None, &mut g);
+    g.reached(cell)
+}
+
 fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool) -> Report {
     let mut errs = line_errors(level);
     let mut map = Map::new(level);
@@ -3158,7 +3227,7 @@ fn lessons(
         if below & ONEWAY != 0 && below & CRUMBLE == 0 {
             see(Topic::OneWay, cell);
         }
-        if below & CRUMBLE != 0 {
+        if below & CRUMBLE != 0 && level.tile(cell.0, cell.1 + 1) == Tile::Crumble {
             see(Topic::Crumble, cell);
         }
         if below & VIRT != 0 && below & (SOLID | ONEWAY) == 0 {
@@ -3180,13 +3249,18 @@ fn lessons(
             }
         }
     }
-    // Bricks, trampolines and crushers: first within a few tiles.
+    // Bricks, trampolines, belts, fans, bumpers, beat blocks and crushers: first within a few
+    // tiles.
     let mut near: Vec<(Topic, Cell)> = Vec::new();
     for r in 0..level.height as i32 {
         for c in 0..level.width as i32 {
             match level.tile(c, r) {
                 Tile::Brick => near.push((Topic::Brick, (c, r))),
                 Tile::Trampoline => near.push((Topic::Spring, (c, r))),
+                Tile::BeltLeft | Tile::BeltRight => near.push((Topic::Belt, (c, r))),
+                Tile::Fan => near.push((Topic::Fan, (c, r))),
+                Tile::BumperLeft | Tile::BumperRight => near.push((Topic::Bumper, (c, r))),
+                t if t.is_beat() => near.push((Topic::Beat, (c, r))),
                 _ => {}
             }
         }

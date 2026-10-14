@@ -1,6 +1,7 @@
 //! The gadget tiles: breakable bricks (a bar of old soap), crumbling platforms (soggy
-//! cardboard), trampolines (a whoopee cushion) and crushers (a riveted steel block with an
-//! angry face and hazard stripes on its slamming side).
+//! cardboard), trampolines (a whoopee cushion), crushers (a riveted steel block with an
+//! angry face and hazard stripes on its slamming side), conveyor belts, fans (a vent grate),
+//! bumpers (a rubber duck) and the red and blue beat blocks.
 
 use super::palette::*;
 
@@ -226,6 +227,247 @@ pub fn crusher_stripes() -> Vec<Pixels> {
     vec![grid(CRUSHER_STRIPES, STEEL_PAL)]
 }
 
+// ---------------------------------------------------------------- belt: a conveyor
+
+const BELT_PAL: Palette = &[
+    ('k', hex(0x1c1a20)),
+    ('B', hex(0x5a5660)), // belt, lit edge
+    ('b', hex(0x3e3a44)), // belt rubber
+    ('y', hex(0xf8d030)), // chevrons
+    ('S', hex(0x8a8e98)), // housing
+    ('s', hex(0xb8bcc6)),
+    ('r', hex(0x6a3a2a)), // roller
+    ('h', hex(0xd8a070)), // roller hub
+];
+const BELT: [&[&str]; 4] = [
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kBBBBBBByBBBBBBk",
+        "kybbbbbbbybbbbbk",
+        "kbbbbbbbybbbbbbk",
+        "kkkkkkkkkkkkkkkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkkkSSSSSSkkkSk",
+        "kkrhrkSSSSkrhrkk",
+        "kkrhrkSSSSkrhrkk",
+        "kkrrrkSSSSkrrrkk",
+        "kSkkkSSSSSSkkkSk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkSkSkSkSkSkSkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSSSSSSSSSSSSSSk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kByBBBBBBByBBBBk",
+        "kbbybbbbbbbybbbk",
+        "kbybbbbbbbybbbbk",
+        "kkkkkkkkkkkkkkkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkkkSSSSSSkkkSk",
+        "kkrhrkSSSSkrhrkk",
+        "kkrrrkSSSSkrrrkk",
+        "kkrrrkSSSSkrrrkk",
+        "kSkkkSSSSSSkkkSk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkSkSkSkSkSkSkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSSSSSSSSSSSSSSk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kBBByBBBBBBByBBk",
+        "kbbbbybbbbbbbybk",
+        "kbbbybbbbbbbybbk",
+        "kkkkkkkkkkkkkkkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkkkSSSSSSkkkSk",
+        "kkrhrkSSSSkrhrkk",
+        "kkrhrkSSSSkrhrkk",
+        "kkrrrkSSSSkrrrkk",
+        "kSkkkSSSSSSkkkSk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkSkSkSkSkSkSkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSSSSSSSSSSSSSSk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kBBBBByBBBBBBByk",
+        "kbbbbbbybbbbbbbk",
+        "kbbbbbybbbbbbbyk",
+        "kkkkkkkkkkkkkkkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkkkSSSSSSkkkSk",
+        "kkrhrkSSSSkrhrkk",
+        "kkrrrkSSSSkrrrkk",
+        "kkrrrkSSSSkrrrkk",
+        "kSkkkSSSSSSkkkSk",
+        "kSSSSSSSSSSSSSSk",
+        "kSkSkSkSkSkSkSkk",
+        "kSSSSSSSSSSSSSSk",
+        "kSSSSSSSSSSSSSSk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+];
+
+/// A conveyor belt moving right, 4 frames (flip it for one moving left).
+pub fn belt() -> Vec<Pixels> {
+    BELT.iter().map(|g| grid(g, BELT_PAL)).collect()
+}
+
+// ---------------------------------------------------------------- fan: a vent grate
+
+const FAN_PAL: Palette = &[
+    ('k', hex(0x16181e)),
+    ('S', hex(0x7a808c)), // frame
+    ('s', hex(0xa8aeb8)), // frame lit
+    ('b', hex(0x5aa0d8)), // blades
+    ('h', hex(0xd8ecff)), // hub shine
+    ('g', hex(0x3a3e48)), // vents
+];
+const FAN: [&[&str]; 2] = [
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kSSSSSSSSSSSSSSk",
+        "kssssssssssssssk",
+        "ksk....bb....ksk",
+        "ks....bbbb....sk",
+        "ks.....bb.....sk",
+        "ksbb...hh...bbsk",
+        "ksbbbbhkkhbbbbsk",
+        "ksbb...hh...bbsk",
+        "ks.....bb.....sk",
+        "ks....bbbb....sk",
+        "ksk....bb....ksk",
+        "kSSSSSSSSSSSSSSk",
+        "kgkgkgkgkgkgkggk",
+        "kSSSSSSSSSSSSSSk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kSSSSSSSSSSSSSSk",
+        "kssssssssssssssk",
+        "ksk.b.......bksk",
+        "ks.bbb.....bbbsk",
+        "ks..bbb...bbb.sk",
+        "ks....bhhb....sk",
+        "ks.....kk.....sk",
+        "ks....bhhb....sk",
+        "ks..bbb...bbb.sk",
+        "ks.bbb.....bbbsk",
+        "ksk.b.......bksk",
+        "kSSSSSSSSSSSSSSk",
+        "kgkgkgkgkgkgkggk",
+        "kSSSSSSSSSSSSSSk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+];
+
+/// A fan in its grate, blades turning: 2 frames.
+pub fn fan() -> Vec<Pixels> {
+    FAN.iter().map(|g| grid(g, FAN_PAL)).collect()
+}
+
+/// A puff of the fan's updraft (white, faded; tint it). 4x6.
+pub fn wisp() -> Vec<Pixels> {
+    vec![grid(WISP, WISP_PAL)]
+}
+
+const WISP_PAL: Palette = &[('w', [255, 255, 255, 150]), ('W', [255, 255, 255, 80])];
+const WISP: &[&str] = &[".W..", ".w..", "..w.", "..wW", ".w..", ".W.."];
+
+// ---------------------------------------------------------------- bumper: a rubber duck
+
+const DUCK_PAL: Palette = &[
+    ('k', hex(0x3a2410)),
+    ('y', hex(0xf8d838)), // duck
+    ('Y', hex(0xd8a818)), // shade
+    ('w', hex(0xffffff)), // eye shine
+    ('o', hex(0xf08020)), // beak
+    ('R', hex(0xe03848)), // the rubber bumper on its face
+];
+const BUMPER: &[&str] = &[
+    "................",
+    "......kkkk......",
+    ".....kyyyyk.....",
+    "....kyyywkyk.kk.",
+    "....kyyyyyyk.kRk",
+    "....kyyyyyykoRRk",
+    ".kk..kyyyykooRRk",
+    "kyyk.kyyyyk.kRRk",
+    "kyyykyyyyyyykRRk",
+    "kyyyyyyyyyyyyRRk",
+    ".kyyyyyyyyyykRRk",
+    ".kYyyyyyyyyYkRRk",
+    "..kYYyyyyyYYkRRk",
+    "...kYYYYYYYk.kRk",
+    "....kkkkkkkk..kk",
+    "kkkkkkkkkkkkkkkk",
+];
+
+/// A bumper: a rubber duck with a red rubber face on its right (flip it for a left one).
+pub fn bumper() -> Vec<Pixels> {
+    vec![grid(BUMPER, DUCK_PAL)]
+}
+
+// ---------------------------------------------------------------- beat blocks
+
+const RED_PAL: Palette = &[('k', hex(0x401018)), ('w', hex(0xffb0b8)), ('c', hex(0xe03848)), ('C', hex(0xa01c30))];
+const BLUE_PAL: Palette = &[('k', hex(0x101c40)), ('w', hex(0xb0d0ff)), ('c', hex(0x3870e0)), ('C', hex(0x1c3ca0))];
+const BEAT: [&[&str]; 2] = [
+    &[
+        "kkkkkkkkkkkkkkkk",
+        "kwwwwwwwwwwwwwCk",
+        "kwccccccccccccCk",
+        "kwcccccckkccccCk",
+        "kwcccccckwkcccCk",
+        "kwcccccckcwkccCk",
+        "kwcccccckccccCCk",
+        "kwcccccckccccCCk",
+        "kwccckkkkccccCCk",
+        "kwcckkkkkccccCCk",
+        "kwcckkkkcccccCCk",
+        "kwccckkccccccCCk",
+        "kwccccccccccCCCk",
+        "kwCCCCCCCCCCCCCk",
+        "kCCCCCCCCCCCCCCk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+    &[
+        "cc..cc..cc..cc..",
+        "c..............c",
+        "................",
+        "c..............c",
+        "c.......c......c",
+        "........cc......",
+        "........c.c.....",
+        "c.......c......c",
+        "c....ccccc.....c",
+        ".....cccc.......",
+        "................",
+        "c..............c",
+        "c..............c",
+        "................",
+        "c..............c",
+        "..cc..cc..cc..cc",
+    ],
+];
+
+/// Red beat blocks: there (a note on it), and gone (a dotted outline).
+pub fn beat_red() -> Vec<Pixels> {
+    BEAT.iter().map(|g| grid(g, RED_PAL)).collect()
+}
+
+/// Blue beat blocks: there, and gone.
+pub fn beat_blue() -> Vec<Pixels> {
+    BEAT.iter().map(|g| grid(g, BLUE_PAL)).collect()
+}
+
 #[cfg(test)]
 pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
     let mut v: Vec<(&'static str, Vec<&'static str>, Palette)> = vec![
@@ -240,5 +482,17 @@ pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
     for g in TRAMPOLINE {
         v.push(("TRAMPOLINE", g.to_vec(), CUSHION_PAL));
     }
+    for g in BELT {
+        v.push(("BELT", g.to_vec(), BELT_PAL));
+    }
+    for g in FAN {
+        v.push(("FAN", g.to_vec(), FAN_PAL));
+    }
+    for g in BEAT {
+        v.push(("BEAT", g.to_vec(), RED_PAL));
+        v.push(("BEAT", g.to_vec(), BLUE_PAL));
+    }
+    v.push(("BUMPER", BUMPER.to_vec(), DUCK_PAL));
+    v.push(("WISP", WISP.to_vec(), WISP_PAL));
     v
 }

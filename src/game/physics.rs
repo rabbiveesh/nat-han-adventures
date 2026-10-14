@@ -41,7 +41,7 @@ use super::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
-use crate::level::{Level, SPRING_SPEED, TILE, Tile};
+use crate::level::{BUMPER_LIFT, BUMPER_SPEED, FAN_LIFT, FAN_RISE, Level, SPRING_SPEED, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<HanBoosted>().add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
@@ -239,6 +239,8 @@ pub struct Contact {
     /// Bricks (grid col, row) rising into them smashed this step: the caller breaks them
     /// (the body is already inside them).
     pub bricks: [Option<(i32, i32)>; 4],
+    /// Ran or flew into a bumper's face and got batted back ([`BUMPER_SPEED`]).
+    pub bumped: bool,
 }
 
 impl Contact {
@@ -263,6 +265,17 @@ pub fn springs(landed: impl Iterator<Item = (i32, Tile)>, center: i32) -> bool {
     mid.unwrap_or(any && !other)
 }
 
+/// The conveyor belt's speed (px/s) under a body standing at `pos`: the tile under the middle
+/// of its feet, else either corner's. 0 off a belt.
+pub fn belt_underfoot(level: &Level, pos: Vec2, half: Vec2) -> f32 {
+    let feet = pos.y - half.y - 1.0;
+    [pos.x, pos.x - half.x + 0.5, pos.x + half.x - 0.5]
+        .into_iter()
+        .map(|x| tile_at(level, idx(x), idx(feet)).belt())
+        .find(|&b| b != 0.0)
+        .unwrap_or(0.0)
+}
+
 /// One fixed step of the shared body physics (Nat and Han): gravity, being carried by the
 /// carrier stood on, then tile AABB collision X then Y (solid tiles, one-way tiles from above),
 /// then the carriers (one-way, from above). `blockers` are extra boxes (min, max) that stop
@@ -274,6 +287,9 @@ pub fn springs(landed: impl Iterator<Item = (i32, Tile)>, center: i32) -> bool {
 ///
 /// Rising into a brick smashes through it (`Contact::bricks`: the caller breaks them); landing
 /// on a trampoline ([`springs`]) springs the body up at [`SPRING_SPEED`] (`Contact::sprung`).
+/// A conveyor belt underfoot carries the body (and leaving it keeps its speed: `Contact::launch`),
+/// a fan's updraft ([`Level::updraft`]) lifts it, and a bumper's face bats it back
+/// (`Contact::bumped`, as a [`Body::launch`]).
 #[allow(clippy::too_many_arguments)]
 pub fn step_body(
     level: &Level,
@@ -285,8 +301,11 @@ pub fn step_body(
     solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Contact {
-    // --- Gravity.
+    // --- Gravity (and a fan's updraft against it).
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
+    if body.vel.y < FAN_RISE && level.updraft(idx(pos.x), row_of(level, idx(pos.y))) {
+        body.vel.y = (body.vel.y + FAN_LIFT * dt).min(FAN_RISE);
+    }
 
     // --- Carried by what we stood on.
     let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
@@ -294,19 +313,27 @@ pub fn step_body(
 
     let half = body.half;
     let was_on_ground = body.on_ground;
+    // A conveyor belt underfoot (just jumped off it too: its speed comes along).
+    let belt = if body.riding.is_none() && (body.vel.y >= 0.0 || was_on_ground) { belt_underfoot(level, *pos, half) } else { 0.0 };
     let fall_speed = -body.vel.y;
     let mut blocked_x = false;
 
     // --- X.
-    let dx = (body.vel.x + body.launch) * dt + carry.x;
+    let dx = (body.vel.x + body.launch + belt) * dt + carry.x;
     let x_before = pos.x;
     pos.x += dx;
+    let mut bumped = 0.0;
     if dx != 0.0 {
         let (xs, ys) = cells(*pos - half, *pos + half);
         for j in ys {
             for i in xs.clone() {
-                if !tile_at(level, i, j).is_solid() {
+                let tile = tile_at(level, i, j);
+                if !tile.is_solid() {
                     continue;
+                }
+                // A bumper's face, run into: batted back.
+                if tile.bumper() == -dx.signum() {
+                    bumped = tile.bumper();
                 }
                 if dx > 0.0 {
                     pos.x = pos.x.min(i as f32 * TILE - half.x);
@@ -329,6 +356,11 @@ pub fn step_body(
             body.launch = 0.0;
             blocked_x = true;
         }
+    }
+    if bumped != 0.0 {
+        body.launch = bumped * BUMPER_SPEED;
+        body.vel.y = body.vel.y.max(BUMPER_LIFT);
+        body.on_ground = false;
     }
 
     // --- Y.
@@ -397,7 +429,7 @@ pub fn step_body(
         body.launch = 0.0;
         body.on_ground = false;
         body.riding = None;
-        return Contact { ground: false, riding: None, was_on_ground, fall_speed, blocked_x, launch: None, sprung, bricks };
+        return Contact { ground: false, riding: None, was_on_ground, fall_speed, blocked_x, launch: None, sprung, bricks, bumped: false };
     }
     // Carriers (one-way).
     if body.vel.y <= 0.0 {
@@ -418,10 +450,15 @@ pub fn step_body(
         body.vel.y = 0.0;
         body.launch = 0.0;
     }
-    let launch = (!ground && !blocked_x).then_some(carrier).flatten().filter(|c| c.launches).map(|c| c.carry.x / dt);
+    let launch = (!ground && !blocked_x)
+        .then_some(carrier)
+        .flatten()
+        .filter(|c| c.launches)
+        .map(|c| c.carry.x / dt)
+        .or((!ground && !blocked_x && belt != 0.0).then_some(belt));
     body.on_ground = ground;
     body.riding = riding;
-    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch, sprung: false, bricks }
+    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch, sprung: false, bricks, bumped: bumped != 0.0 }
 }
 
 /// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;
@@ -654,8 +691,8 @@ fn player_step(
         smash(&mut active, contact.smashed(), &mut smashed);
     }
     let level = &active.level;
-    if contact.sprung {
-        // Off a trampoline: way up, and the toot's back.
+    if contact.sprung || contact.bumped {
+        // Off a trampoline (or a bumper): way up, and the toot's back.
         ctl.has_toot = true;
         ctl.weak_toot = false;
         ctl.cut_armed = false;

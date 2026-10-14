@@ -9,18 +9,23 @@
 //!   (the tile goes empty in [`ActiveLevel`]) and come back [`CRUMBLE_BACK`] s after that.
 //! - **Bricks** are smashed by whoever rises into them (`Contact::bricks`): [`smash`] empties
 //!   the tile and says so ([`BrickSmashed`]) for the art and the sound.
+//! - **Beat blocks** swap on the music's bar line ([`beat_blocks`]): red ones are there on even
+//!   bars, blue ones on odd ones. One coming back where someone stands waits until they've
+//!   moved.
+//!
+//! (Conveyor belts, fans and bumpers are all physics: `step_body`.)
 
 use bevy::prelude::*;
 
 use super::physics::{Body, Carrier, Dead, Finished};
-use super::{ActiveLevel, GameSet, Han, LevelTile, Player, Pos, SimClock};
-use crate::level::{CRUMBLE_BACK, CRUMBLE_DELAY, CrushDir, Crusher, CrusherDef, Level, TILE, Tile};
+use super::{ActiveLevel, GameSet, Groove, Han, LevelTile, Player, Pos, SimClock};
+use crate::level::{CRUMBLE_BACK, CRUMBLE_DELAY, CrushDir, CrushTime, Crusher, CrusherDef, Level, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<BrickSmashed>()
         .add_message::<Sprung>()
         .add_message::<CrusherThud>()
-        .add_systems(FixedUpdate, move_crushers.in_set(GameSet::World))
+        .add_systems(FixedUpdate, (move_crushers, beat_blocks).in_set(GameSet::World))
         .add_systems(FixedUpdate, crumble.in_set(GameSet::Interact))
         .add_systems(FixedUpdate, sounds.in_set(GameSet::Sync));
 }
@@ -60,8 +65,8 @@ impl CrusherBlock {
         CrusherBlock { def, home: (a + b) / 2.0, half: Vec2::new(def.w as f32, def.h as f32) * TILE / 2.0, slamming: false }
     }
 
-    /// Where its center is at sim time `t`.
-    pub fn at(&self, t: f32) -> Vec2 {
+    /// Where its center is at `t`.
+    pub fn at(&self, t: CrushTime) -> Vec2 {
         let (d, _) = Crusher::offset(&self.def, t);
         let dir = match self.def.dir {
             CrushDir::Down => Vec2::NEG_Y,
@@ -97,10 +102,17 @@ pub fn squashed(pos: Vec2, half: Vec2, (min, max): (Vec2, Vec2)) -> bool {
     pos.x + half.x - f > min.x && pos.x - half.x + f < max.x && pos.y + half.y - f > min.y && pos.y - half.y + f < max.y
 }
 
+/// When it is for the crushers: the sim clock, and the music's bars.
+pub fn crush_time(clock: &SimClock, groove: &Groove) -> CrushTime {
+    let c = &groove.clock;
+    let bars = c.bar as f32 + (c.beat as f32 + c.phase) / c.beats_per_bar.max(1) as f32;
+    CrushTime { sim: clock.time, bars, bar_secs: c.bar_secs() }
+}
+
 /// Should a body (center `pos`, half extents `half`) on foot, heading `dir` at `speed` px/s,
-/// wait before stepping into this crusher's sweep at sim time `t`? Yes unless it's resting
+/// wait before stepping into this crusher's sweep at `t`? Yes unless it's resting
 /// at home long enough to get past it. (Already in the sweep: no, get out.) Han's reflex.
-pub fn wait_for(block: &CrusherBlock, pos: Vec2, half: Vec2, dir: f32, speed: f32, t: f32) -> bool {
+pub fn wait_for(block: &CrusherBlock, pos: Vec2, half: Vec2, dir: f32, speed: f32, t: CrushTime) -> bool {
     let (a0, a1) = block.bounds(block.home);
     let d = block.def.travel as f32 * TILE;
     let far = block.home
@@ -160,10 +172,16 @@ pub struct CrusherThud {
 }
 
 /// Crushers follow their cycle.
-pub(super) fn move_crushers(clock: Res<SimClock>, mut q: Query<(&mut CrusherBlock, &mut Pos)>, mut thuds: MessageWriter<CrusherThud>) {
+pub(super) fn move_crushers(
+    clock: Res<SimClock>,
+    groove: Res<Groove>,
+    mut q: Query<(&mut CrusherBlock, &mut Pos)>,
+    mut thuds: MessageWriter<CrusherThud>,
+) {
+    let t = crush_time(&clock, &groove);
     for (mut block, mut pos) in &mut q {
-        let at = block.at(clock.time);
-        let (_, slamming) = Crusher::offset(&block.def, clock.time);
+        let at = block.at(t);
+        let (_, slamming) = Crusher::offset(&block.def, t);
         if block.slamming != slamming {
             if block.slamming {
                 let (face, half) = match block.def.dir {
@@ -247,6 +265,47 @@ fn crumble(
     if !changes.is_empty() {
         for (i, tile) in changes {
             active.level.tiles[i] = tile;
+        }
+    }
+}
+
+/// Beat blocks follow the music's bars: red on even bars, blue on odd ones. One coming back
+/// where a body is waits until it's clear (nobody gets stuck in a block).
+#[allow(clippy::type_complexity)]
+pub(super) fn beat_blocks(
+    groove: Res<Groove>,
+    mut active: ResMut<ActiveLevel>,
+    bodies: Query<(&Pos, &Body), (Or<(With<Player>, With<Han>)>, Without<Dead>)>,
+    mut cells: Local<Vec<usize>>,
+) {
+    let level = &active.level;
+    // (A scan is a few thousand compares: cheaper than keeping a list in step with level loads.)
+    cells.clear();
+    cells.extend(level.tiles.iter().enumerate().filter(|(_, t)| t.is_beat()).map(|(i, _)| i));
+    if cells.is_empty() {
+        return;
+    }
+    let odd = groove.clock.bar % 2 == 1;
+    let inside: Vec<(Vec2, Vec2)> = bodies.iter().map(|(p, b)| (p.0 - b.half, p.0 + b.half)).collect();
+    let mut changes: Vec<(usize, Tile)> = Vec::new();
+    for &i in cells.iter() {
+        let now = level.tiles[i];
+        let next = now.on_bar(odd);
+        if next == now {
+            continue;
+        }
+        if next.is_solid() {
+            let c = level.tile_center(i % level.width, i / level.width);
+            let (min, max) = (c - TILE / 2.0, c + TILE / 2.0);
+            if inside.iter().any(|&(a, b)| a.x < max.x && b.x > min.x && a.y < max.y && b.y > min.y) {
+                continue;
+            }
+        }
+        changes.push((i, next));
+    }
+    if !changes.is_empty() {
+        for (i, t) in changes {
+            active.level.tiles[i] = t;
         }
     }
 }

@@ -762,10 +762,11 @@ pub(super) fn think(
     }
 
     // Crushers: wait for one to rest at home long enough to get past it.
+    let crush_t = crate::game::crushers::crush_time(&clock, &groove);
     if !parachute
         && body.on_ground
         && input.dir != 0.0
-        && crushers.iter().any(|(_, b, _, _)| crate::game::crushers::wait_for(b, pos.0, body.half, input.dir, phys.speed, clock.time))
+        && crushers.iter().any(|(_, b, _, _)| crate::game::crushers::wait_for(b, pos.0, body.half, input.dir, phys.speed, crush_t))
     {
         input.dir = 0.0;
         input.jump = false;
@@ -773,7 +774,7 @@ pub(super) fn think(
 
     // --- Move.
     let drove = drive(level, &mut pos.0, &mut body, &mut brain.ctl, input, &phys, &carriers, &solids, dt);
-    if drove.contact.sprung {
+    if drove.contact.sprung || drove.contact.bumped {
         sprung.write(Sprung { pos: pos.0, han: true });
     }
     if drove.contact.bricks.iter().any(Option::is_some) {

@@ -252,7 +252,7 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
     // Crushers: Pos is the center of the block.
     for &def in level.crushers.iter().filter(|c| cols.contains(&c.col)) {
         let block = super::crushers::CrusherBlock::new(level, def);
-        let pos = block.at(0.0);
+        let pos = block.at(crate::level::CrushTime::sim(0.0));
         commands.spawn((
             Name::new("Crusher"),
             LevelEntity,

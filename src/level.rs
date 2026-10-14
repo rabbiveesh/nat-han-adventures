@@ -31,8 +31,9 @@
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
 //! - `N: ...` (a digit): a moving platform, see below.
-//! - `crusher@<col>,<row>: phase=<0..1>`: shift the cycle of the crusher covering that cell
-//!   (so neighbours don't slam in lockstep). See "Crushers" below.
+//! - `crusher@<col>,<row>: phase=<0..1> beat=<bars>` (either or both): shift the cycle of the
+//!   crusher covering that cell (so neighbours don't slam in lockstep); with `beat=N` it slams
+//!   on the music's ONE every N bars instead of on its own clock. See "Crushers" below.
 //! - `gate: <topic> <c0>,<r0> <c1>,<r1>`: a *gate mark*, the cells (inclusive rectangle) of a
 //!   gate the level is built around, named by its [`Topic`] word: `giant` (giant wall), `gap`
 //!   (long gap), `waltz` (glide launch), `grip` (grease chute), `stain` (stain pit), `mega`
@@ -62,6 +63,10 @@
 //! | `%` | breakable brick: solid, but rising into it from below (a jump, a toot, a boost) smashes it and carries on up. Gone for the level visit (back on a restart) |
 //! | `-` | crumbling platform: one-way like `=`; [`CRUMBLE_DELAY`] s after someone stands on it, it falls, and comes back [`CRUMBLE_BACK`] s later |
 //! | `T` | trampoline: a solid block; landing on its top springs you up ([`SPRING_SPEED`], ~6.5 tiles; the toot comes back) |
+//! | `{` `}` | conveyor belt: solid; standing on it carries you left (`{`) or right (`}`) at [`BELT_SPEED`], and jumping or stepping off keeps its speed |
+//! | `*` | fan: a solid grate; its updraft fills the empty tiles above it ([`FAN_REACH`] at most) and floats anyone in it up ([`FAN_RISE`]) to bob at the top |
+//! | `(` `)` | bumper (a rubber duck): solid; running or flying into its springy face (`(`: the left face, `)`: the right) bats you back the other way and up ([`BUMPER_SPEED`], [`BUMPER_LIFT`]) |
+//! | `[` `]` | beat block: red (`[`) is solid on even bars of the music and gone on odd ones, blue (`]`) the other way round. One that comes back around someone waits until they're clear |
 //! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -110,6 +115,9 @@
 //! his end). Its block is solid at every point of its cycle, and carries whoever stands on it.
 //! The validator treats its home as solid and its sweep like a spray can's jet: a timed
 //! hazard you can run through, unless it's too big to time ([`Crusher::timeable`]).
+//! A *beat crusher* (`beat=N`) slams on the ONE every N bars of the music instead; when the
+//! band plays fast it holds less and creeps back faster, so it's home at least
+//! [`CRUSH_BEAT_REST`] of its cycle (the validator assumes [`NOMINAL_BAR`]s).
 //!
 //! Rows may be ragged; short rows are padded with empty. Outside the grid: left/right is a solid
 //! wall, above is a solid ceiling (the top of the screen: the camera never shows above row 0, so
@@ -162,6 +170,26 @@ pub const CRUSH_SLAM_SPEED: f32 = 480.0;
 pub const CRUSH_HOLD: f32 = 0.6;
 /// ...and creeps home at this speed (px/s).
 pub const CRUSH_RISE_SPEED: f32 = 48.0;
+/// A beat crusher (`crusher@...: beat=N`) is home with at least this share of its cycle left
+/// to rest: it creeps back faster when the band plays fast.
+pub const CRUSH_BEAT_REST: f32 = 0.4;
+/// The bar the validator and free play assume for a beat crusher (s): 4 beats at 120 bpm.
+pub const NOMINAL_BAR: f32 = 2.0;
+/// A conveyor belt (`{` `}`) moves whoever stands on it this fast (px/s): 2.5 tiles/s. Jumping or
+/// stepping off keeps its speed, like a moving platform's.
+pub const BELT_SPEED: f32 = 40.0;
+/// A fan (`*`) blows straight up through this many empty tiles above it...
+pub const FAN_REACH: i32 = 6;
+/// ...lifting whoever's in its column (px/s², on top of gravity)...
+pub const FAN_LIFT: f32 = 2600.0;
+/// ...up to this rising speed (px/s): you float up the column and bob at its top.
+pub const FAN_RISE: f32 = 200.0;
+/// A bumper (`(` `)`, a sideways spring) bats whoever runs or flies into its face back this
+/// fast (px/s, kept until they land or hit a wall, like a platform's launch)...
+pub const BUMPER_SPEED: f32 = 240.0;
+/// ...and this fast up (px/s, at least).
+pub const BUMPER_LIFT: f32 = 300.0;
+
 /// The farthest (tiles) a crusher slams, with nothing in its way.
 pub const CRUSH_MAX_TRAVEL: i32 = 10;
 /// The validator times its way past a crusher whose face is at most this many tiles across...
@@ -230,6 +258,23 @@ pub enum Tile {
     Crumble,
     /// Trampoline (`T`): a solid block that springs whoever lands on top up high.
     Trampoline,
+    /// Conveyor belt (`{`: moving left, `}`: right): solid, carries whoever stands on it at
+    /// [`BELT_SPEED`].
+    BeltLeft,
+    BeltRight,
+    /// Fan (`*`): a solid grate blowing up its column ([`FAN_REACH`] empty tiles above it).
+    Fan,
+    /// Bumper: a solid block with a spring on one face (`(`: its left face, `)`: its right).
+    /// Running or flying into that face bats you back ([`BUMPER_SPEED`], [`BUMPER_LIFT`]).
+    BumperLeft,
+    BumperRight,
+    /// Beat blocks: red (`[`) are solid on even bars of the music and gone on odd ones, blue
+    /// (`]`) the other way round. The `Off` variants are the gone ones (only made at runtime,
+    /// but `]` starts as one: bar 0 is even).
+    BeatRed,
+    BeatRedOff,
+    BeatBlue,
+    BeatBlueOff,
 }
 
 impl Tile {
@@ -240,7 +285,64 @@ impl Tile {
     /// Blocks from every side (ground, grease, bricks, trampolines). (A brick gives way to
     /// anyone rising into it: `game::step_body`.)
     pub fn is_solid(self) -> bool {
-        matches!(self, Tile::Solid | Tile::Grease | Tile::Brick | Tile::Trampoline)
+        matches!(
+            self,
+            Tile::Solid
+                | Tile::Grease
+                | Tile::Brick
+                | Tile::Trampoline
+                | Tile::BeltLeft
+                | Tile::BeltRight
+                | Tile::Fan
+                | Tile::BumperLeft
+                | Tile::BumperRight
+                | Tile::BeatRed
+                | Tile::BeatBlue
+        )
+    }
+
+    /// A conveyor belt's speed (px/s, negative: left), 0 for anything else.
+    pub fn belt(self) -> f32 {
+        match self {
+            Tile::BeltLeft => -BELT_SPEED,
+            Tile::BeltRight => BELT_SPEED,
+            _ => 0.0,
+        }
+    }
+
+    /// A bumper's springy face: -1 its left face, 1 its right, 0 not a bumper.
+    pub fn bumper(self) -> f32 {
+        match self {
+            Tile::BumperLeft => -1.0,
+            Tile::BumperRight => 1.0,
+            _ => 0.0,
+        }
+    }
+
+    /// A beat block, on or off.
+    pub fn is_beat(self) -> bool {
+        matches!(self, Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff)
+    }
+
+    /// A beat block as it is on a bar of this parity (`odd`); anything else as it is.
+    pub fn on_bar(self, odd: bool) -> Tile {
+        match self {
+            Tile::BeatRed | Tile::BeatRedOff => {
+                if odd {
+                    Tile::BeatRedOff
+                } else {
+                    Tile::BeatRed
+                }
+            }
+            Tile::BeatBlue | Tile::BeatBlueOff => {
+                if odd {
+                    Tile::BeatBlue
+                } else {
+                    Tile::BeatBlueOff
+                }
+            }
+            t => t,
+        }
     }
 
     /// Solid on top only: you jump up through it and stand on it (`=`, stains, crumbling
@@ -305,10 +407,18 @@ pub enum Topic {
     Spring,
     /// Crushers `X` `<` `>` (`crusher`).
     Crusher,
+    /// Conveyor belts `{` `}` (`belt`).
+    Belt,
+    /// Fans `*` (`fan`).
+    Fan,
+    /// Bumpers `(` `)` (`bumper`).
+    Bumper,
+    /// Beat blocks `[` `]` (`beat`).
+    Beat,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 20] = [
+    pub const ALL: [Topic; 24] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -329,11 +439,24 @@ impl Topic {
         Topic::Crumble,
         Topic::Spring,
         Topic::Crusher,
+        Topic::Belt,
+        Topic::Fan,
+        Topic::Bumper,
+        Topic::Beat,
     ];
 
     /// The gadget tiles: not in the campaign yet (only `levels/playground/gadgets.txt`), so the
     /// campaign doesn't owe them a lesson until a level uses one.
-    pub const GADGETS: [Topic; 4] = [Topic::Brick, Topic::Crumble, Topic::Spring, Topic::Crusher];
+    pub const GADGETS: [Topic; 8] = [
+        Topic::Brick,
+        Topic::Crumble,
+        Topic::Spring,
+        Topic::Crusher,
+        Topic::Belt,
+        Topic::Fan,
+        Topic::Bumper,
+        Topic::Beat,
+    ];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -357,6 +480,10 @@ impl Topic {
             Topic::Crumble => "crumble",
             Topic::Spring => "spring",
             Topic::Crusher => "crusher",
+            Topic::Belt => "belt",
+            Topic::Fan => "fan",
+            Topic::Bumper => "bumper",
+            Topic::Beat => "beat",
         }
     }
 
@@ -542,46 +669,86 @@ pub struct CrusherDef {
     pub dir: CrushDir,
     /// Tiles from home to its stop.
     pub travel: i32,
-    /// Starting point in its cycle, 0..1 (0: the start of its rest at home).
+    /// Starting point in its cycle, 0..1 (0: the start of its rest at home; a beat crusher's:
+    /// the share of its bars it's late by).
     pub phase: f32,
+    /// A beat crusher (`beat=N`): it slams on the ONE every `N` bars of the music. 0: it runs
+    /// on the sim clock.
+    pub beat: u8,
+}
+
+/// When it is for a crusher: the sim clock (s) and where the music is.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct CrushTime {
+    pub sim: f32,
+    /// Bars since the music's bar 0 (fractional).
+    pub bars: f32,
+    /// Seconds per bar.
+    pub bar_secs: f32,
+}
+
+impl CrushTime {
+    /// Sim time `t` with the band playing [`NOMINAL_BAR`]s from the start (the validator's and
+    /// headless tests' music).
+    pub fn sim(t: f32) -> CrushTime {
+        CrushTime { sim: t, bars: t / NOMINAL_BAR, bar_secs: NOMINAL_BAR }
+    }
 }
 
 /// A crusher's cycle (pure, shared by the game, Han and the validator).
 pub struct Crusher;
 
 impl Crusher {
-    /// Seconds per cycle for a crusher slamming `travel` tiles.
+    /// Seconds per cycle for a (sim clock) crusher slamming `travel` tiles.
     pub fn period(travel: i32) -> f32 {
         let d = travel as f32 * TILE;
         CRUSH_WAIT + d / CRUSH_SLAM_SPEED + CRUSH_HOLD + d / CRUSH_RISE_SPEED
     }
 
-    /// How far (px) from home `def` is at sim time `t`, and whether it's slamming then.
-    pub fn offset(def: &CrusherDef, t: f32) -> (f32, bool) {
+    /// Where `def` is in its cycle at `at`: seconds since its slam started, and its slam, hold
+    /// and rise times and the whole cycle (s). (A sim-clock crusher's cycle starts with its
+    /// rest; that's counted at the end here, like a beat crusher's.)
+    fn cycle(def: &CrusherDef, at: CrushTime) -> (f32, [f32; 3], f32) {
         let d = def.travel as f32 * TILE;
-        let period = Crusher::period(def.travel);
-        let mut u = (t + def.phase * period).rem_euclid(period);
-        if u < CRUSH_WAIT {
-            return (0.0, false);
-        }
-        u -= CRUSH_WAIT;
         let slam = d / CRUSH_SLAM_SPEED;
-        if u < slam {
-            return (u * CRUSH_SLAM_SPEED, true);
+        if def.beat == 0 {
+            let period = Crusher::period(def.travel);
+            let u = (at.sim + def.phase * period - CRUSH_WAIT).rem_euclid(period);
+            return (u, [slam, CRUSH_HOLD, d / CRUSH_RISE_SPEED], period);
         }
-        u -= slam;
-        if u < CRUSH_HOLD {
-            return (d, false);
-        }
-        u -= CRUSH_HOLD;
-        ((d - u * CRUSH_RISE_SPEED).max(0.0), false)
+        let n = def.beat as f32;
+        let bar = at.bar_secs.max(0.1);
+        let cycle = n * bar;
+        let u = (at.bars - def.phase * n).rem_euclid(n) * bar;
+        // Fast music: hold less and creep back faster, so it's home with time to get past.
+        let busy = cycle * (1.0 - CRUSH_BEAT_REST);
+        let hold = CRUSH_HOLD.min((busy - slam) * 0.4).max(0.0);
+        let rise = (d / CRUSH_RISE_SPEED).min(busy - slam - hold).max(0.05);
+        (u, [slam, hold, rise], cycle)
     }
 
-    /// Seconds left of its rest at home at sim time `t` (`None`: it's not resting).
-    pub fn rest_left(def: &CrusherDef, t: f32) -> Option<f32> {
-        let period = Crusher::period(def.travel);
-        let u = (t + def.phase * period).rem_euclid(period);
-        (u < CRUSH_WAIT).then(|| CRUSH_WAIT - u)
+    /// How far (px) from home `def` is at `at`, and whether it's slamming then.
+    pub fn offset(def: &CrusherDef, at: CrushTime) -> (f32, bool) {
+        let d = def.travel as f32 * TILE;
+        let (mut u, [slam, hold, rise], _) = Crusher::cycle(def, at);
+        if u < slam {
+            return (d * u / slam.max(1e-3), true);
+        }
+        u -= slam;
+        if u < hold {
+            return (d, false);
+        }
+        u -= hold;
+        if u < rise {
+            return (d * (1.0 - u / rise), false);
+        }
+        (0.0, false)
+    }
+
+    /// Seconds left of its rest at home at `at` (`None`: it's not resting).
+    pub fn rest_left(def: &CrusherDef, at: CrushTime) -> Option<f32> {
+        let (u, [slam, hold, rise], cycle) = Crusher::cycle(def, at);
+        (u >= slam + hold + rise).then(|| cycle - u)
     }
 
     /// Can a player time their way past it (the validator's call, like a lone spray can's)?
@@ -718,6 +885,22 @@ impl Level {
         }
     }
 
+    /// Is grid cell (col, row) in a fan's updraft: a fan (`*`) at most [`FAN_REACH`] tiles
+    /// below it, with nothing solid between?
+    pub fn updraft(&self, col: i32, row: i32) -> bool {
+        if col < 0 || col >= self.width as i32 || self.tile(col, row).is_solid() {
+            return false;
+        }
+        for k in 1..=FAN_REACH {
+            match self.tile(col, row + k) {
+                Tile::Fan => return true,
+                t if t.is_solid() => return false,
+                _ => {}
+            }
+        }
+        false
+    }
+
     /// World-space (pixels, y up) center of a grid cell. The bottom-left of the grid is (0, 0).
     pub fn tile_center(&self, col: usize, row: usize) -> Vec2 {
         Vec2::new(
@@ -780,7 +963,7 @@ impl Level {
         let mut deaths = None;
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
-        let mut crusher_phase: Vec<((i32, i32), f32)> = Vec::new();
+        let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
 
         for (n, line) in header.lines().enumerate() {
             let line = line.trim();
@@ -824,11 +1007,19 @@ impl Level {
                         .split_once(',')
                         .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
                         .ok_or_else(|| format!("expected `crusher@<col>,<row>`, got `{k}`"))?;
-                    let phase = value
-                        .strip_prefix("phase=")
-                        .and_then(|v| v.trim().parse::<f32>().ok())
-                        .ok_or_else(|| format!("{k}: expected `phase=<0..1>`, got `{value}`"))?;
-                    crusher_phase.push((cell, phase));
+                    let (mut phase, mut beat) = (None, None);
+                    for kv in value.split_whitespace() {
+                        let bad = || format!("{k}: bad `{kv}` (expected `phase=<0..1>` and/or `beat=<1..8 bars>`)");
+                        match kv.split_once('=') {
+                            Some(("phase", v)) => phase = Some(v.parse::<f32>().ok().filter(|p| (0.0..=1.0).contains(p)).ok_or_else(bad)?),
+                            Some(("beat", v)) => beat = Some(v.parse::<u8>().ok().filter(|b| (1..=8).contains(b)).ok_or_else(bad)?),
+                            _ => return Err(bad()),
+                        }
+                    }
+                    if phase.is_none() && beat.is_none() {
+                        return Err(format!("{k}: expected `phase=<0..1>` and/or `beat=<1..8>`"));
+                    }
+                    crusher_phase.push((cell, phase, beat));
                 }
                 k if k.starts_with("say@") || k.starts_with("hint@") => {
                     let (what, rest) = k.split_once('@').unwrap();
@@ -924,6 +1115,13 @@ impl Level {
                     '%' => *tile = Tile::Brick,
                     '-' => *tile = Tile::Crumble,
                     'T' => *tile = Tile::Trampoline,
+                    '{' => *tile = Tile::BeltLeft,
+                    '}' => *tile = Tile::BeltRight,
+                    '*' => *tile = Tile::Fan,
+                    '(' => *tile = Tile::BumperLeft,
+                    ')' => *tile = Tile::BumperRight,
+                    '[' => *tile = Tile::BeatRed,
+                    ']' => *tile = Tile::BeatBlueOff,
                     'X' => crusher_cells.push((CrushDir::Down, col, row)),
                     '<' => crusher_cells.push((CrushDir::Left, col, row)),
                     '>' => crusher_cells.push((CrushDir::Right, col, row)),
@@ -970,12 +1168,13 @@ impl Level {
         }
 
         let mut crushers = group_crushers(&crusher_cells, &tiles, width, height)?;
-        for ((c, r), phase) in crusher_phase {
+        for ((c, r), phase, beat) in crusher_phase {
             let k = crushers
                 .iter()
                 .position(|d| Crusher::home(d).any(|h| h == (c, r)))
                 .ok_or_else(|| format!("crusher@{c},{r}: no crusher there"))?;
-            crushers[k].phase = phase;
+            crushers[k].phase = phase.unwrap_or(0.0);
+            crushers[k].beat = beat.unwrap_or(0);
         }
 
         for s in say_at.iter().chain(&hints) {
@@ -1038,7 +1237,7 @@ fn group_crushers(cells: &[(CrushDir, usize, usize)], tiles: &[Tile], width: usi
         if group.len() != w * h {
             return Err(format!("crusher `{}` at row {r0}, col {c0} isn't a filled rectangle", dir.char()));
         }
-        let mut def = CrusherDef { col: c0, row: r0, w, h, dir, travel: 0, phase: 0.0 };
+        let mut def = CrusherDef { col: c0, row: r0, w, h, dir, travel: 0, phase: 0.0, beat: 0 };
         let blocked = |cc: i32, rr: i32| {
             if cc < 0 || cc >= width as i32 || rr < 0 {
                 return true;
