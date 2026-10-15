@@ -1,12 +1,12 @@
 ; After You've Gone (Turner Layton / Henry Creamer, 1918)
 ; Melody and changes from Veesh's chart (an octave up for the trumpet); the last two bars
-; are the chart's rests, left to the band.
-; bpm: Side B's levels are timed to Tiger Rag's tempo, so its tunes keep it. Each line ends with its bar numbers.
+; are the chart's rests, left to the band. Each line ends with its bar numbers.
+; bpm: Side B's levels are timed to Tiger Rag's tempo, so its tunes keep it.
 
 [song]
 title = After You've Gone (Turner Layton, 1918)
 bpm = 192
-swing = 0.28
+swing = 0.33
 key = Bb
 loop = yes
 meter = 4/4
@@ -48,16 +48,16 @@ o5 f4 g4 b-4 o6 d4& | o6 d2. r4 | r4 o5 e-4 f4 a4 | o6 c2 d2 | ; 33-36
 o6 d4 o5 b-2.& | o5 b-2. r4 | r1 | r1 | ; 37-40
 
 [pulse2]
-v7 @2 r4 o4 {d e- g}8 r8 r4 {d e- g}8 r8 | r4 o4 {d e- g}8 r8 r4 {d e- g}8 r8 | r4 o4 {e- g- > d-}8 r8 r4 {e- g- > d-}8 r8 | r4 o4 {g- a- > c}8 r8 r4 {g- a- > c}8 r8 | ; 1-4
-r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {d f > c}8 r8 r4 {d f > c}8 r8 | r4 o4 {f g b}8 r8 r4 {f g b}8 r8 | ; 5-8
-r4 o4 {e b- > c}8 r8 r4 {e b- > c}8 r8 | r4 o4 {e b- > c}8 r8 r4 {e b- > c}8 r8 | r4 o4 {e- f a}8 r8 r4 {e- f a}8 r8 | r4 o4 {e- f a}8 r8 r4 {e- f a}8 r8 | ; 9-12
-r4 o4 {d g b-}8 r8 r4 {d g b-}8 r8 | r4 o4 {d g b-}8 r8 r4 {d g b-}8 r8 | r4 o4 {e- f a-}8 r8 r4 {e- f a-}8 r8 | r4 o4 {d a- b-}8 r8 r4 {d a- b-}8 r8 | ; 13-16
-r4 o4 {d e- g}8 r8 r4 {d e- g}8 r8 | r4 o4 {d e- g}8 r8 r4 {d e- g}8 r8 | r4 o4 {e- g- > d-}8 r8 r4 {e- g- > d-}8 r8 | r4 o4 {g- a- > c}8 r8 r4 {g- a- > c}8 r8 | ; 17-20
-r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {d f > c}8 r8 r4 {d f > c}8 r8 | r4 o4 {f g b}8 r8 r4 {f g b}8 r8 | ; 21-24
-r4 o4 {e- b- > c}8 r8 r4 {e- b- > c}8 r8 | r4 o4 {f g b}8 r8 r4 {f g b}8 r8 | r4 o4 {e- b- > c}8 r8 r4 {e- b- > c}8 r8 | r4 o4 {e- g- > d-}8 r8 r4 {g- a- > c}8 r8 | ; 25-28
-r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {g a > c}8 r8 r4 {d g- > c}8 r8 | r4 o4 {f g b-}8 r8 r4 {f g b-}8 r8 | r4 o4 {d e g}8 r8 r4 {d e g}8 r8 | ; 29-32
-r4 o4 {d g b-}8 r8 r4 {d g b-}8 r8 | r4 o4 {f g b}8 r8 r4 {f g b}8 r8 | r4 o4 {e- b- > c}8 r8 r4 {e- b- > c}8 r8 | r4 o4 {e- f a}8 r8 r4 {e- f a}8 r8 | ; 33-36
-r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {d a b-}8 r8 r4 {d a b-}8 r8 | r4 o4 {e- f a-}8 r8 r4 {e- f a-}8 r8 | r4 o4 {d a- b-}8 r8 r4 {d a- b-}8 r8 | ; 37-40
+v7 @2 r4 o4 {d e- g}8 r8 r4 {d e- g}8 {d e- g}8 | r4 o4 {d e- g}8 r8 r4 {d e- g}8 {d e- g}8 | r4 o4 {e- g- > d-}8 r8 r4 {e- g- > d-}8 {e- g- > d-}8 | r4 o4 {g- a- > c}8 r8 r4 {g- a- > c}8 {g- a- > c}8 | ; 1-4
+r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {d f > c}8 r8 r4 {d f > c}8 {d f > c}8 | r4 o4 {f g b}8 r8 r4 {f g b}8 {f g b}8 | ; 5-8
+r4 o4 {e b- > c}8 r8 r4 {e b- > c}8 {e b- > c}8 | r4 o4 {e b- > c}8 r8 r4 {e b- > c}8 {e b- > c}8 | r4 o4 {e- f a}8 r8 r4 {e- f a}8 {e- f a}8 | r4 o4 {e- f a}8 r8 r4 {e- f a}8 {e- f a}8 | ; 9-12
+r4 o4 {d g b-}8 r8 r4 {d g b-}8 {d g b-}8 | r4 o4 {d g b-}8 r8 r4 {d g b-}8 {d g b-}8 | r4 o4 {e- f a-}8 r8 r4 {e- f a-}8 {e- f a-}8 | r4 o4 {d a- b-}8 r8 r4 {d a- b-}8 {d a- b-}8 | ; 13-16
+r4 o4 {d e- g}8 r8 r4 {d e- g}8 {d e- g}8 | r4 o4 {d e- g}8 r8 r4 {d e- g}8 {d e- g}8 | r4 o4 {e- g- > d-}8 r8 r4 {e- g- > d-}8 {e- g- > d-}8 | r4 o4 {g- a- > c}8 r8 r4 {g- a- > c}8 {g- a- > c}8 | ; 17-20
+r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {d f > c}8 r8 r4 {d f > c}8 {d f > c}8 | r4 o4 {f g b}8 r8 r4 {f g b}8 {f g b}8 | ; 21-24
+r4 o4 {e- b- > c}8 r8 r4 {e- b- > c}8 {e- b- > c}8 | r4 o4 {f g b}8 r8 r4 {f g b}8 {f g b}8 | r4 o4 {e- b- > c}8 r8 r4 {e- b- > c}8 {e- b- > c}8 | r4 o4 {e- g- > d-}8 r8 r4 {g- a- > c}8 {g- a- > c}8 | ; 25-28
+r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {g a > c}8 r8 r4 {d g- > c}8 {d g- > c}8 | r4 o4 {f g b-}8 r8 r4 {f g b-}8 {f g b-}8 | r4 o4 {d e g}8 r8 r4 {d e g}8 {d e g}8 | ; 29-32
+r4 o4 {d g b-}8 r8 r4 {d g b-}8 {d g b-}8 | r4 o4 {f g b}8 r8 r4 {f g b}8 {f g b}8 | r4 o4 {e- b- > c}8 r8 r4 {e- b- > c}8 {e- b- > c}8 | r4 o4 {e- f a}8 r8 r4 {e- f a}8 {e- f a}8 | ; 33-36
+r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {d a b-}8 r8 r4 {d a b-}8 {d a b-}8 | r4 o4 {e- f a-}8 r8 r4 {e- f a-}8 {e- f a-}8 | r4 o4 {d a- b-}8 r8 r4 {d a- b-}8 {d a- b-}8 | ; 37-40
 
 [triangle]
 o2 e-4 r4 o1 b-4 r4 | o2 e-4 r4 o1 b-4 r4 | o2 e-4 r4 o1 b-4 r4 | o2 a-4 r4 e-4 r4 | ; 1-4
@@ -72,13 +72,13 @@ o2 f4 r4 f4 r4 | o2 g4 r4 d4 r4 | o2 c4 r4 g4 r4 | o2 f4 r4 c4 r4 | ; 33-36
 o1 b-4 r4 o2 f4 r4 | o1 b-4 r4 o2 f4 r4 | o2 f4 r4 c4 r4 | o1 b-4 r4 o2 f4 r4 | ; 37-40
 
 [noise]
-v9 x8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | ; 1-4
-k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 5-8
-x8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | ; 9-12
-k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 13-16
-x8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | ; 17-20
-k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 21-24
-x8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | ; 25-28
-k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 29-32
-x8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | ; 33-36
-k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 h8 s8 h8 k8 h8 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 37-40
+v9 x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 1-4
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 5-8
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 9-12
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 13-16
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 17-20
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 21-24
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 25-28
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 29-32
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 33-36
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 37-40

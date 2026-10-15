@@ -677,4 +677,21 @@ mod plugin {
         let after = app.world().resource::<LivePlayer>().freedom().unwrap();
         assert!(after.lead < start.lead && after.dynamics <= start.dynamics, "{start:?} → {after:?}");
     }
+
+    /// Side B's band plays hot, deaths or not; back in a story level it follows the player again.
+    #[test]
+    fn side_b_cranks_up_the_band() {
+        use nat_han_adventures::game::{adaptive::SIDE_B_FREEDOM, sideb::SideB};
+        let mut app = app();
+        app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        app.world_mut().insert_resource(SideB::new(0, Vec::new()));
+        go(&mut app, AppState::Playing);
+        app.update();
+        assert_eq!(app.world().resource::<LivePlayer>().freedom(), Some(SIDE_B_FREEDOM));
+        app.world_mut().remove_resource::<SideB>();
+        app.update();
+        app.update();
+        let story = app.world().resource::<LivePlayer>().freedom().unwrap();
+        assert!(story.lead < SIDE_B_FREEDOM.lead, "{story:?}");
+    }
 }

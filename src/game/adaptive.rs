@@ -548,17 +548,28 @@ fn profile_cues(
     }
 }
 
+/// The band in Side B (and a free play Side B room): the player *is* the band there, so it
+/// plays hot (planing, trades, feels of its own), whoever's struggling.
+pub const SIDE_B_FREEDOM: BandFreedom = BandFreedom { lead: 0.62, comp: 0.56, bass: 0.48, drums: 0.56, dynamics: 0.35 };
+
 /// The band's freedom, on decisions: level start, death, checkpoint, every
-/// [`MUSIC_CHECK_SECS`] of play.
+/// [`MUSIC_CHECK_SECS`] of play, and Side B coming or going.
+#[allow(clippy::too_many_arguments)]
 fn decide_music(
     mode: Res<AssistMode>,
     run: Option<Res<LevelRun>>,
     story: Res<StoryAssistState>,
     profile: Res<AdaptiveProfile>,
+    side: Option<Res<super::sideb::SideB>>,
+    mut was_side: Local<bool>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
 ) {
     let Some(run) = run else { return };
+    if side.is_some() != *was_side {
+        *was_side = side.is_some();
+        t.decide = true;
+    }
     if run.time - t.last_decision >= MUSIC_CHECK_SECS {
         t.decide = true;
     }
@@ -567,6 +578,10 @@ fn decide_music(
     }
     t.decide = false;
     t.last_decision = run.time;
+    if side.is_some() {
+        out.write(SIDE_B_FREEDOM);
+        return;
+    }
     let mood = match *mode {
         AssistMode::FreePlay => adapt::band_mood(&profile.0),
         AssistMode::Story | AssistMode::Manual => story_mood(&story.0, &t.recent),

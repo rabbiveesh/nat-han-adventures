@@ -20,7 +20,7 @@ pub enum Music {
 }
 
 impl Music {
-    pub const ALL: [Music; 10] = [
+    pub const ALL: [Music; 12] = [
         Music::Title,
         Music::World(1),
         Music::World(2),
@@ -31,10 +31,12 @@ impl Music {
         Music::Victory,
         Music::SideB(1),
         Music::SideB(2),
+        Music::SideB(3),
+        Music::SideB(4),
     ];
 
     /// How many tunes Side B has.
-    pub const SIDE_B_TUNES: u8 = 2;
+    pub const SIDE_B_TUNES: u8 = 4;
     const SIDE_B_LEVELS: usize = 10;
 
     /// The tune for Side B level `level` (0-based): its levels in runs, a tune to each run, in
