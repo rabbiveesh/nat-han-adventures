@@ -73,12 +73,14 @@ fn level_hotkeys(
     mut restart: MessageWriter<RestartLevel>,
     mut call: MessageWriter<crate::events::CallBand>,
     mut next: ResMut<NextState<PlayState>>,
+    side_b: Option<Res<super::sideb::SideB>>,
 ) {
     if input.just_pressed(&Action::Restart) {
         restart.write(RestartLevel);
     } else if input.just_pressed(&Action::Back) {
         next.set(PlayState::Paused);
-    } else if input.just_pressed(&Action::Down) {
+    } else if input.just_pressed(&Action::Down) && side_b.is_none() {
+        // (On Side B, Down calls the set list's pick instead: `sideb`.)
         call.write(crate::events::CallBand);
     }
 }
@@ -99,6 +101,8 @@ fn restart_level(
     let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
     // Side B rewinds its own level (free play restarts a room itself).
     match (generated, side_b) {
+        // (A free play Side B room rewinds itself: `sideb`.)
+        (Some(_), Some(s)) if s.room.is_some() => return,
         (Some(g), Some(_)) => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
@@ -153,6 +157,11 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
     spawn_actors(commands, level);
 }
 
+/// A nugget in cell (col, row).
+pub(super) fn nugget(level: &Level, col: usize, row: usize) -> impl Bundle {
+    (Name::new("Nugget"), LevelEntity, Nugget, Transform::from_translation(level.tile_center(col, row).extend(2.0)))
+}
+
 /// Spawn the static part of `level` in columns `cols`: tiles, nuggets, checkpoints, hazards,
 /// hint spots and moving platforms (those starting in the columns). Free play streams its
 /// growing level in with this, a few columns at a time.
@@ -190,12 +199,7 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
         let center = level.tile_center(thing.col, thing.row);
         match thing.kind {
             ThingKind::Nugget => {
-                commands.spawn((
-                    Name::new("Nugget"),
-                    LevelEntity,
-                    Nugget,
-                    Transform::from_translation(center.extend(2.0)),
-                ));
+                commands.spawn(nugget(level, thing.col, thing.row));
             }
             ThingKind::Checkpoint => {
                 commands.spawn((

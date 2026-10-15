@@ -28,7 +28,7 @@ use leafwing_input_manager::prelude::*;
 
 use super::han::{HanBrain, HanMode, HanNav, nav_cell, stand};
 use super::physics::{Body, Finished, PlayerControl};
-use super::{ActiveLevel, GameSet, GeneratedLevel, Goal, Groove, Han, Player, Pos, RestartLevel, SimClock};
+use super::{ActiveLevel, GameSet, GeneratedLevel, Goal, Groove, Han, Nugget, Player, Pos, PrevPos, RestartLevel, SimClock};
 use crate::audio::Harmony;
 use crate::events::HanSays;
 use crate::input::Action;
@@ -74,6 +74,9 @@ pub const HOLD_SECS: f32 = 6.0;
 pub const CHARGE_GIVE_UP: f32 = 8.0;
 
 pub const CLEARED_LINE: &str = "Nat's hat!";
+/// A free play Side B room cleared: Han tags Nat back in (after this long).
+pub const ROOM_CLEARED_LINE: &str = "Tag, Nat!";
+pub const ROOM_CLEARED_SECS: f32 = 1.5;
 
 /// How Han met his end (each has its line).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
@@ -217,6 +220,19 @@ pub struct SideB {
     pub calls: u32,
     /// Nuggets Han's grabbed this try (each one more call).
     pub refills: u32,
+    /// A free play Side B room (`crate::freeplay`) rather than a Side B level: where it is.
+    #[reflect(ignore)]
+    pub room: Option<AloneRoom>,
+}
+
+/// A free play Side B room in the course (cells and columns of the loaded level): Nat waits in
+/// its entry pipe while Han runs it, a rewind puts Han back at its start (the rest of the run
+/// stays as it is), and Han reaching its goal hands the run back to Nat there.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AloneRoom {
+    pub start: (usize, usize),
+    pub goal: (usize, usize),
+    pub cols: (usize, usize),
 }
 
 impl SideB {
@@ -238,6 +254,7 @@ impl SideB {
             rewinds: 0,
             calls: 0,
             refills: 0,
+            room: None,
         }
     }
 
@@ -247,6 +264,7 @@ impl SideB {
             rewinds: self.rewinds + 1,
             selected: self.selected,
             fate: self.fate,
+            room: self.room,
             ..SideB::new(self.level, self.setlist.clone())
         };
     }
@@ -258,12 +276,71 @@ impl SideB {
 
 /// Start Side B level `n` (0-based): the run's resources, then [`AppState::Playing`].
 pub fn start(commands: &mut Commands, n: usize) {
-    let b = SideBLevel::load(n);
+    start_level(commands, n, SideBLevel::load(n));
+}
+
+/// Start `b` as Side B level `n` (tests: a free play Side B room on its own).
+pub fn start_level(commands: &mut Commands, n: usize, b: SideBLevel) {
     commands.insert_resource(SideB::new(n, b.setlist));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
     commands.insert_resource(crate::state::Shelf::SideB);
     commands.queue(|w: &mut World| w.resource_mut::<NextState<AppState>>().set(AppState::Playing));
+}
+
+/// Hand free play over to Han for a Side B room (room `k` of the run): Nat waits in the pipe
+/// (the beacon, hidden), Han comes through it to the room's start, the band starts the tune
+/// over (`audio::plugin`), and the set list starts empty.
+pub fn start_room(world: &mut World, k: usize, room: AloneRoom, setlist: Vec<(SetCall, u32)>) {
+    world.insert_resource(SideB { room: Some(room), ..SideB::new(k, setlist) });
+    world.insert_resource(HanNav::side_b());
+    han_to_start(world, room);
+}
+
+/// Han back at the room's start, as he came in.
+fn han_to_start(world: &mut World, room: AloneRoom) {
+    let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
+    let at = super::han::spawn_spot(&level, super::stand_pos(&level, room.start.0, room.start.1));
+    let mut q = world.query_filtered::<(&mut Pos, &mut PrevPos, &mut Body, &mut HanBrain), With<Han>>();
+    if let Ok((mut pos, mut prev, mut body, mut brain)) = q.single_mut(world) {
+        pos.0 = at;
+        prev.0 = at;
+        *body = Body { on_ground: true, ..Body::player() };
+        *brain = HanBrain::default();
+    }
+}
+
+/// A rewind in a free play Side B room: Han back at its start, its nuggets back.
+fn rewind_room(world: &mut World, room: AloneRoom) {
+    han_to_start(world, room);
+    let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
+    let (x0, x1) = (room.cols.0 as f32 * TILE, room.cols.1 as f32 * TILE);
+    let mut q = world.query_filtered::<(Entity, &Transform), With<Nugget>>();
+    let old: Vec<Entity> = q.iter(world).filter(|(_, tf)| (x0..x1).contains(&tf.translation.x)).map(|(e, _)| e).collect();
+    for e in old {
+        world.despawn(e);
+    }
+    for t in level.things.iter().filter(|t| t.kind == crate::level::ThingKind::Nugget && (room.cols.0..room.cols.1).contains(&t.col)) {
+        world.spawn(super::lifecycle::nugget(&level, t.col, t.row));
+    }
+}
+
+/// Han's cleared the room: Nat comes out of the pipe where Han is, and the run's his again.
+fn end_room(world: &mut World) {
+    world.remove_resource::<SideB>();
+    world.insert_resource(HanNav::default());
+    let mut han = world.query_filtered::<(&Pos, &mut HanBrain), With<Han>>();
+    let Ok((at, mut brain)) = han.single_mut(world).map(|(p, b)| (p.0, b)) else { return };
+    *brain = HanBrain::default();
+    let mut nat = world.query_filtered::<(Entity, &mut Pos, &mut PrevPos, &mut Body, Option<&mut Visibility>), With<Player>>();
+    let Ok((e, mut pos, mut prev, mut body, vis)) = nat.single_mut(world) else { return };
+    pos.0 = at;
+    prev.0 = at;
+    *body = Body { on_ground: true, ..Body::player() };
+    if let Some(mut vis) = vis {
+        *vis = Visibility::Inherited;
+    }
+    world.entity_mut(e).remove::<Finished>();
 }
 
 pub(super) fn plugin(app: &mut App) {
@@ -343,9 +420,12 @@ fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>,
     }
 }
 
-fn refill_on_restart(mut restarts: MessageReader<RestartLevel>, mut side: ResMut<SideB>) {
+fn refill_on_restart(mut commands: Commands, mut restarts: MessageReader<RestartLevel>, mut side: ResMut<SideB>) {
     if restarts.read().count() > 0 {
         side.rewound();
+        if let Some(room) = side.room {
+            commands.queue(move |w: &mut World| rewind_room(w, room));
+        }
     }
 }
 
@@ -373,7 +453,8 @@ fn beacon(
         *nav = HanNav::side_b();
     }
     let Ok((hpos, hbody, mut brain)) = han.single_mut() else { return };
-    let goal = (level.goal.0 as i32, level.goal.1 as i32);
+    let goal = side.room.map_or(level.goal, |r| r.goal);
+    let goal = (goal.0 as i32, goal.1 as i32);
     let dir = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
     // Re-plan from where he stands (mid-air he's carrying out a move already).
     if hbody.on_ground && side.phase == Phase::Playing {
@@ -466,11 +547,13 @@ fn melt(time: Res<Time>, groove: Res<Groove>, mut han: Query<(&mut Pos, &mut Bod
 /// before he gets there.
 fn han_grabs_nuggets(
     mut commands: Commands,
-    mut side: ResMut<SideB>,
+    // (Gone the moment Han clears a free play Side B room: `end_room`.)
+    side: Option<ResMut<SideB>>,
     han: Query<(&Pos, &Body), With<Han>>,
     nuggets: Query<(Entity, &Transform), With<super::Nugget>>,
     mut sfx: MessageWriter<crate::events::PlaySfx>,
 ) {
+    let Some(mut side) = side else { return };
     if side.phase != Phase::Playing || side.left.is_empty() {
         return;
     }
@@ -545,7 +628,9 @@ fn han_fate(
             return;
         }
         Phase::Cleared { t } => {
-            if t - dt <= 0.0 {
+            if t - dt <= 0.0 && side.room.is_some() {
+                commands.queue(end_room);
+            } else if t - dt <= 0.0 {
                 // On to the next Side B level (the strip and the level redraw), or the title
                 // after the last.
                 let n = side.level + 1;
@@ -571,10 +656,18 @@ fn han_fate(
     if clock.time < 0.1 {
         return;
     }
-    if let Ok(g) = goal.single() {
-        let floor = g.translation.truncate();
+    let floor = match side.room {
+        Some(r) => Some(super::cell_floor(level, r.goal.0, r.goal.1)),
+        None => goal.single().ok().map(|g| g.translation.truncate()),
+    };
+    if let Some(floor) = floor {
         let (min, max) = (floor - Vec2::new(5.0, 0.0), floor + Vec2::new(5.0, 2.0 * TILE));
         if pos.0.x + HALF.x > min.x && pos.0.x - HALF.x < max.x && pos.0.y + HALF.y > min.y && pos.0.y - HALF.y < max.y {
+            if side.room.is_some() {
+                side.phase = Phase::Cleared { t: ROOM_CLEARED_SECS };
+                say(&mut says, ROOM_CLEARED_LINE);
+                return;
+            }
             side.phase = Phase::Cleared { t: CLEARED_SECS };
             if let Some(mut progress) = progress {
                 progress.record_side_b(side.level, side.rewinds);

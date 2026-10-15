@@ -17,7 +17,8 @@ pub fn plugin(app: &mut App) {
     use crate::game::sideb::SideB;
     // (Side B has its set list instead: `ui::sideb`.)
     app.add_systems(OnEnter(AppState::Playing), spawn_strip.run_if(not(resource_exists::<SideB>)))
-        .add_systems(Update, update_strip.run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))));
+        .add_systems(Update, update_strip.run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))))
+        .add_systems(Update, hide_strip.run_if(resource_exists::<SideB>));
 }
 
 /// Where the strip's panel sits (virtual px from the top).
@@ -275,5 +276,12 @@ fn update_strip(
     }
     for (CallMark(c), mut vis) in &mut marks {
         vis.set_if_neq(if v.ready == Some(*c) { Visibility::Inherited } else { Visibility::Hidden });
+    }
+}
+
+/// A free play Side B room: the set list's up there instead.
+fn hide_strip(mut strip: Query<&mut Visibility, With<Strip>>) {
+    for mut v in &mut strip {
+        v.set_if_neq(Visibility::Hidden);
     }
 }
