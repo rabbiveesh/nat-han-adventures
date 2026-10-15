@@ -678,20 +678,35 @@ mod plugin {
         assert!(after.lead < start.lead && after.dynamics <= start.dynamics, "{start:?} → {after:?}");
     }
 
-    /// Side B's band plays hot, deaths or not; back in a story level it follows the player again.
+    /// Side B's band starts hotter than the story's and still follows play: a rewind cools it, a
+    /// call heats it; back in a story level it follows the player again.
     #[test]
-    fn side_b_cranks_up_the_band() {
-        use nat_han_adventures::game::{adaptive::SIDE_B_FREEDOM, sideb::SideB};
+    fn side_b_raises_the_bands_baseline() {
+        use nat_han_adventures::game::sideb::SideB;
+        let freedom = |app: &App| app.world().resource::<LivePlayer>().freedom().expect("posted").lead;
+        let mut story = app();
+        story.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        go(&mut story, AppState::Playing);
+        story.update();
+        let story_start = freedom(&story);
+
         let mut app = app();
         app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
         app.world_mut().insert_resource(SideB::new(0, Vec::new()));
         go(&mut app, AppState::Playing);
         app.update();
-        assert_eq!(app.world().resource::<LivePlayer>().freedom(), Some(SIDE_B_FREEDOM));
+        let start = freedom(&app);
+        assert!(start > story_start + 0.1, "Side B {start} vs story {story_start}");
+        app.world_mut().resource_mut::<SideB>().rewinds = 2;
+        app.update();
+        let cooled = freedom(&app);
+        assert!(cooled < start && cooled > story_start, "rewound: {cooled}");
+        app.world_mut().resource_mut::<SideB>().calls = 3;
+        app.update();
+        assert!(freedom(&app) > cooled, "a call heats it back up");
         app.world_mut().remove_resource::<SideB>();
         app.update();
         app.update();
-        let story = app.world().resource::<LivePlayer>().freedom().unwrap();
-        assert!(story.lead < SIDE_B_FREEDOM.lead, "{story:?}");
+        assert!(freedom(&app) < cooled, "the story's band again");
     }
 }

@@ -1,5 +1,5 @@
 //! Render Side B's tunes as the game plays them: the level intro, then two choruses with the
-//! band at Side B's freedom ([`SIDE_B_FREEDOM`]), so the choruses, feels and solos come out.
+//! band at Side B's starting freedom ([`side_b_mood`]), so the choruses, feels and solos come out.
 //!
 //! ```sh
 //! cargo run --release --example side_b_tunes -- out/
@@ -12,7 +12,7 @@ use std::path::Path;
 use kira::Frame;
 use nat_han_adventures::audio::Music;
 use nat_han_adventures::audio::live::{Engine, EngineConfig, Input, library};
-use nat_han_adventures::game::adaptive::SIDE_B_FREEDOM;
+use nat_han_adventures::game::adaptive::{band_freedom, side_b_mood};
 
 const RATE: u32 = 48_000;
 
@@ -25,7 +25,7 @@ fn main() {
         let (_, file) = library::song(music).expect("song parses");
         let config = EngineConfig { intro: true, ..EngineConfig::default() };
         let mut e = Engine::with_config(file, RATE, config).expect("engine");
-        let f = SIDE_B_FREEDOM;
+        let f = band_freedom(side_b_mood(0, 0));
         e.post(Input::LevelStart);
         e.post(Input::SetFreedom { lead: f.lead, comp: f.comp, bass: f.bass, drums: f.drums, dynamics: f.dynamics });
         let bars = 2 * e.shape().bars as u64 + 4;
