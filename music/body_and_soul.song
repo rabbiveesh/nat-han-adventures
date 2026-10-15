@@ -1,10 +1,11 @@
 ; Body and Soul (Johnny Green / Edward Heyman, Robert Sour, Frank Eyton, 1930)
 ; Side B's finale: the torch ballad played as a Dixieland stomp. Melody and changes from the
-; Real Book page (an octave up for the trumpet). Each line ends with its bar numbers.
+; Real Book page (an octave up for the trumpet).
+; bpm: Side B's levels are timed to Tiger Rag's tempo, so its tunes keep it. Each line ends with its bar numbers.
 
 [song]
 title = Body and Soul (Johnny Green, 1930)
-bpm = 200
+bpm = 192
 swing = 0.28
 key = Db
 loop = yes

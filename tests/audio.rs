@@ -197,6 +197,16 @@ fn every_song_renders_cleanly_in_the_medley() {
     assert!(secs < 2.0 * budget_secs(), "medley + plain renders took {secs:.2}s");
 }
 
+/// Side B's levels are timed to world 2's tune (calls land on bar lines, and the routes in
+/// `tests/side_b.rs` were found at its tempo), so its own tunes keep that tempo.
+#[test]
+fn side_b_tunes_keep_the_tempo_its_levels_were_built_for() {
+    let built_for = song(Music::World(2)).bpm;
+    for t in 1..=Music::SIDE_B_TUNES {
+        assert_eq!(song(Music::SideB(t)).bpm, built_for, "Side B tune {t}");
+    }
+}
+
 /// Every real song's melody through every reharmonizing filter: same rhythm, in range, close
 /// to the written line, same contour; melodic minor in the scale, quartal free of strong avoid
 /// notes, Coltrane untouched where the chart is.

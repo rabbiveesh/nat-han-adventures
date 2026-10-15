@@ -1,10 +1,11 @@
 ; After You've Gone (Turner Layton / Henry Creamer, 1918)
 ; Melody and changes from Veesh's chart (an octave up for the trumpet); the last two bars
-; are the chart's rests, left to the band. Each line ends with its bar numbers.
+; are the chart's rests, left to the band.
+; bpm: Side B's levels are timed to Tiger Rag's tempo, so its tunes keep it. Each line ends with its bar numbers.
 
 [song]
 title = After You've Gone (Turner Layton, 1918)
-bpm = 208
+bpm = 192
 swing = 0.28
 key = Bb
 loop = yes
