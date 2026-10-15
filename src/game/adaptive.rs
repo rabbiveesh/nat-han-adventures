@@ -109,7 +109,7 @@ impl EasySkills {
 /// The skill a gate (or a hint topic) exercises.
 pub fn skill_of(topic: Topic) -> Option<Skill> {
     Some(match topic {
-        Topic::Toot | Topic::OneWay | Topic::Brick | Topic::Crumble | Topic::Spring | Topic::Belt | Topic::Fan | Topic::Bumper => {
+        Topic::Toot | Topic::OneWay | Topic::Brick | Topic::Crumble | Topic::Spring | Topic::Belt | Topic::Fan | Topic::Bumper | Topic::Wind | Topic::Fling => {
             Skill::Precision
         }
         Topic::Platform => Skill::MovingPlatforms,

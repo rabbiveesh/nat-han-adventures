@@ -68,6 +68,9 @@
 //! | `*` | fan: a solid grate; its updraft fills the empty tiles above it ([`FAN_REACH`] at most) and floats anyone in it up ([`FAN_RISE`]) to bob at the top |
 //! | `(` `)` | bumper (a rubber duck): solid; running or flying into its springy face (`(`: the left face, `)`: the right) bats you back the other way and up ([`BUMPER_SPEED`], [`BUMPER_LIFT`]) |
 //! | `[` `]` | beat block: red (`[`) is solid on even bars of the music and gone on odd ones, blue (`]`) the other way round. One that comes back around someone waits until they're clear |
+//! | `!` `e` `w` | fans laid on a ceiling (`!`, blowing down: a downdraft you can't rise through) or a wall (`e` blowing right, `w` left: a gust that pushes you along at [`WIND_SPEED`]); like `*`, [`FAN_REACH`] empty tiles |
+//! | `b` `d` `m` | cushions laid on a wall (`b`: its spring on its right face, `d`: its left; run or fly into it and it flings you away, [`CUSHION_FLING`]) or a ceiling (`m`: bump your head on it and it springs you back down); the toot comes back |
+//! | `\|` | brushes sticking out of a wall sideways, pointing away from it (there must be a wall on exactly one side); deadly in that half of the tile |
 //! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -191,6 +194,15 @@ pub const BUMPER_SPEED: f32 = 240.0;
 /// ...and this fast up (px/s, at least).
 pub const BUMPER_LIFT: f32 = 300.0;
 
+/// A wall fan (`e` `w`) pushes whoever's in its gust along this fast (px/s, on top of their
+/// own speed, like a belt's): 1.5 tiles a second short of a run against it.
+pub const WIND_SPEED: f32 = 110.0;
+/// A wall cushion (`b` `d`) flings whoever runs or flies into its face away this fast (px/s,
+/// kept until they land or hit a wall, like a bumper's)...
+pub const CUSHION_FLING: f32 = 420.0;
+/// ...and this fast up (px/s, at least).
+pub const CUSHION_LIFT: f32 = 260.0;
+
 /// The farthest (tiles) a crusher slams, with nothing in its way.
 pub const CRUSH_MAX_TRAVEL: i32 = 10;
 /// The validator times its way past a crusher whose face is at most this many tiles across...
@@ -276,11 +288,28 @@ pub enum Tile {
     BeatRedOff,
     BeatBlue,
     BeatBlueOff,
+    /// Fans laid sideways or upside down: a ceiling fan (`!`) blowing down its column, wall fans
+    /// blowing right (`e`, east) and left (`w`, west) along their row ([`FAN_REACH`] empty
+    /// tiles, like `*`). See [`Level::wind`].
+    FanDown,
+    FanRight,
+    FanLeft,
+    /// Cushions laid sideways or upside down: one on a wall (`b`: its spring on its right
+    /// face, `d`: its left) flings whoever runs or flies into it away ([`CUSHION_FLING`]); one
+    /// on a ceiling (`m`) springs a head bumped into it back down ([`SPRING_SPEED`]). Both give
+    /// the toot back, like `T`.
+    CushionRight,
+    CushionLeft,
+    CushionDown,
+    /// Brushes sticking out of a wall sideways (`|`), pointing away from the wall beside them
+    /// (right: the wall's on their left), deadly in that half of the tile.
+    SpikesRight,
+    SpikesLeft,
 }
 
 impl Tile {
     pub fn is_deadly(self) -> bool {
-        matches!(self, Tile::SpikesUp | Tile::SpikesDown | Tile::Liquid)
+        matches!(self, Tile::SpikesUp | Tile::SpikesDown | Tile::Liquid | Tile::SpikesRight | Tile::SpikesLeft)
     }
 
     /// Blocks from every side (ground, grease, bricks, trampolines). (A brick gives way to
@@ -299,6 +328,12 @@ impl Tile {
                 | Tile::BumperRight
                 | Tile::BeatRed
                 | Tile::BeatBlue
+                | Tile::FanDown
+                | Tile::FanRight
+                | Tile::FanLeft
+                | Tile::CushionRight
+                | Tile::CushionLeft
+                | Tile::CushionDown
         )
     }
 
@@ -317,6 +352,26 @@ impl Tile {
             Tile::BumperLeft => -1.0,
             Tile::BumperRight => 1.0,
             _ => 0.0,
+        }
+    }
+
+    /// A wall cushion's springy face: -1 its left face, 1 its right, 0 not one.
+    pub fn fling(self) -> f32 {
+        match self {
+            Tile::CushionLeft => -1.0,
+            Tile::CushionRight => 1.0,
+            _ => 0.0,
+        }
+    }
+
+    /// Any fan, the way it blows: (x, y), y up.
+    pub fn fan(self) -> Option<(i32, i32)> {
+        match self {
+            Tile::Fan => Some((0, 1)),
+            Tile::FanDown => Some((0, -1)),
+            Tile::FanRight => Some((1, 0)),
+            Tile::FanLeft => Some((-1, 0)),
+            _ => None,
         }
     }
 
@@ -416,10 +471,14 @@ pub enum Topic {
     Bumper,
     /// Beat blocks `[` `]` (`beat`).
     Beat,
+    /// Fans laid sideways or upside down `!` `e` `w` (`wind`).
+    Wind,
+    /// Cushions laid sideways or upside down `b` `d` `m` (`fling`).
+    Fling,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 24] = [
+    pub const ALL: [Topic; 26] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -444,11 +503,13 @@ impl Topic {
         Topic::Fan,
         Topic::Bumper,
         Topic::Beat,
+        Topic::Wind,
+        Topic::Fling,
     ];
 
     /// The gadget tiles: not in the campaign yet (only `levels/playground/gadgets.txt`), so the
     /// campaign doesn't owe them a lesson until a level uses one.
-    pub const GADGETS: [Topic; 8] = [
+    pub const GADGETS: [Topic; 10] = [
         Topic::Brick,
         Topic::Crumble,
         Topic::Spring,
@@ -457,6 +518,8 @@ impl Topic {
         Topic::Fan,
         Topic::Bumper,
         Topic::Beat,
+        Topic::Wind,
+        Topic::Fling,
     ];
 
     pub fn word(self) -> &'static str {
@@ -485,6 +548,8 @@ impl Topic {
             Topic::Fan => "fan",
             Topic::Bumper => "bumper",
             Topic::Beat => "beat",
+            Topic::Wind => "wind",
+            Topic::Fling => "fling",
         }
     }
 
@@ -891,17 +956,34 @@ impl Level {
     /// Is grid cell (col, row) in a fan's updraft: a fan (`*`) at most [`FAN_REACH`] tiles
     /// below it, with nothing solid between?
     pub fn updraft(&self, col: i32, row: i32) -> bool {
+        self.wind(col, row).1 > 0
+    }
+
+    /// The gusts grid cell (col, row) is in, (x, y) with y up: each fan at most [`FAN_REACH`]
+    /// tiles away blowing its way at it, with nothing solid between (an updraft: y 1, a ceiling
+    /// fan's downdraft: y -1; a wall fan's: x ±1). Opposite gusts cancel.
+    pub fn wind(&self, col: i32, row: i32) -> (i32, i32) {
         if col < 0 || col >= self.width as i32 || self.tile(col, row).is_solid() {
-            return false;
+            return (0, 0);
         }
-        for k in 1..=FAN_REACH {
-            match self.tile(col, row + k) {
-                Tile::Fan => return true,
-                t if t.is_solid() => return false,
-                _ => {}
+        let mut wind = (0, 0);
+        // Look back up each gust: (dc, dr) is grid steps towards the fan.
+        for (dc, dr) in [(0, 1), (0, -1), (-1, 0), (1, 0)] {
+            for k in 1..=FAN_REACH {
+                let t = self.tile(col + dc * k, row + dr * k);
+                if let Some((x, y)) = t.fan() {
+                    // Blowing back along the look (grid rows run down: y flips).
+                    if (x, -y) == (-dc, -dr) {
+                        wind.0 += x;
+                        wind.1 += y;
+                    }
+                }
+                if t.is_solid() {
+                    break;
+                }
             }
         }
-        false
+        wind
     }
 
     /// World-space (pixels, y up) center of a grid cell. The bottom-left of the grid is (0, 0).
@@ -1132,6 +1214,14 @@ impl Level {
                     ')' => *tile = Tile::BumperRight,
                     '[' => *tile = Tile::BeatRed,
                     ']' => *tile = Tile::BeatBlueOff,
+                    '!' => *tile = Tile::FanDown,
+                    'e' => *tile = Tile::FanRight,
+                    'w' => *tile = Tile::FanLeft,
+                    'b' => *tile = Tile::CushionRight,
+                    'd' => *tile = Tile::CushionLeft,
+                    'm' => *tile = Tile::CushionDown,
+                    // Pointing away from the wall beside it (below).
+                    '|' => *tile = Tile::SpikesRight,
                     'X' => crusher_cells.push((CrushDir::Down, col, row)),
                     '<' => crusher_cells.push((CrushDir::Left, col, row)),
                     '>' => crusher_cells.push((CrushDir::Right, col, row)),
@@ -1174,6 +1264,22 @@ impl Level {
                     }
                 }
                 col += 1;
+            }
+        }
+
+        // Wall brushes point away from the wall they stick out of.
+        for row in 0..height {
+            for col in 0..width {
+                if tiles[row * width + col] != Tile::SpikesRight {
+                    continue;
+                }
+                let at = |c: i32| (c >= 0 && (c as usize) < width).then(|| tiles[row * width + c as usize]);
+                let wall = |t: Option<Tile>| t.is_some_and(|t| t.is_solid());
+                match (wall(at(col as i32 - 1)), wall(at(col as i32 + 1))) {
+                    (true, false) => {}
+                    (false, true) => tiles[row * width + col] = Tile::SpikesLeft,
+                    _ => return Err(format!("wall brushes `|` at row {row}, col {col} need a wall on exactly one side")),
+                }
             }
         }
 

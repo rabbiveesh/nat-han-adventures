@@ -7,7 +7,7 @@ use bevy::prelude::*;
 use crate::art::{SpriteId, Sprites};
 use crate::game::crushers::{BrickSmashed, Crumble, CrusherBlock, Sprung};
 use crate::game::{ActiveLevel, LevelEntity, LevelTile};
-use crate::level::{CrushDir, TILE, Tile};
+use crate::level::{CrushDir, FAN_REACH, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(crusher_sprite).add_systems(
@@ -89,15 +89,22 @@ fn squash_trampolines(
     time: Res<Time>,
     sprites: Res<Sprites>,
     mut sprung: MessageReader<Sprung>,
-    mut q: Query<(Entity, &LevelTile, &mut Sprite, Option<&mut Squashed>)>,
+    mut q: Query<(Entity, &LevelTile, &Transform, &mut Sprite, Option<&mut Squashed>)>,
 ) {
     let hits: Vec<Vec2> = sprung.read().map(|s| s.pos).collect();
-    for (e, t, mut sprite, squashed) in &mut q {
-        if t.tile != Tile::Trampoline {
+    for (e, t, tf, mut sprite, squashed) in &mut q {
+        if !matches!(t.tile, Tile::Trampoline | Tile::CushionRight | Tile::CushionLeft | Tile::CushionDown) {
             continue;
         }
-        let x = (t.col as f32 + 0.5) * TILE;
-        let hit = hits.iter().any(|p| (p.x - x).abs() < TILE);
+        let center = Vec2::new((t.col as f32 + 0.5) * TILE, 0.0);
+        // A trampoline squashes under whoever sprang off it (by column); a cushion laid
+        // sideways or upside down when they're right by it.
+        let hit = if t.tile == Tile::Trampoline {
+            hits.iter().any(|p| (p.x - center.x).abs() < TILE)
+        } else {
+            let at = tf.translation.truncate();
+            hits.iter().any(|p| (*p - at).length() < TILE * 1.6)
+        };
         let left = match squashed {
             _ if hit => {
                 commands.entity(e).insert(Squashed(0.15));
@@ -153,22 +160,27 @@ fn fan_wisps(
     let level = &active.level;
     let t = time.elapsed_secs();
     for f in &fans {
-        if f.tile != Tile::Fan {
-            continue;
-        }
+        let Some((x, y)) = f.tile.fan() else { continue };
         let (c, r) = (f.col as i32, f.row as i32);
-        let reach = (1..).take_while(|k| level.updraft(c, r - k)).count() as f32;
+        // How far its gust reaches (grid rows run down).
+        let reach = (1..=FAN_REACH)
+            .take_while(|k| {
+                let w = level.wind(c + x * k, r - y * k);
+                (x != 0 && w.0.signum() == x) || (y != 0 && w.1.signum() == y)
+            })
+            .count() as f32;
         if reach == 0.0 {
             continue;
         }
         // A cheap jitter: no two fans (or puffs) alike.
         let j = ((t * 12.9898 + f.col as f32 * 78.233).sin() * 43758.545).fract();
-        let at = level.tile_center(f.col, f.row) + Vec2::new((j - 0.5) * 12.0, TILE / 2.0);
+        let dir = Vec2::new(x as f32, y as f32);
+        let at = level.tile_center(f.col, f.row) + dir.perp() * (j - 0.5) * 12.0 + dir * TILE / 2.0;
         let speed = 90.0;
         let life = reach * TILE / speed;
         commands.spawn((
             LevelEntity,
-            super::particles::Particle { vel: Vec2::new(0.0, speed), gravity: 0.0, life, max_life: life, fade: true },
+            super::particles::Particle { vel: dir * speed, gravity: 0.0, life, max_life: life, fade: true },
             Sprite { image: sprites.get(SpriteId::Wisp), color: Color::srgba(0.85, 0.95, 1.0, 0.8), ..default() },
             Transform::from_translation(at.extend(1.5)),
         ));

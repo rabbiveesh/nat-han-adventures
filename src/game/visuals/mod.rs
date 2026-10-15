@@ -146,11 +146,11 @@ fn sprite(sprites: &Sprites, id: SpriteId) -> Sprite {
 
 fn tile_sprite(
     add: On<Add, LevelTile>,
-    q: Query<&LevelTile>,
+    mut q: Query<(&LevelTile, &mut Transform)>,
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(sprites), Ok(t)) = (sprites, q.get(add.entity)) else { return };
+    let (Some(sprites), Ok((t, mut tf))) = (sprites, q.get_mut(add.entity)) else { return };
     let w = t.world;
     let (id, anim) = match t.tile {
         Tile::Empty => return,
@@ -169,11 +169,24 @@ fn tile_sprite(
         Tile::Crumble => (SpriteId::Crumble, false),
         Tile::Trampoline => (SpriteId::Trampoline, false),
         Tile::BeltLeft | Tile::BeltRight => (SpriteId::Belt, true),
-        Tile::Fan => (SpriteId::Fan, true),
+        Tile::Fan | Tile::FanDown | Tile::FanRight | Tile::FanLeft => (SpriteId::Fan, true),
         Tile::BumperLeft | Tile::BumperRight => (SpriteId::Bumper, false),
+        Tile::CushionRight | Tile::CushionLeft | Tile::CushionDown => (SpriteId::Trampoline, false),
+        Tile::SpikesRight | Tile::SpikesLeft => (SpriteId::SpikesUp, false),
         Tile::BeatRed | Tile::BeatRedOff => (SpriteId::BeatRed, false),
         Tile::BeatBlue | Tile::BeatBlueOff => (SpriteId::BeatBlue, false),
     };
+    // Laid sideways or upside down: the upright sprite turned (a quarter turn
+    // counterclockwise per step).
+    let quarter = match t.tile {
+        Tile::FanLeft | Tile::CushionLeft | Tile::SpikesLeft => 1.0,
+        Tile::FanDown | Tile::CushionDown => 2.0,
+        Tile::FanRight | Tile::CushionRight | Tile::SpikesRight => -1.0,
+        _ => 0.0,
+    };
+    if quarter != 0.0 {
+        tf.rotation = Quat::from_rotation_z(quarter * std::f32::consts::FRAC_PI_2);
+    }
     let mut e = commands.entity(add.entity);
     let mut s = sprite(&sprites, id);
     // Left-moving belts and left-facing bumpers are the right ones mirrored.

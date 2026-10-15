@@ -252,10 +252,13 @@ pub(super) fn check_hazards(
     for j in ys {
         for i in xs.clone() {
             let (x0, y0) = (i as f32 * TILE, j as f32 * TILE);
-            let (lo, hi, what) = match tile_at(level, i, j) {
-                Tile::SpikesUp => (y0, y0 + TILE / 2.0, DeathCause::Spikes),
-                Tile::SpikesDown => (y0 + TILE / 2.0, y0 + TILE, DeathCause::Spikes),
-                Tile::Liquid => (y0, y0 + TILE, DeathCause::Sewage),
+            // (The deadly part of the tile: x from its left, y from its bottom.)
+            let (left, right, lo, hi, what) = match tile_at(level, i, j) {
+                Tile::SpikesUp => (0.0, TILE, y0, y0 + TILE / 2.0, DeathCause::Spikes),
+                Tile::SpikesDown => (0.0, TILE, y0 + TILE / 2.0, y0 + TILE, DeathCause::Spikes),
+                Tile::SpikesRight => (TILE / 2.0, TILE, y0, y0 + TILE, DeathCause::Spikes),
+                Tile::SpikesLeft => (0.0, TILE / 2.0, y0, y0 + TILE, DeathCause::Spikes),
+                Tile::Liquid => (0.0, TILE, y0, y0 + TILE, DeathCause::Sewage),
                 _ => continue,
             };
             // A fresh side splat shields this tile from that side.
@@ -263,7 +266,7 @@ pub(super) fn check_hazards(
             if side_stains.iter().any(|s| s.i == i && s.j == j && s.side == from) {
                 continue;
             }
-            if rects_overlap(min, max, Vec2::new(x0, lo), Vec2::new(x0 + TILE, hi)) {
+            if rects_overlap(min, max, Vec2::new(x0 + left, lo), Vec2::new(x0 + right, hi)) {
                 let d = (Vec2::new(x0, y0) + TILE / 2.0).distance(pos.0);
                 if splat_on.is_none_or(|(best, _, _)| d < best) {
                     splat_on = Some((d, i, j));

@@ -41,7 +41,9 @@ use super::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
-use crate::level::{BUMPER_LIFT, BUMPER_SPEED, FAN_LIFT, FAN_RISE, Level, SPRING_SPEED, TILE, Tile};
+use crate::level::{
+    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_RISE, Level, SPRING_SPEED, TILE, Tile, WIND_SPEED,
+};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<HanBoosted>().add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
@@ -234,7 +236,8 @@ pub struct Contact {
     /// Left a moving platform into the air this step: its horizontal speed (px/s), for the
     /// caller to keep as [`Body::launch`] (Nat does, Han doesn't).
     pub launch: Option<f32>,
-    /// Landed on a trampoline and sprang off it ([`SPRING_SPEED`]).
+    /// Landed on a trampoline and sprang off it ([`SPRING_SPEED`]), or a cushion laid on a
+    /// wall flung it away, or one on a ceiling sprang it back down.
     pub sprung: bool,
     /// Bricks (grid col, row) rising into them smashed this step: the caller breaks them
     /// (the body is already inside them).
@@ -301,11 +304,17 @@ pub fn step_body(
     solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Contact {
-    // --- Gravity (and a fan's updraft against it).
+    // --- Gravity (and a fan's updraft against it, or a ceiling fan's downdraft with it).
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
-    if body.vel.y < FAN_RISE && level.updraft(idx(pos.x), row_of(level, idx(pos.y))) {
+    let wind = level.wind(idx(pos.x), row_of(level, idx(pos.y)));
+    if wind.1 > 0 && body.vel.y < FAN_RISE {
         body.vel.y = (body.vel.y + FAN_LIFT * dt).min(FAN_RISE);
     }
+    if wind.1 < 0 && body.vel.y > -FAN_RISE {
+        body.vel.y = (body.vel.y - FAN_LIFT * dt).max(-FAN_RISE);
+    }
+    // A wall fan's gust pushes along (like a belt, in the air too).
+    let gust = wind.0 as f32 * WIND_SPEED;
 
     // --- Carried by what we stood on.
     let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
@@ -319,10 +328,11 @@ pub fn step_body(
     let mut blocked_x = false;
 
     // --- X.
-    let dx = (body.vel.x + body.launch + belt) * dt + carry.x;
+    let dx = (body.vel.x + body.launch + belt + gust) * dt + carry.x;
     let x_before = pos.x;
     pos.x += dx;
     let mut bumped = 0.0;
+    let mut flung = 0.0;
     if dx != 0.0 {
         let (xs, ys) = cells(*pos - half, *pos + half);
         for j in ys {
@@ -334,6 +344,10 @@ pub fn step_body(
                 // A bumper's face, run into: batted back.
                 if tile.bumper() == -dx.signum() {
                     bumped = tile.bumper();
+                }
+                // A wall cushion's face: flung away.
+                if tile.fling() == -dx.signum() {
+                    flung = tile.fling();
                 }
                 if dx > 0.0 {
                     pos.x = pos.x.min(i as f32 * TILE - half.x);
@@ -362,6 +376,13 @@ pub fn step_body(
         body.vel.y = body.vel.y.max(BUMPER_LIFT);
         body.on_ground = false;
     }
+    if flung != 0.0 {
+        body.launch = flung * CUSHION_FLING;
+        body.vel.y = body.vel.y.max(CUSHION_LIFT);
+        body.on_ground = false;
+    }
+    // A ceiling cushion bumped into: back down.
+    let mut bonked = false;
 
     // --- Y.
     let bottom_before = pos.y - half.y + carry.y;
@@ -394,6 +415,7 @@ pub fn step_body(
                     t if t.is_solid() => {
                         pos.y = pos.y.min(j as f32 * TILE - half.y);
                         body.vel.y = body.vel.y.min(0.0);
+                        bonked |= t == Tile::CushionDown;
                     }
                     t if t.is_one_way()
                         && body.vel.y <= 0.0
@@ -421,6 +443,9 @@ pub fn step_body(
                 }
             }
         }
+    }
+    if bonked {
+        body.vel.y = -SPRING_SPEED;
     }
     // A trampoline underfoot: up we go.
     let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x));
@@ -458,7 +483,17 @@ pub fn step_body(
         .or((!ground && !blocked_x && belt != 0.0).then_some(belt));
     body.on_ground = ground;
     body.riding = riding;
-    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch, sprung: false, bricks, bumped: bumped != 0.0 }
+    Contact {
+        ground,
+        riding,
+        was_on_ground,
+        fall_speed,
+        blocked_x,
+        launch,
+        sprung: flung != 0.0 || bonked,
+        bricks,
+        bumped: bumped != 0.0,
+    }
 }
 
 /// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;

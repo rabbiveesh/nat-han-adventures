@@ -333,6 +333,8 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Fan => vec!["A FAN BLOWS YOU UP.".into(), "FLOAT, THEN STEER OFF!".into()],
         Topic::Bumper => vec!["BUMP A RUBBER DUCK".into(), "AND BOING! IT BATS BACK!".into()],
         Topic::Beat => vec!["RED AND BLUE BLOCKS".into(), "SWAP ON EVERY BAR!".into()],
+        Topic::Wind => vec!["FANS ON WALLS PUSH YOU.".into(), "ON CEILINGS? NO RISING!".into()],
+        Topic::Fling => vec!["CUSHIONS ON WALLS FLING".into(), "YOU. ON CEILINGS: BONK!".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -351,6 +353,8 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Fan => "NEW: FANS",
         Topic::Bumper => "NEW: BUMPERS",
         Topic::Beat => "NEW: BEAT BLOCKS",
+        Topic::Wind => "NEW: SIDEWAYS FANS",
+        Topic::Fling => "NEW: SIDEWAYS CUSHIONS",
         _ => "NEW!",
     };
     (title, lines)

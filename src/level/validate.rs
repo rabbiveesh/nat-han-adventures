@@ -78,8 +78,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
 use super::{
-    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, Crusher, FAN_LIFT, FAN_RISE, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE,
-    SPRING_SPEED, TILE, ThingKind, Tile, Topic,
+    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_FLING, CUSHION_LIFT, Crusher, FAN_LIFT, FAN_RISE, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE,
+    SPRING_SPEED, TILE, ThingKind, Tile, Topic, WIND_SPEED,
 };
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
@@ -442,7 +442,19 @@ const UPDRAFT: u32 = 65536;
 const BUMPER: u32 = 131072;
 /// A conveyor belt (also `SOLID`): it carries you ([`Map::belt`]); no place to linger.
 const BELT: u32 = 262144;
-const DEADLY_TILE: u32 = SPIKE_UP | SPIKE_DOWN | LIQUID;
+/// In a ceiling fan's downdraft ([`Level::wind`]): it presses you down.
+const DOWNDRAFT: u32 = 1 << 19;
+/// In a wall fan's gust blowing right / left ([`Level::wind`]): it pushes you along.
+const WIND_E: u32 = 1 << 20;
+const WIND_W: u32 = 1 << 21;
+/// A cushion laid on a wall or a ceiling (also `SOLID`): its face flings you away
+/// ([`Tile::fling`], [`Tile::CushionDown`]).
+const CUSHION: u32 = 1 << 22;
+/// Brushes sticking out of a wall, pointing left / right: deadly in that half of the tile.
+const SPIKE_L: u32 = 1 << 23;
+const SPIKE_R: u32 = 1 << 24;
+const WIND: u32 = UPDRAFT | DOWNDRAFT | WIND_E | WIND_W;
+const DEADLY_TILE: u32 = SPIKE_UP | SPIKE_DOWN | LIQUID | SPIKE_L | SPIKE_R;
 const FLOOR_ONEWAY: u32 = ONEWAY | VIRT | STAIN | RAFT;
 
 /// A run of adjacent spray cans `c0..=c1` sitting in row `row`.
@@ -552,12 +564,21 @@ impl<'a> Map<'a> {
                     Tile::Trampoline => SOLID | SPRING,
                     Tile::Crumble => ONEWAY | CRUMBLE,
                     Tile::BeltLeft | Tile::BeltRight => SOLID | BELT,
-                    Tile::Fan => SOLID,
+                    Tile::Fan | Tile::FanDown | Tile::FanRight | Tile::FanLeft => SOLID,
                     Tile::BumperLeft | Tile::BumperRight => SOLID | BUMPER,
+                    Tile::CushionLeft | Tile::CushionRight | Tile::CushionDown => SOLID | CUSHION,
+                    Tile::SpikesLeft => SPIKE_L,
+                    Tile::SpikesRight => SPIKE_R,
                     // Beat blocks come and go with the bars: fine to land on and jump off (a
                     // bar is long), no place to linger, never in your way for long.
                     Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff => ONEWAY | CRUMBLE,
-                } | if level.updraft(c, r) { UPDRAFT } else { 0 };
+                } | {
+                    let (x, y) = level.wind(c, r);
+                    (if y > 0 { UPDRAFT } else { 0 })
+                        | (if y < 0 { DOWNDRAFT } else { 0 })
+                        | (if x > 0 { WIND_E } else { 0 })
+                        | (if x < 0 { WIND_W } else { 0 })
+                };
             }
         }
         // Crushers: home is solid; the sweep a timed hazard (deadly when too big to time);
@@ -691,14 +712,17 @@ impl<'a> Map<'a> {
             pools,
             chasms,
             has_grease: level.has_grease(),
-            has_springs: level.tiles.iter().any(|t| matches!(t, Tile::Trampoline | Tile::Fan) || t.bumper() != 0.0),
+            has_springs: level.tiles.iter().any(|t| {
+                matches!(t, Tile::Trampoline | Tile::CushionDown) || t.fan().is_some() || t.bumper() != 0.0 || t.fling() != 0.0
+            }),
+            // (Ducks or wall cushions facing each other.)
             shafts: (0..h)
                 .flat_map(|r| (0..w).map(move |c| (c, r)))
-                .filter(|&(c, r)| level.tile(c, r).bumper() > 0.0)
+                .filter(|&(c, r)| level.tile(c, r).bumper() + level.tile(c, r).fling() > 0.0)
                 .flat_map(|(c, r)| {
                     let k = (1..=PIN_SHAFT)
                         .find(|&k| level.tile(c + k, r) != Tile::Empty)
-                        .filter(|&k| k > 1 && level.tile(c + k, r).bumper() < 0.0);
+                        .filter(|&k| k > 1 && level.tile(c + k, r).bumper() + level.tile(c + k, r).fling() < 0.0);
                     (1..k.unwrap_or(1)).map(move |j| (c + j, r))
                 })
                 .collect(),
@@ -809,9 +833,25 @@ impl<'a> Map<'a> {
         self.shafts.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
     }
 
-    /// In a fan's updraft, the box centered at (x, y)?
-    fn updraft(&self, x: f32, y: f32) -> bool {
-        self.f((x / TILE).floor() as i32, (y / TILE).floor() as i32) & UPDRAFT != 0
+    /// The gusts the box centered at (x, y) is in (the game's `step_body` looks at its
+    /// center's cell): the wind's (x, y) as in [`Level::wind`], y up.
+    fn wind(&self, x: f32, y: f32) -> (i32, i32) {
+        let f = self.f((x / TILE).floor() as i32, (y / TILE).floor() as i32);
+        if f & WIND == 0 {
+            return (0, 0);
+        }
+        let on = |b: u32| (f & b != 0) as i32;
+        (on(WIND_E) - on(WIND_W), on(UPDRAFT) - on(DOWNDRAFT))
+    }
+
+    /// A wall cushion's face at (c, r) (-1 its left, 1 its right, 0 none).
+    fn fling(&self, c: i32, r: i32) -> f32 {
+        if self.f(c, r) & CUSHION == 0 { 0.0 } else { self.level.tile(c, r).fling() }
+    }
+
+    /// A ceiling cushion at (c, r)?
+    fn cushion_down(&self, c: i32, r: i32) -> bool {
+        self.f(c, r) & CUSHION != 0 && self.level.tile(c, r) == Tile::CushionDown
     }
 
     /// The conveyor belt's speed (px/s) under `cell` (0: not on one).
@@ -886,6 +926,9 @@ impl<'a> Map<'a> {
                 let hit = (f & LIQUID != 0)
                     || (f & SPIKE_UP != 0 && y1 > ty + TILE / 2.0)
                     || (f & SPIKE_DOWN != 0 && y0 < ty + TILE / 2.0);
+                // Wall brushes: deadly, no stain (they stick out sideways).
+                let tx = c as f32 * TILE;
+                other |= (f & SPIKE_R != 0 && x1 > tx + TILE / 2.0) || (f & SPIKE_L != 0 && x0 < tx + TILE / 2.0);
                 if hit {
                     let d = (c as f32 * TILE + 8.0 - x).abs() + (ty + 8.0 - y).abs();
                     if stainable.is_none_or(|(b, _)| d < b) {
@@ -930,7 +973,7 @@ impl<'a> Map<'a> {
             && below & (CRUMBLE | BELT) == 0
             && (0..=RUNWAY_HEADROOM).all(|k| {
                 let f = self.f(c, r - k);
-                f & (DEADLY_TILE | SPRAY | CRUSH | UPDRAFT) == 0
+                f & (DEADLY_TILE | SPRAY | CRUSH | WIND) == 0
             })
             && !self.in_fly_zone(
                 c as f32 * TILE,
@@ -1469,23 +1512,33 @@ struct Moved {
 fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec<Cell>) -> Moved {
     let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
     let mut refilled = false;
-    // A fan's updraft (the game's `step_body`).
-    if b.vy > -FAN_RISE && map.updraft(b.x, b.y) {
+    // A fan's updraft or a ceiling fan's downdraft, and a wall fan's gust (the game's
+    // `step_body`).
+    let wind = map.wind(b.x, b.y);
+    if wind.1 > 0 && b.vy > -FAN_RISE {
         b.vy = (b.vy - FAN_LIFT * DT).max(-FAN_RISE);
     }
+    if wind.1 < 0 && b.vy < FAN_RISE {
+        b.vy = (b.vy + FAN_LIFT * DT).min(FAN_RISE);
+    }
+    let gust = wind.0 as f32 * WIND_SPEED;
 
     // Horizontal move against solids.
-    let nx = b.x + (b.vx + b.carry) * DT;
-    let moving = b.vx + b.carry;
+    let nx = b.x + (b.vx + b.carry + gust) * DT;
+    let moving = b.vx + b.carry + gust;
     let (y0, y1) = (b.y - HALF_H, b.y + HALF_H);
     let mut blocked = false;
     let mut bumped = 0.0;
+    let mut flung = 0.0;
     for col in cells(nx - HALF_W, nx + HALF_W) {
         for row in cells(y0, y1) {
             if solid(smashed, col, row) {
                 blocked = true;
                 if map.bumper(col, row) == -moving.signum() {
                     bumped = map.bumper(col, row);
+                }
+                if map.fling(col, row) == -moving.signum() {
+                    flung = map.fling(col, row);
                 }
                 b.x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
             }
@@ -1501,6 +1554,13 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
         // A bumper's face: batted back and up, the toot back (like a trampoline).
         b.carry = bumped * BUMPER_SPEED;
         b.vy = b.vy.min(-BUMPER_LIFT);
+        b.cut = true;
+        refilled = true;
+    }
+    if flung != 0.0 {
+        // A wall cushion's face: flung away, the toot back.
+        b.carry = flung * CUSHION_FLING;
+        b.vy = b.vy.min(-CUSHION_LIFT);
         b.cut = true;
         refilled = true;
     }
@@ -1548,6 +1608,7 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
         }
     } else {
         let mut hit = false;
+        let mut bonk = false;
         for col in cells(b.x - HALF_W, b.x + HALF_W) {
             for row in cells(ny - HALF_H, ny + HALF_H) {
                 if !solid(smashed, col, row) {
@@ -1559,10 +1620,16 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
                     continue;
                 }
                 hit = true;
+                bonk |= map.cushion_down(col, row);
                 b.y = (row + 1) as f32 * TILE + HALF_H;
             }
         }
-        if hit {
+        if bonk {
+            // A ceiling cushion: sprung back down, the toot back.
+            b.vy = SPRING_SPEED;
+            b.cut = true;
+            refilled = true;
+        } else if hit {
             b.vy = 0.0;
         } else {
             b.y = ny;
@@ -3609,6 +3676,8 @@ fn lessons(
                 Tile::Trampoline => near.push((Topic::Spring, (c, r))),
                 Tile::BeltLeft | Tile::BeltRight => near.push((Topic::Belt, (c, r))),
                 Tile::Fan => near.push((Topic::Fan, (c, r))),
+                Tile::FanDown | Tile::FanRight | Tile::FanLeft => near.push((Topic::Wind, (c, r))),
+                Tile::CushionLeft | Tile::CushionRight | Tile::CushionDown => near.push((Topic::Fling, (c, r))),
                 Tile::BumperLeft | Tile::BumperRight => near.push((Topic::Bumper, (c, r))),
                 t if t.is_beat() => near.push((Topic::Beat, (c, r))),
                 _ => {}
