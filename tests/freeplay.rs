@@ -33,7 +33,9 @@ fn every_template_validates_at_every_band() {
     let t0 = Instant::now();
     // (template, band) -> (first-try valid, attempts, fallbacks, worst µs, total µs, expected deaths seen)
     let results: Vec<(usize, u8, u32, u32, u32, u64, u64, Vec<u32>)> = std::thread::scope(|s| {
+        // (Side B rooms are Han's alone, proven by playing them: `tests/side_b.rs`.)
         let handles: Vec<_> = (0..TEMPLATES.len())
+            .filter(|&t| !TEMPLATES[t].alone())
             .flat_map(|t| BANDS.map(|b| (t, b)))
             .map(|(t, b)| {
                 s.spawn(move || {
@@ -59,7 +61,7 @@ fn every_template_validates_at_every_band() {
             .collect();
         handles.into_iter().map(|h| h.join().unwrap()).collect()
     });
-    eprintln!("{} rooms in {:.1?} (threaded)", TEMPLATES.len() * BANDS.len() * SEEDS as usize, t0.elapsed());
+    eprintln!("{} rooms in {:.1?} (threaded)", results.len() * SEEDS as usize, t0.elapsed());
     for (t, b, first, attempts, fallbacks, worst, total, deaths) in &results {
         let tpl = &TEMPLATES[*t];
         eprintln!(

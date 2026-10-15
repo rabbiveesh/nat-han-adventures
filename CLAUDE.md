@@ -72,6 +72,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `index.html`): only the plan and the verdict cross as text, the game redraws the room and
   checks its fingerprint, and falls back to the main thread on any mismatch or worker error.
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
+  Once B1 is cleared, a run now and then hands a room to Han alone (`alone.rs`: Side B's
+  pieces, more with each Side B level cleared; Nat waits in the pipe, the set list comes up,
+  a rewind rewinds only the room, `sideb::start_room`). Those are built with their solution, not
+  validated: `tests/side_b.rs` plays them (`SIDE_B_ROOMS=n` seeds, `try_a_room`).
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
   header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and

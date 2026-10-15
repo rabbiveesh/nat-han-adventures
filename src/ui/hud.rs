@@ -198,7 +198,10 @@ fn update_hud(
     solo: Option<Res<crate::game::solo::SoloRun>>,
     mut q: Query<(&HudText, &mut Text)>,
 ) {
-    let side_b = side_b.filter(|_| is_side_b.is_some() || solo.is_some()).map(|g| g.0.name.to_uppercase());
+    // (A free play Side B room keeps the room counter.)
+    let side_b = side_b
+        .filter(|_| is_side_b.is_some_and(|s| s.room.is_none()) || solo.is_some())
+        .map(|g| g.0.name.to_uppercase());
     for (h, mut text) in &mut q {
         let s = match h {
             HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),

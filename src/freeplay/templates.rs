@@ -9,6 +9,7 @@
 //! four gates are all [`Skill::Buddy`]): the generator picks among the unlocked ones by seed. Its gates are checked by `crate::level::validate` like
 //! any other room's, so a new gate kind needs only the validator to know it.
 
+use super::alone::{self, ALONE_H};
 use super::canvas::*;
 use super::dice::{Dice, t};
 use crate::adapt::{Band, Skill};
@@ -20,6 +21,23 @@ use crate::level::{PlatformKind, Topic};
 pub struct Dressing {
     /// Extra nuggets on a long gap's nugget line (the band fires up more easily).
     pub extra_nuggets: u8,
+    /// Side B levels the player has cleared (which of Side B's pieces a Side B room may use).
+    pub side_b: u8,
+}
+
+/// What the player has unlocked, which decides the rooms free play may serve: story levels
+/// playable (`crate::save::Progress::unlocked`) and Side B levels cleared.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Unlocks {
+    pub levels: usize,
+    pub side_b: usize,
+}
+
+impl From<usize> for Unlocks {
+    /// Story levels only.
+    fn from(levels: usize) -> Unlocks {
+        Unlocks { levels, side_b: 0 }
+    }
 }
 
 /// What a template tells the generator about the room it drew.
@@ -40,6 +58,9 @@ pub struct Template {
     /// Story levels `0..=unlock` must be unlocked (`crate::save::Progress::unlocked`) before
     /// free play serves this room: the mechanic has been taught.
     pub unlock: usize,
+    /// Side B levels that must be cleared first; a template that asks for any is a Side B room
+    /// (`super::alone`): Han goes on alone, the player calls the band, and it isn't validated.
+    pub side_b: usize,
     /// Rows in its canvas: [`H`], or more for a tall room ([`CLIMB_H`] for a climb,
     /// [`CHASM_H`] for a fired-up chasm's headroom).
     pub height: usize,
@@ -48,22 +69,25 @@ pub struct Template {
 
 /// Every template.
 pub const TEMPLATES: &[Template] = &[
-    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, height: H, build: gauntlet },
-    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, height: CLIMB_H, build: shelf_climb },
-    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, height: H, build: hazards },
-    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, height: H, build: platforms },
-    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, height: H, build: giant_wall },
-    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, height: H, build: long_gap },
-    Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, height: H, build: glide_launch },
-    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, height: H, build: stain_pit },
-    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, height: H, build: grease_chute },
-    Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, height: MEGA_H, build: mega_wall },
-    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, height: H, build: buddy_raft_pool },
-    Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, height: CHASM_H, build: fired_up_chasm },
-    Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, height: MEGA_H, build: cling_shaft },
-    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, height: MEGA_H, build: trapeze },
-    Template { name: "gadget run", skill: Skill::Precision, unlock: 1, height: H, build: gadget_run },
-    Template { name: "beat hall", skill: Skill::HazardTiming, unlock: 1, height: H, build: beat_hall },
+    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, side_b: 0, height: H, build: gauntlet },
+    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, side_b: 0, height: CLIMB_H, build: shelf_climb },
+    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, side_b: 0, height: H, build: hazards },
+    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, side_b: 0, height: H, build: platforms },
+    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, side_b: 0, height: H, build: giant_wall },
+    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, side_b: 0, height: H, build: long_gap },
+    Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, side_b: 0, height: H, build: glide_launch },
+    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, side_b: 0, height: H, build: stain_pit },
+    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, side_b: 0, height: H, build: grease_chute },
+    Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, side_b: 0, height: MEGA_H, build: mega_wall },
+    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, side_b: 0, height: H, build: buddy_raft_pool },
+    Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, side_b: 0, height: CHASM_H, build: fired_up_chasm },
+    Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, side_b: 0, height: MEGA_H, build: cling_shaft },
+    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, side_b: 0, height: MEGA_H, build: trapeze },
+    Template { name: "gadget run", skill: Skill::Precision, unlock: 1, side_b: 0, height: H, build: gadget_run },
+    Template { name: "beat hall", skill: Skill::HazardTiming, unlock: 1, side_b: 0, height: H, build: beat_hall },
+    // The Side B room: once B1 is cleared (its pieces grow with each Side B level cleared).
+    // Never picked by skill: `super::run` mixes it in now and then.
+    Template { name: "han alone", skill: Skill::Buddy, unlock: 0, side_b: 1, height: ALONE_H, build: alone::build },
 ];
 
 /// The templates for a skill.
@@ -73,16 +97,23 @@ pub fn for_skill(skill: Skill) -> impl Iterator<Item = &'static Template> {
 
 impl Template {
     /// Free play may serve it with `unlocked_levels` story levels playable.
-    pub fn unlocked(&self, unlocked_levels: usize) -> bool {
-        self.unlock < unlocked_levels.max(1)
+    pub fn unlocked(&self, unlocks: impl Into<Unlocks>) -> bool {
+        let u = unlocks.into();
+        self.unlock < u.levels.max(1) && self.side_b <= u.side_b
+    }
+
+    /// A Side B room (`super::alone`).
+    pub fn alone(&self) -> bool {
+        self.side_b > 0
     }
 }
 
 /// Skills free play can serve with `unlocked` story levels playable.
-pub fn unlocked_skills(unlocked_levels: usize) -> Vec<Skill> {
+pub fn unlocked_skills(unlocks: impl Into<Unlocks>) -> Vec<Skill> {
+    let u = unlocks.into();
     let mut out: Vec<Skill> = Vec::new();
     for t in TEMPLATES {
-        if t.unlocked(unlocked_levels) && !out.contains(&t.skill) {
+        if t.unlocked(u) && !t.alone() && !out.contains(&t.skill) {
             out.push(t.skill);
         }
     }

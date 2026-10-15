@@ -339,7 +339,7 @@ fn side_b(src: &str) -> App {
     .insert_resource(AudioOutput::Headless)
     .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)));
     app.update();
-    app.world_mut().run_system_once(move |mut c: Commands| sideb::start_level(&mut c, level.clone(), 0)).unwrap();
+    app.world_mut().run_system_once(move |mut c: Commands| sideb::start_level(&mut c, 0, level.clone())).unwrap();
     app.update();
     app.update();
     app
