@@ -21,6 +21,7 @@ mod physics;
 mod pickups;
 mod platforms;
 pub mod sideb;
+pub mod solo;
 mod visuals;
 
 pub mod assist;
@@ -121,6 +122,7 @@ pub fn plugin(app: &mut App) {
             han::plugin,
             adaptive::plugin,
             sideb::plugin,
+            solo::plugin,
             crushers::plugin,
         ));
 }

@@ -1,5 +1,6 @@
 //! Title screen: big title, the stars bobbing, blinking "PRESS ENTER", and the choice of
-//! STORY (level select), FREE PLAY, or SIDE B once the story's last level is cleared.
+//! STORY (level select), FREE PLAY, or SIDE B and NAT ALONE once the story's last level is
+//! cleared.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -24,12 +25,13 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 struct TitleScreen;
 
-/// The menu: story mode, free play, and Side B (only shown once unlocked).
-const OPTIONS: [&str; 3] = ["STORY", "FREE PLAY", "SIDE B"];
+/// The menu: story mode, free play, Side B and NAT ALONE (the last two only shown once
+/// unlocked).
+const OPTIONS: [&str; 4] = ["STORY", "FREE PLAY", "SIDE B", "NAT ALONE"];
 
 /// How many of `OPTIONS` the title shows.
 fn shown(progress: Option<&Progress>) -> usize {
-    if progress.is_some_and(Progress::side_b_unlocked) { 3 } else { 2 }
+    if progress.is_some_and(Progress::side_b_unlocked) { 4 } else { 2 }
 }
 
 #[derive(Resource, Default)]
@@ -37,6 +39,8 @@ struct TitleCursor(usize, Vec<i32>);
 
 /// The hidden way into Side B (`game::sideb`) before it's unlocked: Up Up Down Down on the title.
 const SIDE_B_COMBO: [i32; 4] = [-1, -1, 1, 1];
+/// ...and into NAT ALONE (`game::solo`): Down Down Up Up.
+const SOLO_COMBO: [i32; 4] = [1, 1, -1, -1];
 
 #[derive(Component)]
 struct TitleOption(usize);
@@ -127,10 +131,15 @@ fn input(
         if n > SIDE_B_COMBO.len() {
             cursor.1.drain(..n - SIDE_B_COMBO.len());
         }
-        if cursor.1 == SIDE_B_COMBO {
+        let shelf = match cursor.1.as_slice() {
+            c if c == SIDE_B_COMBO => Some(Shelf::SideB),
+            c if c == SOLO_COMBO => Some(Shelf::Solo),
+            _ => None,
+        };
+        if let Some(shelf) = shelf {
             cursor.1.clear();
             sfx(&mut sfx_w, Sfx::MenuSelect);
-            commands.insert_resource(Shelf::SideB);
+            commands.insert_resource(shelf);
             next.set(AppState::LevelSelect);
             return;
         }
@@ -143,7 +152,11 @@ fn input(
         match cursor.0 {
             1 => next.set(AppState::FreePlaySetup),
             i => {
-                commands.insert_resource(if i == 0 { Shelf::Story } else { Shelf::SideB });
+                commands.insert_resource(match i {
+                    0 => Shelf::Story,
+                    2 => Shelf::SideB,
+                    _ => Shelf::Solo,
+                });
                 next.set(AppState::LevelSelect);
             }
         }

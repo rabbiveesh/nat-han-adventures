@@ -7,6 +7,9 @@
 //!   tower: a duck shaft through soap bricks past a trap door, fans, a beat bridge and a duck
 //!   chimney to toot up.
 //!
+//! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): the other eight levels each
+//!   have a run (`scripts/tours/<level>.timeline`) that clears it without a death.
+//!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
 //!
@@ -125,7 +128,8 @@ fn the_gauntlet_is_a_valid_level_with_every_gadget() {
     let report = validate::check(&level, &validate::Options { dump: false });
     assert!(report.errs.is_empty(), "{:#?}", report.errs);
     let topics: Vec<_> = report.lessons.iter().map(|l| l.topic).collect();
-    for t in Topic::GADGETS {
+    // (It came before the sideways and upside-down ones: NAT ALONE has those.)
+    for t in Topic::GADGETS.into_iter().filter(|t| ![Topic::Wind, Topic::Fling].contains(t)) {
         assert!(topics.contains(&t), "no {t:?} in the gauntlet: {topics:?}");
     }
 }
@@ -183,6 +187,40 @@ fn the_tour_climbs_the_spout_on_the_second_try() {
     let goal = run.goal.expect("the second try reaches the goal");
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
+
+/// A NAT ALONE level passes the full check, and its tour clears it without a death.
+macro_rules! nat_alone {
+    ($valid:ident, $clean:ident, $file:literal) => {
+        #[test]
+        fn $valid() {
+            let level = Level::parse(include_str!(concat!("../levels/solo/", $file, ".txt"))).unwrap();
+            assert!(level.solo);
+            let report = validate::check(&level, &validate::Options { dump: false });
+            assert!(report.errs.is_empty(), "{:#?}", report.errs);
+        }
+
+        #[test]
+        fn $clean() {
+            let run = play(
+                include_str!(concat!("../levels/solo/", $file, ".txt")),
+                include_str!(concat!("../scripts/tours/", $file, ".timeline")),
+            );
+            assert!(!run.han, "a solo level has no Han");
+            assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+            let goal = run.goal.expect("the tour reaches the goal");
+            assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+        }
+    };
+}
+
+nat_alone!(breezy_is_a_valid_level, the_tour_clears_breezy, "breezy");
+nat_alone!(bouncy_is_a_valid_level, the_tour_clears_bouncy, "bouncy");
+nat_alone!(brush_is_a_valid_level, the_tour_clears_brush, "brush");
+nat_alone!(wind_is_a_valid_level, the_tour_clears_wind, "wind");
+nat_alone!(disco_is_a_valid_level, the_tour_clears_disco, "disco");
+nat_alone!(spin_is_a_valid_level, the_tour_clears_spin, "spin");
+nat_alone!(pingpong_is_a_valid_level, the_tour_clears_pingpong, "pingpong");
+nat_alone!(flush_is_a_valid_level, the_tour_clears_flush, "flush");
 
 #[test]
 fn check_a_level_file() {

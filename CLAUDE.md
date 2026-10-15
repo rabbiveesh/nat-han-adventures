@@ -79,6 +79,13 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
   level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
   `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
+- `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,
+  `levels/solo/`), the gadget tiles sideways and upside down too (wall/ceiling fans `e` `w` `!`,
+  wall/ceiling cushions `b` `d` `m`, wall brushes `|`). A `GeneratedLevel` like Side B, its own
+  `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once level 10 is cleared,
+  Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
+  run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
+  tracing knobs for writing one).
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.
