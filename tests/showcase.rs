@@ -12,7 +12,8 @@
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
 //! bar lines and the crushers near him; `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play
-//! another level / timeline in `the_tour_beats_the_gauntlet_without_a_death`, and
+//! another level / timeline in `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`:
+//! trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
 #![cfg(feature = "capture")]
 
@@ -75,6 +76,7 @@ fn play(level: &str, tour: &str) -> Run {
     app.insert_resource(TimelinePlayer::new(timeline.clone()))
         .add_systems(PreUpdate, play_timeline.before(bevy::input::InputSystems));
     let trace = std::env::var("SHOWCASE_TRACE").is_ok();
+    let every = std::env::var("SHOWCASE_EVERY").ok().and_then(|e| e.parse().ok()).unwrap_or(FPS as u64 / 4);
     let secs = |f: u64| f as f32 / FPS as f32;
     let mut goal = None;
     let mut last_bar = None;
@@ -96,7 +98,7 @@ fn play(level: &str, tour: &str) -> Run {
             last_bar = Some(bar);
         }
         let Some(p) = app.world_mut().query_filtered::<&Pos, With<Player>>().iter(app.world()).next().map(|p| p.0) else { continue };
-        if frame % (FPS as u64 / 4) == 0 {
+        if frame % every == 0 {
             eprintln!("t={:5.2} col {:6.2} row {:6.2} {state:?}", secs(frame), p.x / TILE, rows - p.y / TILE);
         }
         if frame % 3 == 0 {
@@ -186,5 +188,9 @@ fn the_tour_climbs_the_spout_on_the_second_try() {
 fn check_a_level_file() {
     let Ok(path) = std::env::var("SHOWCASE_CHECK") else { return };
     let level = Level::parse(&std::fs::read_to_string(path).unwrap()).unwrap();
-    eprintln!("{:#?}", validate::check(&level, &validate::Options { dump: false }).errs);
+    let report = validate::check(&level, &validate::Options { dump: std::env::var("SHOWCASE_DUMP").is_ok() });
+    if let Some(d) = report.dump {
+        eprintln!("{d}");
+    }
+    eprintln!("{:#?}", report.errs);
 }

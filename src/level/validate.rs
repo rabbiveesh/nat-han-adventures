@@ -535,6 +535,9 @@ pub struct Map<'a> {
     /// Pinball shafts: the empty cells between a duck facing right and one facing left a few
     /// cells across from it ([`pinball`] flies through them).
     shafts: Vec<Cell>,
+    /// The cushions (wall and ceiling) and wall brushes: flights near them steer
+    /// ([`Map::near_pinball`]).
+    steer: Vec<Cell>,
     /// Per cell: the top horizontal speed (px/s, normal time) of a moving platform you can
     /// stand on there (0: none). See [`Map::carry`].
     carry: Vec<f32>,
@@ -726,6 +729,13 @@ impl<'a> Map<'a> {
                     (1..k.unwrap_or(1)).map(move |j| (c + j, r))
                 })
                 .collect(),
+            steer: (0..h)
+                .flat_map(|r| (0..w).map(move |c| (c, r)))
+                .filter(|&(c, r)| {
+                    let t = level.tile(c, r);
+                    t.fling() != 0.0 || t.fan().is_some() || matches!(t, Tile::CushionDown | Tile::SpikesLeft | Tile::SpikesRight)
+                })
+                .collect(),
             carry,
             derive_marks: false,
             derived: Vec::new(),
@@ -828,9 +838,12 @@ impl<'a> Map<'a> {
     }
 
     /// Could a pinball flight ([`pinball`]) start in `cell`: a pinball shaft within
-    /// [`PIN_NEAR`] cells?
+    /// [`PIN_NEAR`] cells, or a cushion or wall brushes within [`PIN_STEER`] (a fling or a bonk
+    /// off a cushion refills the toot, brushes stick out into the way: what to do next is a
+    /// choice made in the air)?
     fn near_pinball(&self, (c, r): Cell) -> bool {
         self.shafts.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
+            || self.steer.iter().any(|s| (s.0 - c).abs() <= PIN_STEER && (s.1 - r).abs() <= PIN_STEER)
     }
 
     /// The gusts the box centered at (x, y) is in (the game's `step_body` looks at its
@@ -1655,6 +1668,8 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
 /// are picked again, and how many air states one graph's flights may visit.
 const PIN_SHAFT: i32 = 6;
 const PIN_NEAR: i32 = 4;
+/// ... or a cushion or wall brushes this close (cells).
+const PIN_STEER: i32 = 8;
 const PIN_FRAMES: u32 = 6;
 const PIN_STATES: usize = 400_000;
 /// How finely (px, px/s) the pinball search tells its air states apart: their position, their
@@ -2894,7 +2909,9 @@ fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: us
             }
         }
     }
+    // (Nat alone: no Han to boost him.)
     if (!c.gate.needs_han() || c.gate.zoned_han())
+        && !map.level.solo
         && let Some(e) = boost_leak(&before, phys, g, i, c, &beyond)
     {
         errs.push(format!("{what} {e}"));
@@ -3455,7 +3472,8 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             crossings.iter().filter(|c| c.gate.needs_han() && !c.gate.zoned_han()).map(|c| mark_of(c.gate, c.from, c.to)),
         );
     }
-    for c in crossings.iter().filter(|_| !map.derive_marks) {
+    // (Nat alone: the marks only tame Han's boost, and there's no Han.)
+    for c in crossings.iter().filter(|_| !map.derive_marks && !level.solo) {
         let t = c.gate.topic();
         if !level.gates.iter().any(|m| m.topic == t && m.contains(c.from) && m.contains(c.to)) {
             errs.push(format!(

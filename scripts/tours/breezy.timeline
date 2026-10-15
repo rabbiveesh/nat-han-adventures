@@ -1,0 +1,20 @@
+wait 0.3
+hold Right 1.6
+hold Right Space 300ms
+hold Right 0.15
+hold Right Space 300ms
+hold Right 0.6
+at 3.3
+hold Right Space 300ms
+hold Right 0.15
+hold Right Space 300ms
+hold Right 0.5
+at 4.75
+repeat 6
+hold Right Space 200ms
+hold Right 0.22
+end
+hold Right 1.1
+hold Right Space 300ms
+hold Right 4
+wait 2
