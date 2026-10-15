@@ -350,7 +350,7 @@ fn setup(world: &mut World) {
 fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'static str, Filters), String> {
     let (title, file) = library::song(music)?;
     // A level's tune starts with an intro (when the band's loose enough: see `chorus`).
-    let config = EngineConfig { intro: matches!(music, Music::World(_)), ..EngineConfig::default() };
+    let config = EngineConfig { intro: matches!(music, Music::World(_) | Music::SideB(_)), ..EngineConfig::default() };
     let engine = Engine::with_config(file, ENGINE_RATE, config)?;
     let mut filters = match overrides.0 {
         Some(f) if music != Music::LevelClear => f,
@@ -387,9 +387,14 @@ fn follow_state(
     mut groove: Option<ResMut<Groove>>,
     mut started: MessageWriter<MusicStarted>,
     mut audio: NonSendMut<Audio>,
+    side: Option<Res<crate::game::sideb::SideB>>,
 ) {
     let world = playing_world(levels.as_deref(), *current_level, generated.as_deref());
-    let want = desired_music(*state.get(), world);
+    // Side B (and a free play Side B room, while Han has it) plays its own tunes.
+    let want = match (desired_music(*state.get(), world), side) {
+        (Music::World(_), Some(s)) => s.tune(),
+        (want, _) => want,
+    };
     if player.music == Some(want) {
         return;
     }
@@ -408,7 +413,7 @@ fn follow_state(
     engine.post(Input::SetFilters(filters));
     // The band plays the levels' tunes, and the level-clear jingle (a Basie ending on it,
     // if it's loose).
-    if let (Music::World(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
+    if let (Music::World(_) | Music::SideB(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
         engine.post(set_freedom(f));
     }
     // The fanfare cuts in quickly; everything else crossfades.

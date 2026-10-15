@@ -473,6 +473,23 @@ mod plugin {
         assert_eq!(app.world().resource::<LivePlayer>().filters(), Some(Filters::default()));
     }
 
+    /// Side B plays its own tunes, a run of levels to each, and a level's tune comes back
+    /// when Side B's gone (a free play room handed back to Nat).
+    #[test]
+    fn side_b_plays_its_own_tunes() {
+        use nat_han_adventures::game::sideb::SideB;
+        let mut app = app();
+        app.world_mut().insert_resource(SideB::new(0, Vec::new()));
+        go(&mut app, AppState::Playing);
+        assert_eq!(playing(&app), Some(Music::SideB(1)));
+        app.world_mut().insert_resource(SideB::new(9, Vec::new()));
+        app.update();
+        assert_eq!(playing(&app), Some(Music::SideB(Music::SIDE_B_TUNES)));
+        app.world_mut().remove_resource::<SideB>();
+        app.update();
+        assert!(matches!(playing(&app), Some(Music::World(_))), "{:?}", playing(&app));
+    }
+
     /// The player's AUDIO DELAY steps the beat back by exactly that much, all the way through
     /// the bar: no freezing at the bar line while the music before it is still being heard.
     #[test]
