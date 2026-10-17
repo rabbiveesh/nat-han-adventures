@@ -698,10 +698,13 @@ mod plugin {
         let start = freedom(&app);
         assert!(start > story_start + 0.1, "Side B {start} vs story {story_start}");
         app.world_mut().resource_mut::<SideB>().rewinds = 2;
+        // (Two frames: the decision posts on one, the engine can hear it on the next.)
+        app.update();
         app.update();
         let cooled = freedom(&app);
         assert!(cooled < start && cooled > story_start, "rewound: {cooled}");
         app.world_mut().resource_mut::<SideB>().calls = 3;
+        app.update();
         app.update();
         assert!(freedom(&app) > cooled, "a call heats it back up");
         app.world_mut().remove_resource::<SideB>();
