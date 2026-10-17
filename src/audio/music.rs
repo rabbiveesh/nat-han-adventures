@@ -15,10 +15,12 @@ pub enum Music {
     LevelClear,
     /// After level 10: credits music.
     Victory,
+    /// Side B's tunes, 1..=[`Music::SIDE_B_TUNES`] ([`Music::side_b`] picks one).
+    SideB(u8),
 }
 
 impl Music {
-    pub const ALL: [Music; 8] = [
+    pub const ALL: [Music; 12] = [
         Music::Title,
         Music::World(1),
         Music::World(2),
@@ -27,12 +29,29 @@ impl Music {
         Music::World(5),
         Music::LevelClear,
         Music::Victory,
+        Music::SideB(1),
+        Music::SideB(2),
+        Music::SideB(3),
+        Music::SideB(4),
     ];
+
+    /// How many tunes Side B has.
+    pub const SIDE_B_TUNES: u8 = 4;
+    const SIDE_B_LEVELS: usize = 10;
+
+    /// The tune for Side B level `level` (0-based): its levels in runs, a tune to each run, in
+    /// order. A free play Side B room (`room`, the `level`th of the run) takes them in turn.
+    pub fn side_b(level: usize, room: bool) -> Music {
+        let n = Self::SIDE_B_TUNES as usize;
+        let tune = if room { level % n } else { (level * n / Self::SIDE_B_LEVELS).min(n - 1) };
+        Music::SideB(tune as u8 + 1)
+    }
 
     /// Lower-case name for files ("title", "world3", ...).
     pub fn slug(self) -> String {
         match self {
             Music::World(w) => format!("world{w}"),
+            Music::SideB(t) => format!("sideb{t}"),
             other => format!("{other:?}").to_lowercase(),
         }
     }
@@ -144,4 +163,25 @@ pub enum Sfx {
     HanBlip,
     /// The laughing band's boing boost: Han's head is a spring.
     Boing,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn side_b_levels_take_the_tunes_in_runs_and_rooms_in_turn() {
+        let levels: Vec<Music> = (0..10).map(|l| Music::side_b(l, false)).collect();
+        let n = Music::SIDE_B_TUNES;
+        assert_eq!(levels[0], Music::SideB(1));
+        assert_eq!(levels[9], Music::SideB(n));
+        assert!(levels.windows(2).all(|w| matches!((w[0], w[1]), (Music::SideB(a), Music::SideB(b)) if b == a || b == a + 1)));
+        for t in 1..=n {
+            assert!(levels.contains(&Music::SideB(t)), "tune {t} never plays");
+            assert!(Music::ALL.contains(&Music::SideB(t)));
+        }
+        assert_eq!(Music::side_b(0, true), Music::SideB(1));
+        assert_eq!(Music::side_b(n as usize, true), Music::SideB(1));
+        assert_eq!(Music::side_b(1, true), Music::SideB(2));
+    }
 }

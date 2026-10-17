@@ -1,0 +1,75 @@
+; Embraceable You (George & Ira Gershwin, 1930)
+; Side B's opener: the ballad as a two-beat stomp, the clarinet out front. Melody and changes
+; from Veesh's chart (an octave up). Each line ends with its bar numbers.
+; bpm: Side B's levels are timed to Tiger Rag's tempo, so its tunes keep it.
+
+[song]
+title = Embraceable You (George Gershwin, 1930)
+bpm = 192
+swing = 0.33
+key = G
+loop = yes
+meter = 4/4
+
+[chords]
+| G6 | Bbdim7 | Am7 | D7 | Am7 | Cm6 F7 | G6 | F#m7b5 B7 | ; 1-8
+| Em7 Em/D | C#m7b5 F#7 | Bm7 | Em7 A7 | Dmaj7 Ebdim7 | Em7 A7 | Am7 | D7 | ; 9-16
+| G6 | Bbdim7 | Am7 | D7 | Am7 | Cm6 F7 | G6 | Dm7 G7 | ; 17-24
+| Cmaj7 | F#m7b5 B7 | Em7 | A7 A#dim7 | Bm7 E7 | Am7b5 D7 | G6 Em7 | Am7 D7 | ; 25-32
+
+[instruments]
+; The band's alternates: each channel's base is `default` (the sound as written); its
+; musician may switch to the others for a phrase or a fill. `@i name` uses one in the MML.
+brass    : vol 9 12 14 15 15 14 13 | duty 0 1 2 | pitch -1 -0.5 -0.25 0 | vib delay=14 depth=14 speed=5.5   ; a trumpet: swell, scoop, late vibrato
+clarinet : vol 10 12 13 | duty 1 | vib delay=10 depth=18 speed=5                ; woody, narrow, a warm vibrato
+banjo    : vol 15 10 7 5 4 3 2 2 1 | duty 2 1 | pitch +0.25 0                ; a banjo: bright, gone in a flash
+tuba     : vol 15 13 12 11 | pitch -0.5 0                                     ; an oom-pah tuba (on the triangle)
+brushes  : kick decay=3 click=0.1 | snare decay=6 period=6 tone=150 body=1 | hat decay=0.6 period=3 ; brushes
+pulse1 = default brass clarinet
+pulse2 = default banjo
+triangle = default tuba
+noise = default brushes
+; The feels' instruments (a feel and channel not listed plays the built-in set):
+bossa.pulse1 = clarinet
+samba.pulse1 = brass
+samba.pulse2 = banjo
+
+[pulse1]
+v12 @i clarinet r4 o5 e4 f+4 g4 | r4 o5 e4 f+4 g4 | o5 a4. d8 d4 d4& | o5 d1 | ; 1-4
+r4 o5 a4 b4 o6 c4 | r4 o5 a4 b4 o6 c4 | o6 d4. o5 g8 g4 g4& | o5 g1 | ; 5-8
+o5 b4 g4 a4 g4 | o5 b4 g4 a4 g4 | o5 b4. f+8 f+4 f+4& | o5 f+1 | ; 9-12
+o5 a4 f+4 g4 f+4 | o5 g4 a4 b4 o6 c+4 | o6 d4. o5 d8 d4 d4& | o5 d1 | ; 13-16
+r4 o5 e4 f+4 g4 | r4 o5 e4 f+4 g4 | o5 a4. d8 d4 d4& | o5 d1 | ; 17-20
+r4 o5 a4 b4 o6 c4 | r4 o5 a4 b4 o6 c4 | o6 d4. o5 g8 g4 g4& | o5 g1 | ; 21-24
+r4 o6 d4 c4 o5 b4 | o6 c4 o5 b4 a4 b4 | r4 o5 g8 g8 g8 g8 g8 g8 | o5 g8 g8 b2. | ; 25-28
+r4 o5 b4 o6 c4 d4 | o6 e-4. o5 g8 f+2 | o5 g1 | r1 | ; 29-32
+
+[pulse2]
+v7 @2 r4 o4 {e g b}8 r8 r4 {e g b}8 {e g b}8 | r4 o4 {g a+ > c+}8 r8 r4 {g a+ > c+}8 {g a+ > c+}8 | r4 o4 {g a > c}8 r8 r4 {g a > c}8 {g a > c}8 | r4 o4 {d f+ > c}8 r8 r4 {d f+ > c}8 {d f+ > c}8 | ; 1-4
+r4 o4 {g a > c}8 r8 r4 {g a > c}8 {g a > c}8 | r4 o4 {d+ a > c}8 r8 r4 {d+ f a}8 {d+ f a}8 | r4 o4 {e g b}8 r8 r4 {e g b}8 {e g b}8 | r4 o4 {e f+ a}8 r8 r4 {d+ a b}8 {d+ a b}8 | ; 5-8
+r4 o4 {d e g}8 r8 r4 {e g b}8 {e g b}8 | r4 o4 {e b > c+}8 r8 r4 {e f+ a+}8 {e f+ a+}8 | r4 o4 {d a b}8 r8 r4 {d a b}8 {d a b}8 | r4 o4 {d e g}8 r8 r4 {g a > c+}8 {g a > c+}8 | ; 9-12
+r4 o4 {d f+ > c+}8 r8 r4 {d+ f+ > c}8 {d+ f+ > c}8 | r4 o4 {d e g}8 r8 r4 {g a > c+}8 {g a > c+}8 | r4 o4 {g a > c}8 r8 r4 {g a > c}8 {g a > c}8 | r4 o4 {d f+ > c}8 r8 r4 {d f+ > c}8 {d f+ > c}8 | ; 13-16
+r4 o4 {e g b}8 r8 r4 {e g b}8 {e g b}8 | r4 o4 {g a+ > c+}8 r8 r4 {g a+ > c+}8 {g a+ > c+}8 | r4 o4 {g a > c}8 r8 r4 {g a > c}8 {g a > c}8 | r4 o4 {d f+ > c}8 r8 r4 {d f+ > c}8 {d f+ > c}8 | ; 17-20
+r4 o4 {g a > c}8 r8 r4 {g a > c}8 {g a > c}8 | r4 o4 {d+ a > c}8 r8 r4 {d+ f a}8 {d+ f a}8 | r4 o4 {e g b}8 r8 r4 {e g b}8 {e g b}8 | r4 o4 {d f > c}8 r8 r4 {f g b}8 {f g b}8 | ; 21-24
+r4 o4 {e b > c}8 r8 r4 {e b > c}8 {e b > c}8 | r4 o4 {e f+ a}8 r8 r4 {d+ a b}8 {d+ a b}8 | r4 o4 {d e g}8 r8 r4 {d e g}8 {d e g}8 | r4 o4 {g a > c+}8 r8 r4 {g a+ > c+}8 {g a+ > c+}8 | ; 25-28
+r4 o4 {d a b}8 r8 r4 {d e g+}8 {d e g+}8 | r4 o4 {g a > c}8 r8 r4 {d f+ > c}8 {d f+ > c}8 | r4 o4 {e g b}8 r8 r4 {d e g}8 {d e g}8 | r4 o4 {g a > c}8 r8 r4 {d f+ > c}8 {d f+ > c}8 | ; 29-32
+
+[triangle]
+o2 g4 r4 d4 r4 | o1 a+4 r4 o2 e4 r4 | o2 a4 r4 e4 r4 | o2 d4 r4 a4 r4 | ; 1-4
+o2 a4 r4 e4 r4 | o2 c4 r4 f4 r4 | o2 g4 r4 d4 r4 | o2 f+4 r4 o1 b4 r4 | ; 5-8
+o2 e4 r4 d4 r4 | o2 c+4 r4 f+4 r4 | o1 b4 r4 o2 f+4 r4 | o2 e4 r4 a4 r4 | ; 9-12
+o2 d4 r4 d+4 r4 | o2 e4 r4 a4 r4 | o2 a4 r4 e4 r4 | o2 d4 r4 a4 r4 | ; 13-16
+o2 g4 r4 d4 r4 | o1 a+4 r4 o2 e4 r4 | o2 a4 r4 e4 r4 | o2 d4 r4 a4 r4 | ; 17-20
+o2 a4 r4 e4 r4 | o2 c4 r4 f4 r4 | o2 g4 r4 d4 r4 | o2 d4 r4 g4 r4 | ; 21-24
+o2 c4 r4 g4 r4 | o2 f+4 r4 o1 b4 r4 | o2 e4 r4 o1 b4 r4 | o2 a4 r4 o1 a+4 r4 | ; 25-28
+o1 b4 r4 o2 e4 r4 | o2 a4 r4 d4 r4 | o2 g4 r4 e4 r4 | o2 a4 r4 d4 r4 | ; 29-32
+
+[noise]
+v9 x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 1-4
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 5-8
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 9-12
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 13-16
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 17-20
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 21-24
+x4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | ; 25-28
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s16 s16 s8 s8 k8 s8 s16 s16 s8 | ; 29-32

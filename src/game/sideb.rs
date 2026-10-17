@@ -239,6 +239,11 @@ pub struct AloneRoom {
 }
 
 impl SideB {
+    /// The band's tune for this level (or room).
+    pub fn tune(&self) -> crate::audio::Music {
+        crate::audio::Music::side_b(self.level, self.room.is_some())
+    }
+
     pub fn new(level: usize, setlist: Vec<(SetCall, u32)>) -> SideB {
         let left = setlist.iter().map(|s| s.1).collect();
         SideB {

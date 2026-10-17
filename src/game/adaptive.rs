@@ -550,17 +550,41 @@ fn profile_cues(
     }
 }
 
+/// The band's mood in Side B (and a free play Side B room), where the player *is* the band:
+/// a hot baseline ([`SIDE_B_BASE`]) that each rewind of the level cools and each call this
+/// try heats back up, never below [`SIDE_B_FLOOR`] (still hotter than the story's neutral).
+pub fn side_b_mood(rewinds: u32, calls: u32) -> BandMood {
+    let f = (SIDE_B_BASE - SIDE_B_REWIND_COOLS * rewinds as f32 + SIDE_B_CALL_HEATS * calls as f32).clamp(SIDE_B_FLOOR, 1.0);
+    BandMood { freedom: f, intensity: f }
+}
+
+/// Side B's freedom at the top of a level (story neutral is 0.5).
+pub const SIDE_B_BASE: f32 = 0.75;
+/// The coolest Side B gets, however many rewinds.
+pub const SIDE_B_FLOOR: f32 = 0.55;
+const SIDE_B_REWIND_COOLS: f32 = 0.06;
+const SIDE_B_CALL_HEATS: f32 = 0.05;
+
 /// The band's freedom, on decisions: level start, death, checkpoint, every
-/// [`MUSIC_CHECK_SECS`] of play.
+/// [`MUSIC_CHECK_SECS`] of play, and in Side B its rewinds and calls.
+#[allow(clippy::too_many_arguments)]
 fn decide_music(
     mode: Res<AssistMode>,
     run: Option<Res<LevelRun>>,
     story: Res<StoryAssistState>,
     profile: Res<AdaptiveProfile>,
+    side: Option<Res<super::sideb::SideB>>,
+    mut was_side: Local<Option<(u32, u32)>>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
 ) {
     let Some(run) = run else { return };
+    // Side B decides on coming, going, every rewind and every call.
+    let now_side = side.as_ref().map(|s| (s.rewinds, s.calls));
+    if now_side != *was_side {
+        *was_side = now_side;
+        t.decide = true;
+    }
     if run.time - t.last_decision >= MUSIC_CHECK_SECS {
         t.decide = true;
     }
@@ -569,6 +593,10 @@ fn decide_music(
     }
     t.decide = false;
     t.last_decision = run.time;
+    if let Some(s) = side {
+        out.write(band_freedom(side_b_mood(s.rewinds, s.calls)));
+        return;
+    }
     let mood = match *mode {
         AssistMode::FreePlay => adapt::band_mood(&profile.0),
         AssistMode::Story | AssistMode::Manual => story_mood(&story.0, &t.recent),
