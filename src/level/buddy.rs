@@ -78,7 +78,7 @@ impl HanPhys {
             1.0
         };
         HanPhys {
-            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt() },
+            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt(), drift: 0.0 },
             speed: HAN_RUN_SPEED * speed,
             ground_accel: GROUND_ACCEL * speed,
             air_accel: AIR_ACCEL * speed,
@@ -95,7 +95,7 @@ impl HanPhys {
     pub fn side_b(groove: &Groove) -> HanPhys {
         let g = groove;
         HanPhys {
-            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale() },
+            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale(), drift: 0.0 },
             speed: RUN_SPEED * g.speed_scale,
             ground_accel: GROUND_ACCEL * g.speed_scale,
             air_accel: AIR_ACCEL * g.speed_scale,
@@ -170,11 +170,18 @@ pub fn drive(
     dt: f32,
 ) -> Drove {
     let mut out = Drove::default();
+    // Per-tile tweaks (`level::tweak`), as for Nat.
+    let here = level.here(*pos, body.half, body.on_ground && body.riding.is_none());
     let speed = if input.speed > 0.0 { input.speed } else { 1.0 };
-    let target = input.dir * phys.speed * speed;
+    let target = input.dir * phys.speed * speed * here.run;
     let accel = speed.max(1.0)
+        * here.run
         * if body.on_ground {
-            if input.dir == 0.0 || input.dir * body.vel.x < 0.0 { GROUND_DECEL } else { phys.ground_accel }
+            if input.dir == 0.0 || input.dir * body.vel.x < 0.0 {
+                GROUND_DECEL * here.friction
+            } else {
+                phys.ground_accel * here.friction.max(0.1)
+            }
         } else {
             phys.air_accel
         };
@@ -183,7 +190,7 @@ pub fn drive(
         ctl.toots_left = phys.toots;
     }
     if input.jump && body.on_ground {
-        body.vel.y = phys.jump_speed;
+        body.vel.y = phys.jump_speed * here.jump;
         body.on_ground = false;
         body.riding = None;
         ctl.cut_armed = true;
@@ -201,10 +208,16 @@ pub fn drive(
     if body.vel.y <= 0.0 {
         ctl.cut_armed = false;
     }
-    let contact = step_body(level, pos, body, phys.fall, carriers, &[], dt);
+    let contact = step_body(level, pos, body, phys.fall.here(&here), carriers, &[], dt);
     if contact.ground {
         ctl.toots_left = phys.toots;
-        if phys.bounce && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
+        let spring = level.bounce_underfoot(*pos, body.half);
+        if spring > 0.0 && contact.riding.is_none() && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
+            body.vel.y = (contact.fall_speed * spring).min(super::tweak::BOUNCE_MAX);
+            body.on_ground = false;
+            body.riding = None;
+            out.bounced = true;
+        } else if phys.bounce && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
             body.vel.y = (contact.fall_speed * crate::game::BOUNCE_RESTITUTION).min(crate::game::BOUNCE_SPEED * HAN_ROLL_BOUNCE);
             body.on_ground = false;
             body.riding = None;

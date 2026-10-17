@@ -77,6 +77,22 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
   level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
   `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
+- `src/bin/level_editor/` the native level editor (`cargo run --bin level-editor [-- levels/x.txt]`;
+  the `editor` feature): egui on Bevy, the level drawn with the game's sprites, palette from
+  `level::GLYPHS` (a new tile is a `Tile` + a row there), gate marks, Han's lines, the tweak
+  layer, Side B set lists; Validate (F7, on demand) draws the validator's reach map; Play (F5)
+  runs the real game on it in a second window (`NATHAN_LEVEL=<file> cargo run`, reloads on
+  save). Its document (`level::doc`) saves untouched lines byte for byte; new levels go in
+  `levels/custom/`. Per-tile physics and Han's zones: `level::tweak` (a second `---` grid of
+  letters); Nat, Han, the validator and Han's nav obey them (not friction, for the validator; no cost
+  without tweaks). `tests/tweaks.rs`. Share (once validated; Side B: once Han's `solution:`
+  clears it) copies a link to the web game with the whole level in its `#lvl=` (`level::share`:
+  deflate + base64url, size-capped); the game plays it like a playtest (`playtest::play_shared`;
+  SHARED LEVEL on the web title pastes one). `tests/share.rs`.
+- Downloadable editors: `.github/workflows/editors.yml` builds both (`--profile dist
+  --no-default-features --features editor`) for Linux, Windows and macOS (arm64, x86_64); a `v*`
+  tag publishes a release. Run outside the repo, they use `Documents/Nat Han Adventures`,
+  filled with the game's levels and songs on first use (`workspace`; `NATHAN_HOME` overrides).
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

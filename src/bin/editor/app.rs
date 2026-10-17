@@ -163,9 +163,9 @@ pub struct Editor {
     pub feels: Vec<Feel>,
 }
 
-/// The repository root (where `music/` is).
+/// Where `music/` is: the repository, or a downloaded editor's own folder (`workspace::root`).
 pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    nat_han_adventures::workspace::root()
 }
 
 /// The songs in `music/` (stem, title), or the built-in ones if there's no such directory.

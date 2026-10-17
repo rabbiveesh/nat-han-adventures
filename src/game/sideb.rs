@@ -373,6 +373,27 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, dev_start);
 }
 
+/// A level file's `solution:` header line (the prover's plan, `sideb_solve`; the game never
+/// reads it), split off: the rest is what `SideBLevel::parse` reads.
+pub fn split_solution(src: &str) -> (String, Option<String>) {
+    let mut rest = String::with_capacity(src.len());
+    let mut solution = None;
+    let mut in_header = true;
+    for line in src.lines() {
+        if line.trim() == "---" {
+            in_header = false;
+        }
+        match line.split_once(':') {
+            Some((k, v)) if in_header && k.trim() == "solution" => solution = Some(v.trim().to_string()),
+            _ => {
+                rest.push_str(line);
+                rest.push('\n');
+            }
+        }
+    }
+    (rest, solution)
+}
+
 /// Hidden ways in (Side B is a prototype): `NATHAN_SIDE_B=1 cargo run`, or `?sideb=1` on the
 /// web, start straight in Side B's level 1 (and the title's Up Up Down Down: `ui::title`).
 fn dev_start(mut commands: Commands) {
@@ -616,8 +637,10 @@ fn han_fate(
     mut says: MessageWriter<HanSays>,
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
+    playtest: Option<Res<super::playtest::Playtest>>,
     progress: Option<ResMut<crate::save::Progress>>,
 ) {
+    let playtest = playtest.is_some();
     let dt = time.delta_secs();
     let level = &active.level;
     let say = |says: &mut MessageWriter<HanSays>, t: &str| {
@@ -639,7 +662,12 @@ fn han_fate(
                 // On to the next Side B level (the strip and the level redraw), or the title
                 // after the last.
                 let n = side.level + 1;
-                if n < SIDE_B_SOURCES.len() {
+                if playtest {
+                    // A playtest plays its one level again.
+                    side.rewound();
+                    side.rewinds = 0;
+                    restart.write(RestartLevel);
+                } else if n < SIDE_B_SOURCES.len() {
                     commands.queue(move |w: &mut World| {
                         let b = SideBLevel::load(n);
                         w.insert_resource(SideB::new(n, b.setlist));
@@ -674,7 +702,7 @@ fn han_fate(
                 return;
             }
             side.phase = Phase::Cleared { t: CLEARED_SECS };
-            if let Some(mut progress) = progress {
+            if let Some(mut progress) = progress.filter(|_| !playtest) {
                 progress.record_side_b(side.level, side.rewinds);
             }
             say(&mut says, CLEARED_LINE);

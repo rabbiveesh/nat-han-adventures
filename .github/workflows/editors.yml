@@ -1,0 +1,81 @@
+# Build the music editor and the level editor for Linux, Windows and macOS.
+# A `v*` tag publishes them as a GitHub release; a manual run (or a PR touching this file)
+# leaves them as downloadable workflow artifacts.
+# Bevy is linked statically (no `dynamic_linking`), and on Windows the C runtime too. On Linux
+# the binaries still load the desktop's own libasound, libudev and graphics drivers.
+name: Editors
+
+on:
+  push:
+    tags: ["v*"]
+  pull_request:
+    paths: [".github/workflows/editors.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-x86_64, os: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { name: windows-x86_64, os: windows-latest, target: x86_64-pc-windows-msvc }
+          - { name: macos-arm64, os: macos-latest, target: aarch64-apple-darwin }
+          - { name: macos-x86_64, os: macos-latest, target: x86_64-apple-darwin }
+    runs-on: ${{ matrix.os }}
+    env:
+      CARGO_TARGET_X86_64_PC_WINDOWS_MSVC_RUSTFLAGS: "-C target-feature=+crt-static"
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v4
+      - name: System deps
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev libasound2-dev libwayland-dev libxkbcommon-dev
+      # Installs exactly what rust-toolchain.toml pins, plus this job's target.
+      - name: Install Rust
+        shell: bash
+        run: rustup toolchain install && rustup target add ${{ matrix.target }}
+      # .cargo/config.toml links Linux builds with clang + mold.
+      - uses: rui314/setup-mold@v1
+        if: runner.os == 'Linux'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Build
+        shell: bash
+        run: cargo build --profile dist --locked --no-default-features --features editor --target ${{ matrix.target }} --bin editor --bin level-editor
+      - name: Package
+        shell: bash
+        run: |
+          out="nat-han-editors-${{ matrix.name }}"
+          mkdir "$out"
+          ext=""; [ "$RUNNER_OS" = Windows ] && ext=".exe"
+          cp "target/${{ matrix.target }}/dist/editor$ext" "$out/music-editor$ext"
+          cp "target/${{ matrix.target }}/dist/level-editor$ext" "$out/level-editor$ext"
+          cp scripts/editors-README.txt "$out/README.txt"
+          if [ "$RUNNER_OS" = Windows ]; then
+            7z a "$out.zip" "$out" > /dev/null
+          else
+            # zip keeps the executable bit (macOS opens zips natively).
+            zip -qr "$out.zip" "$out"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nat-han-editors-${{ matrix.name }}
+          path: nat-han-editors-${{ matrix.name }}.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: "*.zip"
+          generate_release_notes: true

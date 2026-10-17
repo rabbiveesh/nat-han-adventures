@@ -18,6 +18,9 @@
 //! `--check` (no window: load and reformat every song, then quit). `NATHAN_AUDIO=headless`
 //! renders without a sound card.
 
+// A downloaded (release) editor on Windows opens no console window beside it.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod app;
 mod feed;
 mod model;

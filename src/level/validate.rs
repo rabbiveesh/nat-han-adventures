@@ -501,6 +501,9 @@ pub struct Map<'a> {
     /// marked as they're found (Han's boost is weak around them like around marked ones).
     derive_marks: bool,
     pub(crate) derived: Vec<GateMark>,
+    /// The level has physics tweaks (`level::tweak`): arcs read them as they fly, and the
+    /// free-flight envelopes (which assume the plain physics) prune nothing.
+    pub tweaked: bool,
 }
 
 impl<'a> Map<'a> {
@@ -637,7 +640,37 @@ impl<'a> Map<'a> {
             carry,
             derive_marks: false,
             derived: Vec::new(),
+            tweaked: level.tweaks.iter().any(|(_, t)| t.has_surface() || t.has_volume()),
         }
+    }
+
+    /// The air's tweaks at box center (x, y) (px, y down): × gravity, × run, wind (px/s).
+    #[inline]
+    fn air(&self, x: f32, y: f32) -> (f32, f32, f32) {
+        if !self.tweaked {
+            return (1.0, 1.0, 0.0);
+        }
+        match self.level.tweak_at((x / TILE).floor() as i32, (y / TILE).floor() as i32) {
+            Some(t) => (t.gravity.unwrap_or(1.0), t.run.unwrap_or(1.0), t.wind.unwrap_or(0.0) * TILE),
+            None => (1.0, 1.0, 0.0),
+        }
+    }
+
+    /// The floor tweak under a box centered at x whose feet are on the top of row `row` (the
+    /// tile under its center, else under either edge), as `level::Level::tweak_underfoot`.
+    fn underfoot(&self, x: f32, row: i32) -> Option<&crate::level::tweak::Tweak> {
+        if !self.tweaked {
+            return None;
+        }
+        [x, x - HALF_W + 0.5, x + HALF_W - 0.5].into_iter().find_map(|x| {
+            let c = (x / TILE).floor() as i32;
+            (self.floor(c, row) != Floor::None).then(|| self.level.tweak_at(c, row)).flatten()
+        })
+    }
+
+    /// A conveyor belt's speed (px/s) under cell (c, r)'s floor.
+    pub fn belt(&self, (c, r): Cell) -> f32 {
+        self.underfoot(c as f32 * TILE + 8.0, r + 1).and_then(|t| t.belt).unwrap_or(0.0) * TILE
     }
 
     /// Han's view of the level: flies and spray jets don't hurt him (spikes and sewage still
@@ -1182,9 +1215,25 @@ impl Flight {
 /// toots, gravity. Shared by the free-flight envelopes and [`fly`].
 #[inline(always)]
 fn air_controls(env: &Env, f: &Flight, t: f32, vx: &mut f32, vy: &mut f32, cut: &mut bool, tooted: &mut [bool; 3]) {
+    air_controls_in(env, (1.0, 1.0), f, t, vx, vy, cut, tooted)
+}
+
+/// [`air_controls`] in tweaked air: × gravity, × run (`Map::air`).
+#[inline(always)]
+#[allow(clippy::too_many_arguments)]
+fn air_controls_in(
+    env: &Env,
+    (gravity, run): (f32, f32),
+    f: &Flight,
+    t: f32,
+    vx: &mut f32,
+    vy: &mut f32,
+    cut: &mut bool,
+    tooted: &mut [bool; 3],
+) {
     let input = if t < f.release { f.dir } else { 0.0 };
-    let target = input * env.vx;
-    let dv = env.air_accel * DT;
+    let target = input * env.vx * run;
+    let dv = env.air_accel * run * DT;
     *vx = if (target - *vx).abs() <= dv { target } else { *vx + dv * (target - *vx).signum() };
     if !*cut && t >= f.hold {
         *cut = true;
@@ -1198,7 +1247,12 @@ fn air_controls(env: &Env, f: &Flight, t: f32, vx: &mut f32, vy: &mut f32, cut: 
             *vy = -f.toot_speed;
         }
     }
-    *vy = (*vy + env.gravity * DT).min(env.max_fall);
+    let rise = *vy;
+    *vy = (*vy + env.gravity * gravity * DT).min(env.max_fall);
+    if gravity < 0.0 {
+        // Negative gravity floats you up, as fast as you'd fall (`game::physics::step_body`).
+        *vy = vy.max(rise.min(-env.max_fall));
+    }
 }
 
 fn free_envelope(env: &Env, f: &Flight) -> [Option<(f32, f32)>; (DR_MAX - DR_MIN + 1) as usize] {
@@ -1310,16 +1364,34 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
     }
     let (mut vx, mut vy) = (f.vx0, f.vy0);
     let mut carry = f.carry;
+    if map.tweaked {
+        // Taking off from a tweaked floor (feet on a tile top; not off Han's head): its jump
+        // and its belt (kept like a platform's speed), and the air's run.
+        if ((y + HALF_H) / TILE).fract() == 0.0 && let Some(t) = map.underfoot(x, ((y + HALF_H) / TILE) as i32) {
+            if vy < 0.0 {
+                vy *= t.jump.unwrap_or(1.0);
+            }
+            carry += t.belt.unwrap_or(0.0) * TILE;
+        }
+        vx *= map.air(x, y).1;
+    }
     let mut cut = f.cut;
     let mut tooted = [false; 3];
+    // Off a bounce floor's spring the toot is back: used at the top of the spring.
+    let mut spring_toot = false;
     let mut t = 0.0;
     while t < MAX_T {
         t += DT;
-        air_controls(env, f, t, &mut vx, &mut vy, &mut cut, &mut tooted);
+        let (gravity, run, wind) = map.air(x, y);
+        air_controls_in(env, (gravity, run), f, t, &mut vx, &mut vy, &mut cut, &mut tooted);
+        if spring_toot && vy >= 0.0 {
+            spring_toot = false;
+            vy = -f.toot_speed;
+        }
 
-        // Horizontal move against solids.
-        let nx = x + (vx + carry) * DT;
-        let moving = vx + carry;
+        // Horizontal move against solids (the wind blows on regardless).
+        let nx = x + (vx + carry + wind) * DT;
+        let moving = vx + carry + wind;
         let (y0, y1) = (y - HALF_H, y + HALF_H);
         let mut blocked = false;
         for col in cells(nx - HALF_W, nx + HALF_W) {
@@ -1391,6 +1463,15 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
             }
         }
         if let Some(cell) = landed {
+            // A bounce tweak's floor springs the box back up (`game::physics`); it lands for
+            // good once the bounces die down.
+            let spring = map.underfoot(x, cell.1 + 1).and_then(|t| t.bounce).unwrap_or(0.0);
+            if spring > 0.0 && vy > crate::game::BOUNCE_MIN_SPEED {
+                vy = -(vy * spring).min(crate::level::tweak::BOUNCE_MAX);
+                carry = 0.0;
+                spring_toot = f.toot_speed > 0.0;
+                continue;
+            }
             return (if map.standable(cell) { Outcome::Land(cell) } else { Outcome::Nothing }, t);
         }
     }
@@ -1472,9 +1553,11 @@ fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &
         }
         g.touch(cell);
         let mut out: Vec<Cell> = Vec::new();
+        let belt = map.belt(cell);
         for d in [-1, 1] {
             let n = (cell.0 + d, cell.1);
-            if map.standable(n) {
+            // (Not up a conveyor belt faster than you run.)
+            if map.standable(n) && belt * d as f32 > -arcs.env.vx {
                 out.push(n);
             }
         }
@@ -1888,6 +1971,15 @@ fn cross_dying(
 /// Normal-physics reachability from the start, plus gate crossings from wherever a mode can be
 /// summoned (and stain pits when nothing else is new), until nothing new is reached. Stains
 /// made for pits stay in `map`.
+/// Does Nat get from the start to the goal on foot: plain physics (a human's arcs), no band,
+/// no Han, no splats? (Tests; the editor.)
+pub fn on_foot(level: &Level, phys: &Physics) -> bool {
+    let map = Map::new(level);
+    let mut g = Graph::new(map.w, map.h);
+    explore(&map, phys.human(Mode::Normal), vec![(level.start.0 as i32, level.start.1 as i32)], None, &mut g);
+    g.reached((level.goal.0 as i32, level.goal.1 as i32))
+}
+
 fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
     let mut g = Graph::new(map.w, map.h);
     explore(map, phys.human(Mode::Normal), vec![start], None, &mut g);
@@ -2252,7 +2344,7 @@ fn leak(
         for &from in &frontier {
             for (k, s) in arcs.at(map, from).iter().enumerate() {
                 let Some(f) = arcs.flight(map, from, s) else { continue };
-                if !rows.iter().any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1)) {
+                if !map.tweaked && !rows.iter().any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1)) {
                     continue;
                 }
                 if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
@@ -2453,7 +2545,7 @@ fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyo
     let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>, m: Mode| -> Option<Cell> {
         for (k, s) in arcs.at(map, from).iter().enumerate() {
             let Some(f) = arcs.flight(map, from, s) else { continue };
-            if !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
+            if !map.tweaked && !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
                 continue;
             }
             if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
@@ -2704,6 +2796,8 @@ pub struct Report {
     pub segments: Vec<u32>,
     /// The map with reachable cells marked (if asked for).
     pub dump: Option<String>,
+    /// The story's house rules broken, with [`Options::rules_apart`] (else they're in `errs`).
+    pub rules: Vec<String>,
     /// The level's gate marks; for a generated room ([`check_room`]), the marks it needs (its
     /// gates, found): copy them into the room so the game's Han is feeble around its band gates.
     pub marks: Vec<GateMark>,
@@ -2713,6 +2807,10 @@ pub struct Report {
 pub struct Options {
     /// Render [`Report::dump`].
     pub dump: bool,
+    /// Put the story's house rules (checkpoint and nugget counts, the level's size, Han's
+    /// lines) in [`Report::rules`] instead of [`Report::errs`], so they don't stop the
+    /// reachability search (the level editor: a level in progress, or Side B's).
+    pub rules_apart: bool,
 }
 
 fn line_errors(level: &Level) -> Vec<String> {
@@ -2783,19 +2881,23 @@ pub fn check_room(level: &Level, phys: &Physics) -> Report {
 }
 
 fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool) -> Report {
-    let mut errs = line_errors(level);
+    let mut rules = line_errors(level);
     let mut map = Map::new(level);
     map.derive_marks = !check_deaths;
     let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
     if !(1..=3).contains(&cps.len()) {
-        errs.push(format!("{} checkpoints (want 1..=3)", cps.len()));
+        rules.push(format!("{} checkpoints (want 1..=3)", cps.len()));
     }
     let n = level.nugget_count();
     if !NUGGETS.contains(&n) {
-        errs.push(format!("{n} nuggets (want {NUGGETS:?})"));
+        rules.push(format!("{n} nuggets (want {NUGGETS:?})"));
     }
     if level.height < 14 || level.width < 40 {
-        errs.push(format!("level is only {}x{}", level.width, level.height));
+        rules.push(format!("level is only {}x{}", level.width, level.height));
+    }
+    let mut errs = Vec::new();
+    if !opts.rules_apart {
+        errs.append(&mut rules);
     }
 
     let start = (level.start.0 as i32, level.start.1 as i32);
@@ -2835,7 +2937,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     }
     if !errs.is_empty() {
         // Structural problems: reachability would just add noise.
-        return Report { errs, ..Report::default() };
+        return Report { errs, rules, ..Report::default() };
     }
 
     let base = map.clone();
@@ -3039,7 +3141,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             dump(level, &map, &g, &crossings)
         )
     });
-    Report { errs, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
+    Report { errs, rules, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
 }
 
 /// Every mechanic's first appearance (by path cost from the start), with its best hint.

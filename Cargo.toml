@@ -2,7 +2,8 @@
 name = "nat-han-adventures"
 version = "0.1.0"
 edition = "2024"
-# `cargo run` is the game; the music editor is `cargo run --bin editor`.
+# `cargo run` is the game; the music editor is `cargo run --bin editor`, the level editor
+# `cargo run --bin level-editor`.
 default-run = "nat-han-adventures"
 
 [dependencies]
@@ -14,6 +15,8 @@ kira = { version = "0.12", default-features = false, features = ["cpal"] }
 rtrb = "0.4"
 leafwing-input-manager = "0.21"
 rand = "0.9"
+# Share links: a level file deflated into the link (`level::share`).
+miniz_oxide = "0.8"
 bevy_brp_extras = { version = "0.22", optional = true }
 # The music editor's GUI (native only, see the `editor` feature).
 bevy_egui = { version = "0.40", optional = true, default-features = false, features = ["render", "default_fonts", "manage_clipboard"] }
@@ -38,6 +41,12 @@ name = "editor"
 path = "src/bin/editor/main.rs"
 required-features = ["editor"]
 
+# The level editor (`cargo run --bin level-editor`), same feature: native only.
+[[bin]]
+name = "level-editor"
+path = "src/bin/level_editor/main.rs"
+required-features = ["editor"]
+
 # Optimise deps even in dev; our own crate stays fast to compile.
 [profile.dev]
 opt-level = 1
@@ -48,9 +57,15 @@ opt-level = 3
 # wasm: getrandom needs to be told to use the browser's crypto API.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom_03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
-web-sys = { version = "0.3", features = ["Window", "Location", "Storage", "Document", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "HtmlElement", "DomTokenList", "Worker", "DedicatedWorkerGlobalScope", "MessageEvent", "ErrorEvent"] }
+web-sys = { version = "0.3", features = ["Window", "Location", "Storage", "Document", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement", "HtmlElement", "DomTokenList", "Worker", "DedicatedWorkerGlobalScope", "MessageEvent", "ErrorEvent", "History"] }
 js-sys = "0.3"
 wasm-bindgen = "0.2"
+
+# The downloadable editors (`.github/workflows/editors.yml`).
+[profile.dist]
+inherits = "release"
+lto = "thin"
+strip = true
 
 # Web release: small and fast. Used by Trunk (see index.html).
 [profile.wasm-release]

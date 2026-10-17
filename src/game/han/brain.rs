@@ -736,6 +736,14 @@ pub(super) fn think(
         input.dir = 0.0;
         input.jump = false;
     }
+    // A `han=wait` zone (`level::tweak`): he stays put until Nat's back by him.
+    if brain.mode == HanMode::Follow
+        && body.on_ground
+        && level.han_zone(feet_cell(level, pos.0)) == Some(crate::level::tweak::HanZone::Wait)
+        && (nat.pos - pos.0).length() > 2.0 * TILE
+    {
+        input = HanInput::default();
+    }
     // Side B: charging at what he can't cross (`game::sideb`).
     if side_b
         && brain.mode == HanMode::Follow
@@ -743,8 +751,8 @@ pub(super) fn think(
     {
         input = charge(level, &pos.0, &body, &brain.ctl, dir);
     }
-    // Keep off a chute's grease (on foot).
-    if !side_b && !parachute && input.dir != 0.0 && body.on_ground {
+    // Keep off a chute's grease, and `han=avoid` zones (on foot).
+    if (!side_b || !level.tweaks.is_empty()) && !parachute && input.dir != 0.0 && body.on_ground {
         let here = level.han_keeps_out(feet_cell(level, pos.0));
         let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
         if !here && next {

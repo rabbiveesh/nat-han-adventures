@@ -76,6 +76,8 @@ impl Course {
             things: Vec::new(),
             platforms: Vec::new(),
             gates: Vec::new(),
+            tweaks: Vec::new(),
+            tweak_cells: Vec::new(),
         };
         (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)
     }
