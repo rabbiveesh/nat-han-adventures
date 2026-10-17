@@ -167,6 +167,7 @@ pub fn drive(
     input: HanInput,
     phys: &HanPhys,
     carriers: &[Carrier],
+    solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Drove {
     let mut out = Drove::default();
@@ -201,7 +202,7 @@ pub fn drive(
     if body.vel.y <= 0.0 {
         ctl.cut_armed = false;
     }
-    let contact = step_body(level, pos, body, phys.fall, carriers, &[], dt);
+    let contact = step_body(level, pos, body, phys.fall, carriers, &[], solids, dt);
     if contact.ground {
         ctl.toots_left = phys.toots;
         if phys.bounce && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
@@ -440,7 +441,7 @@ pub fn chain_try(
         if !jumped {
             input = HanInput { dir: d, speed: 1.0, ..default() };
         }
-        drive(level, &mut han, &mut hb, &mut hctl, input, &phys, &[], DT);
+        drive(level, &mut han, &mut hb, &mut hctl, input, &phys, &[], &[], DT);
         if hb.on_ground {
             han_floor = han.y;
         }
@@ -489,7 +490,7 @@ pub fn chain_try(
             }
         }
         let carriers: Vec<Carrier> = han_carrier(han_id, han, han_prev, &head).into_iter().collect();
-        let contact = step_body(level, &mut nat, &mut nb, Fall::of(&groove), &carriers, &[], DT);
+        let contact = step_body(level, &mut nat, &mut nb, Fall::of(&groove), &carriers, &[], &[], DT);
         if nat.y + HALF.y < 0.0 {
             return None; // fell out of the level
         }

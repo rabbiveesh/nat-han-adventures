@@ -195,10 +195,13 @@ fn update_hud(
     free: Option<Res<crate::freeplay::FreePlayRun>>,
     side_b: Option<Res<crate::game::GeneratedLevel>>,
     is_side_b: Option<Res<crate::game::sideb::SideB>>,
+    solo: Option<Res<crate::game::solo::SoloRun>>,
     mut q: Query<(&HudText, &mut Text)>,
 ) {
     // (A free play Side B room keeps the room counter.)
-    let side_b = side_b.filter(|_| is_side_b.is_some_and(|s| s.room.is_none())).map(|g| g.0.name.to_uppercase());
+    let side_b = side_b
+        .filter(|_| is_side_b.is_some_and(|s| s.room.is_none()) || solo.is_some())
+        .map(|g| g.0.name.to_uppercase());
     for (h, mut text) in &mut q {
         let s = match h {
             HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),
@@ -223,12 +226,18 @@ fn spawn_intro(
     free: Option<Res<crate::freeplay::FreePlayRun>>,
     side_b: Option<Res<crate::game::sideb::SideB>>,
     generated: Option<Res<crate::game::GeneratedLevel>>,
+    solo: Option<Res<crate::game::solo::SoloRun>>,
 ) {
     let f = &*font;
-    let world = free.as_ref().map_or_else(|| levels.0.get(current.0).map_or(1, |l| l.world), |r| r.world);
-    let (title, name) = match (&free, &side_b, &generated) {
-        (Some(r), _, _) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
-        (None, Some(s), Some(g)) => (format!("SIDE B {}", s.level + 1), g.0.name.to_uppercase()),
+    let world = match (&free, &solo, &generated) {
+        (Some(r), _, _) => r.world,
+        (None, Some(_), Some(g)) => g.0.world,
+        _ => levels.0.get(current.0).map_or(1, |l| l.world),
+    };
+    let (title, name) = match (&free, &side_b, &solo, &generated) {
+        (Some(r), _, _, _) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
+        (None, Some(s), _, Some(g)) => (format!("SIDE B {}", s.level + 1), g.0.name.to_uppercase()),
+        (None, None, Some(s), Some(g)) => (format!("NAT ALONE {}", s.0 + 1), g.0.name.to_uppercase()),
         _ => (format!("LEVEL {}", current.0 + 1), level_name(&levels, current.0)),
     };
     commands

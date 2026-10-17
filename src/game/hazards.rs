@@ -235,6 +235,7 @@ pub(super) fn check_hazards(
     mut died: MessageWriter<PlayerDied>,
     mut says: MessageWriter<HanSays>,
     side_stains: Query<&SideStain>,
+    crushers: Query<(&super::crushers::CrusherBlock, &Pos), (Without<Player>, Without<Raft>)>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
@@ -251,10 +252,13 @@ pub(super) fn check_hazards(
     for j in ys {
         for i in xs.clone() {
             let (x0, y0) = (i as f32 * TILE, j as f32 * TILE);
-            let (lo, hi, what) = match tile_at(level, i, j) {
-                Tile::SpikesUp => (y0, y0 + TILE / 2.0, DeathCause::Spikes),
-                Tile::SpikesDown => (y0 + TILE / 2.0, y0 + TILE, DeathCause::Spikes),
-                Tile::Liquid => (y0, y0 + TILE, DeathCause::Sewage),
+            // (The deadly part of the tile: x from its left, y from its bottom.)
+            let (left, right, lo, hi, what) = match tile_at(level, i, j) {
+                Tile::SpikesUp => (0.0, TILE, y0, y0 + TILE / 2.0, DeathCause::Spikes),
+                Tile::SpikesDown => (0.0, TILE, y0 + TILE / 2.0, y0 + TILE, DeathCause::Spikes),
+                Tile::SpikesRight => (TILE / 2.0, TILE, y0, y0 + TILE, DeathCause::Spikes),
+                Tile::SpikesLeft => (0.0, TILE / 2.0, y0, y0 + TILE, DeathCause::Spikes),
+                Tile::Liquid => (0.0, TILE, y0, y0 + TILE, DeathCause::Sewage),
                 _ => continue,
             };
             // A fresh side splat shields this tile from that side.
@@ -262,7 +266,7 @@ pub(super) fn check_hazards(
             if side_stains.iter().any(|s| s.i == i && s.j == j && s.side == from) {
                 continue;
             }
-            if rects_overlap(min, max, Vec2::new(x0, lo), Vec2::new(x0 + TILE, hi)) {
+            if rects_overlap(min, max, Vec2::new(x0 + left, lo), Vec2::new(x0 + right, hi)) {
                 let d = (Vec2::new(x0, y0) + TILE / 2.0).distance(pos.0);
                 if splat_on.is_none_or(|(best, _, _)| d < best) {
                     splat_on = Some((d, i, j));
@@ -286,6 +290,11 @@ pub(super) fn check_hazards(
         spray.on && SprayPlug::danger(plug, floor).into_iter().flatten().any(|(lo, hi)| rects_overlap(min, max, lo, hi))
     }) {
         cause = Some(DeathCause::Spray);
+    }
+
+    // Crushers: in the block's way (it moved into him).
+    if crushers.iter().any(|(b, p)| super::crushers::squashed(pos.0, body.half, b.bounds(p.0))) {
+        cause = Some(DeathCause::Crusher);
     }
 
     let Some(cause) = cause else { return };
@@ -329,8 +338,8 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
     let near = |c0: i32, r0: i32, c1: i32, r1: i32| {
         (c0 - 2..=c1 + 2).contains(&c) && (pit || (r0 - 2..=r1 + 2).contains(&r))
     };
-    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray);
-    // Flies and sprays never count against a gate: none is built of them.
+    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher);
+    // Flies, sprays and crushers never count against a gate: none is built of them.
     if !hazard
         && let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1))
         && let Some(skill) = super::adaptive::skill_of(g.topic)

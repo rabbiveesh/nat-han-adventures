@@ -325,6 +325,16 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Spray => vec!["A CAN PUFFS ON A BEAT.".into(), "WAIT TILL THE PSSHT STOPS,".into(), "THEN GO!".into()],
         Topic::Stain => vec!["TOO WIDE TO JUMP? SPLAT".into(), "ON THE SPIKES: YOUR STAIN".into(), "IS A STEP!".into()],
         Topic::Grease => vec!["ON GREASE YOU CAN'T STOP".into(), "OR JUMP. SPLAT A FEW AND".into(), "THE BAND GETS NERVOUS.".into()],
+        Topic::Brick => vec!["JUMP UP INTO A BAR OF".into(), "SOAP: IT SMASHES!".into()],
+        Topic::Crumble => vec!["SOGGY CARDBOARD SAGS".into(), "UNDER YOU. KEEP MOVING!".into()],
+        Topic::Spring => vec!["LAND ON A CUSHION:".into(), "PFFFT! UP YOU GO!".into()],
+        Topic::Crusher => vec!["A CRUSHER SLAMS, THEN".into(), "CREEPS BACK. GO THEN!".into()],
+        Topic::Belt => vec!["A CONVEYOR CARRIES YOU.".into(), "JUMP OFF IT FOR A BOOST!".into()],
+        Topic::Fan => vec!["A FAN BLOWS YOU UP.".into(), "FLOAT, THEN STEER OFF!".into()],
+        Topic::Bumper => vec!["BUMP A RUBBER DUCK".into(), "AND BOING! IT BATS BACK!".into()],
+        Topic::Beat => vec!["RED AND BLUE BLOCKS".into(), "SWAP ON EVERY BAR!".into()],
+        Topic::Wind => vec!["FANS ON WALLS PUSH YOU.".into(), "ON CEILINGS? NO RISING!".into()],
+        Topic::Fling => vec!["CUSHIONS ON WALLS FLING".into(), "YOU. ON CEILINGS: BONK!".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -335,6 +345,16 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Spray => "NEW: SPRAY CANS",
         Topic::Stain => "NEW: SPLAT STAINS",
         Topic::Grease => "NEW: GREASE",
+        Topic::Brick => "NEW: SOAP BRICKS",
+        Topic::Crumble => "NEW: SOGGY BOXES",
+        Topic::Spring => "NEW: WHOOPEE CUSHIONS",
+        Topic::Crusher => "NEW: CRUSHERS",
+        Topic::Belt => "NEW: CONVEYORS",
+        Topic::Fan => "NEW: FANS",
+        Topic::Bumper => "NEW: BUMPERS",
+        Topic::Beat => "NEW: BEAT BLOCKS",
+        Topic::Wind => "NEW: SIDEWAYS FANS",
+        Topic::Fling => "NEW: SIDEWAYS CUSHIONS",
         _ => "NEW!",
     };
     (title, lines)

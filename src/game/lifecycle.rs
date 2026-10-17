@@ -93,17 +93,23 @@ fn restart_level(
     current: Res<CurrentLevel>,
     generated: Option<Res<GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    solo: Option<Res<super::solo::SoloRun>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
     if requests.read().count() == 0 {
         return;
     }
     let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
-    // Side B rewinds its own level (free play restarts a room itself).
+    // Side B rewinds its own level, NAT ALONE restarts its own (free play restarts a room
+    // itself).
     match (generated, side_b) {
         // (A free play Side B room rewinds itself: `sideb`.)
         (Some(_), Some(s)) if s.room.is_some() => return,
         (Some(g), Some(_)) => {
+            load(&mut commands, g.0.clone(), index, &old);
+            return;
+        }
+        (Some(g), None) if solo.is_some() => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
@@ -180,12 +186,15 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
                 Tile::Liquid => above != Tile::Liquid,
                 _ => true,
             };
-            commands.spawn((
+            let mut e = commands.spawn((
                 Name::new("Tile"),
                 LevelEntity,
                 LevelTile { col, row, tile, top, world: level.world },
                 Transform::from_translation(level.tile_center(col, row).extend(0.0)),
             ));
+            if tile == Tile::Crumble {
+                e.insert(super::crushers::Crumble::default());
+            }
         }
     }
 
@@ -250,6 +259,20 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
         ));
     }
 
+    // Crushers: Pos is the center of the block.
+    for &def in level.crushers.iter().filter(|c| cols.contains(&c.col)) {
+        let block = super::crushers::CrusherBlock::new(level, def);
+        let pos = block.at(crate::level::CrushTime::sim(0.0));
+        commands.spawn((
+            Name::new("Crusher"),
+            LevelEntity,
+            block,
+            Pos(pos),
+            PrevPos(pos),
+            Transform::from_translation(pos.extend(1.0)),
+        ));
+    }
+
     // Moving platforms: Pos is the center of the platform's tiles.
     for def in level.platforms.iter().filter(|p| cols.contains(&p.col)) {
         let left = level.tile_center(def.col, def.row);
@@ -296,6 +319,9 @@ fn spawn_actors(commands: &mut Commands, level: &Level) {
         PrevPos(start),
         Transform::from_translation(start.extend(5.0)),
     ));
+    if level.solo {
+        return;
+    }
     let han = super::han::spawn_spot(level, start);
     let mut han_body = Body::player();
     han_body.on_ground = true;

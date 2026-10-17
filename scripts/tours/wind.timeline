@@ -1,0 +1,28 @@
+wait 0.3
+hold Right 0.9
+wait 0.5
+hold Right 2.5
+hold Right 0.5
+wait 0.4
+hold Right 0.5
+wait 0.4
+hold Right 0.4
+wait 0.4
+hold Right 0.5
+wait 0.4
+hold Right 0.4
+wait 0.4
+hold Right 0.4
+wait 0.4
+hold Right 0.7
+wait 1
+hold Right 0.6
+hold Right Space 100ms
+hold Right 0.6
+wait 0.5
+hold Right 0.15
+hold Right Space 250ms
+hold Right 0.1
+hold Right Space 250ms
+hold Right 1
+wait 1

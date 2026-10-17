@@ -7,6 +7,7 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 mod backdrops;
 mod buddy;
 mod characters;
+mod gadgets;
 mod items;
 pub mod palette;
 mod tiles;
@@ -108,6 +109,28 @@ pub enum SpriteId {
     IconHorn,
     IconNote,
     IconSweat,
+    /// Breakable brick (a bar of old soap). 16x16.
+    Brick,
+    /// Crumbling platform (soggy cardboard), whole and cracking. 16x16, art in the top ~9px.
+    Crumble,
+    /// Trampoline (a whoopee cushion), puffed and squashed. 16x16.
+    Trampoline,
+    /// Crusher: riveted steel (one per cell of its block), its angry face, the hazard stripes
+    /// on its slamming side (along the bottom; rotated). 16x16.
+    CrusherBody,
+    CrusherFace,
+    CrusherStripes,
+    /// Conveyor belt moving right (flip it for left), 4 frames. 16x16.
+    Belt,
+    /// Fan in its grate, 2 frames. 16x16.
+    Fan,
+    /// A puff of a fan's updraft (white; tint it). 4x6.
+    Wisp,
+    /// Bumper: a rubber duck, its springy face on the right (flip it for left). 16x16.
+    Bumper,
+    /// Beat blocks: there, and gone (an outline). 16x16.
+    BeatRed,
+    BeatBlue,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -142,7 +165,8 @@ impl SpriteId {
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
-            IconLock, IconHorn, IconNote, IconSweat,
+            IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
+            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue,
         ];
         for w in tiles::WORLDS {
             v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
@@ -161,6 +185,7 @@ impl SpriteId {
             Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
+            Wisp => (4, 6),
             Backdrop(_) => (backdrops::W as u32, backdrops::H as u32),
             _ => (16, 16),
         }
@@ -225,6 +250,18 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         IconHorn => items::icon_horn(),
         IconNote => items::icon_note(),
         IconSweat => items::icon_sweat(),
+        Brick => gadgets::brick(),
+        Crumble => gadgets::crumble(),
+        Trampoline => gadgets::trampoline(),
+        CrusherBody => gadgets::crusher_body(),
+        CrusherFace => gadgets::crusher_face(),
+        CrusherStripes => gadgets::crusher_stripes(),
+        Belt => gadgets::belt(),
+        Fan => gadgets::fan(),
+        Wisp => gadgets::wisp(),
+        Bumper => gadgets::bumper(),
+        BeatRed => gadgets::beat_red(),
+        BeatBlue => gadgets::beat_blue(),
     }
 }
 
@@ -310,7 +347,7 @@ mod tests {
 
     #[test]
     fn grids_are_rectangular_and_use_only_palette_chars() {
-        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids()).chain(buddy::grids());
+        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids()).chain(buddy::grids()).chain(gadgets::grids());
         for (name, rows, pal) in all {
             if let Err(e) = palette::try_grid(&rows, pal) {
                 panic!("grid {name}: {e:?}");

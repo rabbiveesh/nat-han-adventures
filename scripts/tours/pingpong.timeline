@@ -1,0 +1,9 @@
+wait 0.3
+hold Right 4.2
+hold Right Space 0.3
+hold Right 0.5
+at 6.6
+hold Left Space 0.1
+hold Left 0.3
+hold Left 3.8
+wait 1

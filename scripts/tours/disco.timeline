@@ -1,0 +1,42 @@
+wait 0.3
+hold Right 0.9
+at 2.2
+hold Right Space 200ms
+hold Right 0.2
+at 3.43
+hold Right Space 200ms
+hold Right 0.2
+at 4.67
+hold Right Space 200ms
+hold Right 0.2
+at 5.93
+hold Right Space 200ms
+hold Right 0.2
+at 7.2
+hold Right Space 200ms
+hold Right 0.2
+at 8.43
+hold Right Space 200ms
+hold Right 0.6
+wait 0.6
+hold Right 2.4
+wait 0.0
+hold Right 0.4
+at 12.6
+hold Right Space 0.15
+hold Right 0.2
+at 13.8
+hold Right Space 0.25
+hold Right 0.0
+at 14.9
+hold Left Space 0.15
+hold Left 0.0
+at 16.3
+hold Right Space 0.15
+hold Right 0.0
+at 17.25
+hold Left Space 0.15
+hold Left 0.0
+at 17.6
+hold Right Space 0.0
+hold Right 1.8

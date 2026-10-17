@@ -188,6 +188,11 @@ impl Canvas {
         true
     }
 
+    /// A header line for the room's level text (a `crusher@` line).
+    pub fn header(&mut self, line: String) {
+        self.platforms.push(line);
+    }
+
     /// A hint spot (Han's line the first time Nat comes near).
     pub fn hint(&mut self, col: usize, row: usize, topics: &[Topic], text: &str) {
         let words: Vec<&str> = topics.iter().map(|t| t.word()).collect();
