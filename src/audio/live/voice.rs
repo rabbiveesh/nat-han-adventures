@@ -74,10 +74,14 @@ pub struct Fx {
     pub sweep: u8,
     /// The plunger "wah": the volume and duty open and close about 3 times a second.
     pub wah: bool,
+    /// One breath with the note it slurs from (a tie right after it): the instrument's macros,
+    /// vibrato and fade carry on where that note left them instead of starting over, so a
+    /// grace note, mordent or turn and the note it ornaments sound as one gesture.
+    pub legato: bool,
 }
 
 impl Fx {
-    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false };
+    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false, legato: false };
 
     pub fn is_none(&self) -> bool {
         *self == Fx::NONE
@@ -168,21 +172,85 @@ struct Active {
     vol_mul: f32,
     duty: f32,
     pitch_mul: f32,
+    /// Samples of the legato line before this note ([`Fx::legato`]): the instrument's macros
+    /// and vibrato count from the line's first note-on.
+    carry: usize,
+    /// The slide and fall-off, per sample ([`Bend::at`]).
+    bend: Bend,
+}
+
+/// Where a legato line got to when its last note ended: the next note picks it up.
+#[derive(Debug, Clone, Copy)]
+struct Line {
+    /// The sample the note's held part ended at.
+    end: u64,
+    inst: u8,
+    carry: usize,
+    lfo: f32,
+    env: f32,
+}
+
+/// A slide onto the note and a fall off its end, glided sample by sample (eased: a slide
+/// arrives quickly and settles, a fall drops away faster and faster) rather than stepped
+/// per frame, so neither sounds like a staircase.
+#[derive(Debug, Clone, Copy, Default)]
+struct Bend {
+    slide: f32,
+    slide_len: f32,
+    fall: f32,
+    fall_from: usize,
+    fall_len: f32,
+}
+
+impl Bend {
+    fn new(fx: &Fx, n: usize, sr: f32) -> Self {
+        let frames = |f: u8| f as f32 * sr / 60.0;
+        let fall_len = frames(fx.fall_frames.max(1)).min(n as f32);
+        Bend {
+            slide: fx.slide as f32 * 100.0,
+            slide_len: frames(fx.slide_frames).max(1.0),
+            fall: fx.fall as f32 * 100.0,
+            fall_from: n.saturating_sub(fall_len as usize),
+            fall_len: fall_len.max(1.0),
+        }
+    }
+
+    fn is_none(&self) -> bool {
+        self.slide == 0.0 && self.fall == 0.0
+    }
+
+    /// The pitch factor at sample `i` of the note (held part `n` long; past it, the fall holds).
+    #[inline]
+    fn at(&self, i: usize) -> f32 {
+        let mut cents = 0.0;
+        if self.slide != 0.0 && (i as f32) < self.slide_len {
+            let q = 1.0 - i as f32 / self.slide_len;
+            cents += self.slide * q * q;
+        }
+        if self.fall != 0.0 && i >= self.fall_from {
+            let p = ((i - self.fall_from) as f32 / self.fall_len).min(1.0);
+            cents += self.fall * p * p;
+        }
+        if cents == 0.0 { 1.0 } else { (cents / 1200.0).exp2() }
+    }
 }
 
 impl Active {
     /// The frame values at sample `i` (a frame boundary).
     fn frame(&mut self, i: usize, sr: u64) {
         let held = i < self.n;
-        let base = if held { 0 } else { self.n };
-        let f = ((i - base) as u64 * 60 / sr) as u32;
-        let mut next = base + ((f as u64 + 1) * sr).div_ceil(60) as usize;
+        // The held part counts from the legato line's first note-on, the release from the note-off.
+        let (base, from) = if held { (0, self.carry) } else { (self.n, 0) };
+        let f = ((i - base + from) as u64 * 60 / sr) as u32;
+        let mut next = (base + ((f as u64 + 1) * sr).div_ceil(60) as usize).saturating_sub(from);
         if held {
             next = next.min(self.n);
         }
         self.next_frame = next.max(i + 1);
-        // Frames since the note-on (for sequences without a release, and the effects).
+        // Frames since the line's note-on (for sequences without a release), and since this
+        // note's own note-on (for the effects).
         let fh = if held { f } else { self.held_frames + f };
+        let fx_h = fh.saturating_sub((self.carry as u64 * 60 / sr) as u32);
         let at = |s: &super::instrument::Seq| if held || s.release().is_none() { s.held(fh) } else { s.released(f) };
         let fx = self.ev.fx;
         let mut vol = self.inst.vol.as_ref().map_or(1.0, |s| at(s).clamp(0, 15) as f32 / 15.0);
@@ -190,22 +258,12 @@ impl Active {
         if fx.sweep > 0 {
             // Up and back down: 0 1 2 3 2 1 0 ...
             const SWEEP: [usize; 6] = [0, 1, 2, 3, 2, 1];
-            duty = SWEEP[(duty + (fh / fx.sweep as u32) as usize) % 6];
+            duty = SWEEP[(duty + (fx_h / fx.sweep as u32) as usize) % 6];
         }
-        let mut cents = self.inst.pitch.as_ref().map_or(0.0, |s| at(s) as f32);
-        if fx.slide != 0 && fh < fx.slide_frames as u32 {
-            cents += fx.slide as f32 * 100.0 * (1.0 - fh as f32 / fx.slide_frames as f32);
-        }
-        if fx.fall != 0 {
-            let from = self.held_frames.saturating_sub(fx.fall_frames as u32);
-            if fh >= from {
-                let p = ((fh - from + 1) as f32 / fx.fall_frames.max(1) as f32).min(1.0);
-                cents += fx.fall as f32 * 100.0 * p * p;
-            }
-        }
+        let cents = self.inst.pitch.as_ref().map_or(0.0, |s| at(s) as f32);
         if fx.wah {
             // Open and close every 18 frames (3.3 Hz): loud and bright, then muted and thin.
-            let ph = (fh % 18) as f32 / 18.0;
+            let ph = (fx_h % 18) as f32 / 18.0;
             let open = 0.5 - 0.5 * (std::f32::consts::TAU * ph).cos();
             vol *= 0.35 + 0.65 * open;
             duty = if open > 0.55 { 2 } else { 0 };
@@ -229,13 +287,15 @@ struct ToneVoice {
     last: Option<(u64, u64)>,
     /// Instrument `k` (0: the built-in).
     insts: Vec<Tone>,
+    /// The legato line the last note left off ([`Fx::legato`]).
+    line: Option<Line>,
 }
 
 impl ToneVoice {
     fn new(ch: usize, gain: (f32, f32), instruments: &Instruments) -> Self {
         let n = instruments.defs.len() + 1;
         let insts = (0..n).map(|k| instruments.tone(ch, k as u8)).collect();
-        ToneVoice { ch, gain, phase: 0.0, pass_start: None, queue: VecDeque::with_capacity(QUEUE), active: None, last: None, insts }
+        ToneVoice { ch, gain, phase: 0.0, pass_start: None, queue: VecDeque::with_capacity(QUEUE), active: None, last: None, insts, line: None }
     }
 
     fn push(&mut self, ev: NoteEvent) {
@@ -265,6 +325,7 @@ impl ToneVoice {
             self.phase = 0.0;
         }
         let n = (ev.end - ev.start) as usize;
+        let line = self.line.take().filter(|l| ev.fx.legato && ev.tie && l.end == ev.start && l.inst == ev.inst);
         if n == 0 || ev.volume == 0 {
             return;
         }
@@ -300,7 +361,9 @@ impl ToneVoice {
         .filter(|_| k == 1);
         let sr_u = sr as u64;
         let tail = (inst.release_frames() as u64 * sr_u).div_ceil(60) as usize;
+        let bend = Bend::new(&ev.fx, n, sr);
         let modulated = inst.has_macros() || !ev.fx.is_none();
+        let carry = line.map_or(0, |l| l.carry);
         self.active = Some(Active {
             ev,
             n,
@@ -312,18 +375,20 @@ impl ToneVoice {
             attack,
             release,
             wobble,
-            env: 1.0,
-            lfo: 0.0,
+            env: line.map_or(1.0, |l| l.env),
+            lfo: line.map_or(0.0, |l| l.lfo),
             decay: inst.fade.map(|tau| (-1.0 / (tau * sr)).exp()),
             vib,
             wave,
             modulated,
             inst,
             next_frame: 0,
-            held_frames: (n as u64 * 60 / sr_u) as u32,
+            held_frames: ((n + carry) as u64 * 60 / sr_u) as u32,
             vol_mul: 1.0,
             duty: DUTIES[ev.duty as usize & 3],
             pitch_mul: 1.0,
+            carry,
+            bend,
         });
     }
 
@@ -362,7 +427,8 @@ impl ToneVoice {
                 Self::tone(a, self.gain, &mut self.phase, frames, i0, sr, (a_end - a.ev.start) as usize);
             }
             if stop == a_end {
-                self.active = None;
+                let a = self.active.take().unwrap();
+                self.line = a.ev.slur_out.then_some(Line { end: held_end, inst: a.ev.inst, carry: a.carry + a.n, lfo: a.lfo, env: a.env });
             }
             t = stop;
         }
@@ -394,6 +460,9 @@ impl ToneVoice {
         let step = ((ARP_STEP * sr) as usize).max(1);
         let amp = a.amp;
         let vib = a.vib;
+        let carry = a.carry;
+        let bend = a.bend;
+        let bends = !bend.is_none();
         let decay = a.decay;
         let modulated = a.modulated;
         let sr_u = sr as u64;
@@ -410,10 +479,13 @@ impl ToneVoice {
             if modulated {
                 dt *= a.pitch_mul;
             }
+            if bends {
+                dt *= bend.at(i);
+            }
             if let Some(vb) = vib
-                && i > vb.delay
+                && i + carry > vb.delay
             {
-                let depth = (((i - vb.delay) as f32) / vb.ramp).min(1.0) * vb.depth;
+                let depth = (((i + carry - vb.delay) as f32) / vb.ramp).min(1.0) * vb.depth;
                 advance(&mut a.lfo, vb.rate);
                 dt *= 1.0 + depth * (triangle_lfo(a.lfo));
             }
@@ -624,5 +696,110 @@ impl VoiceBank {
     /// Nothing queued or sounding.
     pub fn idle(&self) -> bool {
         self.tones.iter().all(|v| v.queue.is_empty() && v.active.is_none()) && self.drums.queue.is_empty() && self.drums.ringing.is_empty()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SR: u32 = 48_000;
+    /// Samples in a 60 Hz frame.
+    const F: u64 = 800;
+
+    fn note(start: u64, end: u64, n: u8, inst: u8, tie: bool, legato: bool, seq: u64) -> NoteEvent {
+        NoteEvent {
+            ch: 0,
+            bar: 0,
+            start,
+            end,
+            sound: Sound::Note(n),
+            volume: 15,
+            duty: 2,
+            tie,
+            slur_out: false,
+            gain: 1.0,
+            beat: 0.0,
+            phrase_beat: 0.0,
+            waltz: false,
+            loop_start: 0,
+            salt: 0,
+            tuning: Tuning::Equal,
+            anchor: 60,
+            inst,
+            fx: Fx { legato, ..Fx::NONE },
+            seq,
+        }
+    }
+
+    /// Pulse 1's output for `events`, `len` samples.
+    fn play(events: &[NoteEvent], len: usize) -> Vec<f32> {
+        let inst = Instruments::parse("swell : vol 3 3 3 3 3 3 3 3 3 3 15\npulse1 = default swell").unwrap();
+        let m = Medley::new(0, 16.0, Some(8.0));
+        let mut bank = VoiceBank::new(SR, [m.clone(), m], &inst);
+        for e in events {
+            bank.push(*e);
+        }
+        let mut out = vec![Frame::ZERO; len];
+        let mut t = 0;
+        for chunk in out.chunks_mut(MAX_SEGMENT) {
+            bank.render(chunk, t, 0);
+            t += chunk.len() as u64;
+        }
+        out.iter().map(|f| f.left).collect()
+    }
+
+    fn peak(x: &[f32]) -> f32 {
+        x.iter().fold(0.0f32, |m, v| m.max(v.abs()))
+    }
+
+    #[test]
+    fn a_legato_note_carries_on_the_breath_a_plain_slur_starts_over() {
+        // A grace note for 12 frames (its swell is full from frame 10), then the main note.
+        let swell = 1;
+        let grace = note(0, 12 * F, 71, swell, false, false, 1);
+        let at = 12 * F + 100..13 * F - 100;
+        let restarts = play(&[grace, note(12 * F, 40 * F, 72, swell, true, false, 2)], 40 * F as usize);
+        let carries = play(&[grace, note(12 * F, 40 * F, 72, swell, true, true, 2)], 40 * F as usize);
+        let (r, c) = (peak(&restarts[at.start as usize..at.end as usize]), peak(&carries[at.start as usize..at.end as usize]));
+        assert!(c > 4.0 * r, "the main note's first frame: legato {c}, plain slur {r}");
+        // And the full swell where both have got there.
+        let late = 30 * F as usize..31 * F as usize;
+        assert!((peak(&restarts[late.clone()]) - peak(&carries[late])).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_legato_line_breaks_on_a_new_attack_or_another_instrument() {
+        let swell = 1;
+        let grace = note(0, 12 * F, 71, swell, false, false, 1);
+        let first = 12 * F as usize + 100..13 * F as usize - 100;
+        let plain = play(&[grace, note(12 * F, 40 * F, 72, swell, false, true, 2)], 40 * F as usize);
+        let after_default = play(&[note(0, 12 * F, 71, 0, false, false, 1), note(12 * F, 40 * F, 72, swell, true, true, 2)], 40 * F as usize);
+        let restarts = play(&[grace, note(12 * F, 40 * F, 72, swell, true, false, 2)], 40 * F as usize);
+        let r = peak(&restarts[first.clone()]);
+        assert!((peak(&plain[first.clone()]) - r).abs() < 0.2 * r, "an attacked note starts its swell over");
+        assert!((peak(&after_default[first.clone()]) - r).abs() < 0.2 * r, "a new instrument starts its swell over");
+    }
+
+    #[test]
+    fn slides_and_falls_glide_sample_by_sample() {
+        let fx = Fx { slide: -2, slide_frames: 4, fall: -3, fall_frames: 6, ..Fx::NONE };
+        let n = 30 * F as usize;
+        let b = Bend::new(&fx, n, SR as f32);
+        let cents = |i: usize| 1200.0 * b.at(i).log2();
+        assert!((cents(0) + 200.0).abs() < 0.01, "starts two semitones under: {}", cents(0));
+        // Rising every sample of the slide (no frame-long steps), smoothly, and arriving.
+        for i in 1..4 * F as usize {
+            let d = cents(i) - cents(i - 1);
+            assert!(d > 0.0 && d < 0.2, "sample {i}: {d} cents");
+        }
+        assert_eq!(b.at(4 * F as usize), 1.0);
+        assert_eq!(b.at(20 * F as usize), 1.0);
+        // The fall: falling all through its last 6 frames (from a standstill), down three semitones.
+        let from = n - 6 * F as usize;
+        for i in from + 100..n {
+            assert!(cents(i) < cents(i - 1), "sample {i}");
+        }
+        assert!((cents(n - 1) + 300.0).abs() < 1.0, "{}", cents(n - 1));
     }
 }
