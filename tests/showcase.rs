@@ -1,14 +1,8 @@
 //! The showcase levels and the scripted runs their demo videos record:
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
-//! - Tilt! (`levels/solo/tilt.txt`, `scripts/tours/tilt.timeline`): Nat alone (`solo: nat`) in
-//!   a pinball machine of rubber ducks with no ground, two wrong doors and then the right one;
-//! - Up the Spout! (`levels/solo/spout.txt`, `scripts/tours/spout.timeline`): Nat alone up a
-//!   tower: a duck shaft through soap bricks past a trap door, fans, a beat bridge and a duck
-//!   chimney to toot up.
-//!
-//! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): the other eight levels each
-//!   have a run (`scripts/tours/<level>.timeline`) that clears it without a death.
+//! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): each of its ten levels has a
+//!   run (`scripts/tours/<level>.timeline`) that clears it without a death.
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -35,10 +29,6 @@ use nat_han_adventures::{
 
 const GAUNTLET: &str = include_str!("../levels/secret/gauntlet.txt");
 const GAUNTLET_TOUR: &str = include_str!("../scripts/tours/gauntlet.timeline");
-const TILT: &str = include_str!("../levels/solo/tilt.txt");
-const TILT_TOUR: &str = include_str!("../scripts/tours/tilt.timeline");
-const SPOUT: &str = include_str!("../levels/solo/spout.txt");
-const SPOUT_TOUR: &str = include_str!("../scripts/tours/spout.timeline");
 const FPS: u32 = 30;
 
 #[derive(Resource, Default)]
@@ -143,51 +133,6 @@ fn the_tour_beats_the_gauntlet_without_a_death() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 
-/// Tilt! passes the full check: the level checker steers through the ducks ([`validate`]'s
-/// pinball search) to the plunger and to the lures in the trap shaft and back out (a fixed
-/// jump can't), and Nat alone needs no intro, checkpoint or Han.
-#[test]
-fn tilt_is_a_valid_level() {
-    let level = Level::parse(TILT).unwrap();
-    let report = validate::check(&level, &validate::Options { dump: false });
-    assert!(report.errs.is_empty(), "{:#?}", report.errs);
-}
-
-/// Tilt!: no ground but the launch perch and the plunger's pedestal, only ducks. The tour
-/// climbs A into its spikes, then takes the wide shaft's first door (spikes again), then sinks
-/// to the bottom door and out onto the plunger. Nat alone: no Han.
-#[test]
-fn the_tour_finds_the_way_out_of_tilt_on_the_third_try() {
-    let level = Level::parse(TILT).unwrap();
-    assert!(level.solo);
-    let run = play(TILT, TILT_TOUR);
-    assert!(!run.han, "a solo level has no Han");
-    let cols: Vec<_> = run.deaths.iter().map(|d| d.1 as i32).collect();
-    assert!(matches!(cols[..], [7..=9, 35..=37]), "into A's spikes, then the first door's (s, col, row): {:?}", run.deaths);
-    let goal = run.goal.expect("the third try reaches the goal");
-    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
-}
-
-/// Up the Spout! passes the full check (the checker steers up both duck shafts).
-#[test]
-fn the_spout_is_a_valid_level() {
-    let level = Level::parse(SPOUT).unwrap();
-    assert!(level.solo);
-    let report = validate::check(&level, &validate::Options { dump: false });
-    assert!(report.errs.is_empty(), "{:#?}", report.errs);
-}
-
-/// Up the Spout!: the shaft carries Nat out of the trap door first, the second try toots past
-/// it and climbs the rest of the tower.
-#[test]
-fn the_tour_climbs_the_spout_on_the_second_try() {
-    let run = play(SPOUT, SPOUT_TOUR);
-    let cols: Vec<_> = run.deaths.iter().map(|d| d.1 as i32).collect();
-    assert!(matches!(cols[..], [1..=6]), "into the trap door's brushes (s, col, row): {:?}", run.deaths);
-    let goal = run.goal.expect("the second try reaches the goal");
-    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
-}
-
 /// A NAT ALONE level passes the full check, and its tour clears it without a death.
 macro_rules! nat_alone {
     ($valid:ident, $clean:ident, $file:literal) => {
@@ -216,6 +161,8 @@ macro_rules! nat_alone {
 nat_alone!(breezy_is_a_valid_level, the_tour_clears_breezy, "breezy");
 nat_alone!(bouncy_is_a_valid_level, the_tour_clears_bouncy, "bouncy");
 nat_alone!(brush_is_a_valid_level, the_tour_clears_brush, "brush");
+nat_alone!(spout_is_a_valid_level, the_tour_clears_spout, "spout");
+nat_alone!(tilt_is_a_valid_level, the_tour_clears_tilt, "tilt");
 nat_alone!(wind_is_a_valid_level, the_tour_clears_wind, "wind");
 nat_alone!(disco_is_a_valid_level, the_tour_clears_disco, "disco");
 nat_alone!(spin_is_a_valid_level, the_tour_clears_spin, "spin");
