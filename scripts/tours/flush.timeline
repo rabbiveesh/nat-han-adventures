@@ -38,4 +38,12 @@ hold Left 0.08
 hold Left Space 0.1
 hold Left 0.1
 hold Left 2.5
-wait 1
+hold Left 0.6
+at 20.6
+hold Left 3.0
+hold Left 2.2
+hold Right 0.1
+wait 0.3
+hold Left 0.3
+hold Left 3.85
+wait 2
