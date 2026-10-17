@@ -1,3 +1,6 @@
+# Brush Hour (levels/solo/brush.txt): down the stair-well's brush-tipped ledges, along the belts,
+# up the fan relays; then the gallery (hop the posts, onto the tall one and off; low hops onto
+# the low posts under the ceiling fans), down the drain's belt ledges and through the wash.
 wait 0.3
 hold Right 0.75
 wait 0.5
@@ -31,5 +34,64 @@ hold Right 0.2
 wait 0.4
 hold Left 0.3
 wait 0.4
-hold Right 2
-wait 1
+hold Right 2.85
+hold Right Space 0.3
+hold Right 0.2
+hold Right 0.1
+hold Right Space 0.3
+wait 0.3
+hold Right Space 200ms
+hold Right 0.1
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.2
+hold Right 0.7
+hold Right Space 200ms
+hold Right 0.2
+hold Right Space 200ms
+hold Right 0.1
+hold Right 0.3
+hold Right Space 200ms
+hold Right 0.2
+hold Right Space 200ms
+hold Right 0.1
+hold Right 0.7
+wait 0.2
+hold Right 0.15
+hold Right Space 200ms
+hold Right 0.3
+wait 0.1
+hold Left 0.1
+hold Left Space 100ms
+hold Left 0.3
+wait 0.1
+hold Right 0.1
+hold Right Space 100ms
+hold Right 0.3
+wait 0.1
+hold Left 0.1
+hold Left Space 100ms
+hold Left 0.3
+wait 0.1
+hold Right 0.05
+hold Right Space 100ms
+hold Right 0.2
+wait 0.1
+hold Right 0.8
+hold Right Space 300ms
+hold Right 0.2
+hold Right 0.5
+hold Right Space 300ms
+wait 0.1
+hold Right Space 300ms
+hold Right 0.2
+hold Right 0.2
+hold Right Space 300ms
+hold Right 0.3
+hold Right 0.5
+hold Right Space 300ms
+wait 0.1
+hold Right Space 300ms
+hold Right 0.2
+hold Right 1.5
+wait 1.5
