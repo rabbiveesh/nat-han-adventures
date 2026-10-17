@@ -631,7 +631,8 @@ pub(super) fn think(
     let zoned = |p: Vec2| level.in_band_zone(level.cell_at(p));
     let in_zone = zoned(pos.0) || zoned(nat.pos);
     match brain.mode {
-        HanMode::Follow if !nat_dead && !nat.grounded && nat_above && brain.winded == 0.0 => {
+        // (Not while he's charging on his own: Side B, the double game.)
+        HanMode::Follow if !nat_dead && !nat.grounded && nat_above && brain.winded == 0.0 && brain.charge.is_none() => {
             let coming = nat.vel.y < 0.0 || in_chasm;
             let near = dx_nat.abs() < intercept_range(e);
             if coming && near && !in_zone && (in_chasm || doomed(level, nat.pos, nat.vel.x)) {

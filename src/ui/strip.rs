@@ -221,10 +221,11 @@ pub fn strip_view(meters: &crate::audio::director::Meters, progress: &Progress) 
     StripView { shown, meters: m, ready }
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn update_strip(
     meters: Option<Res<BandMeters>>,
     progress: Res<Progress>,
+    duo: Option<Res<crate::game::duo::Duo>>,
     mut strip: Query<&mut Visibility, (With<Strip>, Without<CallMark>)>,
     mut nodes: Query<(&mut Node, Option<&Cell>, Option<&CallSlot>, Option<&Pips>, Option<&ModeTimer>, Has<Divider>), Without<TimerFill>>,
     mut cells: Query<(&Cell, &mut BackgroundColor, &mut BorderColor), (Without<Pip>, Without<TimerFill>)>,
@@ -233,7 +234,12 @@ fn update_strip(
     mut marks: Query<(&CallMark, &mut Visibility), Without<Strip>>,
 ) {
     let m = meters.map(|m| m.0).unwrap_or_default();
-    let v = strip_view(&m, &progress);
+    let mut v = strip_view(&m, &progress);
+    // (The double game is post-game: every counter's been taught by then.)
+    if duo.is_some() {
+        v.shown[..3].fill(true);
+        v.ready = m.ready.and_then(|h| SUMMON_ORDER.iter().position(|&s| s == h)).map(|i| BandCounter::ALL[i]);
+    }
     let any = v.shown.iter().any(|&s| s);
     for mut vis in &mut strip {
         vis.set_if_neq(if any { Visibility::Inherited } else { Visibility::Hidden });

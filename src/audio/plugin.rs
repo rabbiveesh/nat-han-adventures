@@ -495,7 +495,7 @@ fn direct(
     mut named_calls: MessageReader<crate::game::sideb::CallMode>,
     mut meters: ResMut<BandMeters>,
     mut groove_for_grip: Option<ResMut<Groove>>,
-    side: Option<Res<crate::game::sideb::SideB>>,
+    (side, duo): (Option<Res<crate::game::sideb::SideB>>, Option<Res<crate::game::duo::Duo>>),
 ) {
     let playing = *state.get() == AppState::Playing;
     // (A free play Side B room starts the band afresh for Han, as a rewind does.)
@@ -537,6 +537,10 @@ fn direct(
         decision = Some(d.band.start(now));
         d.melt_until = None;
         level_start = !restarted;
+        // The double game's calls hold a few bars (a story call would last the level).
+        if duo.is_some() {
+            d.band.hold_secs = Some(crate::game::duo::HOLD_SECS);
+        }
     }
     d.was_playing = playing;
     if !playing {

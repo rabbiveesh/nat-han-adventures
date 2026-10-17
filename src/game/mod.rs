@@ -12,6 +12,7 @@ use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
 pub mod adaptive;
+pub mod duo;
 mod groove;
 mod han;
 mod hazards;
@@ -120,6 +121,7 @@ pub fn plugin(app: &mut App) {
             han::plugin,
             adaptive::plugin,
             sideb::plugin,
+            duo::plugin,
         ));
 }
 

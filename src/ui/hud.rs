@@ -215,6 +215,7 @@ fn update_hud(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_intro(
     mut commands: Commands,
     font: Res<UiFont>,
@@ -223,12 +224,18 @@ fn spawn_intro(
     free: Option<Res<crate::freeplay::FreePlayRun>>,
     side_b: Option<Res<crate::game::sideb::SideB>>,
     generated: Option<Res<crate::game::GeneratedLevel>>,
+    duo: Option<Res<crate::game::duo::Duo>>,
 ) {
     let f = &*font;
     let world = free.as_ref().map_or_else(|| levels.0.get(current.0).map_or(1, |l| l.world), |r| r.world);
+    let world = match (&duo, &generated) {
+        (Some(_), Some(g)) => g.0.world,
+        _ => world,
+    };
     let (title, name) = match (&free, &side_b, &generated) {
         (Some(r), _, _) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
         (None, Some(s), Some(g)) => (format!("SIDE B {}", s.level + 1), g.0.name.to_uppercase()),
+        (None, None, Some(g)) if duo.is_some() => ("NAT + HAN".to_string(), g.0.name.to_uppercase()),
         _ => (format!("LEVEL {}", current.0 + 1), level_name(&levels, current.0)),
     };
     commands

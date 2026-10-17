@@ -80,7 +80,7 @@ fn spawn_camera(mut commands: Commands) {
     ));
 }
 
-#[allow(clippy::type_complexity)]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn follow_player(
     time: Res<Time>,
     groove: Option<Res<Groove>>,
@@ -89,7 +89,8 @@ fn follow_player(
     player: Query<(&Transform, &PlayerControl, Ref<Player>), Without<GameCamera>>,
     han: Query<(&Transform, &crate::game::Body), (With<crate::game::Han>, Without<GameCamera>, Without<Player>)>,
     side_b: Option<Res<crate::game::sideb::SideB>>,
-    mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
+    duo: Option<Res<crate::game::duo::Duo>>,
+    mut cam: Query<(&mut Transform, &mut GameCamera, &mut Projection)>,
 ) {
     let (Some(active), Ok((ptf, ctl, added))) = (active, player.single()) else { return };
     // Side B: Nat's off screen; the camera's on Han.
@@ -97,8 +98,15 @@ fn follow_player(
         (Some(_), Ok((htf, hb))) => (htf, if hb.vel.x < -1.0 { -1.0 } else { 1.0 }),
         _ => (ptf, ctl.facing),
     };
-    let Ok((mut tf, mut gc, proj)) = cam.single_mut() else { return };
-    let half = match proj {
+    let Ok((mut tf, mut gc, mut proj)) = cam.single_mut() else { return };
+    // The double game shows the whole level's height (both storeys) and rides Han.
+    let view_height = if duo.is_some() { crate::game::duo::VIEW_HEIGHT } else { VIEW_HEIGHT };
+    if let Projection::Orthographic(o) = &mut *proj
+        && !matches!(o.scaling_mode, ScalingMode::FixedVertical { viewport_height } if viewport_height == view_height)
+    {
+        o.scaling_mode = ScalingMode::FixedVertical { viewport_height: view_height };
+    }
+    let half = match &*proj {
         Projection::Orthographic(o) if o.area.width() > 0.0 => o.area.half_size(),
         _ => Vec2::new(VIEW_HEIGHT * 16.0 / 9.0, VIEW_HEIGHT) / 2.0,
     };
@@ -109,16 +117,24 @@ fn follow_player(
     gc.look += (facing * LOOK_AHEAD - gc.look) * k(2.5);
     let touch = touch.is_some_and(|t| t.0);
     let lift = if touch { 16.0 + TOUCH_LIFT } else { 16.0 };
-    let target = ptf.translation.truncate() + Vec2::new(gc.look, lift);
+    let mut target = ptf.translation.truncate() + Vec2::new(gc.look, lift);
+    if let Some(d) = &duo {
+        target = Vec2::new(d.view_x, active.level.size_px().y / 2.0);
+        gc.look = 0.0;
+    }
     let mut p = tf.translation.truncate() - gc.wobble;
     p.x += (target.x - p.x) * k(6.0);
     p.y += (target.y - p.y) * k(4.0);
+    if duo.is_some() {
+        // (Already smooth, and the window's edges are rules: no lag.)
+        p = target;
+    }
 
     let size = active.level.size_px();
     let clamp = |v: f32, half: f32, size: f32, margin: f32| {
         if size + 2.0 * margin <= half * 2.0 { size / 2.0 } else { v.clamp(half - margin, size - half + margin) }
     };
-    let margin = if touch { TOUCH_MARGIN } else { Vec2::ZERO };
+    let margin = if touch && duo.is_none() { TOUCH_MARGIN } else { Vec2::ZERO };
     p.x = clamp(p.x, half.x, size.x, margin.x);
     // (Only below the floor: the top keeps its edge.)
     p.y = if size.y + margin.y <= half.y * 2.0 {
@@ -157,13 +173,21 @@ fn spawn_backdrop(mut commands: Commands, sprites: Res<Sprites>, active: Res<Act
 }
 
 fn scroll_backdrop(
-    cam: Query<(&Transform, &GameCamera), Without<Backdrop>>,
+    cam: Query<(&Transform, &GameCamera, &Projection), Without<Backdrop>>,
     mut q: Query<(&Backdrop, &mut Transform)>,
 ) {
-    let Ok((cam, gc)) = cam.single() else { return };
+    let Ok((cam, gc, proj)) = cam.single() else { return };
+    // (A taller view, the double game's, gets a bigger backdrop.)
+    let tall = match proj {
+        Projection::Orthographic(o) => match o.scaling_mode {
+            ScalingMode::FixedVertical { viewport_height } => viewport_height / VIEW_HEIGHT,
+            _ => 1.0,
+        },
+        _ => 1.0,
+    };
     // A rolling camera sees past the backdrop's top and bottom at the corners: grow it a bit.
-    let scale = 1.0 + gc.seasick * 0.06;
-    let w = 256.0 * BACKDROP_SCALE;
+    let scale = tall * (1.0 + gc.seasick * 0.06);
+    let w = 256.0 * BACKDROP_SCALE * tall;
     let c = cam.translation;
     // Tiles scroll at PARALLAX of the camera speed; wrap so copies always cover the view.
     let shift = (c.x * PARALLAX).rem_euclid(w);

@@ -14,7 +14,8 @@ const HEADERS: [&str; 5] = ["FLUSHED IT!", "WHAT A RELIEF!", "PLOP-TASTIC!", "SM
 
 pub fn plugin(app: &mut App) {
     // Free play has its own card (`crate::freeplay::ui`) and records nothing here.
-    let story = not(resource_exists::<crate::freeplay::FreePlayRun>);
+    // (Nor does the double game: `ui::duo`.)
+    let story = not(resource_exists::<crate::freeplay::FreePlayRun>).and_then(not(resource_exists::<crate::game::duo::Duo>));
     app.add_systems(OnEnter(AppState::LevelComplete), (record, spawn).chain().run_if(story.clone()))
         .add_systems(Update, input.run_if(in_state(AppState::LevelComplete).and_then(story)));
 }

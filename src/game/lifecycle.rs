@@ -85,6 +85,7 @@ fn level_hotkeys(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn restart_level(
     mut requests: MessageReader<RestartLevel>,
     mut commands: Commands,
@@ -93,6 +94,7 @@ fn restart_level(
     current: Res<CurrentLevel>,
     generated: Option<Res<GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    duo: Option<Res<super::duo::Duo>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
     if requests.read().count() == 0 {
@@ -104,6 +106,11 @@ fn restart_level(
         // (A free play Side B room rewinds itself: `sideb`.)
         (Some(_), Some(s)) if s.room.is_some() => return,
         (Some(g), Some(_)) => {
+            load(&mut commands, g.0.clone(), index, &old);
+            return;
+        }
+        // (The double game reloads its level as a story level does.)
+        (Some(g), None) if duo.is_some() => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }

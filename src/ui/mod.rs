@@ -14,6 +14,7 @@ use crate::audio::Sfx;
 use crate::events::PlaySfx;
 
 mod bubble;
+mod duo;
 mod hud;
 mod lesson;
 mod level_select;
@@ -86,6 +87,7 @@ pub fn plugin(app: &mut App) {
             hud::plugin,
             strip::plugin,
             sideb::plugin,
+            duo::plugin,
             lesson::plugin,
             pause::plugin,
             results::plugin,

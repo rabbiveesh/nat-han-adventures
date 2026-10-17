@@ -577,7 +577,7 @@ fn han_grabs_nuggets(
 }
 
 /// Is a box at `pos` (half extents `half`) in a spike tile's deadly half?
-fn on_spikes(level: &Level, pos: Vec2, half: Vec2) -> bool {
+pub(crate) fn on_spikes(level: &Level, pos: Vec2, half: Vec2) -> bool {
     let shrink = Vec2::splat(super::FORGIVE);
     let (min, max) = (pos - half + shrink, pos + half - shrink);
     let (c0, r1) = level.cell_at(min);
