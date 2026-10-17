@@ -88,7 +88,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,
   `levels/solo/`), the gadget tiles sideways and upside down too (wall/ceiling fans `e` `w` `!`,
   wall/ceiling cushions `b` `d` `m`, wall brushes `|`). A `GeneratedLevel` like Side B, its own
-  `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once level 10 is cleared,
+  `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once Side B's B10 is cleared (the third world),
   Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
   run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
   tracing knobs for writing one).

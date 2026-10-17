@@ -6,8 +6,8 @@
 //! Wired like Side B: the level is a [`GeneratedLevel`] (the story's levels, saves and assist
 //! dial aren't touched; [`AssistMode::Manual`]) and [`SoloRun`] says which one. The results
 //! card records it in [`Progress`](crate::save::Progress)'s `solo_*` and goes on to the next.
-//! Ways in: NAT ALONE on the title once the story's cleared, Down Down Up Up on the title,
-//! `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`.
+//! The third world: NAT ALONE shows on the title once Side B's cleared. Other ways in: Down
+//! Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`.
 
 use bevy::prelude::*;
 

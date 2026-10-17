@@ -25,13 +25,17 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 struct TitleScreen;
 
-/// The menu: story mode, free play, Side B and NAT ALONE (the last two only shown once
-/// unlocked).
+/// The menu: story mode, free play, Side B (once the story's cleared) and NAT ALONE (once
+/// Side B's cleared).
 const OPTIONS: [&str; 4] = ["STORY", "FREE PLAY", "SIDE B", "NAT ALONE"];
 
 /// How many of `OPTIONS` the title shows.
 fn shown(progress: Option<&Progress>) -> usize {
-    if progress.is_some_and(Progress::side_b_unlocked) { 4 } else { 2 }
+    match progress {
+        Some(p) if p.solo_world_unlocked() => 4,
+        Some(p) if p.side_b_unlocked() => 3,
+        _ => 2,
+    }
 }
 
 #[derive(Resource, Default)]

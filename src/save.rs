@@ -234,6 +234,12 @@ impl Progress {
         self.best_nuggets[LEVEL_COUNT - 1].is_some()
     }
 
+    /// NAT ALONE (`game::solo`), the third world, opens on the title once Side B's last level
+    /// is cleared.
+    pub fn solo_world_unlocked(&self) -> bool {
+        self.side_b_rewinds[SIDE_B_COUNT - 1].is_some()
+    }
+
     /// Tiny line-based text format:
     /// ```text
     /// nat-han-adventures-progress 1
@@ -660,8 +666,10 @@ mod tests {
         assert!(!p.record_side_b(0, 20), "more rewinds is no best");
         assert!(p.record_side_b(0, 3));
         assert_eq!((p.side_b_unlocked, p.side_b_rewinds[0]), (2, Some(3)));
+        assert!(!p.solo_world_unlocked());
         p.record_side_b(SIDE_B_COUNT - 1, 0);
         assert_eq!(p.side_b_unlocked, SIDE_B_COUNT);
+        assert!(p.solo_world_unlocked(), "clearing Side B opens NAT ALONE");
         assert_eq!(p.unlocked, 1, "the story's untouched");
         assert_eq!(Progress::from_text(&p.to_text()).unwrap(), p, "it survives a save");
     }
