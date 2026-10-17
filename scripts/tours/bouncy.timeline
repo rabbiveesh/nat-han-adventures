@@ -1,3 +1,6 @@
+# Bouncy Castle (levels/solo/bouncy.txt): the first fling, the shelf, the lid, the chimney; then
+# back into the wall cushion to fly the moat flat under the gate, the castle's three floors
+# (jump into each end's cushion to be flung up a floor) and the trampolines to the plunger.
 wait 0.3
 hold Left 0.2
 hold Left Space 250ms
@@ -24,5 +27,34 @@ hold Right 1.5
 wait 0.2
 hold Right Space 300ms
 wait 0.8
-hold Right 1.5
-wait 2
+hold Right 0.7
+wait 0.2
+hold Left 0.3
+hold Right 0.5
+wait 0.3
+hold Right 0.4
+hold Right Space 0.3
+wait 0
+hold Right 0.2
+hold Right Space 0.3
+hold Right 0.1
+hold Right 2.8
+hold Right Space 0.3
+hold Right 0.1
+hold Left 0.5
+wait 0.3
+hold Left 1.7
+hold Left Space 0.2
+hold Left 0.1
+hold Right 0.5
+wait 0.3
+hold Right 2.2
+wait 0.1
+hold Right 0.6
+wait 0.1
+hold Right 0.6
+wait 0.1
+hold Right 0.6
+wait 0.5
+hold Right 1
+wait 1

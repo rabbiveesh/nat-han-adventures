@@ -18,4 +18,44 @@ hold Left Space 0.25
 hold Left 0.2
 hold Left Space 0.25
 hold Left 1.4
+wait 0.3
+hold Right 0.12
+wait 1.2
+hold Right Space 0.3
+hold Right 0.3
+hold Right 0.7
+hold Right Space 0.3
+hold Right 0.1
+hold Right Space 0.3
+hold Right 0.1
+hold Left 0.3
+hold Right 0.3
+hold Right 1.65
+hold Right Space 0.15
+hold Right 0.05
+wait 0.6
+hold Left Space 0.3
+hold Left 0.25
+wait 0.5
+hold Left Space 0.2
+hold Left 0.15
+wait 0.1
+hold Left 0.3
+wait 0.1
+hold Left 0.3
+wait 0.1
+hold Left 0.3
+wait 0.2
+hold Left 0.35
+hold Left 0.2
+hold Left Space 0.3
+hold Left 0.05
+wait 0.3
+hold Right 0.2
+hold Left 0.4
+hold Left Space 0.3
+hold Left 0.05
+wait 0.3
+hold Right 0.2
+hold Left 0.6
 wait 1

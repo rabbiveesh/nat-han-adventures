@@ -20,23 +20,70 @@ hold Right Space 200ms
 hold Right 0.6
 wait 0.6
 hold Right 2.4
-wait 0.0
-hold Right 0.4
-at 12.6
+hold Right 0.5
+hold Right Space 0.25
+hold Right 0.15
+at 13.4
+hold Right Space 0.3
+hold Right 0.15
+at 14.65
+hold Right Space 0.3
+hold Right 0.15
+at 15.9
+hold Right Space 0.3
+hold Right 0.15
+at 16.4
+hold Right Space 0.3
+hold Right 0.1
+hold Right Space 0.3
+hold Right 0.1
+at 17.6
+wait 0.05
+at 18.5
+hold Right Space 0.3
+hold Right 0.15
+at 19.75
+hold Right Space 0.3
+hold Right 0.15
+at 20.6
+hold Right Space 0.3
+hold Right 0.8
+hold Right 0.3
+at 22.6
+hold Right Space 0.3
+hold Right 0.0
+at 26.2
+hold Right Space 0.25
+hold Right 0.2
+at 28.05
+hold Right 0.5
+at 29.55
+hold Right 0.55
+at 31.05
+hold Right 0.55
+at 32.55
+hold Right 0.55
+at 34.05
+hold Right 0.55
+hold Right 0.6
+at 37.23
+hold Right 0.35
+at 37.60
 hold Right Space 0.15
 hold Right 0.2
-at 13.8
+at 38.80
 hold Right Space 0.25
 hold Right 0.0
-at 14.9
+at 39.90
 hold Left Space 0.15
 hold Left 0.0
-at 16.3
+at 41.30
 hold Right Space 0.15
 hold Right 0.0
-at 17.25
+at 42.25
 hold Left Space 0.15
 hold Left 0.0
-at 17.6
+at 42.60
 hold Right Space 0.0
 hold Right 1.8
+wait 1
