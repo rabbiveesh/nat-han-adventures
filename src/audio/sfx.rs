@@ -18,12 +18,12 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::HanBlip => 0.6,
         Sfx::Jump | Sfx::Land => 0.75,
         Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect => 0.85,
-        Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing => 1.0,
+        Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing | Sfx::Crash => 1.0,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 11] = [
+    pub const ALL: [Sfx; 12] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -35,6 +35,7 @@ impl Sfx {
         Sfx::MenuSelect,
         Sfx::HanBlip,
         Sfx::Boing,
+        Sfx::Crash,
     ];
 }
 
@@ -55,6 +56,7 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::MenuSelect => menu_select(),
         Sfx::HanBlip => return han_blip(0),
         Sfx::Boing => boing(),
+        Sfx::Crash => crash(),
     };
     finish(mono, level(sfx))
 }
@@ -189,6 +191,25 @@ fn boing() -> Vec<f32> {
             let f = exp_sweep(110.0, 440.0, (t * 2.2).min(1.0)) * (1.0 + wobble);
             let twang = o.tri(f) * 0.9 + o.pulse(f * 2.0, 0.25) * 0.15 * (1.0 - t);
             twang * env_ar(i, n, 0.004, 0.25)
+        })
+        .collect()
+}
+
+/// A big cymbal crash over a booming drum: bright noise that rings out, and a thump.
+fn crash() -> Vec<f32> {
+    let n = secs(1.8);
+    let mut o = Osc::default();
+    let mut noise = Lfsr::with_seed(0x5eed);
+    let (mut lp, mut body) = (LowPass(0.0), LowPass(0.0));
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let x = noise.next(44_000.0, false);
+            // High-passed: the noise minus its own low end, ringing out slowly.
+            let shimmer = (x - lp.run(x, 3_000.0)) * (-t * 3.2).exp();
+            let wash = body.run(x, 5_000.0) * 0.35 * (-t * 6.0).exp();
+            let boom = o.tri(exp_sweep(110.0, 38.0, (t * 6.0).min(1.0))) * 0.9 * (-t * 9.0).exp();
+            (shimmer + wash + boom) * env_ar(i, n, 0.001, 0.2)
         })
         .collect()
 }

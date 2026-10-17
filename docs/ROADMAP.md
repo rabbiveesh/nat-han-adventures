@@ -60,6 +60,10 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
   capture (`scripts/record-run --capture`), headless BRP driving (`scripts/headless-run`).
 
 ## In flight
+- **Encores gone wrong** (prototype, World 1 only): no boss fights; each world's last level
+  ends in a playable encore lap that goes wrong and sends Nat into the next world
+  (`src/game/encore.rs`). World 1: the closing cymbal knocks Nat into the Golden Throne, Han's
+  plunger misses, FLUSH. Side B, World 3 and World 4 gags are agreed but not built.
 Nothing: everything from the original session is merged. Deadly spray cans landed (a can's tile
 kills while firing; Han's plug covers it; free-play waltz rooms are now glide launches),
 and the deep checker's chain model now uses Han's real head rules (`KNOWN_BYPASSES` is empty).

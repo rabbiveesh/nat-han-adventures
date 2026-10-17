@@ -74,7 +74,15 @@ fn level_hotkeys(
     mut call: MessageWriter<crate::events::CallBand>,
     mut next: ResMut<NextState<PlayState>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    encore: Option<Res<super::encore::Encore>>,
 ) {
+    // (The encore can't be restarted, and Down is its free call: `encore`.)
+    if encore.is_some() {
+        if input.just_pressed(&Action::Back) {
+            next.set(PlayState::Paused);
+        }
+        return;
+    }
     if input.just_pressed(&Action::Restart) {
         restart.write(RestartLevel);
     } else if input.just_pressed(&Action::Back) {
@@ -285,7 +293,7 @@ fn spawn_actors(commands: &mut Commands, level: &Level) {
     ));
 
     // Player and Han.
-    let start = stand_pos(level, level.start.0, level.start.1);
+    let start = dev_start(level).unwrap_or_else(|| stand_pos(level, level.start.0, level.start.1));
     commands.spawn((
         Name::new("Player"),
         LevelEntity,
@@ -311,6 +319,24 @@ fn spawn_actors(commands: &mut Commands, level: &Level) {
         PrevPos(han),
         Transform::from_translation(han.extend(4.0)),
     ));
+}
+
+/// `NATHAN_START=<col>` (native dev): start on the highest floor in that column instead (to
+/// record a level's end, say).
+fn dev_start(level: &Level) -> Option<Vec2> {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let col: usize = std::env::var("NATHAN_START").ok()?.parse().ok()?;
+        let row = (1..level.height).find(|&r| {
+            level.tile(col as i32, r as i32).is_solid() && level.tile(col as i32, r as i32 - 1) == Tile::Empty
+        })?;
+        Some(stand_pos(level, col, row - 1))
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = level;
+        None
+    }
 }
 
 pub(super) fn tick_clocks(
