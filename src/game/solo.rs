@@ -42,6 +42,11 @@ pub fn name(n: usize) -> &'static str {
     SOLO_SOURCES[n].lines().find_map(|l| l.strip_prefix("name:")).map_or("???", str::trim)
 }
 
+/// The first NAT ALONE level (0-based) whose map has `tile` in it: the one that teaches it.
+pub fn teaches(tile: char) -> Option<usize> {
+    SOLO_SOURCES.iter().position(|src| src.split_once("\n---\n").is_some_and(|(_, map)| map.contains(tile)))
+}
+
 /// Level `n`, parsed.
 pub fn load(n: usize) -> Level {
     Level::parse(SOLO_SOURCES[n]).unwrap_or_else(|e| panic!("NAT ALONE level {}: {e}", n + 1))
@@ -103,5 +108,13 @@ mod tests {
             assert!(level.solo, "{} has no `solo: nat`", name(n));
             assert_eq!(level.name, name(n));
         }
+    }
+
+    #[test]
+    fn every_sideways_tile_is_taught() {
+        for tile in ['e', 'w', '!', 'b', 'd', 'm', '|'] {
+            assert!(teaches(tile).is_some(), "no NAT ALONE level has {tile}");
+        }
+        assert_eq!(teaches('e'), Some(0), "Breezy Does It opens with the wall fans");
     }
 }

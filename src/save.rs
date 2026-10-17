@@ -230,6 +230,11 @@ impl Progress {
         self.side_b_rewinds.iter().filter(|r| r.is_some()).count()
     }
 
+    /// NAT ALONE levels cleared (free play's gadget world rooms use the tiles they taught).
+    pub fn solo_cleared(&self) -> usize {
+        self.solo_nuggets.iter().filter(|n| n.is_some()).count()
+    }
+
     pub fn side_b_unlocked(&self) -> bool {
         self.best_nuggets[LEVEL_COUNT - 1].is_some()
     }
