@@ -6,7 +6,7 @@ use super::song::SongError;
 use crate::audio::Music;
 
 /// `(file stem, text)` of every song.
-pub const FILES: [(&str, &str); 8] = [
+pub const FILES: [(&str, &str); 12] = [
     ("sweet_georgia_brown", include_str!("../../../music/sweet_georgia_brown.song")),
     ("the_entertainer", include_str!("../../../music/the_entertainer.song")),
     ("tiger_rag", include_str!("../../../music/tiger_rag.song")),
@@ -15,6 +15,10 @@ pub const FILES: [(&str, &str); 8] = [
     ("i_got_rhythm", include_str!("../../../music/i_got_rhythm.song")),
     ("shave_and_a_haircut", include_str!("../../../music/shave_and_a_haircut.song")),
     ("when_the_saints", include_str!("../../../music/when_the_saints.song")),
+    ("embraceable_you", include_str!("../../../music/embraceable_you.song")),
+    ("after_youve_gone", include_str!("../../../music/after_youve_gone.song")),
+    ("sunny_side", include_str!("../../../music/sunny_side.song")),
+    ("body_and_soul", include_str!("../../../music/body_and_soul.song")),
 ];
 
 /// The file for a piece of the game's music.
@@ -28,6 +32,10 @@ pub fn stem(music: Music) -> &'static str {
         Music::World(_) => "i_got_rhythm",
         Music::LevelClear => "shave_and_a_haircut",
         Music::Victory => "when_the_saints",
+        Music::SideB(1) => "embraceable_you",
+        Music::SideB(2) => "after_youve_gone",
+        Music::SideB(3) => "sunny_side",
+        Music::SideB(_) => "body_and_soul",
     }
 }
 

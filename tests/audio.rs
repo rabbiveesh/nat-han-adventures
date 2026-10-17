@@ -197,6 +197,16 @@ fn every_song_renders_cleanly_in_the_medley() {
     assert!(secs < 2.0 * budget_secs(), "medley + plain renders took {secs:.2}s");
 }
 
+/// Side B's levels are timed to world 2's tune (calls land on bar lines, and the routes in
+/// `tests/side_b.rs` were found at its tempo), so its own tunes keep that tempo.
+#[test]
+fn side_b_tunes_keep_the_tempo_its_levels_were_built_for() {
+    let built_for = song(Music::World(2)).bpm;
+    for t in 1..=Music::SIDE_B_TUNES {
+        assert_eq!(song(Music::SideB(t)).bpm, built_for, "Side B tune {t}");
+    }
+}
+
 /// Every real song's melody through every reharmonizing filter: same rhythm, in range, close
 /// to the written line, same contour; melodic minor in the scale, quartal free of strong avoid
 /// notes, Coltrane untouched where the chart is.
@@ -473,6 +483,23 @@ mod plugin {
         assert_eq!(app.world().resource::<LivePlayer>().filters(), Some(Filters::default()));
     }
 
+    /// Side B plays its own tunes, a run of levels to each, and a level's tune comes back
+    /// when Side B's gone (a free play room handed back to Nat).
+    #[test]
+    fn side_b_plays_its_own_tunes() {
+        use nat_han_adventures::game::sideb::SideB;
+        let mut app = app();
+        app.world_mut().insert_resource(SideB::new(0, Vec::new()));
+        go(&mut app, AppState::Playing);
+        assert_eq!(playing(&app), Some(Music::SideB(1)));
+        app.world_mut().insert_resource(SideB::new(9, Vec::new()));
+        app.update();
+        assert_eq!(playing(&app), Some(Music::SideB(Music::SIDE_B_TUNES)));
+        app.world_mut().remove_resource::<SideB>();
+        app.update();
+        assert!(matches!(playing(&app), Some(Music::World(_))), "{:?}", playing(&app));
+    }
+
     /// The player's AUDIO DELAY steps the beat back by exactly that much, all the way through
     /// the bar: no freezing at the bar line while the music before it is still being heard.
     #[test]
@@ -649,5 +676,37 @@ mod plugin {
         }
         let after = app.world().resource::<LivePlayer>().freedom().unwrap();
         assert!(after.lead < start.lead && after.dynamics <= start.dynamics, "{start:?} → {after:?}");
+    }
+
+    /// Side B's band starts hotter than the story's and still follows play: a rewind cools it, a
+    /// call heats it; back in a story level it follows the player again.
+    #[test]
+    fn side_b_raises_the_bands_baseline() {
+        use nat_han_adventures::game::sideb::SideB;
+        let freedom = |app: &App| app.world().resource::<LivePlayer>().freedom().expect("posted").lead;
+        let mut story = app();
+        story.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        go(&mut story, AppState::Playing);
+        story.update();
+        let story_start = freedom(&story);
+
+        let mut app = app();
+        app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        app.world_mut().insert_resource(SideB::new(0, Vec::new()));
+        go(&mut app, AppState::Playing);
+        app.update();
+        let start = freedom(&app);
+        assert!(start > story_start + 0.1, "Side B {start} vs story {story_start}");
+        app.world_mut().resource_mut::<SideB>().rewinds = 2;
+        app.update();
+        let cooled = freedom(&app);
+        assert!(cooled < start && cooled > story_start, "rewound: {cooled}");
+        app.world_mut().resource_mut::<SideB>().calls = 3;
+        app.update();
+        assert!(freedom(&app) > cooled, "a call heats it back up");
+        app.world_mut().remove_resource::<SideB>();
+        app.update();
+        app.update();
+        assert!(freedom(&app) < cooled, "the story's band again");
     }
 }

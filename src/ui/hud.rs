@@ -197,9 +197,10 @@ fn update_hud(
     is_side_b: Option<Res<crate::game::sideb::SideB>>,
     mut q: Query<(&HudText, &mut Text)>,
 ) {
-    // Side B and playtests show their level's own name.
-    let _ = is_side_b;
-    let side_b = side_b.filter(|_| free.is_none()).map(|g| g.0.name.to_uppercase());
+    // Side B and playtests show their level's own name (a free play Side B room keeps the
+    // room counter).
+    let room = is_side_b.is_some_and(|s| s.room.is_some());
+    let side_b = side_b.filter(|_| free.is_none() && !room).map(|g| g.0.name.to_uppercase());
     for (h, mut text) in &mut q {
         let s = match h {
             HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),

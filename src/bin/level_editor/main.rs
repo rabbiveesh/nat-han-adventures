@@ -13,6 +13,9 @@
 //! document and back, unchanged, then quit). `--play` runs the game itself (with
 //! `NATHAN_LEVEL=<file>`: what the Play button starts).
 
+// A downloaded (release) editor on Windows opens no console window beside it.
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod app;
 #[path = "../editor/theme.rs"]
 #[allow(dead_code)]

@@ -13,7 +13,7 @@ use std::sync::{Arc, OnceLock};
 use nat_han_adventures::game::sideb::SideBLevel;
 use nat_han_adventures::level::doc::{LevelDoc, key_of, value_of};
 use nat_han_adventures::level::validate::{self, Options, Physics};
-use nat_han_adventures::level::{Level, Topic, Tweak};
+use nat_han_adventures::level::{Level, Topic, Tweak, share};
 
 /// What a left click does on the canvas.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -142,6 +142,8 @@ pub struct Editor {
 
     pub status: String,
     pub save_as: String,
+    /// A share link (or code) pasted in, to open.
+    pub pasted: String,
     pub files: Vec<Entry>,
 }
 
@@ -151,8 +153,9 @@ fn physics() -> &'static Arc<Physics> {
     P.get_or_init(|| Arc::new(Physics::new()))
 }
 
+/// Where `levels/` is: the repository, or a downloaded editor's own folder (`workspace::root`).
 pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    nat_han_adventures::workspace::root()
 }
 
 /// Every level file: the campaign, Side B, and `levels/custom/`.
@@ -240,6 +243,7 @@ impl Editor {
             pushed: String::new(),
             status: String::new(),
             save_as: String::new(),
+            pasted: String::new(),
         };
         if let Some(p) = open {
             ed.open(p);
@@ -525,10 +529,56 @@ impl Editor {
         self.validation.as_ref().is_some_and(|v| v.text == self.doc.text())
     }
 
+    // ─── Sharing ────────────────────────────────────────────────────────────
+
+    /// Why the level can't be shared as it is, if it can't: a link is only made from a level
+    /// the validator has passed as it is now, and a Side B level Han has cleared with its
+    /// `solution:` line (which the link carries, so whoever gets it knows it can be done).
+    pub fn share_blocker(&self) -> Option<&'static str> {
+        if self.parsed.level.is_err() {
+            return Some("it doesn't parse");
+        }
+        let Some(v) = self.validation.as_ref().filter(|_| self.validation_fresh()) else {
+            return Some("validate it first (F7)");
+        };
+        if !v.errs.is_empty() {
+            return Some("the validator found problems");
+        }
+        if self.parsed.side_b && !matches!(v.han, Some(HanProof::Holds)) {
+            return Some("Han has to clear it first (keep his plan as the solution)");
+        }
+        None
+    }
+
+    /// The level's share link (`level::share`): the web game plays it.
+    pub fn share_link(&self) -> String {
+        share::link(&self.doc.text())
+    }
+
+    /// Open a share link's level (or a bare code's) as a new, unsaved level.
+    pub fn open_shared(&mut self, pasted: &str) {
+        match share::decode(pasted).and_then(|t| LevelDoc::parse(&t)) {
+            Ok(doc) => {
+                self.set_doc(doc);
+                self.saved = String::new();
+                self.path = None;
+                self.undo.clear();
+                self.redo.clear();
+                self.validation = None;
+                self.selected = None;
+                self.selection = None;
+                self.pan = bevy_egui::egui::Vec2::ZERO;
+                self.save_as = self.parsed.level.as_ref().map(|l| l.name.clone()).unwrap_or_default();
+                self.status = "opened a shared level: Save As keeps it".into();
+            }
+            Err(e) => self.status = format!("can't open that link: {e}"),
+        }
+    }
+
     // ─── Playtest ────────────────────────────────────────────────────────────
 
     pub fn playtest_file(&self) -> PathBuf {
-        self.root.join("target/level-editor/playtest.txt")
+        std::env::temp_dir().join("nat-han-adventures/playtest.txt")
     }
 
     pub fn playing(&self) -> bool {
@@ -734,5 +784,26 @@ impl Editor {
 impl Drop for Editor {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod share_tests {
+    use super::*;
+
+    #[test]
+    fn a_level_shares_once_validated_and_opens_from_its_link() {
+        let mut ed = Editor::new(repo_root(), Some(Path::new("levels/03.txt")));
+        assert_eq!(ed.share_blocker(), Some("validate it first (F7)"));
+        let text = ed.doc.text();
+        let link = ed.share_link();
+        ed.new_level(false);
+        ed.open_shared(&link);
+        assert_eq!(ed.doc.text(), text);
+        assert_eq!(ed.path, None, "a shared level opens unsaved");
+        assert!(!ed.save_as.is_empty(), "named after the level");
+        ed.open_shared("nonsense");
+        assert!(ed.status.starts_with("can't open that link"), "{}", ed.status);
+        assert_eq!(ed.doc.text(), text, "a bad link changes nothing");
     }
 }

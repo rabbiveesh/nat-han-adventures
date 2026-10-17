@@ -92,26 +92,7 @@ pub fn parse_plan(b: &SideBLevel, text: &str) -> Result<Plan, String> {
         .collect()
 }
 
-/// A level file's `solution:` header line, split off (the rest is what `SideBLevel::parse`
-/// reads).
-pub fn split_solution(src: &str) -> (String, Option<String>) {
-    let mut rest = String::with_capacity(src.len());
-    let mut solution = None;
-    let mut in_header = true;
-    for line in src.lines() {
-        if line.trim() == "---" {
-            in_header = false;
-        }
-        match line.split_once(':') {
-            Some((k, v)) if in_header && k.trim() == "solution" => solution = Some(v.trim().to_string()),
-            _ => {
-                rest.push_str(line);
-                rest.push('\n');
-            }
-        }
-    }
-    (rest, solution)
-}
+pub use super::sideb::split_solution;
 
 /// A headless game playing Side B level `b` (the real gameplay and band).
 fn app(b: &SideBLevel) -> App {
@@ -121,7 +102,7 @@ fn app(b: &SideBLevel) -> App {
         .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)));
     app.update();
     let b = b.clone();
-    app.world_mut().run_system_once(move |mut c: Commands| sideb::start_with(&mut c, 0, b.clone())).expect("starts");
+    app.world_mut().run_system_once(move |mut c: Commands| sideb::start_level(&mut c, 0, b.clone())).expect("starts");
     app.update();
     app.update();
     app

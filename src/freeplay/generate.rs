@@ -9,7 +9,7 @@ use bevy::platform::time::Instant;
 
 use super::canvas::{Canvas, ENTRY};
 use super::dice::{Dice, stream};
-use super::templates::{Built, Dressing, TEMPLATES, Template, for_skill};
+use super::templates::{Built, Dressing, TEMPLATES, Template, Unlocks, for_skill};
 use crate::adapt::{AssistLevers, RoomRequest, Skill};
 use crate::level::validate::{Physics, Report, Strategy, check_room};
 use crate::level::{GateMark, Level, TILE};
@@ -97,11 +97,13 @@ pub struct RoomPlan {
     /// Han's line at the room's checkpoint.
     pub line: &'static str,
     pub world: u8,
+    /// Side B levels cleared when it was planned (a Side B room's pieces).
+    pub side_b: u8,
 }
 
 impl RoomPlan {
     /// The plan for `request` as room `index` of the run with `seed`: picks the template (by
-    /// seed, among the skill's unlocked with `unlocked_levels` story levels playable) and the
+    /// seed, among the skill's unlocked with `unlocks`) and the
     /// dressing. `seen` says whether the run already had a room of this skill (the first one
     /// gets Han's hint).
     pub fn new(
@@ -111,13 +113,34 @@ impl RoomPlan {
         world: u8,
         seen: bool,
         calibrating: bool,
-        unlocked_levels: usize,
+        unlocks: impl Into<Unlocks>,
+    ) -> RoomPlan {
+        RoomPlan::pick(seed, index, request, world, seen, calibrating, unlocks.into(), false)
+    }
+
+    /// A Side B room (`super::alone`) for `request` (a [`Skill::Buddy`] one) as room `index`:
+    /// Nat waits in the pipe, Han goes on alone and the player calls the band, with the pieces
+    /// the Side B levels cleared in `unlocks` have taught.
+    pub fn alone(seed: u32, index: u32, request: RoomRequest, world: u8, unlocks: Unlocks) -> RoomPlan {
+        RoomPlan::pick(seed, index, RoomRequest { skill: Skill::Buddy, ..request }, world, true, false, unlocks, true)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn pick(
+        seed: u32,
+        index: u32,
+        request: RoomRequest,
+        world: u8,
+        seen: bool,
+        calibrating: bool,
+        unlocks: Unlocks,
+        alone: bool,
     ) -> RoomPlan {
         let mut d = Dice::new(stream(seed, PICK_STREAM, index as u64));
         let choices: Vec<usize> = TEMPLATES
             .iter()
             .enumerate()
-            .filter(|(_, t)| t.skill == request.skill && t.unlocked(unlocked_levels))
+            .filter(|(_, t)| t.skill == request.skill && t.alone() == alone && t.unlocked(unlocks))
             .map(|(i, _)| i)
             .collect();
         let template = if choices.is_empty() { 0 } else { d.pick(&choices) };
@@ -126,7 +149,15 @@ impl RoomPlan {
         } else {
             d.pick(CHECKPOINT_LINES)
         };
-        RoomPlan { index, request, template, hint: !seen || request.assists.han_hint, line, world }
+        RoomPlan {
+            index,
+            request,
+            template,
+            hint: !seen || request.assists.han_hint,
+            line,
+            world,
+            side_b: unlocks.side_b.min(u8::MAX as usize) as u8,
+        }
     }
 
     pub fn template(&self) -> &'static Template {
@@ -173,7 +204,11 @@ impl Room {
         level.deaths = Some(v.deaths);
         // The marks the validator found its gates by: the game's Han reads them.
         level.gates = v.marks;
-        let par_secs = level.width as f32 * TILE / 70.0 + 4.0 + 3.0 * v.deaths as f32;
+        let run = level.width as f32 * TILE / 70.0;
+        // (A Side B room's rewind replays the room up to it, on average half, after the
+        // needle scratch.)
+        let per_death = if plan.template().alone() { run / 2.0 + crate::game::sideb::REWIND_SECS } else { 3.0 };
+        let par_secs = run + 4.0 + per_death * v.deaths as f32;
         Room {
             plan,
             level,
@@ -209,7 +244,7 @@ impl Room {
 pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
     let mut d = Dice::new(stream(seed, ROOM_STREAM, plan.index as u64 * 1024 + attempt as u64));
     let mut c = Canvas::with_height(plan.template().height);
-    let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal };
+    let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal, side_b: plan.side_b };
     let built: Built = (plan.template().build)(&mut c, &mut d, plan.request.band, &dress);
     if plan.hint
         && let Some((topics, text)) = built.hint
@@ -224,7 +259,8 @@ pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
     {
         c.checkpoint(col, row, "On the house!");
     }
-    c.finish(plan.world, plan.line)
+    let min_nuggets = if plan.template().alone() { 0 } else { super::canvas::MIN_NUGGETS };
+    c.finish_with(plan.world, plan.line, min_nuggets)
 }
 
 /// Validate a drawn room: the report, with its errors.
@@ -258,6 +294,20 @@ impl Job {
     pub fn step(&mut self) -> Option<Room> {
         let t0 = Instant::now();
         let level = draw(self.seed, &self.plan, self.attempt);
+        if self.plan.template().alone() {
+            // Built with its solution (`super::alone`): nothing for the validator to prove.
+            self.attempt += 1;
+            self.micros += t0.elapsed().as_micros() as u64;
+            // (Its rewinds are its deaths: the ones learning its layout takes, `super::alone`.)
+            let verdict = Verdict {
+                attempts: self.attempt,
+                fallback: false,
+                deaths: level.deaths.unwrap_or(0),
+                marks: level.gates.clone(),
+                micros: self.micros,
+            };
+            return Some(Room::finish(self.plan.clone(), level, verdict));
+        }
         let report = validate(&level);
         self.attempt += 1;
         self.micros += t0.elapsed().as_micros() as u64;

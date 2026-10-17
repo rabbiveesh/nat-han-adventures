@@ -14,7 +14,7 @@ use super::course::{COLS_PER_ROOM, Course, ENDLESS_ROOMS};
 use super::dice::{Dice, mix, stream};
 use super::generate::{Job, Room, RoomPlan, WORLD_STREAM, generate};
 use super::offload::{self, Outcome};
-use super::templates::unlocked_skills;
+use super::templates::{Unlocks, unlocked_skills};
 use crate::adapt::frustration::IDLE_SECS;
 use crate::adapt::{AdaptEvent, FrustrationSignal, RoomResult, Skill, next_room, reduce};
 use crate::events::{Jumped, LevelCompleted, PlayerDied};
@@ -22,6 +22,7 @@ use crate::game::{
     ActiveLevel, AdaptiveProfile, AssistMode, Checkpoint, Dead, Fly, GeneratedLevel, Goal, HintSpot, LevelEntity,
     LevelRun, LevelTile, MovingPlatform, Nugget, Player, Pos, RestartLevel, Spray, Stain, cell_floor, spawn_region,
 };
+use crate::game::sideb::{self, AloneRoom, SideB};
 use crate::input::Action;
 use crate::level::TILE;
 use crate::save::Progress;
@@ -37,6 +38,9 @@ pub const ROOMS_BEHIND: usize = 2;
 pub const INTRO: &str = "Free play! New pipes every time, Nat.";
 /// Dice stream for the adaptive engine's room picks.
 pub const CHOOSE_STREAM: u64 = 4;
+/// Dice stream for whether a room is a Side B room, and how often it is.
+pub const ALONE_STREAM: u64 = 5;
+pub const ALONE_CHANCE: f32 = 0.2;
 
 pub(super) fn plugin(app: &mut App) {
     app.init_resource::<FreePlaySettings>()
@@ -113,6 +117,8 @@ pub struct FreePlayRun {
     pub unlocked: Vec<Skill>,
     /// Story levels playable when the run started (which templates it may serve).
     pub unlocked_levels: usize,
+    /// Side B levels cleared when the run started (Side B rooms, and their pieces).
+    pub side_b_cleared: usize,
     pub stats: RoomStats,
     /// Every adaptive event posted, in order (tests, the debug dump).
     pub events: Vec<AdaptEvent>,
@@ -157,12 +163,29 @@ impl FreePlayRun {
         self.rooms.iter().any(|r| r.plan.request.skill == skill)
     }
 
-    /// The plan for room `index`, from the profile as it is now.
+    fn unlocks(&self) -> Unlocks {
+        Unlocks { levels: self.unlocked_levels, side_b: self.side_b_cleared }
+    }
+
+    /// The plan for room `index`, from the profile as it is now. Once Side B's been played,
+    /// now and then it's a Side B room (never two in a row, nor the first or the last).
     fn plan(&self, profile: &crate::adapt::PlayerProfile, index: usize) -> RoomPlan {
         let mut d = Dice::new(stream(self.seed, CHOOSE_STREAM, index as u64));
+        let mut a = Dice::new(stream(self.seed, ALONE_STREAM, index as u64));
+        let after_alone = self.rooms.last().is_some_and(|r| r.plan.template().alone());
+        if self.side_b_cleared > 0
+            && index > 0
+            && !self.is_last(index)
+            && !after_alone
+            && !profile.calibrating()
+            && a.chance(ALONE_CHANCE)
+        {
+            let request = next_room(profile, &[Skill::Buddy], d.rng());
+            return RoomPlan::alone(self.seed, index as u32, request, self.world, self.unlocks());
+        }
         let request = next_room(profile, &self.unlocked, d.rng());
         let seen = self.seen(request.skill);
-        RoomPlan::new(self.seed, index as u32, request, self.world, seen, profile.calibrating(), self.unlocked_levels)
+        RoomPlan::new(self.seed, index as u32, request, self.world, seen, profile.calibrating(), self.unlocks())
     }
 }
 
@@ -186,6 +209,11 @@ fn start_generation(commands: &mut Commands, seed: u32, plan: RoomPlan) {
     use std::sync::atomic::{AtomicU64, Ordering};
     static NEXT_ID: AtomicU64 = AtomicU64::new(1);
     let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    // Side B rooms aren't validated (nothing for the worker to do).
+    if plan.template().alone() {
+        spawn_attempt(commands, Job::new(seed, plan));
+        return;
+    }
     if let Some(text) = offload::encode_job(id, seed, &plan)
         && offload::send(&text)
     {
@@ -209,12 +237,18 @@ pub fn world_for(seed: u32) -> u8 {
 }
 
 /// Set up a run: its first room generated and stitched in. Returns the run and the level to load.
-pub fn begin(seed: u32, endless: bool, profile: &mut crate::adapt::PlayerProfile, unlocked_levels: usize) -> (FreePlayRun, crate::level::Level) {
+pub fn begin(
+    seed: u32,
+    endless: bool,
+    profile: &mut crate::adapt::PlayerProfile,
+    unlocks: impl Into<Unlocks>,
+) -> (FreePlayRun, crate::level::Level) {
+    let unlocks = unlocks.into();
     let world = world_for(seed);
     let rooms = if endless { ENDLESS_ROOMS } else { FIXED_ROOMS as usize };
     let (course, mut level) = Course::new(world, rooms);
     level.intro = INTRO.to_string();
-    let unlocked = unlocked_skills(unlocked_levels);
+    let unlocked = unlocked_skills(unlocks);
     let mut run = FreePlayRun {
         seed,
         endless,
@@ -225,7 +259,8 @@ pub fn begin(seed: u32, endless: bool, profile: &mut crate::adapt::PlayerProfile
         cleared: 0,
         finished: false,
         unlocked: unlocked.clone(),
-        unlocked_levels,
+        unlocked_levels: unlocks.levels,
+        side_b_cleared: unlocks.side_b,
         stats: RoomStats::default(),
         events: Vec::new(),
         room_id_base: mix(seed as u64 ^ (profile.rooms_played as u64) << 32) & !0xFFFF,
@@ -258,7 +293,8 @@ fn start_run(
     mut next: ResMut<NextState<AppState>>,
 ) {
     let Some(req) = requests.read().last().copied() else { return };
-    let (run, level) = begin(req.seed, req.endless, &mut profile.0, progress.unlocked);
+    let unlocks = Unlocks { levels: progress.unlocked, side_b: progress.side_b_cleared() };
+    let (run, level) = begin(req.seed, req.endless, &mut profile.0, unlocks);
     settings.last_seed = Some(req.seed);
     // Remembered between visits (saved with the progress).
     if progress.last_seed != Some(req.seed) {
@@ -338,6 +374,16 @@ fn track_rooms(
         par_secs: Some(r.par_secs),
     };
     post(run, &mut profile.0, started);
+    // A Side B room: Han takes it from here.
+    let r = &run.rooms[next];
+    if r.plan.template().alone() {
+        let p = run.course.rooms[next];
+        let dr = super::course::COURSE_H - r.level.height;
+        let at = |(c, row): (usize, usize)| (c + p.col0, row + dr);
+        let room = AloneRoom { start: at(r.level.start), goal: at(r.level.goal), cols: (p.col0, p.col0 + p.width) };
+        let setlist = super::alone::setlist(r.plan.side_b as usize);
+        commands.queue(move |w: &mut World| sideb::start_room(w, next, room, setlist));
+    }
     if !run.is_last(next) && run.planned.is_none() && run.rooms.len() == next + 1 {
         let plan = run.plan(&profile.0, next + 1);
         start_generation(&mut commands, run.seed, plan.clone());
@@ -425,8 +471,14 @@ fn restart_room(
     mut run: ResMut<FreePlayRun>,
     mut profile: ResMut<AdaptiveProfile>,
     player: Query<(Entity, Has<Dead>), With<Player>>,
+    side_b: Option<Res<SideB>>,
 ) {
     if requests.read().count() == 0 {
+        return;
+    }
+    // A Side B room rewinds itself (`game::sideb`): Han's rewinds are the room's deaths.
+    if side_b.is_some() {
+        run.stats.deaths += 1;
         return;
     }
     if let Ok((e, dead)) = player.single()

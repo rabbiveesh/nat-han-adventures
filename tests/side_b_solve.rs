@@ -14,7 +14,7 @@ fn level(n: usize) -> SideBLevel {
 
 #[test]
 fn plans_read_and_write_as_text() {
-    let b = level(0); // giant ×2, gap
+    let b = level(0); // giant, gap
     let plan = sideb_solve::parse_plan(&b, "3/giant 22/gap 30/pick-giant").unwrap();
     assert_eq!(plan[1], Step { col: 22.0, act: Act::Call(1) });
     assert_eq!(plan[2].act, Act::Pick(0));
@@ -28,20 +28,25 @@ fn plans_read_and_write_as_text() {
 #[test]
 fn a_levels_solution_clears_it_and_a_wrong_one_doesnt() {
     let b = level(0);
-    let good = sideb_solve::parse_plan(&b, "3/giant 22/gap 50/giant").unwrap();
+    // Over the deck (`ROUTES` in tests/side_b.rs).
+    let good = sideb_solve::parse_plan(&b, "7/giant 52/giant 75/pick-gap 95/pick-giant 106/gap 136/giant").unwrap();
     let r = sideb_solve::play(&b, &good);
     assert!(r.cleared, "{r:?}");
-    let r = sideb_solve::play(&b, &good[..1]);
+    let r = sideb_solve::play(&b, &good[..4]);
     assert!(!r.cleared);
-    assert!(r.fate.is_some() && r.col > 22.0, "no fired up for the gap: {r:?}");
+    assert!(r.fate.is_some() && r.col > 100.0, "no fired up for the gap: {r:?}");
     let r = sideb_solve::play(&b, &[]);
     assert_eq!(r.fate, Some(Fate::Bonk), "no music: the first wall");
 }
 
 #[test]
 fn rush_hour_replays_through_the_prover() {
-    let b = level(4); // giant ×2, gap, melt ×2
-    let plan = sideb_solve::parse_plan(&b, "1/giant 32.6/gap 52.9/melt 100.8/giant 110.8/melt").unwrap();
+    let b = level(4); // giant, gap, melt; under, under
+    let plan = sideb_solve::parse_plan(
+        &b,
+        "4/pick-melt 6/pick-gap 8/giant 83/giant 98/melt 101/gap 140/pick-melt 147/melt 186/melt 189/pick-giant 230/gap 252/giant",
+    )
+    .unwrap();
     assert!(sideb_solve::play(&b, &plan).cleared);
 }
 

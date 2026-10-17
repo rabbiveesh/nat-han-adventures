@@ -1,6 +1,6 @@
 //! Side B's set list strip (in place of the band's counter strip): one cell per call, the
 //! horn for Giant Steps, the nugget for fired up, with the calls left; the picked one in a gold
-//! frame with "DOWN" under it; the playing mode's timer drains under its cell. And the banner:
+//! frame with "CALL" under it (Down or Jump calls); the playing mode's timer drains under its cell. And the banner:
 //! REWIND! when Han's done for, CLEAR! at the goal.
 
 use bevy::prelude::*;
@@ -16,14 +16,23 @@ pub fn plugin(app: &mut App) {
         .add_systems(
             Update,
             (respawn, update).chain().run_if(in_state(AppState::Playing).and_then(resource_exists::<SideB>)),
-        );
+        )
+        .add_systems(Update, clear_away.run_if(not(resource_exists::<SideB>)));
 }
 
 /// The set list strip, for Side B level `.0`.
 #[derive(Component)]
 struct SetList(usize);
 
-/// On to the next level: its set list.
+/// Back to Nat after a free play Side B room: the set list goes.
+#[allow(clippy::type_complexity)]
+fn clear_away(mut commands: Commands, strip: Query<Entity, Or<(With<SetList>, With<Banner>)>>) {
+    for e in &strip {
+        commands.entity(e).despawn();
+    }
+}
+
+/// On to the next level (or into a free play Side B room): its set list.
 fn respawn(
     mut commands: Commands,
     font: Res<UiFont>,
@@ -32,7 +41,7 @@ fn respawn(
     strip: Query<(Entity, &SetList)>,
     banner: Query<Entity, With<Banner>>,
 ) {
-    if strip.iter().all(|(_, s)| s.0 == side.level) {
+    if !strip.is_empty() && strip.iter().all(|(_, s)| s.0 == side.level) {
         return;
     }
     for e in strip.iter().map(|(e, _)| e).chain(&banner) {
@@ -122,7 +131,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             });
             root.spawn(Node { column_gap: px(4.0), ..default() }).with_children(|row| {
                 for k in 0..side.setlist.len() {
-                    row.spawn((CallPick(k), label(&font, "DOWN", 8.0, GOLD), Visibility::Hidden));
+                    row.spawn((CallPick(k), label(&font, "CALL", 8.0, GOLD), Visibility::Hidden));
                 }
             });
         });

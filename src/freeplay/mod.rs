@@ -7,6 +7,11 @@
 //!   with parameters scaled by the band, the band's rooms opening on rolling ground (humps and
 //!   dips) and the gauntlets climbing up to 7 tiles; [`templates::TEMPLATES`] is the registry
 //!   new kinds of rooms go in.
+//! - [`alone`]: Side B rooms (Han alone, the player calls the band), mixed in now and then
+//!   ([`run::ALONE_CHANCE`]) once B1 is cleared, with the pieces of the Side B levels cleared,
+//!   built with their solution instead of validated. Nat waits in the pipe: in the game it's a
+//!   Side B level in miniature (`crate::game::sideb::start_room`), whose rewinds rewind only
+//!   the room.
 //! - [`canvas`]: the column builder rooms are drawn with, in the ordinary level format, framed
 //!   by entry and exit pipes.
 //! - [`generate`]: a plan becomes a room: seeded dice draw it, the level validator
@@ -25,6 +30,7 @@
 //!
 //! Never tell the player the difficulty: nothing here shows a band.
 
+pub mod alone;
 pub mod canvas;
 pub mod course;
 pub mod dice;

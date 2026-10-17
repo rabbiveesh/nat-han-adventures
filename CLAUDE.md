@@ -64,13 +64,19 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `index.html`): only the plan and the verdict cross as text, the game redraws the room and
   checks its fingerprint, and falls back to the main thread on any mismatch or worker error.
   `cargo run --release --example freeplay_rooms` reports validity/timing per template and band.
-- `src/game/sideb.rs` SIDE B, a hidden prototype: Nat's off screen, Han walks
+  Once B1 is cleared, a run now and then hands a room to Han alone (`alone.rs`: Side B's
+  pieces, more with each Side B level cleared; Nat waits in the pipe, the set list comes up,
+  a rewind rewinds only the room, `sideb::start_room`). Those are built with their solution, not
+  validated: `tests/side_b.rs` plays them (`SIDE_B_ROOMS=n` seeds, `try_a_room`).
+- `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
-  header; Left/Right pick, Down call; `melt` holds the laughing band on its melting phrase and
-  shrinks Han; a call holds 6 s, not the story's 20). Han just runs and jumps at what's ahead
+  header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
+  shrinks Han; a call holds 6 s, not the story's 20). Side B plays its own tunes (`Music::SideB`, `Music::side_b`: its levels in runs, one tune
+  to each run; free play's Han rooms take them in turn; the band starts hot there and still follows play, `adaptive::side_b_mood`;
+  `cargo run --release --example side_b_tunes` renders them as played). Han just runs and jumps at what's ahead
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
-  level's solution is a plan in `tests/side_b.rs` (`try_a_plan` tries one). Ways in: Up Up Down Down on
-  the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
+  level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
+  `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/bin/level_editor/` the native level editor (`cargo run --bin level-editor [-- levels/x.txt]`;
   the `editor` feature): egui on Bevy, the level drawn with the game's sprites, palette from
   `level::GLYPHS` (a new tile is a `Tile` + a row there), gate marks, Han's lines, the tweak
@@ -79,7 +85,14 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   save). Its document (`level::doc`) saves untouched lines byte for byte; new levels go in
   `levels/custom/`. Per-tile physics and Han's zones: `level::tweak` (a second `---` grid of
   letters); Nat, Han, the validator and Han's nav obey them (not friction, for the validator; no cost
-  without tweaks). `tests/tweaks.rs`.
+  without tweaks). `tests/tweaks.rs`. Share (once validated; Side B: once Han's `solution:`
+  clears it) copies a link to the web game with the whole level in its `#lvl=` (`level::share`:
+  deflate + base64url, size-capped); the game plays it like a playtest (`playtest::play_shared`;
+  SHARED LEVEL on the web title pastes one). `tests/share.rs`.
+- Downloadable editors: `.github/workflows/editors.yml` builds both (`--profile dist
+  --no-default-features --features editor`) for Linux, Windows and macOS (arm64, x86_64); a `v*`
+  tag publishes a release. Run outside the repo, they use `Documents/Nat Han Adventures`,
+  filled with the game's levels and songs on first use (`workspace`; `NATHAN_HOME` overrides).
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

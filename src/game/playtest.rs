@@ -5,6 +5,9 @@
 //! reloaded whenever it changes on disk, so saving in the editor restarts it in the game.
 //! Reaching the goal prints a `playtest: cleared ...` line (the editor reads it) and Jump or R
 //! plays again; quitting to the title closes the game.
+//!
+//! A share link's level (`level::share`: the web game's `#lvl=...`, or SHARED LEVEL on the
+//! title) plays the same way, from the link's text; quitting it goes back to the title.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -16,13 +19,22 @@ use crate::input::Action;
 use crate::level::Level;
 use crate::state::{AppState, CurrentLevel};
 
-/// A level file being playtested. Exists while it is.
+/// A level file being playtested, or a shared level being played. Exists while it is.
 #[derive(Resource, Debug, Clone)]
 pub struct Playtest {
-    pub path: std::path::PathBuf,
+    pub source: Source,
     /// The file's text as last loaded.
     pub text: String,
     poll: f32,
+}
+
+/// Where a playtest's level came from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Source {
+    /// A file, reloaded when it changes.
+    File(std::path::PathBuf),
+    /// A share link.
+    Shared,
 }
 
 /// What a playtest file holds.
@@ -37,8 +49,16 @@ pub fn load_text(text: &str) -> Result<Loaded, String> {
     if side_b { SideBLevel::parse(&strip_solution(text)).map(Loaded::SideB) } else { Level::parse(text).map(Loaded::SideA) }
 }
 
+/// Play a share link's level (its text: `level::share::decode`), or say why not.
+pub fn play_shared(commands: &mut Commands, text: String) -> Result<(), String> {
+    let loaded = load_text(&text)?;
+    commands.insert_resource(Playtest { source: Source::Shared, text, poll: 0.0 });
+    start(commands, loaded);
+    Ok(())
+}
+
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Startup, from_env)
+    app.add_systems(Startup, (from_env, from_link))
         .add_systems(Update, (reload, again.run_if(in_state(AppState::LevelComplete))).run_if(resource_exists::<Playtest>))
         .add_systems(OnEnter(AppState::LevelComplete), cleared.run_if(resource_exists::<Playtest>))
         .add_systems(OnEnter(AppState::Title), quit.run_if(resource_exists::<Playtest>))
@@ -63,13 +83,28 @@ fn from_env(mut commands: Commands) {
     if let Some(path) = file_from_env() {
         let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("NATHAN_LEVEL={path}: {e}"));
         let loaded = load_text(&text).unwrap_or_else(|e| panic!("NATHAN_LEVEL={path}: {e}"));
-        commands.insert_resource(Playtest { path: path.into(), text, poll: 0.0 });
+        commands.insert_resource(Playtest { source: Source::File(path.into()), text, poll: 0.0 });
         start(&mut commands, loaded);
     }
 }
 
+/// The web game opened from a share link (`#lvl=...`): play its level (a broken link says so,
+/// and the title comes up as usual).
+#[allow(unused_mut, unused_variables)]
+fn from_link(mut commands: Commands) {
+    #[cfg(target_arch = "wasm32")]
+    {
+        let Some(hash) = web_sys::window().and_then(|w| w.location().hash().ok()) else { return };
+        if !hash.contains(crate::level::share::KEY) {
+            return;
+        }
+        if let Err(e) = crate::level::share::decode(&hash).and_then(|text| play_shared(&mut commands, text)) {
+            crate::web::alert(&format!("Can't play that shared level: {e}"));
+        }
+    }
+}
+
 /// Play `loaded` from the top.
-#[cfg_attr(target_arch = "wasm32", allow(dead_code))]
 fn start(commands: &mut Commands, loaded: Loaded) {
     match loaded {
         Loaded::SideA(level) => {
@@ -79,7 +114,7 @@ fn start(commands: &mut Commands, loaded: Loaded) {
             commands.insert_resource(CurrentLevel(0));
             commands.queue(|w: &mut World| w.resource_mut::<NextState<AppState>>().set(AppState::Playing));
         }
-        Loaded::SideB(b) => sideb::start_with(commands, 0, b),
+        Loaded::SideB(b) => sideb::start_level(commands, 0, b),
     }
 }
 
@@ -100,14 +135,15 @@ fn reload(
     pt.poll = 0.4;
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let Ok(text) = std::fs::read_to_string(&pt.path) else { return };
+        let Source::File(path) = pt.source.clone() else { return };
+        let Ok(text) = std::fs::read_to_string(&path) else { return };
         if text == pt.text {
             return;
         }
         pt.text = text.clone();
         match load_text(&text) {
             Ok(loaded) => {
-                println!("playtest: reloaded {}", pt.path.display());
+                println!("playtest: reloaded {}", path.display());
                 let playing = *state.get() == AppState::Playing;
                 match loaded {
                     Loaded::SideA(level) if playing => {
@@ -123,7 +159,7 @@ fn reload(
                 }
             }
             Err(e) => {
-                println!("playtest: {} doesn't parse: {e}", pt.path.display());
+                println!("playtest: {} doesn't parse: {e}", path.display());
                 says.write(HanSays { text: "Huh? Broken!".into() });
             }
         }
@@ -162,18 +198,21 @@ fn again(input: Single<&ActionState<Action>>, mut next: ResMut<NextState<AppStat
     }
 }
 
-fn quit(mut exit: MessageWriter<AppExit>) {
-    exit.write(AppExit::Success);
+/// Back at the title: a playtest closes the game; a shared level's done, and the story gets its
+/// levels and assists back (Side B's are `sideb::leave`'s).
+fn quit(mut commands: Commands, pt: Res<Playtest>, mut exit: MessageWriter<AppExit>) {
+    if pt.source != Source::Shared {
+        exit.write(AppExit::Success);
+        return;
+    }
+    commands.remove_resource::<Playtest>();
+    commands.remove_resource::<GeneratedLevel>();
+    commands.insert_resource(AssistMode::Story);
+    #[cfg(target_arch = "wasm32")]
+    crate::web::clear_hash();
 }
 
 /// A Side B level's `solution:` line (the editor's: `sideb_solve`) is no part of the level.
 fn strip_solution(text: &str) -> String {
-    #[cfg(not(target_arch = "wasm32"))]
-    {
-        super::sideb_solve::split_solution(text).0
-    }
-    #[cfg(target_arch = "wasm32")]
-    {
-        text.to_string()
-    }
+    sideb::split_solution(text).0
 }

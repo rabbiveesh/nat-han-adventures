@@ -26,6 +26,10 @@ pub mod save;
 pub mod state;
 pub mod touch;
 pub mod ui;
+#[cfg(target_arch = "wasm32")]
+pub mod web;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod workspace;
 
 use bevy::prelude::*;
 

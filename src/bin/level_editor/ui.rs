@@ -195,6 +195,24 @@ fn top(ed: &mut Editor, ui: &mut egui::Ui) {
         if ui.add_enabled(here.is_some() && ed.parsed.level.is_ok(), egui::Button::new("Play from cell")).on_hover_text("shift+F5: Nat starts at the inspected cell").clicked() {
             ed.play(here);
         }
+        ui.separator();
+        let blocker = ed.share_blocker();
+        let share = ui.add_enabled(blocker.is_none(), egui::Button::new("Share"));
+        let share = match blocker {
+            Some(why) => share.on_disabled_hover_text(format!("can't share yet: {why}")),
+            None => share.on_hover_text("copy a link that plays this level in the web game"),
+        };
+        if share.clicked() {
+            let link = ed.share_link();
+            ed.status = format!("share link copied ({} characters)", link.len());
+            ui.ctx().copy_text(link);
+        }
+        let paste = ui.add(egui::TextEdit::singleline(&mut ed.pasted).hint_text("paste a share link").desired_width(110.0));
+        let enter = paste.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+        if ui.add_enabled(!ed.pasted.trim().is_empty(), egui::Button::new("Open link")).clicked() || (enter && !ed.pasted.trim().is_empty()) {
+            let pasted = std::mem::take(&mut ed.pasted);
+            ed.open_shared(&pasted);
+        }
         if ed.playing() {
             ui.checkbox(&mut ed.live, "live").on_hover_text("send every edit to the game as you make it");
             if ui.button("Stop").clicked() {

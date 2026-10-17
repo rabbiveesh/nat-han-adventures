@@ -66,7 +66,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (follow_state, forward, direct, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -350,7 +350,7 @@ fn setup(world: &mut World) {
 fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'static str, Filters), String> {
     let (title, file) = library::song(music)?;
     // A level's tune starts with an intro (when the band's loose enough: see `chorus`).
-    let config = EngineConfig { intro: matches!(music, Music::World(_)), ..EngineConfig::default() };
+    let config = EngineConfig { intro: matches!(music, Music::World(_) | Music::SideB(_)), ..EngineConfig::default() };
     let engine = Engine::with_config(file, ENGINE_RATE, config)?;
     let mut filters = match overrides.0 {
         Some(f) if music != Music::LevelClear => f,
@@ -360,6 +360,19 @@ fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'st
         filters.harmony = Harmony::Original;
     }
     Ok((engine, title, filters))
+}
+
+/// A Side B rewind is the needle back to the start: the tune starts over from the top (the
+/// story's restarts carry on where the band is). So does a free play Side B room, for Han.
+fn side_b_rewind(
+    side: Option<Res<crate::game::sideb::SideB>>,
+    mut restart: MessageReader<RestartLevel>,
+    mut player: ResMut<LivePlayer>,
+) {
+    let room_starts = side.as_ref().is_some_and(|s| s.is_added() && s.room.is_some());
+    if (restart.read().count() > 0 && side.is_some()) || room_starts {
+        player.music = None;
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -374,9 +387,14 @@ fn follow_state(
     mut groove: Option<ResMut<Groove>>,
     mut started: MessageWriter<MusicStarted>,
     mut audio: NonSendMut<Audio>,
+    side: Option<Res<crate::game::sideb::SideB>>,
 ) {
     let world = playing_world(levels.as_deref(), *current_level, generated.as_deref());
-    let want = desired_music(*state.get(), world);
+    // Side B (and a free play Side B room, while Han has it) plays its own tunes.
+    let want = match (desired_music(*state.get(), world), side) {
+        (Music::World(_), Some(s)) => s.tune(),
+        (want, _) => want,
+    };
     if player.music == Some(want) {
         return;
     }
@@ -395,7 +413,7 @@ fn follow_state(
     engine.post(Input::SetFilters(filters));
     // The band plays the levels' tunes, and the level-clear jingle (a Basie ending on it,
     // if it's loose).
-    if let (Music::World(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
+    if let (Music::World(_) | Music::SideB(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
         engine.post(set_freedom(f));
     }
     // The fanfare cuts in quickly; everything else crossfades.
@@ -477,9 +495,12 @@ fn direct(
     mut named_calls: MessageReader<crate::game::sideb::CallMode>,
     mut meters: ResMut<BandMeters>,
     mut groove_for_grip: Option<ResMut<Groove>>,
+    side: Option<Res<crate::game::sideb::SideB>>,
 ) {
     let playing = *state.get() == AppState::Playing;
-    let restarted = restart.read().count() > 0;
+    // (A free play Side B room starts the band afresh for Han, as a rewind does.)
+    let room_starts = side.is_some_and(|s| s.is_added() && s.room.is_some());
+    let restarted = restart.read().count() > 0 || room_starts;
     let mut ev = director::Events::default();
     for j in jumped.read() {
         if j.double {

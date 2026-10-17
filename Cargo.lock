@@ -3762,6 +3762,7 @@ dependencies = [
  "js-sys",
  "kira",
  "leafwing-input-manager",
+ "miniz_oxide 0.8.9",
  "png",
  "rand 0.9.5",
  "rtrb",

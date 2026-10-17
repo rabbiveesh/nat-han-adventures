@@ -141,6 +141,7 @@ use bevy::prelude::*;
 pub mod buddy;
 pub mod doc;
 pub mod nav;
+pub mod share;
 pub mod tweak;
 pub mod validate;
 
