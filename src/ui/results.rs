@@ -4,7 +4,8 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use super::{palette::*, *};
-use crate::game::LevelRun;
+use crate::game::solo::{self, SOLO_COUNT, SoloRun};
+use crate::game::{GeneratedLevel, LevelRun};
 use crate::input::Action;
 use crate::level::{LEVEL_COUNT, Levels};
 use crate::save::{Progress, RecordOutcome};
@@ -23,6 +24,8 @@ pub fn plugin(app: &mut App) {
 #[derive(Resource, Debug, Clone, Default)]
 pub struct LastResult {
     pub level: usize,
+    /// A NAT ALONE level (`game::solo`), not the story's.
+    pub solo: bool,
     pub run: LevelRun,
     pub outcome: RecordOutcome,
 }
@@ -37,17 +40,30 @@ fn record(
     mut progress: ResMut<Progress>,
     current: Res<CurrentLevel>,
     run: Res<LevelRun>,
+    solo: Option<Res<SoloRun>>,
 ) {
-    let outcome = record_run(&mut progress, current.0, &run);
-    commands.insert_resource(LastResult { level: current.0, run: run.clone(), outcome });
+    let result = match solo {
+        Some(s) => LastResult { level: s.0, solo: true, run: run.clone(), outcome: progress.record_solo(s.0, run.nuggets, run.time) },
+        None => LastResult { level: current.0, solo: false, run: run.clone(), outcome: record_run(&mut progress, current.0, &run) },
+    };
+    commands.insert_resource(result);
 }
 
-fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, levels: Res<Levels>, result: Res<LastResult>) {
+fn spawn(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    sprites: Option<Res<Sprites>>,
+    levels: Res<Levels>,
+    generated: Option<Res<GeneratedLevel>>,
+    result: Res<LastResult>,
+) {
     let f = &*font;
     let r = &*result;
-    let total = r.run.nuggets_total.max(levels.0.get(r.level).map_or(0, |l| l.nugget_count() as u32));
-    let name = levels.0.get(r.level).map_or_else(|| "???".into(), |l| l.name.to_uppercase());
-    let last = r.level + 1 >= LEVEL_COUNT;
+    let level = if r.solo { generated.as_deref().map(|g| &g.0) } else { levels.0.get(r.level) };
+    let total = r.run.nuggets_total.max(level.map_or(0, |l| l.nugget_count() as u32));
+    let name = level.map_or_else(|| "???".into(), |l| l.name.to_uppercase());
+    let last = r.level + 1 >= if r.solo { SOLO_COUNT } else { LEVEL_COUNT };
+    let what = if r.solo { "NAT ALONE" } else { "LEVEL" };
     commands
         .spawn((
             Name::new("ResultsCard"),
@@ -60,7 +76,7 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn(panel(Node { min_width: px(240.0), padding: UiRect::axes(px(16.0), px(12.0)), ..column(16.0, 8.0) }))
                 .with_children(|p| {
                     p.spawn(label(f, HEADERS[r.level % HEADERS.len()], 16.0, GOLD));
-                    p.spawn((label(f, format!("LEVEL {}: {name}", r.level + 1), 8.0, CREAM), Node { margin: UiRect::bottom(px(8.0)), ..default() }));
+                    p.spawn((label(f, format!("{what} {}: {name}", r.level + 1), 8.0, CREAM), Node { margin: UiRect::bottom(px(8.0)), ..default() }));
                     let row = |p: &mut ChildSpawnerCommands, text: String, best: bool, with_icon: bool| {
                         p.spawn(Node { column_gap: px(8.0), align_items: AlignItems::Center, ..default() })
                             .with_children(|r| {
@@ -84,9 +100,13 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                         p.spawn(label(f, "EVERY LAST NUGGET!", 8.0, GOLD));
                     }
                     if r.outcome.unlocked_next && !last {
-                        p.spawn(label(f, format!("LEVEL {} UNLOCKED!", r.level + 2), 8.0, GREEN));
+                        p.spawn(label(f, format!("{what} {} UNLOCKED!", r.level + 2), 8.0, GREEN));
                     }
-                    let prompt = if last { "ENTER:THE THRONE AWAITS" } else { "ENTER:NEXT  ESC:LEVELS" };
+                    let prompt = match (last, r.solo) {
+                        (true, true) => "ENTER:ALL FLUSHED!",
+                        (true, false) => "ENTER:THE THRONE AWAITS",
+                        _ => "ENTER:NEXT  ESC:LEVELS",
+                    };
                     p.spawn((label(f, prompt, 8.0, DIM_CREAM), Node { margin: UiRect::top(px(8.0)), ..default() }));
                 });
         });
@@ -97,10 +117,19 @@ fn input(
     mut current: ResMut<CurrentLevel>,
     mut next: ResMut<NextState<AppState>>,
     mut sfx_w: MessageWriter<PlaySfx>,
+    solo: Option<Res<SoloRun>>,
+    mut commands: Commands,
 ) {
     if action.just_pressed(&Action::Confirm) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
-        if current.0 + 1 >= LEVEL_COUNT {
+        // NAT ALONE: on to its next level, or back to its shelf after the last.
+        if let Some(s) = solo {
+            if s.0 + 1 < SOLO_COUNT {
+                solo::start(&mut commands, s.0 + 1);
+            } else {
+                next.set(AppState::LevelSelect);
+            }
+        } else if current.0 + 1 >= LEVEL_COUNT {
             next.set(AppState::Victory);
         } else {
             current.0 += 1;

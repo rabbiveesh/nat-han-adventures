@@ -37,10 +37,14 @@ use leafwing_input_manager::prelude::*;
 use super::groove::{
     BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
 };
+use super::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
-use crate::level::{Level, TILE, Tile};
+use crate::level::{
+    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_FAN_REACH,
+    Level, SPRING_SPEED, TILE, Tile, WALTZ_SPRING_BOOST, WIND_SPEED,
+};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<HanBoosted>().add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
@@ -203,17 +207,57 @@ impl Carrier {
     }
 }
 
-/// Gravity for [`step_body`]: acceleration (px/s², downward) and terminal fall speed.
+/// Gravity for [`step_body`]: acceleration (px/s², downward) and terminal fall speed, and how
+/// the band bends the gadget tiles.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fall {
     pub gravity: f32,
     pub max_fall: f32,
+    pub tiles: TileMood,
 }
 
 impl Fall {
     /// Nat's gravity under `groove`.
     pub fn of(groove: &Groove) -> Self {
-        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale() }
+        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale(), tiles: TileMood::of(groove) }
+    }
+}
+
+/// How the band bends the gadget tiles, for every body (one band): fired up, belts and wall
+/// fans run [`FIRED_UP_TILES`] faster; Giant Steps, every fan blows [`GIANT_FAN_REACH`] tiles
+/// far; the waltz, a trampoline catches you and springs you on the next ONE
+/// ([`WALTZ_SPRING_BOOST`] faster), and a cushion or a bumper hit on ONE flings you that much
+/// faster too.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TileMood {
+    /// Belt speed multiplier.
+    pub belt: f32,
+    /// Wall fans' gust multiplier.
+    pub gust: f32,
+    /// How far (empty tiles) fans blow.
+    pub reach: i32,
+    /// Trampolines hold whoever lands on them until ONE (the waltz).
+    pub catch: bool,
+    /// Spring multiplier now: [`WALTZ_SPRING_BOOST`] on ONE in the waltz, else 1.
+    pub spring: f32,
+}
+
+impl Default for TileMood {
+    fn default() -> Self {
+        TileMood { belt: 1.0, gust: 1.0, reach: FAN_REACH, catch: false, spring: 1.0 }
+    }
+}
+
+impl TileMood {
+    pub fn of(groove: &Groove) -> Self {
+        let fired = if groove.fired_up() { FIRED_UP_TILES } else { 1.0 };
+        TileMood {
+            belt: fired,
+            gust: fired,
+            reach: if groove.giant_steps() { GIANT_FAN_REACH } else { FAN_REACH },
+            catch: groove.waltz(),
+            spring: if groove.on_the_one() { WALTZ_SPRING_BOOST } else { 1.0 },
+        }
     }
 }
 
@@ -233,15 +277,64 @@ pub struct Contact {
     /// Left a moving platform into the air this step: its horizontal speed (px/s), for the
     /// caller to keep as [`Body::launch`] (Nat does, Han doesn't).
     pub launch: Option<f32>,
+    /// Landed on a trampoline and sprang off it ([`SPRING_SPEED`]), or a cushion laid on a
+    /// wall flung it away, or one on a ceiling sprang it back down.
+    pub sprung: bool,
+    /// Bricks (grid col, row) rising into them smashed this step: the caller breaks them
+    /// (the body is already inside them).
+    pub bricks: [Option<(i32, i32)>; 4],
+    /// Ran or flew into a bumper's face and got batted back ([`BUMPER_SPEED`]).
+    pub bumped: bool,
+}
+
+impl Contact {
+    pub fn smashed(&self) -> impl Iterator<Item = (i32, i32)> + '_ {
+        self.bricks.iter().flatten().copied()
+    }
+}
+
+/// Did a landing on the floor tiles `landed` (grid columns and their tiles, the box center's
+/// column `center`) spring off a trampoline? Off the one under the middle of the box, or,
+/// with nothing under the middle, if every tile underfoot is one. (`level::validate` lands
+/// the same way.)
+pub fn springs(landed: impl Iterator<Item = (i32, Tile)>, center: i32) -> bool {
+    let (mut mid, mut any, mut other) = (None, false, false);
+    for (c, t) in landed {
+        if c == center {
+            mid = Some(t == Tile::Trampoline);
+        }
+        any |= t == Tile::Trampoline;
+        other |= t != Tile::Trampoline;
+    }
+    mid.unwrap_or(any && !other)
+}
+
+/// The conveyor belt's speed (px/s) under a body standing at `pos`: the tile under the middle
+/// of its feet, else either corner's. 0 off a belt.
+pub fn belt_underfoot(level: &Level, pos: Vec2, half: Vec2) -> f32 {
+    let feet = pos.y - half.y - 1.0;
+    [pos.x, pos.x - half.x + 0.5, pos.x + half.x - 0.5]
+        .into_iter()
+        .map(|x| tile_at(level, idx(x), idx(feet)).belt())
+        .find(|&b| b != 0.0)
+        .unwrap_or(0.0)
 }
 
 /// One fixed step of the shared body physics (Nat and Han): gravity, being carried by the
 /// carrier stood on, then tile AABB collision X then Y (solid tiles, one-way tiles from above),
 /// then the carriers (one-way, from above). `blockers` are extra boxes (min, max) that stop
-/// horizontal motion into them (a body already overlapping one isn't pushed). Sets
+/// horizontal motion into them (a body already overlapping one isn't pushed); `solids` (the
+/// crushers' blocks) stop it too, and a head rising into their underside. Sets
 /// `body.on_ground`/`riding` and zeroes the vertical speed on landing; landing effects (events,
 /// toot refresh, bounces) are the caller's. [`Body::launch`] moves the body too, and is
 /// dropped on landing or against a wall.
+///
+/// Rising into a brick smashes through it (`Contact::bricks`: the caller breaks them); landing
+/// on a trampoline ([`springs`]) springs the body up at [`SPRING_SPEED`] (`Contact::sprung`).
+/// A conveyor belt underfoot carries the body (and leaving it keeps its speed: `Contact::launch`),
+/// a fan's updraft ([`Level::updraft`]) lifts it, and a bumper's face bats it back
+/// (`Contact::bumped`, as a [`Body::launch`]).
+#[allow(clippy::too_many_arguments)]
 pub fn step_body(
     level: &Level,
     pos: &mut Vec2,
@@ -249,10 +342,21 @@ pub fn step_body(
     fall: Fall,
     carriers: &[Carrier],
     blockers: &[(Vec2, Vec2)],
+    solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Contact {
-    // --- Gravity.
+    // --- Gravity (and a fan's updraft against it, or a ceiling fan's downdraft with it).
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
+    let mood = fall.tiles;
+    let wind = level.wind_within(idx(pos.x), row_of(level, idx(pos.y)), mood.reach);
+    if wind.1 > 0 && body.vel.y < FAN_RISE {
+        body.vel.y = (body.vel.y + FAN_LIFT * dt).min(FAN_RISE);
+    }
+    if wind.1 < 0 && body.vel.y > -FAN_RISE {
+        body.vel.y = (body.vel.y - FAN_LIFT * dt).max(-FAN_RISE);
+    }
+    // A wall fan's gust pushes along (like a belt, in the air too).
+    let gust = wind.0 as f32 * WIND_SPEED * mood.gust;
 
     // --- Carried by what we stood on.
     let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
@@ -260,19 +364,32 @@ pub fn step_body(
 
     let half = body.half;
     let was_on_ground = body.on_ground;
+    // A conveyor belt underfoot (just jumped off it too: its speed comes along).
+    let belt = if body.riding.is_none() && (body.vel.y >= 0.0 || was_on_ground) { belt_underfoot(level, *pos, half) * mood.belt } else { 0.0 };
     let fall_speed = -body.vel.y;
     let mut blocked_x = false;
 
     // --- X.
-    let dx = (body.vel.x + body.launch) * dt + carry.x;
+    let dx = (body.vel.x + body.launch + belt + gust) * dt + carry.x;
     let x_before = pos.x;
     pos.x += dx;
+    let mut bumped = 0.0;
+    let mut flung = 0.0;
     if dx != 0.0 {
         let (xs, ys) = cells(*pos - half, *pos + half);
         for j in ys {
             for i in xs.clone() {
-                if !tile_at(level, i, j).is_solid() {
+                let tile = tile_at(level, i, j);
+                if !tile.is_solid() {
                     continue;
+                }
+                // A bumper's face, run into: batted back.
+                if tile.bumper() == -dx.signum() {
+                    bumped = tile.bumper();
+                }
+                // A wall cushion's face: flung away.
+                if tile.fling() == -dx.signum() {
+                    flung = tile.fling();
                 }
                 if dx > 0.0 {
                     pos.x = pos.x.min(i as f32 * TILE - half.x);
@@ -284,7 +401,7 @@ pub fn step_body(
                 blocked_x = true;
             }
         }
-        for &(min, max) in blockers {
+        for &(min, max) in blockers.iter().chain(solids) {
             let overlaps = |x: f32| x + half.x > min.x && x - half.x < max.x;
             let y_overlaps = pos.y + half.y > min.y + EPS && pos.y - half.y < max.y - EPS;
             if !y_overlaps || overlaps(x_before) || !overlaps(pos.x) {
@@ -296,6 +413,18 @@ pub fn step_body(
             blocked_x = true;
         }
     }
+    if bumped != 0.0 {
+        body.launch = bumped * BUMPER_SPEED * mood.spring;
+        body.vel.y = body.vel.y.max(BUMPER_LIFT * mood.spring);
+        body.on_ground = false;
+    }
+    if flung != 0.0 {
+        body.launch = flung * CUSHION_FLING * mood.spring;
+        body.vel.y = body.vel.y.max(CUSHION_LIFT * mood.spring);
+        body.on_ground = false;
+    }
+    // A ceiling cushion bumped into: back down.
+    let mut bonked = false;
 
     // --- Y.
     let bottom_before = pos.y - half.y + carry.y;
@@ -303,6 +432,8 @@ pub fn step_body(
     pos.y += dy;
     let mut ground = false;
     let mut riding = None;
+    let mut bricks = [None; 4];
+    let mut landed: [Option<(i32, Tile)>; 4] = [None; 4];
     if dy != 0.0 {
         let (xs, ys) = cells(*pos - half, *pos + half);
         for j in ys {
@@ -313,10 +444,20 @@ pub fn step_body(
                     t if t.is_solid() && dy < 0.0 => {
                         pos.y = pos.y.max(top + half.y);
                         ground = true;
+                        if let Some(slot) = landed.iter_mut().find(|s| s.is_none()) {
+                            *slot = Some((i, t));
+                        }
+                    }
+                    Tile::Brick => {
+                        // Smashed through from below: the caller breaks it.
+                        if let Some(slot) = bricks.iter_mut().find(|s| s.is_none()) {
+                            *slot = Some((i, row_of(level, j)));
+                        }
                     }
                     t if t.is_solid() => {
                         pos.y = pos.y.min(j as f32 * TILE - half.y);
                         body.vel.y = body.vel.y.min(0.0);
+                        bonked |= t == Tile::CushionDown;
                     }
                     t if t.is_one_way()
                         && body.vel.y <= 0.0
@@ -325,11 +466,37 @@ pub fn step_body(
                     {
                         pos.y = top + half.y;
                         ground = true;
+                        if let Some(slot) = landed.iter_mut().find(|s| s.is_none()) {
+                            *slot = Some((i, t));
+                        }
                     }
                     _ => {}
                 }
             }
         }
+        // A head rising into a solid box's underside.
+        if dy > 0.0 {
+            let head_before = pos.y - dy + half.y;
+            for &(min, max) in solids {
+                let x_overlaps = pos.x + half.x > min.x + EPS && pos.x - half.x < max.x - EPS;
+                if x_overlaps && head_before <= min.y + ONE_WAY_SLACK && pos.y + half.y > min.y {
+                    pos.y = min.y - half.y;
+                    body.vel.y = body.vel.y.min(0.0);
+                }
+            }
+        }
+    }
+    if bonked {
+        body.vel.y = -SPRING_SPEED * mood.spring;
+    }
+    // A trampoline underfoot: up we go (in the waltz, it holds you till ONE).
+    let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x)) && (!mood.catch || mood.spring > 1.0);
+    if sprung {
+        body.vel.y = SPRING_SPEED * mood.spring;
+        body.launch = 0.0;
+        body.on_ground = false;
+        body.riding = None;
+        return Contact { ground: false, riding: None, was_on_ground, fall_speed, blocked_x, launch: None, sprung, bricks, bumped: false };
     }
     // Carriers (one-way).
     if body.vel.y <= 0.0 {
@@ -350,10 +517,25 @@ pub fn step_body(
         body.vel.y = 0.0;
         body.launch = 0.0;
     }
-    let launch = (!ground && !blocked_x).then_some(carrier).flatten().filter(|c| c.launches).map(|c| c.carry.x / dt);
+    let launch = (!ground && !blocked_x)
+        .then_some(carrier)
+        .flatten()
+        .filter(|c| c.launches)
+        .map(|c| c.carry.x / dt)
+        .or((!ground && !blocked_x && belt != 0.0).then_some(belt));
     body.on_ground = ground;
     body.riding = riding;
-    Contact { ground, riding, was_on_ground, fall_speed, blocked_x, launch }
+    Contact {
+        ground,
+        riding,
+        was_on_ground,
+        fall_speed,
+        blocked_x,
+        launch,
+        sprung: flung != 0.0 || bonked,
+        bricks,
+        bumped: bumped != 0.0,
+    }
 }
 
 /// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;
@@ -429,7 +611,7 @@ pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 fn player_step(
     time: Res<Time>,
-    active: Res<ActiveLevel>,
+    mut active: ResMut<ActiveLevel>,
     groove: Res<Groove>,
     assists: Res<super::Assists>,
     input: Single<&ActionState<Action>>,
@@ -443,6 +625,9 @@ fn player_step(
     mut landed: MessageWriter<Landed>,
     mut on_one: MessageWriter<JumpedOnOne>,
     mut boosted: MessageWriter<HanBoosted>,
+    crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Player>, Without<MovingPlatform>)>,
+    mut smashed: MessageWriter<BrickSmashed>,
+    mut sprung: MessageWriter<Sprung>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
@@ -573,7 +758,25 @@ fn player_step(
             blockers.push((p.0 - h, p.0 + h));
         }
     }
-    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, dt);
+    let mut solids = Vec::new();
+    for (e, block, p, prev) in &crushers {
+        carriers.push(block.carrier(e, p.0, prev.0));
+        solids.push(block.bounds(p.0));
+    }
+    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, &solids, dt);
+    if contact.bricks.iter().any(Option::is_some) {
+        smash(&mut active, contact.smashed(), &mut smashed);
+    }
+    let level = &active.level;
+    if contact.sprung || contact.bumped {
+        // Off a trampoline (or a bumper): way up, and the toot's back.
+        ctl.has_toot = true;
+        ctl.weak_toot = false;
+        ctl.cut_armed = false;
+        ctl.bouncing = false;
+        ctl.coyote = 0.0;
+        sprung.write(Sprung { pos: pos.0, han: false });
+    }
     if let Some(v) = contact.launch {
         body.launch = v.clamp(-LAUNCH_MAX, LAUNCH_MAX);
     }

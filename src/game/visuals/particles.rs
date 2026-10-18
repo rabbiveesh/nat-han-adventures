@@ -78,6 +78,9 @@ fn spawn_fx(
     mut nuggets: MessageReader<NuggetCollected>,
     mut checkpoints: MessageReader<CheckpointReached>,
     mut on_one: MessageReader<JumpedOnOne>,
+    mut smashed: MessageReader<crate::game::crushers::BrickSmashed>,
+    mut sprung: MessageReader<crate::game::crushers::Sprung>,
+    mut thuds: MessageReader<crate::game::crushers::CrusherThud>,
     mut encore: MessageReader<EncoreCue>,
 ) {
     use std::f32::consts::PI;
@@ -183,6 +186,50 @@ fn spawn_fx(
             life: (0.25, 0.5),
             size: 2.0,
         });
+    }
+    for b in smashed.read() {
+        // Chips of soap everywhere.
+        burst(&mut commands, &mut rng, b.pos, Burst {
+            count: 16,
+            colors: &[Color::srgb(0.96, 0.72, 0.83), Color::srgb(1.0, 0.96, 0.98), Color::srgb(0.85, 0.55, 0.7)],
+            speed: (60.0, 160.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 500.0,
+            life: (0.4, 0.8),
+            size: 3.0,
+        });
+    }
+    for s in sprung.read() {
+        // A pink pfffft out of the cushion.
+        burst(&mut commands, &mut rng, s.pos + feet, Burst {
+            count: 8,
+            colors: &[Color::srgb(0.95, 0.63, 0.69), Color::srgb(1.0, 0.82, 0.85)],
+            speed: (30.0, 90.0),
+            angle: (-PI * 0.2, PI * 0.2),
+            gravity: 0.0,
+            life: (0.2, 0.4),
+            size: 2.0,
+        });
+    }
+    for t in thuds.read() {
+        // Dust along the slammed face.
+        use crate::level::CrushDir;
+        let (angle, along) = match t.dir {
+            CrushDir::Down => ((PI * 0.05, PI * 0.95), Vec2::X),
+            CrushDir::Left => ((PI * 0.55, PI * 1.45), Vec2::Y),
+            CrushDir::Right => ((-PI * 0.45, PI * 0.45), Vec2::Y),
+        };
+        for k in [-1.0, 0.0, 1.0] {
+            burst(&mut commands, &mut rng, t.face + along * k * t.half * 0.8, Burst {
+                count: 4,
+                colors: &[Color::srgb(0.75, 0.75, 0.78), Color::srgb(0.55, 0.55, 0.6)],
+                speed: (30.0, 80.0),
+                angle,
+                gravity: 120.0,
+                life: (0.3, 0.6),
+                size: 2.0,
+            });
+        }
     }
     // The encore: confetti for every call (more as it gets bigger), a star burst off the last
     // cymbal, a splash out of the throne.

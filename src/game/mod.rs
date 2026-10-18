@@ -12,6 +12,7 @@ use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
 pub mod adaptive;
+pub mod crushers;
 pub mod encore;
 mod groove;
 mod han;
@@ -21,6 +22,7 @@ mod physics;
 mod pickups;
 mod platforms;
 pub mod sideb;
+pub mod solo;
 mod visuals;
 
 pub mod assist;
@@ -47,9 +49,9 @@ pub use han::{
 };
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{
-    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY, PlayerControl, THROW_CARRY, THROW_SPEED,
+    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY, PlayerControl, THROW_CARRY, THROW_SPEED, TileMood,
     WEAK_BOOST_SPEED, han_carrier,
-    move_towards, step_body,
+    move_towards, springs, step_body,
 };
 pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
 
@@ -121,6 +123,8 @@ pub fn plugin(app: &mut App) {
             han::plugin,
             adaptive::plugin,
             sideb::plugin,
+            solo::plugin,
+            crushers::plugin,
             encore::plugin,
         ));
 }

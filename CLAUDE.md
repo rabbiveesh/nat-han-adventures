@@ -31,6 +31,14 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   built nav graph; `src/level/buddy.rs` Han's physics and reflexes (shared by the game and the
   validator). Pure and wasm-safe; `tests/levels.rs` runs the validator on the campaign.
 - `src/game/` simulation (+ `visuals_plugin`: sprites, animation, camera, particles).
+  `src/game/crushers.rs` the gadget tiles that move or break: crushers (`X`/`<`/`>` blocks on a
+  slam/hold/creep cycle, `crusher@c,r: phase= beat=N`: `beat` slams on the music's ONE every N
+  bars), crumbling platforms (`-`), bricks (`%`, smashed from below) and beat blocks (`[` red on
+  even bars, `]` blue on odd ones, swapped from `Groove::clock`); trampolines (`T`), conveyor
+  belts (`{` `}`), fans (`*`, `Level::updraft`) and bumpers (`(` `)`, rubber ducks) are all
+  `step_body`. `levels/playground/gadgets.txt` has every one (not in the campaign yet:
+  `Topic::GADGETS`); free play's "gadget run" and "beat hall" rooms use them; `tests/gadgets.rs`
+  (headless tests set `Groove::clock` themselves: nothing plays the music there).
   `src/game/han/` is Han, the AI buddy (`docs/han-buddy.md`); `tests/han.rs` and
   `tests/han_campaign.rs` play him headless.
 - `src/adapt/` the adaptive difficulty engine (pure reducers); `src/game/adaptive.rs` wires it
@@ -83,6 +91,13 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
   level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
   `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
+- `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,
+  `levels/solo/`), the gadget tiles sideways and upside down too (wall/ceiling fans `e` `w` `!`,
+  wall/ceiling cushions `b` `d` `m`, wall brushes `|`). A `GeneratedLevel` like Side B, its own
+  `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once Side B's B10 is cleared (the third world),
+  Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
+  run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
+  tracing knobs for writing one).
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

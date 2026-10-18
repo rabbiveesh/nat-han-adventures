@@ -1,5 +1,6 @@
 //! Level select: a 5x2 grid of levels; details of the highlighted one below. The story's
-//! levels, or Side B's (the [`Shelf`]: nuggets for the story, fewest rewinds for Side B).
+//! levels, Side B's or NAT ALONE's (the [`Shelf`]: nuggets for the story and NAT ALONE, fewest
+//! rewinds for Side B).
 //! Hidden cheat: U unlocks everything.
 
 use bevy::prelude::*;
@@ -9,6 +10,7 @@ use super::{palette::*, *};
 use crate::input::Action;
 use crate::level::{LEVEL_COUNT, Levels};
 use crate::game::sideb::{self, SIDE_B_COUNT, SideBLevel};
+use crate::game::solo::{self, SOLO_COUNT};
 use crate::save::Progress;
 use crate::state::{AppState, CurrentLevel, Shelf};
 
@@ -48,6 +50,7 @@ fn count(shelf: Shelf) -> usize {
     match shelf {
         Shelf::Story => LEVEL_COUNT,
         Shelf::SideB => SIDE_B_COUNT,
+        Shelf::Solo => SOLO_COUNT,
     }
 }
 
@@ -55,6 +58,7 @@ fn unlocked(shelf: Shelf, progress: &Progress, i: usize) -> bool {
     match shelf {
         Shelf::Story => progress.is_unlocked(i),
         Shelf::SideB => i < progress.side_b_unlocked,
+        Shelf::Solo => i < progress.solo_unlocked,
     }
 }
 
@@ -64,6 +68,7 @@ fn init_cursor(mut commands: Commands, current: Res<CurrentLevel>, progress: Res
         Shelf::Story if current.0 > 0 => current.0,
         Shelf::Story => progress.unlocked - 1,
         Shelf::SideB => progress.side_b_unlocked - 1,
+        Shelf::Solo => progress.solo_unlocked - 1,
     };
     commands.insert_resource(Cursor(i.min(count(*shelf) - 1)));
 }
@@ -87,7 +92,11 @@ fn spawn(
             fullscreen(),
         ))
         .with_children(|root| {
-            let title = if shelf == Shelf::SideB { "SIDE B" } else { "PICK A PIPE" };
+            let title = match shelf {
+                Shelf::Story => "PICK A PIPE",
+                Shelf::SideB => "SIDE B",
+                Shelf::Solo => "NAT ALONE",
+            };
             root.spawn((label(f, title, 16.0, GOLD), Node { margin: UiRect::bottom(px(6.0)), ..default() }));
             root.spawn((label(f, "", 8.0, DIM_CREAM), Detail::World, Node { margin: UiRect::bottom(px(8.0)), ..default() }));
             // The grid.
@@ -122,6 +131,15 @@ fn spawn(
                         } else if shelf == Shelf::SideB {
                             match progress.side_b_rewinds[i] {
                                 Some(r) => cell.spawn(label(f, format!("R{r}"), 8.0, if r == 0 { GOLD } else { CREAM })),
+                                None => cell.spawn(label(f, "NEW", 8.0, GREEN)),
+                            };
+                        } else if shelf == Shelf::Solo {
+                            match progress.solo_nuggets[i] {
+                                Some(best) => {
+                                    let total = solo::load(i).nugget_count();
+                                    let color = if best as usize >= total { GOLD } else { CREAM };
+                                    cell.spawn(label(f, format!("{best}/{total}"), 8.0, color))
+                                }
                                 None => cell.spawn(label(f, "NEW", 8.0, GREEN)),
                             };
                         } else if let Some(best) = progress.best_nuggets[i] {
@@ -170,6 +188,7 @@ fn input(
                 next.set(AppState::Playing);
             }
             Shelf::SideB => sideb::start(&mut commands, cursor.0),
+            Shelf::Solo => solo::start(&mut commands, cursor.0),
         }
     } else if action.just_pressed(&Action::Back) {
         sfx(&mut sfx_w, Sfx::MenuMove);
@@ -199,6 +218,7 @@ fn cheat(
     match *shelf {
         Shelf::Story if progress.unlocked < LEVEL_COUNT => progress.unlocked = LEVEL_COUNT,
         Shelf::SideB if progress.side_b_unlocked < SIDE_B_COUNT => progress.side_b_unlocked = SIDE_B_COUNT,
+        Shelf::Solo if progress.solo_unlocked < SOLO_COUNT => progress.solo_unlocked = SOLO_COUNT,
         _ => return,
     }
     sfx(&mut sfx_w, Sfx::MenuSelect);
@@ -227,6 +247,8 @@ fn highlight(
     for (d, mut text) in &mut details {
         let s = if *shelf == Shelf::SideB {
             side_b_detail(d, &progress, i)
+        } else if *shelf == Shelf::Solo {
+            solo_detail(d, &progress, i)
         } else {
             match d {
             Detail::World => {
@@ -262,6 +284,18 @@ fn side_b_detail(d: &Detail, progress: &Progress, i: usize) -> String {
             Some(1) => "BEST: FLUSHED IN 1 REWIND".to_string(),
             Some(r) => format!("BEST: FLUSHED IN {r} REWINDS"),
             None => "NOT FLUSHED YET".to_string(),
+        },
+    }
+}
+
+fn solo_detail(d: &Detail, progress: &Progress, i: usize) -> String {
+    match d {
+        Detail::World => "NAT ALONE: THE GADGET WORLD".to_string(),
+        Detail::Name => format!("{}. {}", i + 1, solo::name(i).to_uppercase()),
+        Detail::Best => match (progress.solo_nuggets[i], progress.solo_time[i]) {
+            _ if i >= progress.solo_unlocked => format!("LOCKED: BEAT LEVEL {i} FIRST"),
+            (Some(n), Some(t)) => format!("BEST: {n}/{} NUGGETS  {}", solo::load(i).nugget_count(), format_time(t)),
+            _ => "NOT FLUSHED YET".to_string(),
         },
     }
 }

@@ -1,0 +1,101 @@
+# Breezy Does It (levels/solo/breezy.txt): the awnings' tailwind, the ceiling-fan hall, the wind
+# elevator, the bubble bath (drift column to column at the top of each bob), the updraft up to
+# the roof and its holes, the big blow (awning, fan post, toot); then five toots, Down (Giant
+# Steps): the fan floats Nat up the tall wall, and the sunken fans up the next one, to the
+# plunger in the headwind.
+wait 0.3
+hold Right 1.6
+hold Right Space 300ms
+hold Right 0.15
+hold Right Space 300ms
+hold Right 0.6
+at 3.3
+hold Right Space 300ms
+hold Right 0.15
+hold Right Space 300ms
+hold Right 0.5
+at 4.75
+repeat 6
+hold Right Space 200ms
+hold Right 0.22
+end
+hold Right 1.1
+hold Right Space 300ms
+hold Right 1.05
+wait 0.45
+hold Right 0.4
+wait 0.45
+hold Right 0.45
+wait 0.45
+hold Right 0.45
+wait 0.45
+hold Right 0.45
+wait 0.45
+hold Right 0.45
+wait 0.45
+hold Right 0.4
+wait 0.45
+hold Right 0.4
+wait 0.45
+hold Right 0.45
+wait 0.45
+hold Right 0.5
+wait 0.5
+hold Right 0.3
+hold Right Space 150ms
+hold Right 0.05
+wait 0.2
+hold Right 0.3
+wait 0.3
+hold Right 0.4
+hold Right Space 0.3
+hold Right 0.3
+wait 0.3
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.3
+wait 0.3
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.2
+wait 0.3
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.3
+wait 0.3
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.3
+wait 0.3
+hold Right 0.2
+hold Right Space 0.3
+hold Right 0.3
+wait 0.3
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.3
+wait 0.3
+hold Right 1.95
+hold Right Space 0.3
+hold Right 0.1
+wait 0.3
+hold Right 0.0
+hold Right Space 0.3
+hold Right 0.2
+hold Right Space 200ms
+hold Right 0.3
+wait 0.3
+hold Right 0.4
+wait 0.3
+repeat 5
+  hold Space 140ms
+  wait 120ms
+  hold Space 140ms
+  wait 0.9
+end
+tap Down
+wait 1.0
+hold Right 1.0
+wait 3
+hold Right 9
+wait 1

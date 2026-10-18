@@ -99,6 +99,8 @@ pub struct RoomPlan {
     pub world: u8,
     /// Side B levels cleared when it was planned (a Side B room's pieces).
     pub side_b: u8,
+    /// NAT ALONE levels cleared when it was planned (a gadget world room's tiles).
+    pub solo: u8,
 }
 
 impl RoomPlan {
@@ -157,6 +159,7 @@ impl RoomPlan {
             line,
             world,
             side_b: unlocks.side_b.min(u8::MAX as usize) as u8,
+            solo: unlocks.solo.min(u8::MAX as usize) as u8,
         }
     }
 
@@ -244,7 +247,7 @@ impl Room {
 pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
     let mut d = Dice::new(stream(seed, ROOM_STREAM, plan.index as u64 * 1024 + attempt as u64));
     let mut c = Canvas::with_height(plan.template().height);
-    let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal, side_b: plan.side_b };
+    let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal, side_b: plan.side_b, solo: plan.solo };
     let built: Built = (plan.template().build)(&mut c, &mut d, plan.request.band, &dress);
     if plan.hint
         && let Some((topics, text)) = built.hint

@@ -1,0 +1,86 @@
+wait 0.3
+hold Right 0.9
+wait 1.5
+hold Right Space 0.3
+hold Right 0.2
+wait 0.2
+hold Right 0.7
+wait 0.2
+hold Right 0.4
+wait 1.0
+hold Right 0.7
+wait 0.2
+hold Right 0.7
+hold Right 0.6
+hold Right Space 0.2
+wait 0.1
+at 9.45
+hold Left Space 0.25
+hold Left 0.2
+at 10.9
+hold Left 0.16
+hold Left Space 0.1
+hold Left 0.2
+at 12.3
+hold Left 0.2
+hold Left Space 0.15
+hold Left 0.1
+at 13.9
+hold Left 0.2
+hold Left Space 0.1
+hold Left 0.0
+at 15.45
+hold Left 0.2
+hold Left Space 0.1
+hold Left 0.2
+at 16.15
+hold Left 0.08
+hold Left Space 0.1
+hold Left 0.1
+hold Left 2.5
+hold Left 0.6
+at 20.6
+hold Left 3.0
+hold Left 2.2
+hold Right 0.1
+wait 0.3
+hold Left 0.3
+hold Left 3.85
+# Fired up: out of the flushed nook onto crumbling nuggets, call the band, leap the headwind gap.
+# The waltz: drop into the trampoline pit, three even hops, call the band; the trampoline springs on ONE up the wall.
+hold Left 1.25
+wait 0.3
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+wait 2.0
+hold Left 1.2
+wait 0.8
+hold Left Space 0.3
+# Fired up: the nugget line on the belt, call the band, hold back against the belt till the bar line, leap the gap.
+hold Left 1.1
+tap Down
+hold Right 0.5
+wait 0.4
+hold Right 0.3
+wait 0.45
+hold Left 0.25
+hold Left Space 0.3
+hold Left 0.3
+hold Left Space 0.3
+hold Left 0.6
+# Giant Steps: five toots on the landing, call the band, float up the fan's column over the wall to the goal.
+repeat 5
+hold Space 140ms
+wait 120ms
+hold Space 140ms
+wait 0.9
+end
+tap Down
+wait 1.8
+hold Left 1.6
+hold Left Space 0.3
+hold Left 2.2
+wait 1

@@ -23,20 +23,24 @@ pub struct Dressing {
     pub extra_nuggets: u8,
     /// Side B levels the player has cleared (which of Side B's pieces a Side B room may use).
     pub side_b: u8,
+    /// NAT ALONE levels the player has cleared (which of its tiles a room may use).
+    pub solo: u8,
 }
 
 /// What the player has unlocked, which decides the rooms free play may serve: story levels
-/// playable (`crate::save::Progress::unlocked`) and Side B levels cleared.
+/// playable (`crate::save::Progress::unlocked`), Side B levels cleared and NAT ALONE levels
+/// cleared.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Unlocks {
     pub levels: usize,
     pub side_b: usize,
+    pub solo: usize,
 }
 
 impl From<usize> for Unlocks {
     /// Story levels only.
     fn from(levels: usize) -> Unlocks {
-        Unlocks { levels, side_b: 0 }
+        Unlocks { levels, side_b: 0, solo: 0 }
     }
 }
 
@@ -61,6 +65,8 @@ pub struct Template {
     /// Side B levels that must be cleared first; a template that asks for any is a Side B room
     /// (`super::alone`): Han goes on alone, the player calls the band, and it isn't validated.
     pub side_b: usize,
+    /// NAT ALONE levels that must be cleared first (its sideways and upside-down tiles).
+    pub solo: usize,
     /// Rows in its canvas: [`H`], or more for a tall room ([`CLIMB_H`] for a climb,
     /// [`CHASM_H`] for a fired-up chasm's headroom).
     pub height: usize,
@@ -69,23 +75,26 @@ pub struct Template {
 
 /// Every template.
 pub const TEMPLATES: &[Template] = &[
-    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, side_b: 0, height: H, build: gauntlet },
-    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, side_b: 0, height: CLIMB_H, build: shelf_climb },
-    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, side_b: 0, height: H, build: hazards },
-    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, side_b: 0, height: H, build: platforms },
-    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, side_b: 0, height: H, build: giant_wall },
-    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, side_b: 0, height: H, build: long_gap },
-    Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, side_b: 0, height: H, build: glide_launch },
-    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, side_b: 0, height: H, build: stain_pit },
-    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, side_b: 0, height: H, build: grease_chute },
-    Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, side_b: 0, height: MEGA_H, build: mega_wall },
-    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, side_b: 0, height: H, build: buddy_raft_pool },
-    Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, side_b: 0, height: CHASM_H, build: fired_up_chasm },
-    Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, side_b: 0, height: MEGA_H, build: cling_shaft },
-    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, side_b: 0, height: MEGA_H, build: trapeze },
+    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, side_b: 0, solo: 0, height: H, build: gauntlet },
+    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: CLIMB_H, build: shelf_climb },
+    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, side_b: 0, solo: 0, height: H, build: hazards },
+    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, side_b: 0, solo: 0, height: H, build: platforms },
+    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, side_b: 0, solo: 0, height: H, build: giant_wall },
+    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: H, build: long_gap },
+    Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, side_b: 0, solo: 0, height: H, build: glide_launch },
+    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, side_b: 0, solo: 0, height: H, build: stain_pit },
+    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, side_b: 0, solo: 0, height: H, build: grease_chute },
+    Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, side_b: 0, solo: 0, height: MEGA_H, build: mega_wall },
+    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, side_b: 0, solo: 0, height: H, build: buddy_raft_pool },
+    Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, side_b: 0, solo: 0, height: CHASM_H, build: fired_up_chasm },
+    Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, side_b: 0, solo: 0, height: MEGA_H, build: cling_shaft },
+    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, side_b: 0, solo: 0, height: MEGA_H, build: trapeze },
+    Template { name: "gadget run", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: H, build: gadget_run },
+    Template { name: "beat hall", skill: Skill::HazardTiming, unlock: 1, side_b: 0, solo: 0, height: H, build: beat_hall },
+    Template { name: "gadget world", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 1, height: H, build: gadget_world },
     // The Side B room: once B1 is cleared (its pieces grow with each Side B level cleared).
     // Never picked by skill: `super::run` mixes it in now and then.
-    Template { name: "han alone", skill: Skill::Buddy, unlock: 0, side_b: 1, height: ALONE_H, build: alone::build },
+    Template { name: "han alone", skill: Skill::Buddy, unlock: 0, side_b: 1, solo: 0, height: ALONE_H, build: alone::build },
 ];
 
 /// The templates for a skill.
@@ -97,7 +106,7 @@ impl Template {
     /// Free play may serve it with `unlocked_levels` story levels playable.
     pub fn unlocked(&self, unlocks: impl Into<Unlocks>) -> bool {
         let u = unlocks.into();
-        self.unlock < u.levels.max(1) && self.side_b <= u.side_b
+        self.unlock < u.levels.max(1) && self.side_b <= u.side_b && self.solo <= u.solo
     }
 
     /// A Side B room (`super::alone`).
@@ -799,4 +808,315 @@ fn fired_up_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bui
         c.nugget(x + k, floor - 1);
     }
     Built { hint: Some((&[Topic::Chain], "Hop on!")), checkpoint }
+}
+
+// ─── Precision: a gadget run ─────────────────────────────────────────────────
+
+/// One gadget, 3 → 5 times over (each room teaches one): conveyor belts into gaps (2.5 tiles a
+/// second of carry, the gaps widening past a plain jump's reach), fans at the foot of walls (5
+/// → 8 tall), whoopee cushions up walls, soggy-box bridges over pits (3 → 8 wide), bumpers
+/// (rubber ducks) to hop and soap bricks to smash for the nuggets over them.
+fn gadget_run(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    c.ground(4, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
+    let kind = d.int(0, 5);
+    let reps = 3 + d.scaled(band, 0.0, 2.0, 0) as usize;
+    let mut checkpoint = None;
+    for i in 0..reps {
+        if i == reps / 2 {
+            checkpoint = Some((c.width() + 1, STAND));
+            c.ground(3, FLOOR);
+        }
+        let x = c.width();
+        match kind {
+            // A belt run-up into a gap; now and then one going the wrong way into a short one.
+            0 => {
+                let against = band >= 4 && d.chance(0.3);
+                let run = d.int(4, 7) as usize;
+                c.ground(run, FLOOR);
+                for k in 0..run {
+                    c.set(x + k, FLOOR, if against { b'{' } else { b'}' });
+                }
+                let g = if against { d.int(2, 3) } else { d.scaled(band, 3.0, 7.0, 1).clamp(3, 8) } as usize;
+                let gx = c.width();
+                c.pit(g);
+                let a = g.min(5);
+                arc(c, gx + (g - a) / 2, a, STAND - 1, 2);
+                c.ground(3, FLOOR);
+            }
+            // A fan at the foot of a wall: float up, step off onto its top, drop down the far side.
+            1 => {
+                c.ground(2, FLOOR);
+                let fx = c.width();
+                c.ground(1, FLOOR);
+                c.set(fx, FLOOR, b'*');
+                for k in (2..6).step_by(2) {
+                    c.nugget(fx, STAND - k);
+                }
+                let h = d.scaled(band, 5.0, 8.0, 1).clamp(5, 8) as usize;
+                let wx = c.width();
+                let w = d.int(3, 5) as usize;
+                c.ground(w, FLOOR - h);
+                for k in 0..w {
+                    c.nugget(wx + k, FLOOR - h - 1);
+                }
+                c.ground(2, FLOOR);
+            }
+            // A whoopee cushion at the foot of a wall.
+            2 => {
+                c.ground(2, FLOOR);
+                let tx = c.width();
+                c.ground(1, FLOOR);
+                c.set(tx, FLOOR, b'T');
+                let h = d.scaled(band, 4.0, 6.0, 1).clamp(4, 6) as usize;
+                let wx = c.width();
+                let w = d.int(3, 5) as usize;
+                c.ground(w, FLOOR - h);
+                arc(c, wx, w, FLOOR - h - 1, 1);
+                c.ground(2, FLOOR);
+            }
+            // A soggy-box bridge over a pit.
+            3 => {
+                let g = d.scaled(band, 3.0, 8.0, 1).clamp(3, 8) as usize;
+                c.ground(2, FLOOR);
+                let bx = c.width();
+                c.pit(g);
+                for k in 0..g {
+                    c.set(bx + k, FLOOR, b'-');
+                }
+                let a = g.min(5);
+                arc(c, bx + (g - a) / 2, a, STAND - 1, 2);
+                c.ground(3, FLOOR);
+            }
+            // A rubber duck to hop (2 → 3 tall): bump its face and it bats you back.
+            4 => {
+                c.ground(3, FLOOR);
+                let h = d.scaled(band, 2.0, 3.0, 0).clamp(2, 3) as usize;
+                let bx = c.width();
+                c.ground(1, FLOOR - h);
+                c.set(bx, FLOOR - h, b'(');
+                for k in 1..h {
+                    c.set(bx, FLOOR - h + k, b'(');
+                }
+                c.nugget(bx, FLOOR - h - 2);
+                c.ground(3, FLOOR);
+            }
+            // Soap bricks overhead with nuggets on top: jump up through them.
+            _ => {
+                c.ground(2, FLOOR);
+                let bx = c.width();
+                let w = d.int(2, 4) as usize;
+                c.ground(w, FLOOR);
+                for k in 0..w {
+                    c.set(bx + k, STAND - 3, b'%');
+                    c.nugget(bx + k, STAND - 4);
+                }
+                c.ground(2, FLOOR);
+            }
+        }
+    }
+    c.ground(3, FLOOR);
+    let hint: (&'static [Topic], &'static str) = match kind {
+        0 => (&[Topic::Belt], "Ride it, jump!"),
+        1 => (&[Topic::Fan], "Whoosh!"),
+        2 => (&[Topic::Spring], "Pffft!"),
+        3 => (&[Topic::Crumble], "Keep moving!"),
+        4 => (&[Topic::Bumper], "Quack!"),
+        _ => (&[Topic::Brick], "Smash it!"),
+    };
+    Built { hint: Some(hint), checkpoint }
+}
+
+// ─── Precision: the gadget world ─────────────────────────────────────────────
+
+/// NAT ALONE's tiles laid sideways and upside down, each once its NAT ALONE level is cleared
+/// (all of them in a room built outside a run): a wall fan's gust over a gap too wide to jump
+/// (`e`), a headwind over a short one (`w`), a downdraft over a gap you can only skim (`!`), a
+/// cushion shaft to bounce up (`b` `d`), a trampoline rally under a ceiling cushion (`m`), a
+/// fan up a wall with a brush sticking out of it (`|`).
+fn gadget_world(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built {
+    const KINDS: [char; 6] = ['e', 'w', '!', 'b', 'm', '|'];
+    let cleared = if dress.solo == 0 { usize::MAX } else { dress.solo as usize };
+    let taught: Vec<usize> = (0..KINDS.len())
+        .filter(|&k| crate::game::solo::teaches(KINDS[k]).is_some_and(|n| n < cleared))
+        .collect();
+    let kind = if taught.is_empty() { 0 } else { d.pick(&taught) };
+    c.ground(4, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
+    // (Two or three: the validator steers through every cell near these tiles, which is slow.)
+    let reps = 2 + d.scaled(band, 0.0, 1.0, 0) as usize;
+    let mut checkpoint = None;
+    for i in 0..reps {
+        if i == reps / 2 {
+            checkpoint = Some((c.width() + 1, STAND));
+            c.ground(3, FLOOR);
+        }
+        match kind {
+            // A wall fan hanging over the lip (walk under it): its gust carries the jump.
+            0 => {
+                c.ground(3, FLOOR);
+                let x = c.width();
+                c.ground(1, FLOOR);
+                for r in STAND - 4..STAND {
+                    c.set(x, r, b'e');
+                }
+                let g = d.scaled(band, 6.0, 8.0, 1).clamp(6, 8) as usize;
+                let gx = c.width();
+                c.pit(g);
+                arc(c, gx + 1, g - 2, STAND - 1, 2);
+                c.ground(3, FLOOR);
+            }
+            // A wall fan past the far lip blowing back: the jump comes up short.
+            1 => {
+                c.ground(3, FLOOR);
+                let g = d.scaled(band, 2.0, 4.0, 1).clamp(2, 4) as usize;
+                let gx = c.width();
+                c.pit(g);
+                arc(c, gx, g, STAND - 1, 2);
+                c.ground(4, FLOOR);
+                let x = c.width();
+                c.ground(1, FLOOR);
+                for r in STAND - 4..STAND {
+                    c.set(x, r, b'w');
+                }
+                c.ground(2, FLOOR);
+            }
+            // A ceiling fan over a gap: no hopping high under it, skim across.
+            2 => {
+                c.ground(4, FLOOR);
+                let x = c.width() - 2;
+                let g = d.scaled(band, 2.0, 4.0, 1).clamp(2, 4) as usize;
+                let gx = c.width();
+                c.pit(g);
+                c.ground(3, FLOOR);
+                for k in x..gx + g + 1 {
+                    c.set(k, STAND - 3, b'!');
+                }
+                for k in 1..g + 1 {
+                    c.nugget(gx + g + k, STAND);
+                }
+            }
+            // A cushion shaft: bounce off one wall's spring to the other's and up onto the
+            // ledge. Walk in under the left one.
+            3 => {
+                c.ground(2, FLOOR);
+                let h = d.scaled(band, 5.0, 8.0, 1).clamp(5, 8) as usize;
+                let x = c.width();
+                c.ground(1, FLOOR);
+                for r in FLOOR - h - 2..STAND - 1 {
+                    c.set(x, r, b'b');
+                }
+                c.ground(3, FLOOR);
+                for r in (FLOOR - h + 1..STAND).step_by(2) {
+                    c.nugget(x + 2, r);
+                }
+                let rx = c.width();
+                c.ground(1, FLOOR - h);
+                for r in FLOOR - h..FLOOR {
+                    c.set(rx, r, b'd');
+                }
+                let w = d.int(2, 4) as usize;
+                let lx = c.width();
+                c.ground(w, FLOOR - h);
+                for k in 0..w {
+                    c.nugget(lx + k, FLOOR - h - 1);
+                }
+                c.ground(2, FLOOR);
+            }
+            // Trampolines over a pit under a ceiling cushion: a rally, three tiles a bounce.
+            4 => {
+                c.ground(2, FLOOR);
+                let n = 2 + d.scaled(band, 0.0, 2.0, 0) as usize;
+                let x = c.width();
+                c.pit(n * 3);
+                for k in 0..n {
+                    c.set(x + 1 + k * 3, FLOOR, b'T');
+                    c.nugget(x + 2 + k * 3, FLOOR - 3);
+                }
+                for k in x..x + n * 3 {
+                    c.set(k, FLOOR - 6, b'm');
+                }
+                c.ground(3, FLOOR);
+            }
+            // Fans at the foot of a wall with a brush sticking out of it: ride up the far side
+            // of the draft, step onto the top.
+            _ => {
+                c.ground(2, FLOOR);
+                let x = c.width();
+                c.ground(2, FLOOR);
+                c.set(x, FLOOR, b'*');
+                c.set(x + 1, FLOOR, b'*');
+                let h = d.int(4, 5) as usize;
+                c.ground(3, FLOOR - h);
+                let r = FLOOR - d.int(2, h as i32 - 1) as usize;
+                c.set(x + 1, r, b'|');
+                for k in (2..h + 1).step_by(2) {
+                    c.nugget(x, FLOOR - k);
+                }
+                c.ground(2, FLOOR);
+            }
+        }
+    }
+    c.ground(3, FLOOR);
+    let hint: (&'static [Topic], &'static str) = match kind {
+        0 => (&[Topic::Wind], "Ride the gust!"),
+        1 => (&[Topic::Wind], "Headwind!"),
+        2 => (&[Topic::Wind], "Stay low!"),
+        3 => (&[Topic::Fling], "Boing boing!"),
+        4 => (&[Topic::Fling], "Keep going!"),
+        _ => (&[Topic::Fan], "Mind the brush!"),
+    };
+    Built { hint: Some(hint), checkpoint }
+}
+
+// ─── HazardTiming: a beat hall ───────────────────────────────────────────────
+
+/// Crushers hanging over the path (1 → 2 wide, out of step; from band 5 some slam on the
+/// band's ONE), or beat blocks across a pit (red and blue stones swapping every bar).
+fn beat_hall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    c.ground(4, FLOOR);
+    let n = lead_in(d);
+    hills(c, d, band, n);
+    let crushers = d.chance(0.5);
+    let reps = 2 + d.scaled(band, 0.0, 3.0, 0) as usize;
+    let mut checkpoint = None;
+    for i in 0..reps {
+        if i == reps / 2 {
+            checkpoint = Some((c.width() + 1, STAND));
+            c.ground(3, FLOOR);
+        }
+        let x = c.width();
+        if crushers {
+            // A crusher 4 tiles over the floor: it slams down onto the path.
+            let w = if band >= 4 && d.chance(0.4) { 2 } else { 1 };
+            c.ground(w + d.int(2, 4) as usize, FLOOR);
+            let row = STAND - 4;
+            for k in 0..w {
+                c.set(x + 1 + k, row, b'X');
+            }
+            let beat = band >= 5 && d.chance(0.5);
+            if beat {
+                c.header(format!("crusher@{},{row}: beat={} phase={:.2}", x + 1, d.int(1, 2), d.u() * 0.5));
+            } else {
+                c.header(format!("crusher@{},{row}: phase={:.2}", x + 1, d.u()));
+            }
+        } else {
+            // Beat blocks across a pit: stones a tile wide, two apart, red and blue in turn.
+            c.ground(2, FLOOR);
+            let stones = 2 + d.scaled(band, 0.0, 2.0, 0) as usize;
+            let bx = c.width();
+            c.pit(stones * 2 + 1);
+            for k in 0..stones {
+                c.set(bx + 1 + 2 * k, FLOOR, if k % 2 == 0 { b'[' } else { b']' });
+                c.nugget(bx + 1 + 2 * k, STAND - 1);
+            }
+            c.ground(3, FLOOR);
+        }
+    }
+    c.ground(3, FLOOR);
+    let hint: (&'static [Topic], &'static str) =
+        if crushers { (&[Topic::Crusher], "Wait... go!") } else { (&[Topic::Beat], "On the beat!") };
+    Built { hint: Some(hint), checkpoint }
 }

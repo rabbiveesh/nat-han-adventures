@@ -1,0 +1,62 @@
+# Tilt! (levels/solo/tilt.txt): the pinball machine without a death. Format: src/capture/timeline.rs.
+# Up A, the drain and R2/R3, the wide shaft's bottom door onto the old pedestal (checkpoint),
+# up the tower of doors and out of its middle one, then jump and toot across into the cushion
+# shaft (walk in and it's the sewage), out of its top door and over the light-up bridge; then
+# the drain: grab the four nuggets, Down (fired up), back off the belt and run its length into a
+# long jump over the gap; then three even hops, Down (the waltz), off the edge onto the drain's
+# trampoline and its spring on ONE (toot at the top) up the wall to the plunger.
+wait 0.5
+hold Right Space 300ms
+hold Right 2.6
+wait 0.45
+hold Right 3.5
+hold Left 2.4
+hold Right 2.6
+hold Left 2.5
+hold Right 0.9
+wait 0.3
+hold Right Space 250ms
+hold Right 0.1
+hold Right Space 200ms
+hold Right 2.8
+wait 0.3
+hold Right Space 250ms
+hold Right 0.1
+wait 0.7
+hold Right 0.2
+hold Right Space 300ms
+hold Right 0.1
+wait 0.9
+hold Right Space 300ms
+hold Right 0.1
+wait 0.9
+hold Right Space 300ms
+hold Right 0.1
+wait 0.9
+hold Right Space 300ms
+hold Right 0.1
+hold Right 0.5
+hold Right 0.65
+hold Left Down 0.1
+hold Left 0.6
+wait 0.6
+hold Right 0.9
+hold Right Space 0.35
+hold Right 0.15
+hold Right Space 0.3
+hold Right 0.3
+wait 0.5
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+wait 2.5
+hold Right 0.85
+hold Right Space 0.15
+hold Right 0.9
+at 38.25
+hold Right 0.45
+hold Right Space 0.3
+hold Right 1.5
+wait 1

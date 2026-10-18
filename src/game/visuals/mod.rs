@@ -5,6 +5,7 @@
 //! gameplay components are added (and only if the [`Sprites`] resource exists).
 
 mod camera;
+mod gadgets;
 mod particles;
 
 use bevy::prelude::*;
@@ -75,6 +76,7 @@ pub(super) fn plugin(app: &mut App) {
     );
     camera::plugin(app);
     particles::plugin(app);
+    gadgets::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
 }
@@ -86,16 +88,29 @@ fn hide_nat(mut nat: Query<&mut Visibility, With<Player>>) {
     }
 }
 
-/// Dev shortcut: `NATHAN_LEVEL=3 cargo run` starts straight in level 3.
+/// Dev shortcut: `NATHAN_LEVEL=3 cargo run` starts straight in level 3, and
+/// `NATHAN_LEVEL_FILE=levels/secret/gauntlet.txt` plays that file in its place (level 1 if
+/// `NATHAN_LEVEL` isn't set).
 #[cfg(not(target_arch = "wasm32"))]
 fn dev_jump_to_level(
     mut current: ResMut<crate::state::CurrentLevel>,
     mut next: ResMut<NextState<crate::state::AppState>>,
+    mut levels: ResMut<crate::level::Levels>,
 ) {
-    if let Some(n) = std::env::var("NATHAN_LEVEL").ok().and_then(|v| v.parse::<usize>().ok()) {
-        current.0 = n.saturating_sub(1);
-        next.set(crate::state::AppState::Playing);
+    let n = std::env::var("NATHAN_LEVEL").ok().and_then(|v| v.parse::<usize>().ok());
+    let file = std::env::var("NATHAN_LEVEL_FILE").ok();
+    if n.is_none() && file.is_none() {
+        return;
     }
+    current.0 = n.unwrap_or(1).saturating_sub(1);
+    if let Some(path) = file {
+        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("NATHAN_LEVEL_FILE {path}: {e}"));
+        let level = crate::level::Level::parse(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
+        if let Some(slot) = levels.0.get_mut(current.0) {
+            *slot = level;
+        }
+    }
+    next.set(crate::state::AppState::Playing);
 }
 
 /// Loops through the frames of `id` at `fps`.
@@ -131,11 +146,11 @@ fn sprite(sprites: &Sprites, id: SpriteId) -> Sprite {
 
 fn tile_sprite(
     add: On<Add, LevelTile>,
-    q: Query<&LevelTile>,
+    mut q: Query<(&LevelTile, &mut Transform)>,
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(sprites), Ok(t)) = (sprites, q.get(add.entity)) else { return };
+    let (Some(sprites), Ok((t, mut tf))) = (sprites, q.get_mut(add.entity)) else { return };
     let w = t.world;
     let (id, anim) = match t.tile {
         Tile::Empty => return,
@@ -150,11 +165,40 @@ fn tile_sprite(
         Tile::Grease => (SpriteId::GroundFill(w), false),
         Tile::StainUp => (SpriteId::StainUp, false),
         Tile::StainDown => (SpriteId::StainDown, false),
+        Tile::Brick => (SpriteId::Brick, false),
+        Tile::Crumble => (SpriteId::Crumble, false),
+        Tile::Trampoline => (SpriteId::Trampoline, false),
+        Tile::BeltLeft | Tile::BeltRight => (SpriteId::Belt, true),
+        Tile::Fan | Tile::FanDown | Tile::FanRight | Tile::FanLeft => (SpriteId::Fan, true),
+        Tile::BumperLeft | Tile::BumperRight => (SpriteId::Bumper, false),
+        Tile::CushionRight | Tile::CushionLeft | Tile::CushionDown => (SpriteId::Trampoline, false),
+        Tile::SpikesRight | Tile::SpikesLeft => (SpriteId::SpikesUp, false),
+        Tile::BeatRed | Tile::BeatRedOff => (SpriteId::BeatRed, false),
+        Tile::BeatBlue | Tile::BeatBlueOff => (SpriteId::BeatBlue, false),
     };
+    // Laid sideways or upside down: the upright sprite turned (a quarter turn
+    // counterclockwise per step).
+    let quarter = match t.tile {
+        Tile::FanLeft | Tile::CushionLeft | Tile::SpikesLeft => 1.0,
+        Tile::FanDown | Tile::CushionDown => 2.0,
+        Tile::FanRight | Tile::CushionRight | Tile::SpikesRight => -1.0,
+        _ => 0.0,
+    };
+    if quarter != 0.0 {
+        tf.rotation = Quat::from_rotation_z(quarter * std::f32::consts::FRAC_PI_2);
+    }
     let mut e = commands.entity(add.entity);
-    e.insert(sprite(&sprites, id));
+    let mut s = sprite(&sprites, id);
+    // Left-moving belts and left-facing bumpers are the right ones mirrored.
+    s.flip_x = matches!(t.tile, Tile::BeltLeft | Tile::BumperLeft);
+    if t.tile.is_beat() && !t.tile.is_solid() {
+        s.image = sprites.frame(id, 1);
+    }
+    e.insert(s);
     if anim {
-        e.insert(FrameAnim { id, fps: 4.0, offset: t.col as f32 * 0.13 });
+        let fps = if id == SpriteId::Belt { crate::level::BELT_SPEED / 2.0 } else { 4.0 };
+        let offset = if id == SpriteId::Belt { 0.0 } else { t.col as f32 * 0.13 };
+        e.insert(FrameAnim { id, fps, offset });
     }
 }
 
@@ -557,13 +601,23 @@ fn interpolate(
     }
 }
 
-fn frame_anims(time: Res<Time>, sprites: Res<Sprites>, mut q: Query<(&FrameAnim, &mut Sprite)>) {
+fn frame_anims(
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    groove: Option<Res<Groove>>,
+    mut belt_clock: Local<f32>,
+    mut q: Query<(&FrameAnim, &mut Sprite)>,
+) {
     let t = time.elapsed_secs();
+    // Belts run on their own clock: fired up, they roll as fast as they carry.
+    let rate = if groove.is_some_and(|g| g.fired_up()) { crate::level::FIRED_UP_TILES } else { 1.0 };
+    *belt_clock += time.delta_secs() * rate;
     for (anim, mut sprite) in &mut q {
         let frames = sprites.frames(anim.id);
         if frames.len() < 2 {
             continue;
         }
+        let t = if anim.id == SpriteId::Belt { *belt_clock } else { t };
         let i = (((t + anim.offset) * anim.fps) as usize) % frames.len();
         if sprite.image != frames[i] {
             sprite.image = frames[i].clone();

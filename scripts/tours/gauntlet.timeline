@@ -1,0 +1,28 @@
+wait 1
+press Right
+t=2.55 hold Space 300ms
+wait 0.05
+hold Space 200ms
+t=5.3 hold Space 150ms
+t=6.3 hold Space 200ms
+t=8.5 release Right
+# Beat blocks: one stone a bar, taking off just before it flips.
+t=9.8
+hold Right Space 200ms
+hold Right 280ms
+t=11.05
+hold Right Space 200ms
+hold Right 230ms
+t=12.3
+hold Right Space 200ms
+hold Right 230ms
+t=13.55
+hold Right Space 200ms
+hold Right 230ms
+t=14.3
+hold Right Space 200ms
+hold Right 300ms
+wait 0.5
+# Down the hole and into the duck shaft: hold Right and the ducks do the rest.
+press Right
+wait 8
