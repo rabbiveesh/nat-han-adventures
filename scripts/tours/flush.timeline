@@ -46,4 +46,27 @@ hold Right 0.1
 wait 0.3
 hold Left 0.3
 hold Left 3.85
-wait 2
+# Fired up: out of the flushed nook onto crumbling nuggets, call the band, leap the headwind gap.
+hold Left 2.5
+tap Down
+wait 1.8
+hold Left 0.45
+hold Left Space 0.3
+hold Left 0.3
+hold Left Space 0.3
+hold Left 0.6
+# Giant Steps: five toots on the landing, call the band, float over the cushion wall to the goal.
+repeat 5
+hold Space 140ms
+wait 120ms
+hold Space 140ms
+wait 0.9
+end
+tap Down
+wait 1.8
+hold Left 0.7
+hold Left Space 0.4
+hold Left 0.1
+hold Left Space 0.3
+hold Left 1
+wait 1

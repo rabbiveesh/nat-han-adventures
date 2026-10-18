@@ -146,12 +146,13 @@ macro_rules! nat_alone {
 
         #[test]
         fn $clean() {
-            let run = play(
-                include_str!(concat!("../levels/solo/", $file, ".txt")),
-                include_str!(concat!("../scripts/tours/", $file, ".timeline")),
-            );
+            let level = include_str!(concat!("../levels/solo/", $file, ".txt"));
+            let run = play(level, include_str!(concat!("../scripts/tours/", $file, ".timeline")));
             assert!(!run.han, "a solo level has no Han");
-            assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+            // Only the deaths the level's design expects (`deaths:`: the splats that make the
+            // band nervous for a grease chute).
+            let expected = Level::parse(level).unwrap().deaths.unwrap_or(0) as usize;
+            assert!(run.deaths.len() <= expected, "deaths (s, col, row): {:?}", run.deaths);
             let goal = run.goal.expect("the tour reaches the goal");
             assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
         }

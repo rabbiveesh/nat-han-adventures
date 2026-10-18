@@ -86,4 +86,37 @@ hold Left 0.0
 at 42.60
 hold Right Space 0.0
 hold Right 1.8
+# The waltz: three even hops, call the band, ride the platform and glide off it on ONE.
+hold Right 0.4
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+wait 3.0
+hold Right 0.8
+wait 1.5
+hold Right Space 0.3
+hold Right 0.2
+hold Right Space 0.3
+hold Right 0.6
+wait 0.2
+hold Space 0.2
+hold Right 0.15
+wait 0.3
+wait 0.2
+hold Space 0.05
+hold Right Space 0.3
+wait 0.3
+wait 0.8
+hold Space 0.05
+hold Right Space 0.3
+wait 0.3
+wait 0.8
+hold Space 0.0
+hold Right Space 0.3
+wait 0.3
+wait 0.1
+hold Right Space 0.3
+hold Right 1.6
 wait 1

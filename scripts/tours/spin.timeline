@@ -58,4 +58,21 @@ hold Left 0.05
 wait 0.3
 hold Right 0.2
 hold Left 0.6
+# Giant Steps: down the drain, five toots on the floor, call the band, float over the cushion wall.
+hold Left 0.5
+wait 1.2
+hold Left 0.9
+repeat 5
+hold Space 140ms
+wait 120ms
+hold Space 140ms
+wait 0.9
+end
+tap Down
+wait 1.5
+hold Left 0.7
+hold Left Space 0.4
+hold Left 0.1
+hold Left Space 0.3
+hold Left 1
 wait 1
