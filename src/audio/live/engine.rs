@@ -97,6 +97,9 @@ pub enum Input {
     /// End the song: the band plays an ending ([`chorus::EndKind`], picked by the dials) from
     /// the next bar committed, and the engine is [`Engine::finished`] after it.
     End,
+    /// [`Input::End`] with this ending, whatever the dials would pick (the story's encore
+    /// always ends on a Basie ending's last chord: `game::encore`).
+    EndWith(chorus::EndKind),
     /// Each musician's freedom, and the dynamics, 0..1.
     SetFreedom { lead: f32, comp: f32, bass: f32, drums: f32, dynamics: f32 },
     /// Each channel's level (pulse 1, pulse 2, triangle, noise): 1 as written, 0 muted. A mixer
@@ -244,6 +247,8 @@ pub struct EngineState {
     /// Committed bars from the one at the playhead on.
     pub upcoming: Vec<CommittedBar>,
     pub musicians: [MusicianState; 4],
+    /// The step of the ending the bar at the playhead plays, if it's an ending bar.
+    pub end_step: Option<chorus::EndStep>,
     /// The song is over (one-shots only).
     pub finished: bool,
 }
@@ -267,6 +272,7 @@ impl Default for EngineState {
             stats: PlayStats::default(),
             upcoming: Vec::with_capacity(8),
             musicians: Role::ALL.map(|role| MusicianState { role, freedom: 0.0, plan: None }),
+            end_step: None,
             finished: false,
         }
     }
@@ -855,10 +861,13 @@ impl Engine {
                 self.forced_chorus = c;
                 None
             }
-            Input::End => {
+            Input::End | Input::EndWith(_) => {
                 if self.ending.is_none() && self.next_slot().is_some() {
                     let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
-                    let kind = chorus::ending_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom));
+                    let kind = match input {
+                        Input::EndWith(kind) => kind,
+                        _ => chorus::ending_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom)),
+                    };
                     self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, false), tail: false });
                 }
                 None
@@ -960,6 +969,7 @@ impl Engine {
         for (m, st) in self.musicians.iter().zip(&mut s.musicians) {
             *st = MusicianState { role: m.role(), freedom: m.freedom(), plan: m.current_plan().copied() };
         }
+        s.end_step = self.bar_at_playhead().and_then(|b| b.band.ending).map(|e| e.step());
         s.finished = self.finished();
     }
 

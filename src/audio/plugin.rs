@@ -36,7 +36,9 @@ use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
 use crate::game::sideb::SetCall;
-use crate::events::{BandFreedom, CallBand, CheckpointReached, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied};
+use crate::events::{
+    BandFreedom, CallBand, CheckpointReached, EncoreCue, FinalHit, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied,
+};
 use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::Levels;
 use crate::state::{AppState, CurrentLevel, PlayState};
@@ -66,7 +68,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -595,6 +597,29 @@ fn direct(
     }
 }
 
+/// The story's encore (`game::encore`): the band goes all out (every dial up, a shout chorus a
+/// key up), and ends on a Basie ending when the lap is over; its last chord is the
+/// [`FinalHit`] ([`sync`] hears it).
+fn encore_band(mut cues: MessageReader<EncoreCue>, mut audio: NonSendMut<Audio>) {
+    use super::live::chorus::{Call, Chorus, EndKind};
+    let Some(h) = audio.handle.as_mut() else {
+        cues.clear();
+        return;
+    };
+    for cue in cues.read() {
+        match cue {
+            EncoreCue::Start => {
+                h.post(Input::SetFreedom { lead: 1.0, comp: 1.0, bass: 1.0, drums: 1.0, dynamics: 1.0 });
+                h.post(Input::ForceChorus(Some(Call { chorus: Chorus::Shout, key_up: true })));
+            }
+            EncoreCue::End => {
+                h.post(Input::EndWith(EndKind::Basie));
+            }
+            EncoreCue::Call { .. } | EncoreCue::Knock { .. } | EncoreCue::Flush { .. } => {}
+        }
+    }
+}
+
 /// The pause menu's audio delay check is on: the music plays at full volume while paused.
 #[derive(Resource, Debug, Default)]
 pub struct Calibrating;
@@ -655,9 +680,17 @@ fn sync(
     mut now_playing: ResMut<NowPlaying>,
     mut changed: MessageWriter<MusicChanged>,
     progress: Option<Res<crate::save::Progress>>,
+    mut final_hit: MessageWriter<FinalHit>,
+    mut was_final: Local<bool>,
 ) {
     let Some(h) = audio.handle.as_ref() else { return };
     let p = h.published();
+    // An ending's last chord (the encore knocks Nat over on it).
+    let is_final = p.playing && p.state.end_step == Some(super::live::chorus::EndStep::Final);
+    if is_final && !*was_final {
+        final_hit.write(FinalHit);
+    }
+    *was_final = is_final;
     let now = time.elapsed_secs_f64();
     if p.chunks != player.seen.0 {
         player.seen = (p.chunks, now);
@@ -776,9 +809,21 @@ fn play_sfx(
     mut completed: MessageReader<LevelCompleted>,
     mut han: MessageReader<HanSays>,
     mut requests: MessageReader<PlaySfx>,
+    mut encore: MessageReader<EncoreCue>,
+    mut flushed: Local<bool>,
     mut rng: ResMut<SfxRng>,
 ) {
     let mut queue: Vec<(Sfx, f32)> = Vec::new();
+    for cue in encore.read() {
+        match cue {
+            EncoreCue::Knock { .. } => queue.push((Sfx::Crash, 0.0)),
+            EncoreCue::Flush { .. } => {
+                queue.push((Sfx::Flush, 0.0));
+                *flushed = true;
+            }
+            _ => {}
+        }
+    }
     for j in jumped.read() {
         queue.push((if j.double { Sfx::Toot } else { Sfx::Jump }, -2.0));
     }
@@ -790,7 +835,12 @@ fn play_sfx(
     queue.extend(nuggets.read().map(|_| (Sfx::Nugget, -3.0)));
     queue.extend(died.read().map(|_| (Sfx::Splat, 0.0)));
     queue.extend(checkpoints.read().map(|_| (Sfx::Checkpoint, -2.0)));
-    queue.extend(completed.read().map(|_| (Sfx::Flush, 0.0)));
+    for _ in completed.read() {
+        // (The encore flushed already.)
+        if !std::mem::take(&mut *flushed) {
+            queue.push((Sfx::Flush, 0.0));
+        }
+    }
     queue.extend(requests.read().map(|PlaySfx(s)| (*s, -2.0)));
     for (s, db) in queue {
         let data = audio.sfx(s).cloned();

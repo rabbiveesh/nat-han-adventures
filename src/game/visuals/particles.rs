@@ -6,7 +6,7 @@ use bevy::prelude::*;
 
 use super::FrameAnim;
 use crate::art::{SpriteId, Sprites};
-use crate::events::{CheckpointReached, Jumped, Landed, NuggetCollected, PlayerDied};
+use crate::events::{CheckpointReached, EncoreCue, Jumped, Landed, NuggetCollected, PlayerDied};
 use crate::game::{Body, Dead, Groove, JumpedOnOne, LevelEntity, Player};
 use crate::state::PlayState;
 
@@ -81,6 +81,7 @@ fn spawn_fx(
     mut smashed: MessageReader<crate::game::crushers::BrickSmashed>,
     mut sprung: MessageReader<crate::game::crushers::Sprung>,
     mut thuds: MessageReader<crate::game::crushers::CrusherThud>,
+    mut encore: MessageReader<EncoreCue>,
 ) {
     use std::f32::consts::PI;
     let mut budget = MAX_PARTICLES.saturating_sub(existing.iter().count());
@@ -229,6 +230,48 @@ fn spawn_fx(
                 size: 2.0,
             });
         }
+    }
+    // The encore: confetti for every call (more as it gets bigger), a star burst off the last
+    // cymbal, a splash out of the throne.
+    const CONFETTI: [Color; 5] = [
+        Color::srgb(1.0, 0.85, 0.2),
+        Color::srgb(1.0, 0.4, 0.5),
+        Color::srgb(0.4, 0.8, 1.0),
+        Color::srgb(0.55, 0.95, 0.45),
+        Color::srgb(1.0, 1.0, 1.0),
+    ];
+    for cue in encore.read() {
+        let (at, b) = match *cue {
+            EncoreCue::Start | EncoreCue::End => continue,
+            EncoreCue::Call { pos, hype } => (pos + Vec2::new(0.0, 8.0), Burst {
+                count: 16 + 4 * hype.min(10) as usize,
+                colors: &CONFETTI,
+                speed: (60.0, 140.0 + 8.0 * hype.min(10) as f32),
+                angle: (PI * 0.15, PI * 0.85),
+                gravity: 220.0,
+                life: (0.7, 1.3),
+                size: 3.0,
+            }),
+            EncoreCue::Knock { pos } => (pos, Burst {
+                count: 40,
+                colors: &[Color::WHITE, Color::srgb(1.0, 0.95, 0.6), Color::srgb(1.0, 0.85, 0.2)],
+                speed: (80.0, 220.0),
+                angle: (0.0, 2.0 * PI),
+                gravity: 0.0,
+                life: (0.3, 0.6),
+                size: 3.0,
+            }),
+            EncoreCue::Flush { pos } => (pos, Burst {
+                count: 36,
+                colors: &[Color::srgb(0.45, 0.75, 1.0), Color::srgb(0.75, 0.9, 1.0), Color::WHITE],
+                speed: (60.0, 170.0),
+                angle: (PI * 0.25, PI * 0.75),
+                gravity: 420.0,
+                life: (0.5, 1.0),
+                size: 2.0,
+            }),
+        };
+        burst(&mut commands, &mut rng, at, b);
     }
     for c in checkpoints.read() {
         burst(&mut commands, &mut rng, c.pos + Vec2::new(0.0, 12.0), Burst {

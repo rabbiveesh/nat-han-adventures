@@ -114,9 +114,15 @@ fn hear_hints(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn touch_goal(
     mut commands: Commands,
     active: Res<ActiveLevel>,
+    encore: Option<Res<super::encore::Encore>>,
+    generated: Option<Res<super::GeneratedLevel>>,
+    side_b: Option<Res<super::sideb::SideB>>,
+    mut cues: MessageWriter<crate::events::EncoreCue>,
+    mut says: MessageWriter<HanSays>,
     mut player: Query<(Entity, &Pos, &mut Body), Alive>,
     goal: Query<&Transform, With<Goal>>,
     run: Res<LevelRun>,
@@ -128,7 +134,12 @@ fn touch_goal(
     let floor = goal.translation.truncate();
     let min = floor - Vec2::new(GOAL_WIDTH / 2.0, 0.0);
     let max = floor + Vec2::new(GOAL_WIDTH / 2.0, 2.0 * TILE);
-    if !overlap(pos.0, body.half, min, max) {
+    if encore.is_some() || !overlap(pos.0, body.half, min, max) {
+        return;
+    }
+    // The story's last goal: the band takes an encore first (`encore`), and it ends the level.
+    if super::encore::is_finale(active.index, generated.is_none() && side_b.is_none()) {
+        super::encore::start(&mut commands, &active, &run, &mut cues, &mut says);
         return;
     }
     body.vel = Vec2::ZERO;

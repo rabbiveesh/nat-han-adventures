@@ -13,6 +13,7 @@ use crate::state::PlayState;
 
 pub mod adaptive;
 pub mod crushers;
+pub mod encore;
 mod groove;
 mod han;
 mod hazards;
@@ -124,6 +125,7 @@ pub fn plugin(app: &mut App) {
             sideb::plugin,
             solo::plugin,
             crushers::plugin,
+            encore::plugin,
         ));
 }
 

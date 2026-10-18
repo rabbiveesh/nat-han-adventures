@@ -697,8 +697,10 @@ mod plugin {
         app.update();
         let start = freedom(&app);
         assert!(start > story_start + 0.1, "Side B {start} vs story {story_start}");
+        // Two frames per change: the decision and the post that forwards it run in either order.
         app.world_mut().resource_mut::<SideB>().rewinds = 2;
         // (Two frames: the decision posts on one, the engine can hear it on the next.)
+        app.update();
         app.update();
         app.update();
         let cooled = freedom(&app);
