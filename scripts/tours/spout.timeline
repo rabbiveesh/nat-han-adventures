@@ -2,8 +2,9 @@
 # fans, the beat bridge and S2's duck chimney (the old tower); then along to the second duck
 # shaft (steer out of its door), the beat ladder (jump as your step goes, land as the next comes)
 # and the cushion chimney: zigzag up between the cushions, toot out over the top onto the shelf.
-# Then the giant steps: five toots on the shelf, Down (Giant Steps), and up the three steps to
-# the plunger.
+# Then the room's fans: five toots, Down (Giant Steps), and the fans float Nat up the wall onto
+# the ledge; three even hops, Down (the waltz), and the trampoline's spring on ONE up the last
+# wall to the plunger.
 wait 0.3
 hold Right 0.9
 hold Right Space 300ms
@@ -90,23 +91,19 @@ wait 0.9
 end
 tap Down
 wait 1.0
-hold Right 0.2
-hold Right Space 300ms
-hold Right 0.1
-hold Right Space 200ms
-hold Right 0.4
+hold Right 0.95
 wait 0.3
-hold Left 0.0
-hold Left Space 300ms
-hold Left 0.1
-hold Left Space 200ms
-hold Left 0.4
+hold Right 0.25
+wait 1.3
+hold Right 1.0
 wait 0.3
-hold Right 0.2
-hold Right Space 300ms
-hold Right 0.2
-hold Right Space 200ms
-hold Right 0.6
-wait 0.3
-hold Right 1.2
-wait 2
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+wait 2.5
+hold Right 2.05
+hold Right Space 0.3
+hold Right 1.5
+wait 1

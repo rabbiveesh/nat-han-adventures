@@ -1,6 +1,8 @@
 # Bouncy Castle (levels/solo/bouncy.txt): the first fling, the shelf, the lid, the chimney; then
 # back into the wall cushion to fly the moat flat under the gate, the castle's three floors
-# (jump into each end's cushion to be flung up a floor) and the trampolines to the plunger.
+# (jump into each end's cushion to be flung up a floor); then the moat: grab the four nuggets,
+# Down (fired up), run the belts into a long jump over it; three even hops, Down (the waltz),
+# and the trampoline's spring on ONE up the castle wall to the plunger.
 wait 0.3
 hold Left 0.2
 hold Left Space 250ms
@@ -60,15 +62,20 @@ hold Right 2.2
 wait 0.2
 tap Down
 wait 1.0
-hold Left 0.2
-wait 0.1
+hold Left 0.9
 hold Right 0.5
+hold Right Space 0.35
+hold Right 0.15
 hold Right Space 0.3
-hold Right 0.25
-hold Right Space 200ms
-hold Right 0.3
-wait 0.3
-hold Right 0.4
-hold Right Space 0.2
+hold Right 0.15
+wait 0.4
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+wait 2.5
+hold Right 1.15
+hold Right Space 0.3
 hold Right 1.5
-wait 2
+wait 0.5
