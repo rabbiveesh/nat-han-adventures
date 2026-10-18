@@ -6,13 +6,13 @@
 //! cargo run --release --example side_b_tunes -- out/ 1.0   # the band's mood (1: red hot)
 //! ```
 //!
-//! Files: `sideb<n>_<stem>.wav`.
+//! Files: `sideb<n>_<stem>.wav`, and `.txt` with what each musician played bar by bar.
 
-use std::path::Path;
+use std::{fmt::Write as _, path::Path};
 
 use kira::Frame;
 use nat_han_adventures::audio::Music;
-use nat_han_adventures::audio::live::{Engine, EngineConfig, Input, library};
+use nat_han_adventures::audio::live::{Engine, EngineConfig, Input, library, musician::Role};
 use nat_han_adventures::adapt::BandMood;
 use nat_han_adventures::game::adaptive::{band_freedom, side_b_mood};
 
@@ -40,12 +40,26 @@ fn main() {
         let bars = 2 * e.shape().bars as u64 + 4;
         let mut out: Vec<Frame> = Vec::new();
         let mut buf = [Frame::ZERO; 512];
+        let (mut log, mut logged) = (String::new(), 0);
         while e.beat_clock().position.bar < bars {
             e.fill(&mut buf);
             out.extend_from_slice(&buf);
+            let from = logged;
+            for b in e.state().upcoming.iter().filter(|b| b.slot.index >= from) {
+                let t = b.slot.start as f64 / RATE as f64;
+                let _ = writeln!(log, "bar {:>3}  {:02}:{:05.2}  {}", b.slot.index + 1, (t / 60.0) as u32, t % 60.0, b.band.label());
+                for r in Role::ALL {
+                    let o = b.orns[r as usize];
+                    if !o.is_empty() {
+                        let _ = writeln!(log, "    {:<6} {}", format!("{r:?}").to_lowercase() + ":", o.names());
+                    }
+                }
+                logged = b.slot.index + 1;
+            }
         }
         let path = dir.join(format!("sideb{t}_{}.wav", library::stem(music)));
         write_wav(&path, &out);
+        std::fs::write(path.with_extension("txt"), log).expect("write log");
         println!("{}: {:.0}s", path.display(), out.len() as f64 / RATE as f64);
     }
 }
