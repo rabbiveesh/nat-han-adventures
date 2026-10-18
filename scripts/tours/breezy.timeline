@@ -83,5 +83,27 @@ hold Right 0.2
 hold Right Space 200ms
 hold Right 0.3
 wait 0.3
+hold Right 0.4
+wait 0.3
+repeat 5
+  hold Space 140ms
+  wait 120ms
+  hold Space 140ms
+  wait 0.9
+end
+tap Down
+wait 1.0
+hold Right 0.7
+hold Right Space 0.3
+hold Right 0.15
+hold Right Space 200ms
+hold Right 0.3
+wait 0.3
+hold Right 2.3
+hold Right Space 0.45
+hold Right 0.1
+hold Right Space 0.35
+hold Right 0.6
+wait 0.5
 hold Right 3
 wait 2

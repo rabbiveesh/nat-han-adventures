@@ -1,6 +1,8 @@
 # Brush Hour (levels/solo/brush.txt): down the stair-well's brush-tipped ledges, along the belts,
 # up the fan relays; then the gallery (hop the posts, onto the tall one and off; low hops onto
-# the low posts under the ceiling fans), down the drain's belt ledges and through the wash.
+# the low posts under the ceiling fans), down the drain's belt ledges and through the wash; then
+# the long drain: grab the four nuggets, Down (fired up), and one long flat jump (a little toot,
+# under the brushes) over the bottomless drain to the plunger.
 wait 0.3
 hold Right 0.75
 wait 0.5
@@ -93,5 +95,17 @@ hold Right Space 300ms
 wait 0.1
 hold Right Space 300ms
 hold Right 0.2
-hold Right 1.5
-wait 1.5
+hold Right 3.0
+wait 0.2
+tap Down
+wait 1.0
+hold Left 0.15
+wait 0.1
+hold Right 0.35
+hold Right Space 400ms
+hold Right 0.1
+hold Right Space 250ms
+hold Right 0.6
+wait 0.5
+hold Right 0.6
+wait 2

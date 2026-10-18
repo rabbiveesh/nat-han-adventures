@@ -1,7 +1,9 @@
 # Up the Spout! (levels/solo/spout.txt): up S1's duck shaft and a toot past its trap door, the
 # fans, the beat bridge and S2's duck chimney (the old tower); then along to the second duck
 # shaft (steer out of its door), the beat ladder (jump as your step goes, land as the next comes)
-# and the cushion chimney: zigzag up between the cushions, toot out over the top to the plunger.
+# and the cushion chimney: zigzag up between the cushions, toot out over the top onto the shelf.
+# Then the giant steps: five toots on the shelf, Down (Giant Steps), and up the three steps to
+# the plunger.
 wait 0.3
 hold Right 0.9
 hold Right Space 300ms
@@ -78,5 +80,33 @@ wait 0
 hold Left 1.7
 wait 0.1
 hold Left Space 200ms
-hold Left 1.0
-wait 1
+hold Left 0.3
+wait 0.2
+repeat 5
+hold Space 140ms
+wait 120ms
+hold Space 140ms
+wait 0.9
+end
+tap Down
+wait 1.0
+hold Right 0.2
+hold Right Space 300ms
+hold Right 0.1
+hold Right Space 200ms
+hold Right 0.4
+wait 0.3
+hold Left 0.0
+hold Left Space 300ms
+hold Left 0.1
+hold Left Space 200ms
+hold Left 0.4
+wait 0.3
+hold Right 0.2
+hold Right Space 300ms
+hold Right 0.2
+hold Right Space 200ms
+hold Right 0.6
+wait 0.3
+hold Right 1.2
+wait 2

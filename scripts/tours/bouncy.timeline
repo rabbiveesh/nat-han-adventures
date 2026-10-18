@@ -56,5 +56,19 @@ hold Right 0.6
 wait 0.1
 hold Right 0.6
 wait 0.5
-hold Right 1
-wait 1
+hold Right 2.2
+wait 0.2
+tap Down
+wait 1.0
+hold Left 0.2
+wait 0.1
+hold Right 0.5
+hold Right Space 0.3
+hold Right 0.25
+hold Right Space 200ms
+hold Right 0.3
+wait 0.3
+hold Right 0.4
+hold Right Space 0.2
+hold Right 1.5
+wait 2
