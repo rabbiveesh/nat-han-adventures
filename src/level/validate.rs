@@ -1030,11 +1030,18 @@ impl<'a> Map<'a> {
     /// Standable on real, dry ground (not a moving platform's path, not grease, not a stain),
     /// with nothing deadly in the [`RUNWAY_HEADROOM`] rows above: somewhere to hop up and down
     /// in peace.
-    pub fn calm(&self, (c, r): Cell) -> bool {
+    pub fn calm(&self, cell: Cell) -> bool {
+        self.calm_or_belt(cell, false)
+    }
+
+    /// [`Map::calm`], or (`belts`) the same on a conveyor belt: a run-up for the fired-up band,
+    /// whose belts run [`FIRED_UP_TILES`] faster under you.
+    fn calm_or_belt(&self, (c, r): Cell, belts: bool) -> bool {
         let below = self.f(c, r + 1);
+        let banned = if belts { CRUMBLE } else { CRUMBLE | BELT };
         self.standable((c, r))
             && ((below & SOLID != 0 && below & GREASE == 0) || below & ONEWAY != 0)
-            && below & (CRUMBLE | BELT) == 0
+            && below & banned == 0
             && (0..=RUNWAY_HEADROOM).all(|k| {
                 let f = self.f(c, r - k);
                 f & (DEADLY_TILE | SPRAY | CRUSH | WIND) == 0
@@ -1048,14 +1055,23 @@ impl<'a> Map<'a> {
     }
 
     /// The flat, calm stretch of floor `cell` is on (empty if `cell` itself isn't calm).
-    pub fn flat_run(&self, (c, r): Cell) -> Vec<Cell> {
-        if !self.calm((c, r)) {
+    pub fn flat_run(&self, cell: Cell) -> Vec<Cell> {
+        self.run_of(cell, false)
+    }
+
+    /// [`Map::flat_run`], belts included (a fired-up run-up).
+    pub fn run_up(&self, cell: Cell) -> Vec<Cell> {
+        self.run_of(cell, true)
+    }
+
+    fn run_of(&self, (c, r): Cell, belts: bool) -> Vec<Cell> {
+        if !self.calm_or_belt((c, r), belts) {
             return Vec::new();
         }
         let mut run = vec![(c, r)];
         for d in [-1, 1] {
             let mut k = c + d;
-            while self.calm((k, r)) {
+            while self.calm_or_belt((k, r), belts) {
                 run.push((k, r));
                 k += d;
             }
@@ -2182,7 +2198,7 @@ fn ready(map: &Map, g: &Graph, mode: Mode, cell: Cell, dir: i32) -> bool {
             if dir == 0 {
                 return false;
             }
-            let run = map.flat_run(cell);
+            let run = map.run_up(cell);
             if run.iter().filter(|c| (c.0 - cell.0) * dir <= 0).count() < RUN_UP {
                 return false;
             }
