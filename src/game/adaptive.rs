@@ -305,6 +305,8 @@ struct Tracker {
     per_segment: u32,
     /// Deaths since the level (re)started.
     deaths_in_level: u32,
+    /// Deaths since the last checkpoint (or the level's start).
+    deaths_in_segment: u32,
     /// Finished segments (story) for the music, oldest first.
     recent: Vec<RecentRoom>,
     /// Clean segments in a row.
@@ -421,6 +423,7 @@ fn feed_story(
         t.decide = true;
         t.last_decision = 0.0;
         t.deaths_in_level = 0;
+        t.deaths_in_segment = 0;
         t.segment_toots = 0;
         t.segment_start = 0.0;
         t.idle = None;
@@ -447,6 +450,7 @@ fn feed_story(
         t.decide = true;
         t.idle = Some((0.0, 0.0));
         t.deaths_in_level += 1;
+        t.deaths_in_segment += 1;
         let count = match t.death_spot {
             Some((at, n)) if at.distance(d.pos) <= SAME_SPOT => n + 1,
             _ => 1,
@@ -477,6 +481,7 @@ fn feed_story(
     }
     for c in checkpoints.read() {
         t.decide = true;
+        t.deaths_in_segment = 0;
         if story_mode {
             if let Some(a) = active.as_ref() {
                 let played = t.segment_evidence(&a.level, (c.pos.x / TILE).floor() as i32, story.0.expected_deaths);
@@ -565,8 +570,23 @@ pub const SIDE_B_FLOOR: f32 = 0.55;
 const SIDE_B_REWIND_COOLS: f32 = 0.06;
 const SIDE_B_CALL_HEATS: f32 = 0.05;
 
+/// The band's mood in NAT ALONE (`super::solo`), the third world: a drop hotter than Side B
+/// ([`SOLO_BASE`]); each death since the last checkpoint cools it, never below [`SOLO_FLOOR`],
+/// and a checkpoint brings it back.
+pub fn solo_mood(deaths_in_segment: u32) -> BandMood {
+    let f = (SOLO_BASE - SOLO_DEATH_COOLS * deaths_in_segment as f32).clamp(SOLO_FLOOR, 1.0);
+    BandMood { freedom: f, intensity: f }
+}
+
+/// NAT ALONE's freedom at the top of a level and at each checkpoint.
+pub const SOLO_BASE: f32 = SIDE_B_BASE + 0.05;
+/// The coolest NAT ALONE gets, however many deaths.
+pub const SOLO_FLOOR: f32 = SIDE_B_FLOOR + 0.05;
+const SOLO_DEATH_COOLS: f32 = 0.05;
+
 /// The band's freedom, on decisions: level start, death, checkpoint, every
-/// [`MUSIC_CHECK_SECS`] of play, and in Side B its rewinds and calls.
+/// [`MUSIC_CHECK_SECS`] of play, and in Side B its rewinds and calls. NAT ALONE has its own
+/// mood ([`solo_mood`]).
 #[allow(clippy::too_many_arguments)]
 fn decide_music(
     mode: Res<AssistMode>,
@@ -574,6 +594,7 @@ fn decide_music(
     story: Res<StoryAssistState>,
     profile: Res<AdaptiveProfile>,
     side: Option<Res<super::sideb::SideB>>,
+    solo: Option<Res<super::solo::SoloRun>>,
     mut was_side: Local<Option<(u32, u32)>>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
@@ -595,6 +616,10 @@ fn decide_music(
     t.last_decision = run.time;
     if let Some(s) = side {
         out.write(band_freedom(side_b_mood(s.rewinds, s.calls)));
+        return;
+    }
+    if solo.is_some() {
+        out.write(band_freedom(solo_mood(t.deaths_in_segment)));
         return;
     }
     let mood = match *mode {
