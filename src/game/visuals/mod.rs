@@ -198,7 +198,7 @@ fn goal_sprite(
     ));
     // The throne, just right of the flag (decorative).
     if let Ok(tf) = q.get(add.entity) {
-        let at = tf.translation.truncate() + Vec2::new(TILE * 1.5, 0.0);
+        let at = tf.translation.truncate() + Vec2::new(crate::game::encore::THRONE_OFFSET, 0.0);
         commands.spawn((
             Name::new("Throne"),
             LevelEntity,

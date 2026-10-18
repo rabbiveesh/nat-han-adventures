@@ -89,6 +89,7 @@ fn follow_player(
     player: Query<(&Transform, &PlayerControl, Ref<Player>), Without<GameCamera>>,
     han: Query<(&Transform, &crate::game::Body), (With<crate::game::Han>, Without<GameCamera>, Without<Player>)>,
     side_b: Option<Res<crate::game::sideb::SideB>>,
+    encore: Option<Res<crate::game::encore::Encore>>,
     mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
 ) {
     let (Some(active), Ok((ptf, ctl, added))) = (active, player.single()) else { return };
@@ -130,6 +131,17 @@ fn follow_player(
     gc.giggle = (gc.giggle + if bouncy { dt } else { -dt }).clamp(0.0, 1.0);
     let t = time.elapsed_secs() * std::f32::consts::TAU * WOBBLE_HZ;
     gc.wobble = gc.giggle * WOBBLE_PX * Vec2::new((t * 0.5).sin(), t.sin());
+    // The encore's cymbal crash shakes the screen; the flush rumbles it.
+    let shake = encore.map_or(0.0, |e| {
+        use crate::game::encore::EncorePhase;
+        match e.phase {
+            EncorePhase::Knocked => 4.0 * (1.0 - e.t / 0.5).max(0.0),
+            EncorePhase::Flushing => 1.5 * (1.0 - e.t / crate::game::encore::FLUSH_SECS).max(0.0),
+            _ => 0.0,
+        }
+    });
+    let st = time.elapsed_secs() * 47.0;
+    gc.wobble += shake * Vec2::new(st.sin(), (st * 1.37).cos());
     tf.translation.x = p.x + gc.wobble.x;
     tf.translation.y = p.y + gc.wobble.y;
     // Seasick (the laughing band's 7-TET phrase): the world rolls a little.

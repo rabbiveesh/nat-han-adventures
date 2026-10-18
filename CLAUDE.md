@@ -68,6 +68,12 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   pieces, more with each Side B level cleared; Nat waits in the pipe, the set list comes up,
   a rewind rewinds only the room, `sideb::start_room`). Those are built with their solution, not
   validated: `tests/side_b.rs` plays them (`SIDE_B_ROOMS=n` seeds, `try_a_room`).
+- `src/game/encore.rs` the story's ending: level 10's goal starts an encore lap (free calls,
+  the band all out, a shout chorus a key up), then a Basie ending whose last chord (`FinalHit`,
+  the engine's `end_step`) knocks Nat into the throne; Han dives and misses; FLUSH; to be
+  continued (into Side B). Each world is to end in an "encore gone wrong" that leads into the
+  next. `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
+  scripts/tours/encore.timeline 10` (`NATHAN_START=<col>`: start on that column's floor).
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
   header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and

@@ -1,0 +1,57 @@
+# The story's encore at level 10's goal, for `scripts/record-run --capture` (format:
+# src/capture/timeline.rs). Start on the throne's stage:
+#   NATHAN_START=333 scripts/record-run --capture encore.mp4 scripts/tours/encore.timeline 10
+# Walk to the goal, then show off in the encore lap: call the band (Down) again and again
+# (Giant Steps, fired up, melting, ...) and hop about. The Basie ending's last chord knocks Nat
+# into the throne. ~40 s.
+
+# The level's intro line.
+wait 3
+
+# To the goal flag: ENCORE!
+hold Right 1.1
+wait 0.6
+
+# Call Giant Steps and float about.
+tap Down
+wait 0.4
+repeat 2
+  hold Space 160ms
+  wait 250ms
+  hold Space 160ms
+  wait 0.9
+end
+hold Right Space 300ms
+hold Right 400ms
+
+# Fired up: dash back and forth.
+tap Down
+wait 0.3
+hold Left 0.7
+hold Right Space 250ms
+hold Right 500ms
+hold Left 0.5
+
+# Melting, then more calls, hopping on the spot.
+tap Down
+wait 0.5
+repeat 3
+  hold Space 200ms
+  wait 300ms
+end
+tap Down
+wait 0.3
+hold Right Space 300ms
+hold Right 200ms
+tap Down
+wait 0.4
+hold Space 160ms
+wait 250ms
+hold Space 160ms
+wait 0.6
+tap Down
+# Back left of the throne, to fly into it.
+hold Left 1.0
+
+# The lap ends; the band plays its ending, the cymbal crash, FLUSH, to be continued, results.
+wait 22
