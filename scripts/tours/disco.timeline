@@ -86,37 +86,29 @@ hold Left 0.0
 at 42.60
 hold Right Space 0.0
 hold Right 1.8
-# The waltz: three even hops, call the band, ride the platform and glide off it on ONE.
-hold Right 0.4
+# Fired up off the belt: the nugget line, call the band, hold back against the belt till the bar line, leap.
+hold Right 0.15
+tap Down
+hold Left 0.4
+wait 0.35
+hold Left 0.3
+wait 0.3
+hold Right 0.6
+hold Right Space 0.3
+hold Right 0.3
+hold Right Space 0.3
+hold Right 0.6
+# The waltz: drop into the pit, three even hops, call the band, the trampoline springs on ONE.
+hold Right 0.5
+wait 1.0
 repeat 3
 hold Space 150ms
 wait 0.6
 end
 tap Down
-wait 3.0
+wait 2.0
 hold Right 0.8
-wait 1.5
+wait 1.33
 hold Right Space 0.3
-hold Right 0.2
-hold Right Space 0.3
-hold Right 0.6
-wait 0.2
-hold Space 0.2
-hold Right 0.15
-wait 0.3
-wait 0.2
-hold Space 0.05
-hold Right Space 0.3
-wait 0.3
-wait 0.8
-hold Space 0.05
-hold Right Space 0.3
-wait 0.3
-wait 0.8
-hold Space 0.0
-hold Right Space 0.3
-wait 0.3
-wait 0.1
-hold Right Space 0.3
-hold Right 1.6
+hold Right 1.0
 wait 1

@@ -22,17 +22,21 @@ hold Right 0.525
 at 21.75
 hold Right 0.7
 wait 0.4
-hold Right 0.7
+# The waltz: three even hops by the checkpoint, call the band; the trampoline holds Nat till ONE
+# and springs him up the block (toot at the top).
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+hold Right 0.9
 hold Right Space 0.2
-hold Right 0.15
-wait 0.2
-at 24.800
-hold Right 0.800
-at 26.370
-hold Right 0.650
-at 27.0
-hold Right 0.8
-wait 0.3
+hold Right 1.75
+wait 1.67
+hold Right Space 0.3
+hold Right 0.4
+# (The waltz winds down before the grease: deaths in its hold don't make the band nervous.)
+wait 17.5
 hold Right 1.5
 # The grease chute: three slides into the brushes make the band nervous; with its sweaty grip,
 # jump off the grease onto the wall, then rally over the sewage.
@@ -42,7 +46,7 @@ hold Right 1.6
 wait 2.5
 hold Right 1.6
 wait 2.5
-hold Right 2.2
+hold Right 2.19
 hold Right Space 0.3
 hold Right 0.1
 wait 0.0

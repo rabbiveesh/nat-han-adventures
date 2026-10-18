@@ -4,10 +4,20 @@ hold Right Space 0.25
 hold Right 0.25
 hold Right Space 0.3
 hold Right 1.8
-hold Right 0.6
-hold Right Space 0.15
+# The waltz: three even hops on the floor, call the band, hop on the trampoline: it holds Nat till ONE.
+wait 0.4
+repeat 3
+hold Space 150ms
+wait 0.6
+end
+tap Down
+wait 1.2
 hold Right 0.3
-wait 1.5
+hold Right Space 0.25
+wait 0.71
+hold Left Space 0.27
+hold Space 0.03
+wait 0.74
 hold Left 0.3
 hold Left Space 0.35
 hold Left 0.2
@@ -27,16 +37,20 @@ hold Right 0.7
 hold Right Space 0.3
 hold Right 0.1
 hold Right Space 0.3
-hold Right 0.1
+hold Right 0.2
 hold Left 0.3
 hold Right 0.3
-hold Right 1.65
+hold Right 1.0
+wait 1.1
+hold Right 0.95
 hold Right Space 0.15
 hold Right 0.05
 wait 0.6
 hold Left Space 0.3
 hold Left 0.25
 wait 0.5
+# (The waltz winds down before the dryer: its trampolines would hold Nat till ONE.)
+wait 6
 hold Left Space 0.2
 hold Left 0.15
 wait 0.1
@@ -58,7 +72,7 @@ hold Left 0.05
 wait 0.3
 hold Right 0.2
 hold Left 0.6
-# Giant Steps: down the drain, five toots on the floor, call the band, float over the cushion wall.
+# Giant Steps: down the drain, five toots on the floor, call the band, float up the fan over the wall.
 hold Left 0.5
 wait 1.2
 hold Left 0.9
@@ -74,5 +88,5 @@ hold Left 0.7
 hold Left Space 0.4
 hold Left 0.1
 hold Left Space 0.3
-hold Left 1
+hold Left 1.4
 wait 1

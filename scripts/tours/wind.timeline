@@ -55,14 +55,32 @@ hold Right Space 0.3
 hold Right 0.45
 hold Right Space 0.3
 hold Right 4
-# The fired-up gap: grab the nuggets on the crumbling run, call the band, run at the headwind.
-hold Right 1.9
+# The fired-up gap: grab the nuggets on the crumbling run, call the band, ride the belt and leap at the headwind.
+hold Right 1.62
 tap Down
-wait 1.8
-hold Right 0.45
+hold Right 0.3
+# (Walking against the belt till the bar line.)
+hold Left 0.35
+wait 0.4
+hold Left 0.3
+wait 0.3
+hold Right 0.5
 hold Right Space 0.3
 hold Right 0.3
 hold Right Space 0.3
-hold Right 1.2
-hold Right 2
+hold Right 0.6
+# Giant Steps: drop into the well, five toots, call the band, float up the fan's column over the wall.
+hold Right 0.6
 wait 1.5
+repeat 5
+hold Space 140ms
+wait 120ms
+hold Space 140ms
+wait 0.9
+end
+tap Down
+wait 1.8
+hold Right 1.6
+hold Right Space 0.3
+hold Right 2.2
+wait 1
