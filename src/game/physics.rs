@@ -42,7 +42,8 @@ use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, 
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
 use crate::level::{
-    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_RISE, Level, SPRING_SPEED, TILE, Tile, WIND_SPEED,
+    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_FAN_REACH,
+    Level, SPRING_SPEED, TILE, Tile, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 
 pub(super) fn plugin(app: &mut App) {
@@ -206,17 +207,57 @@ impl Carrier {
     }
 }
 
-/// Gravity for [`step_body`]: acceleration (px/s², downward) and terminal fall speed.
+/// Gravity for [`step_body`]: acceleration (px/s², downward) and terminal fall speed, and how
+/// the band bends the gadget tiles.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fall {
     pub gravity: f32,
     pub max_fall: f32,
+    pub tiles: TileMood,
 }
 
 impl Fall {
     /// Nat's gravity under `groove`.
     pub fn of(groove: &Groove) -> Self {
-        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale() }
+        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale(), tiles: TileMood::of(groove) }
+    }
+}
+
+/// How the band bends the gadget tiles, for every body (one band): fired up, belts and wall
+/// fans run [`FIRED_UP_TILES`] faster; Giant Steps, every fan blows [`GIANT_FAN_REACH`] tiles
+/// far; the waltz, a trampoline catches you and springs you on the next ONE
+/// ([`WALTZ_SPRING_BOOST`] faster), and a cushion or a bumper hit on ONE flings you that much
+/// faster too.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TileMood {
+    /// Belt speed multiplier.
+    pub belt: f32,
+    /// Wall fans' gust multiplier.
+    pub gust: f32,
+    /// How far (empty tiles) fans blow.
+    pub reach: i32,
+    /// Trampolines hold whoever lands on them until ONE (the waltz).
+    pub catch: bool,
+    /// Spring multiplier now: [`WALTZ_SPRING_BOOST`] on ONE in the waltz, else 1.
+    pub spring: f32,
+}
+
+impl Default for TileMood {
+    fn default() -> Self {
+        TileMood { belt: 1.0, gust: 1.0, reach: FAN_REACH, catch: false, spring: 1.0 }
+    }
+}
+
+impl TileMood {
+    pub fn of(groove: &Groove) -> Self {
+        let fired = if groove.fired_up() { FIRED_UP_TILES } else { 1.0 };
+        TileMood {
+            belt: fired,
+            gust: fired,
+            reach: if groove.giant_steps() { GIANT_FAN_REACH } else { FAN_REACH },
+            catch: groove.waltz(),
+            spring: if groove.on_the_one() { WALTZ_SPRING_BOOST } else { 1.0 },
+        }
     }
 }
 
@@ -306,7 +347,8 @@ pub fn step_body(
 ) -> Contact {
     // --- Gravity (and a fan's updraft against it, or a ceiling fan's downdraft with it).
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
-    let wind = level.wind(idx(pos.x), row_of(level, idx(pos.y)));
+    let mood = fall.tiles;
+    let wind = level.wind_within(idx(pos.x), row_of(level, idx(pos.y)), mood.reach);
     if wind.1 > 0 && body.vel.y < FAN_RISE {
         body.vel.y = (body.vel.y + FAN_LIFT * dt).min(FAN_RISE);
     }
@@ -314,7 +356,7 @@ pub fn step_body(
         body.vel.y = (body.vel.y - FAN_LIFT * dt).max(-FAN_RISE);
     }
     // A wall fan's gust pushes along (like a belt, in the air too).
-    let gust = wind.0 as f32 * WIND_SPEED;
+    let gust = wind.0 as f32 * WIND_SPEED * mood.gust;
 
     // --- Carried by what we stood on.
     let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
@@ -323,7 +365,7 @@ pub fn step_body(
     let half = body.half;
     let was_on_ground = body.on_ground;
     // A conveyor belt underfoot (just jumped off it too: its speed comes along).
-    let belt = if body.riding.is_none() && (body.vel.y >= 0.0 || was_on_ground) { belt_underfoot(level, *pos, half) } else { 0.0 };
+    let belt = if body.riding.is_none() && (body.vel.y >= 0.0 || was_on_ground) { belt_underfoot(level, *pos, half) * mood.belt } else { 0.0 };
     let fall_speed = -body.vel.y;
     let mut blocked_x = false;
 
@@ -372,13 +414,13 @@ pub fn step_body(
         }
     }
     if bumped != 0.0 {
-        body.launch = bumped * BUMPER_SPEED;
-        body.vel.y = body.vel.y.max(BUMPER_LIFT);
+        body.launch = bumped * BUMPER_SPEED * mood.spring;
+        body.vel.y = body.vel.y.max(BUMPER_LIFT * mood.spring);
         body.on_ground = false;
     }
     if flung != 0.0 {
-        body.launch = flung * CUSHION_FLING;
-        body.vel.y = body.vel.y.max(CUSHION_LIFT);
+        body.launch = flung * CUSHION_FLING * mood.spring;
+        body.vel.y = body.vel.y.max(CUSHION_LIFT * mood.spring);
         body.on_ground = false;
     }
     // A ceiling cushion bumped into: back down.
@@ -445,12 +487,12 @@ pub fn step_body(
         }
     }
     if bonked {
-        body.vel.y = -SPRING_SPEED;
+        body.vel.y = -SPRING_SPEED * mood.spring;
     }
-    // A trampoline underfoot: up we go.
-    let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x));
+    // A trampoline underfoot: up we go (in the waltz, it holds you till ONE).
+    let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x)) && (!mood.catch || mood.spring > 1.0);
     if sprung {
-        body.vel.y = SPRING_SPEED;
+        body.vel.y = SPRING_SPEED * mood.spring;
         body.launch = 0.0;
         body.on_ground = false;
         body.riding = None;

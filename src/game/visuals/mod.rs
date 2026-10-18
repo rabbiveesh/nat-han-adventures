@@ -601,13 +601,23 @@ fn interpolate(
     }
 }
 
-fn frame_anims(time: Res<Time>, sprites: Res<Sprites>, mut q: Query<(&FrameAnim, &mut Sprite)>) {
+fn frame_anims(
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    groove: Option<Res<Groove>>,
+    mut belt_clock: Local<f32>,
+    mut q: Query<(&FrameAnim, &mut Sprite)>,
+) {
     let t = time.elapsed_secs();
+    // Belts run on their own clock: fired up, they roll as fast as they carry.
+    let rate = if groove.is_some_and(|g| g.fired_up()) { crate::level::FIRED_UP_TILES } else { 1.0 };
+    *belt_clock += time.delta_secs() * rate;
     for (anim, mut sprite) in &mut q {
         let frames = sprites.frames(anim.id);
         if frames.len() < 2 {
             continue;
         }
+        let t = if anim.id == SpriteId::Belt { *belt_clock } else { t };
         let i = (((t + anim.offset) * anim.fps) as usize) % frames.len();
         if sprite.image != frames[i] {
             sprite.image = frames[i].clone();

@@ -184,6 +184,13 @@ pub const NOMINAL_BAR: f32 = 2.0;
 pub const BELT_SPEED: f32 = 40.0;
 /// A fan (`*`) blows straight up through this many empty tiles above it...
 pub const FAN_REACH: i32 = 6;
+/// ...twice that while the band plays Giant Steps (every fan, laid any way: `game::TileMood`).
+pub const GIANT_FAN_REACH: i32 = 2 * FAN_REACH;
+/// While the band's fired up, conveyor belts and wall fans' gusts run this much faster.
+pub const FIRED_UP_TILES: f32 = 1.5;
+/// In the waltz a trampoline catches whoever lands on it and springs them on the next ONE this
+/// much faster (≈ ×2 the height); a cushion or a bumper hit on ONE flings this much faster too.
+pub const WALTZ_SPRING_BOOST: f32 = 1.4;
 /// ...lifting whoever's in its column (px/s², on top of gravity)...
 pub const FAN_LIFT: f32 = 2600.0;
 /// ...up to this rising speed (px/s): you float up the column and bob at its top.
@@ -963,13 +970,19 @@ impl Level {
     /// tiles away blowing its way at it, with nothing solid between (an updraft: y 1, a ceiling
     /// fan's downdraft: y -1; a wall fan's: x ±1). Opposite gusts cancel.
     pub fn wind(&self, col: i32, row: i32) -> (i32, i32) {
+        self.wind_within(col, row, FAN_REACH)
+    }
+
+    /// [`Level::wind`] with fans blowing through `reach` empty tiles (Giant Steps:
+    /// [`GIANT_FAN_REACH`]).
+    pub fn wind_within(&self, col: i32, row: i32, reach: i32) -> (i32, i32) {
         if col < 0 || col >= self.width as i32 || self.tile(col, row).is_solid() {
             return (0, 0);
         }
         let mut wind = (0, 0);
         // Look back up each gust: (dc, dr) is grid steps towards the fan.
         for (dc, dr) in [(0, 1), (0, -1), (-1, 0), (1, 0)] {
-            for k in 1..=FAN_REACH {
+            for k in 1..=reach {
                 let t = self.tile(col + dc * k, row + dr * k);
                 if let Some((x, y)) = t.fan() {
                     // Blowing back along the look (grid rows run down: y flips).

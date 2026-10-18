@@ -12,7 +12,7 @@ use super::{Level, TILE};
 use crate::audio::Harmony;
 use crate::game::{
     BOOST_SPEED, Body, Carrier, Contact, FIRED_UP_SPEED, Fall, WEAK_BOOST_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, THROW_CARRY, THROW_SPEED, han_carrier, move_towards,
-    step_body, tuning::*, HanHead,
+    step_body, tuning::*, HanHead, TileMood,
 };
 
 /// Han's top running speed (px/s): a touch faster than Nat's, so he can catch up.
@@ -78,7 +78,7 @@ impl HanPhys {
             1.0
         };
         HanPhys {
-            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt() },
+            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt(), tiles: TileMood::of(groove) },
             speed: HAN_RUN_SPEED * speed,
             ground_accel: GROUND_ACCEL * speed,
             air_accel: AIR_ACCEL * speed,
@@ -95,7 +95,7 @@ impl HanPhys {
     pub fn side_b(groove: &Groove) -> HanPhys {
         let g = groove;
         HanPhys {
-            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale() },
+            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale(), tiles: TileMood::of(g) },
             speed: RUN_SPEED * g.speed_scale,
             ground_accel: GROUND_ACCEL * g.speed_scale,
             air_accel: AIR_ACCEL * g.speed_scale,

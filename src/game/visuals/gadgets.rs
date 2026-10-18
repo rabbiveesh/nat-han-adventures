@@ -1,13 +1,14 @@
 //! The gadget tiles' art: crushers' blocks (steel, a face, hazard stripes on the slamming side),
 //! crumbling platforms cracking and gone, smashed bricks vanishing, trampolines squashing,
-//! beat blocks there and gone with the bars, fans puffing wisps up their updraft.
+//! beat blocks there and gone with the bars, fans puffing wisps up their updraft (twice as far
+//! under Giant Steps, faster when fired up: the tiles answer the band).
 
 use bevy::prelude::*;
 
 use crate::art::{SpriteId, Sprites};
 use crate::game::crushers::{BrickSmashed, Crumble, CrusherBlock, Sprung};
-use crate::game::{ActiveLevel, LevelEntity, LevelTile};
-use crate::level::{CrushDir, FAN_REACH, TILE, Tile};
+use crate::game::{ActiveLevel, Groove, LevelEntity, LevelTile};
+use crate::level::{CrushDir, FAN_REACH, FIRED_UP_TILES, GIANT_FAN_REACH, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_observer(crusher_sprite).add_systems(
@@ -148,6 +149,7 @@ fn fan_wisps(
     time: Res<Time>,
     active: Option<Res<ActiveLevel>>,
     sprites: Res<Sprites>,
+    groove: Option<Res<Groove>>,
     fans: Query<&LevelTile>,
     mut clock: Local<f32>,
 ) {
@@ -159,13 +161,16 @@ fn fan_wisps(
     *clock = 0.0;
     let level = &active.level;
     let t = time.elapsed_secs();
+    let far = groove.as_ref().is_some_and(|g| g.giant_steps());
+    let max = if far { GIANT_FAN_REACH } else { FAN_REACH };
+    let speed = if groove.as_ref().is_some_and(|g| g.fired_up()) { 90.0 * FIRED_UP_TILES } else { 90.0 };
     for f in &fans {
         let Some((x, y)) = f.tile.fan() else { continue };
         let (c, r) = (f.col as i32, f.row as i32);
         // How far its gust reaches (grid rows run down).
-        let reach = (1..=FAN_REACH)
+        let reach = (1..=max)
             .take_while(|k| {
-                let w = level.wind(c + x * k, r - y * k);
+                let w = level.wind_within(c + x * k, r - y * k, max);
                 (x != 0 && w.0.signum() == x) || (y != 0 && w.1.signum() == y)
             })
             .count() as f32;
@@ -176,7 +181,6 @@ fn fan_wisps(
         let j = ((t * 12.9898 + f.col as f32 * 78.233).sin() * 43758.545).fract();
         let dir = Vec2::new(x as f32, y as f32);
         let at = level.tile_center(f.col, f.row) + dir.perp() * (j - 0.5) * 12.0 + dir * TILE / 2.0;
-        let speed = 90.0;
         let life = reach * TILE / speed;
         commands.spawn((
             LevelEntity,

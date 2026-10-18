@@ -48,7 +48,7 @@ pub use han::{
 };
 pub use pickups::CHECKPOINT_QUIPS;
 pub use physics::{
-    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY, PlayerControl, THROW_CARRY, THROW_SPEED,
+    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY, PlayerControl, THROW_CARRY, THROW_SPEED, TileMood,
     WEAK_BOOST_SPEED, han_carrier,
     move_towards, springs, step_body,
 };

@@ -78,8 +78,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
 use super::{
-    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_FLING, CUSHION_LIFT, Crusher, FAN_LIFT, FAN_RISE, GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE,
-    SPRING_SPEED, TILE, ThingKind, Tile, Topic, WIND_SPEED,
+    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_FLING, CUSHION_LIFT, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_FAN_REACH,
+    GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
@@ -191,6 +191,9 @@ pub enum Gate {
     LongGap,
     /// Needs the waltz: a jump off a moving platform gliding on ONE.
     GlideLaunch,
+    /// Needs the waltz: a trampoline springs you on ONE ([`WALTZ_SPRING_BOOST`] faster) somewhere
+    /// no other mode's spring (or jump) gets.
+    SpringOnOne,
     GreaseChute,
     StainPit,
     /// Needs Giant Steps and Han: the mega-boost off his head (the plunger boost in Giant
@@ -225,6 +228,7 @@ impl Gate {
             Gate::GiantWall => "giant wall",
             Gate::LongGap => "long gap",
             Gate::GlideLaunch => "glide launch",
+            Gate::SpringOnOne => "spring on ONE",
             Gate::GreaseChute => "grease chute",
             Gate::StainPit => "stain pit",
             Gate::MegaWall => "mega wall",
@@ -240,7 +244,7 @@ impl Gate {
         match self {
             Gate::GiantWall => Some(Mode::GiantSteps),
             Gate::LongGap => Some(Mode::FiredUp),
-            Gate::GlideLaunch => Some(Mode::Waltz),
+            Gate::GlideLaunch | Gate::SpringOnOne => Some(Mode::Waltz),
             Gate::GreaseChute => Some(Mode::Nervous),
             Gate::StainPit
             | Gate::MegaWall
@@ -266,7 +270,7 @@ impl Gate {
         match self {
             Gate::GiantWall => Topic::Giant,
             Gate::LongGap => Topic::Gap,
-            Gate::GlideLaunch => Topic::Waltz,
+            Gate::GlideLaunch | Gate::SpringOnOne => Topic::Waltz,
             Gate::GreaseChute => Topic::Grip,
             Gate::StainPit => Topic::Stain,
             Gate::MegaWall => Topic::Mega,
@@ -282,6 +286,7 @@ impl Gate {
             Gate::GiantWall => 'W',
             Gate::LongGap => 'R',
             Gate::GlideLaunch => 'Z',
+            Gate::SpringOnOne => 'O',
             Gate::GreaseChute => 'Y',
             Gate::StainPit => 'K',
             Gate::MegaWall => 'M',
@@ -326,6 +331,39 @@ pub struct Env {
     /// A trampoline gives the toot back (Nat's does; Han's toots aren't refreshed by one, so
     /// his nav replays his moves' toot times as planned).
     pub spring_toot: bool,
+    /// How the band bends the gadget tiles (`game::TileMood`).
+    pub tiles: Tiles,
+}
+
+/// The band's bend on the gadget tiles in a mode (the game's `TileMood`): belts' and wall
+/// fans' speed multipliers (fired up), fans blowing [`GIANT_FAN_REACH`] far (Giant Steps), a
+/// trampoline's spring multiplier (the waltz: it holds you till ONE, then springs
+/// [`WALTZ_SPRING_BOOST`] faster) and a cushion's or a bumper's (the waltz, on ONE: ideal
+/// flights only, a human doesn't count on the timing).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tiles {
+    pub belt: f32,
+    pub gust: f32,
+    pub far: bool,
+    pub spring: f32,
+    pub fling: f32,
+}
+
+impl Tiles {
+    pub const NORMAL: Tiles = Tiles { belt: 1.0, gust: 1.0, far: false, spring: 1.0, fling: 1.0 };
+
+    pub fn of(mode: Mode, ideal: bool) -> Tiles {
+        match mode {
+            Mode::FiredUp => Tiles { belt: FIRED_UP_TILES, gust: FIRED_UP_TILES, ..Tiles::NORMAL },
+            Mode::GiantSteps => Tiles { far: true, ..Tiles::NORMAL },
+            Mode::Waltz => Tiles {
+                spring: WALTZ_SPRING_BOOST,
+                fling: if ideal { WALTZ_SPRING_BOOST } else { 1.0 },
+                ..Tiles::NORMAL
+            },
+            Mode::Normal | Mode::Nervous => Tiles::NORMAL,
+        }
+    }
 }
 
 /// How much faster than normal the waltz's platforms glide at the peak of ONE
@@ -372,13 +410,18 @@ impl Env {
             throw: g.fired_up(),
             kick: 0.0,
             spring_toot: true,
+            tiles: Tiles::of(mode, ideal),
         }
     }
 
     /// The waltz's off-beat jumps: normal physics, but the platforms glide (up to
-    /// [`GLIDE_PEAK`] × their speed) on ONE.
+    /// [`GLIDE_PEAK`] × their speed) on ONE, and the tiles waltz.
     pub fn glide(ideal: bool) -> Env {
-        Env { carry: GLIDE_PEAK * if ideal { 1.0 } else { HUMAN_GLIDE }, ..Env::new(Mode::Normal, ideal) }
+        Env {
+            carry: GLIDE_PEAK * if ideal { 1.0 } else { HUMAN_GLIDE },
+            tiles: Tiles::of(Mode::Waltz, ideal),
+            ..Env::new(Mode::Normal, ideal)
+        }
     }
 
     /// Han's physics in `mode`, for his navigation ([`super::nav`]): his run speed and gravity
@@ -400,6 +443,7 @@ impl Env {
             ideal: false,
             throw: false,
             kick: 0.0,
+            tiles: Tiles::of(mode, false),
         }
     }
 
@@ -454,6 +498,9 @@ const CUSHION: u32 = 1 << 22;
 const SPIKE_L: u32 = 1 << 23;
 const SPIKE_R: u32 = 1 << 24;
 const WIND: u32 = UPDRAFT | DOWNDRAFT | WIND_E | WIND_W;
+/// The gusts with fans blowing [`GIANT_FAN_REACH`] far (Giant Steps): the `WIND` bits, this
+/// many bits up (bits 25, 28, 29, 30).
+const FAR_SHIFT: u32 = 9;
 const DEADLY_TILE: u32 = SPIKE_UP | SPIKE_DOWN | LIQUID | SPIKE_L | SPIKE_R;
 const FLOOR_ONEWAY: u32 = ONEWAY | VIRT | STAIN | RAFT;
 
@@ -576,11 +623,13 @@ impl<'a> Map<'a> {
                     // bar is long), no place to linger, never in your way for long.
                     Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff => ONEWAY | CRUMBLE,
                 } | {
-                    let (x, y) = level.wind(c, r);
-                    (if y > 0 { UPDRAFT } else { 0 })
-                        | (if y < 0 { DOWNDRAFT } else { 0 })
-                        | (if x > 0 { WIND_E } else { 0 })
-                        | (if x < 0 { WIND_W } else { 0 })
+                    let bits = |(x, y): (i32, i32)| {
+                        (if y > 0 { UPDRAFT } else { 0 })
+                            | (if y < 0 { DOWNDRAFT } else { 0 })
+                            | (if x > 0 { WIND_E } else { 0 })
+                            | (if x < 0 { WIND_W } else { 0 })
+                    };
+                    bits(level.wind(c, r)) | bits(level.wind_within(c, r, GIANT_FAN_REACH)) << FAR_SHIFT
                 };
             }
         }
@@ -847,9 +896,11 @@ impl<'a> Map<'a> {
     }
 
     /// The gusts the box centered at (x, y) is in (the game's `step_body` looks at its
-    /// center's cell): the wind's (x, y) as in [`Level::wind`], y up.
-    fn wind(&self, x: f32, y: f32) -> (i32, i32) {
+    /// center's cell): the wind's (x, y) as in [`Level::wind`], y up; `far`: fans blowing
+    /// [`GIANT_FAN_REACH`] far.
+    fn wind(&self, x: f32, y: f32, far: bool) -> (i32, i32) {
         let f = self.f((x / TILE).floor() as i32, (y / TILE).floor() as i32);
+        let f = if far { f >> FAR_SHIFT } else { f };
         if f & WIND == 0 {
             return (0, 0);
         }
@@ -1450,7 +1501,7 @@ fn simulate(map: &Map, env: &Env, (c, r): Cell, s: &Strategy, x0: f32, touched: 
     let mut f = Flight::of(env, s, Launch::Ground, x0, y0);
     // Off a conveyor belt: its speed comes along (Nat keeps it, Han doesn't).
     if env.carry > 0.0 && s.carry == 0.0 {
-        f.carry = map.belt((c, r));
+        f.carry = map.belt((c, r)) * env.tiles.belt;
     }
     fly(map, env, &f, touched)
 }
@@ -1480,7 +1531,7 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
         t += DT;
         let g = Flight { toots, ..*f };
         air_controls(env, &g, t, &mut b.vx, &mut b.vy, &mut b.cut, &mut tooted);
-        let moved = move_body(map, &mut b, &mut smashed, touched);
+        let moved = move_body(map, env, &mut b, &mut smashed, touched);
         if moved.refilled && env.spring_toot {
             // A bumper or trampoline gives the toot back: the planned toots again from now.
             for k in 0..3 {
@@ -1522,19 +1573,20 @@ struct Moved {
 /// (bumpers bat it back), the vertical one (trampolines bounce it, bricks smash from below,
 /// gone for the rest of the flight: `smashed`), hazards. The game's `step_body`; the cells the
 /// box is in go into `touched`.
-fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec<Cell>) -> Moved {
+fn move_body(map: &Map, env: &Env, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec<Cell>) -> Moved {
     let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
     let mut refilled = false;
     // A fan's updraft or a ceiling fan's downdraft, and a wall fan's gust (the game's
     // `step_body`).
-    let wind = map.wind(b.x, b.y);
+    let tiles = env.tiles;
+    let wind = map.wind(b.x, b.y, tiles.far);
     if wind.1 > 0 && b.vy > -FAN_RISE {
         b.vy = (b.vy - FAN_LIFT * DT).max(-FAN_RISE);
     }
     if wind.1 < 0 && b.vy < FAN_RISE {
         b.vy = (b.vy + FAN_LIFT * DT).min(FAN_RISE);
     }
-    let gust = wind.0 as f32 * WIND_SPEED;
+    let gust = wind.0 as f32 * WIND_SPEED * tiles.gust;
 
     // Horizontal move against solids.
     let nx = b.x + (b.vx + b.carry + gust) * DT;
@@ -1565,15 +1617,15 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
     }
     if bumped != 0.0 {
         // A bumper's face: batted back and up, the toot back (like a trampoline).
-        b.carry = bumped * BUMPER_SPEED;
-        b.vy = b.vy.min(-BUMPER_LIFT);
+        b.carry = bumped * BUMPER_SPEED * tiles.fling;
+        b.vy = b.vy.min(-BUMPER_LIFT * tiles.fling);
         b.cut = true;
         refilled = true;
     }
     if flung != 0.0 {
         // A wall cushion's face: flung away, the toot back.
-        b.carry = flung * CUSHION_FLING;
-        b.vy = b.vy.min(-CUSHION_LIFT);
+        b.carry = flung * CUSHION_FLING * tiles.fling;
+        b.vy = b.vy.min(-CUSHION_LIFT * tiles.fling);
         b.cut = true;
         refilled = true;
     }
@@ -1605,11 +1657,16 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
             if let Some(col) = hit {
                 b.y = top - HALF_H;
                 if crate::game::springs(under.iter().flatten().copied(), center) {
-                    // A trampoline: up again (the game's `step_body`), the toot back.
-                    b.vy = -SPRING_SPEED;
+                    // A trampoline: up again (the game's `step_body`; in the waltz on the
+                    // next ONE, faster), the toot back.
+                    b.vy = -SPRING_SPEED * tiles.spring;
                     b.carry = 0.0;
                     b.cut = true;
                     refilled = true;
+                } else if tiles.far && map.f(col, row - 1) >> FAR_SHIFT & UPDRAFT != 0 {
+                    // In a fan's updraft that only Giant Steps' far reach makes: no standing
+                    // there, it lifts you on.
+                    b.vy = 0.0;
                 } else {
                     landed = Some((col, row - 1));
                 }
@@ -1639,7 +1696,7 @@ fn move_body(map: &Map, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec
         }
         if bonk {
             // A ceiling cushion: sprung back down, the toot back.
-            b.vy = SPRING_SPEED;
+            b.vy = SPRING_SPEED * tiles.fling;
             b.cut = true;
             refilled = true;
         } else if hit {
@@ -1733,6 +1790,8 @@ struct PinNode {
 struct PinMemo {
     flags: Vec<u32>,
     toots: bool,
+    /// The physics it was walked in (gravity, the tiles' bend).
+    env: Option<(u32, u32, u32, bool, u32, u32)>,
     ids: HashMap<u64, u32>,
     nodes: Vec<PinNode>,
     walks: u32,
@@ -1844,8 +1903,9 @@ impl PinMemo {
 /// into `g`.
 fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin {
     let mut memo = std::mem::take(&mut g.pin);
-    if memo.flags != map.flags || memo.toots != toots {
-        memo = PinMemo { flags: map.flags.clone(), toots, ..PinMemo::default() };
+    let key = (env.gravity.to_bits(), env.tiles.belt.to_bits(), env.tiles.gust.to_bits(), env.tiles.far, env.tiles.spring.to_bits(), env.tiles.fling.to_bits());
+    if memo.flags != map.flags || memo.toots != toots || memo.env != Some(key) {
+        memo = PinMemo { flags: map.flags.clone(), toots, env: Some(key), ..PinMemo::default() };
     }
     memo.walks += 1;
     let walk = memo.walks;
@@ -1853,7 +1913,7 @@ fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin 
     let (c, r) = from;
     let x = c as f32 * TILE + 8.0;
     let y = (r + 1) as f32 * TILE - HALF_H;
-    let belt = if env.carry > 0.0 { map.belt(from) } else { 0.0 };
+    let belt = if env.carry > 0.0 { map.belt(from) * env.tiles.belt } else { 0.0 };
     let mut starts = Vec::new();
     for dir in [-1.0, 0.0, 1.0] {
         if env.grip || !map.greasy(from) {
@@ -1935,7 +1995,7 @@ fn pin_stretch(map: &Map, env: &Env, ball: &mut Ball, keys: Keys, touched: &mut 
             b.vy = -env.toot;
         }
         b.vy = (b.vy + env.gravity * DT).min(env.max_fall);
-        let moved = move_body(map, b, &mut ball.smashed, &mut frame);
+        let moved = move_body(map, env, b, &mut ball.smashed, &mut frame);
         touched.append(&mut frame);
         if moved.refilled && env.spring_toot {
             ball.toot = true;
@@ -2522,7 +2582,10 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                     continue;
                 }
                 let ok = [-1, 0, 1].map(|d| ready(map, &g, mode, cell, d));
-                if !ok.iter().any(|&b| b) {
+                // A trampoline springing on ONE: a waltz jump without a glide, from anywhere
+                // with room to summon the waltz.
+                let springs = mode == Mode::Waltz && map.has_springs && waltz_runway(map, &g, cell);
+                if !ok.iter().any(|&b| b) && !springs {
                     continue;
                 }
                 let gate = match mode {
@@ -2532,15 +2595,28 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                     _ => Gate::GreaseChute,
                 };
                 for s in arcs.at(map, cell) {
-                    // The waltz's gate is the glide's launch, not its higher jump on ONE.
-                    if !ok[(s.dir as i32 + 1) as usize] || (mode == Mode::Waltz && s.carry == 0.0) {
+                    // The waltz's gates are the glide's launch and a trampoline's spring on ONE,
+                    // not its higher jump on ONE.
+                    let on_one = mode == Mode::Waltz && s.carry == 0.0;
+                    if on_one && !springs || !on_one && !ok[(s.dir as i32 + 1) as usize] {
                         continue;
                     }
                     let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
                     if let Outcome::Land(land) = simulate(map, &arcs.env, cell, s, x0, &mut buf)
                         && !g.reached(land)
                     {
-                        found.push((gate, cell, land, buf.clone()));
+                        if on_one {
+                            // Only if the spring on ONE is what got there: the same jump with
+                            // the trampolines' everyday spring doesn't.
+                            let plain = Env { tiles: Tiles { spring: 1.0, ..arcs.env.tiles }, ..arcs.env };
+                            let mut scratch = Vec::new();
+                            if matches!(simulate(map, &plain, cell, s, x0, &mut scratch), Outcome::Land(l) if !g.reached(l)) {
+                                continue;
+                            }
+                            found.push((Gate::SpringOnOne, cell, land, buf.clone()));
+                        } else {
+                            found.push((gate, cell, land, buf.clone()));
+                        }
                     }
                 }
             }
