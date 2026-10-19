@@ -23,7 +23,7 @@ use nat_han_adventures::{
         frame_duration,
         timeline::{Script, TimelinePlayer, play_timeline},
     },
-    events::{CallBand, Jumped, NuggetCollected, PlayerDied},
+    events::{BandFreedom, CallBand, Jumped, NuggetCollected, PlayerDied},
     game::{Groove, Han, Player, Pos, crushers::CrusherBlock, secret::SecretFound},
     level::{Level, Levels, TILE, Topic, validate},
     state::AppState,
@@ -51,10 +51,15 @@ struct Run {
     end: f32,
     han: bool,
     secrets: usize,
+    /// The freest the adaptive engine set the band's lead (a secret sets it loose).
+    hottest: f32,
 }
 
 #[derive(Resource, Default)]
 struct Secrets(usize);
+
+#[derive(Resource, Default)]
+struct Hottest(f32);
 
 fn play(level: &str, tour: &str) -> Run {
     let level = Level::parse(level).unwrap();
@@ -72,6 +77,10 @@ fn play(level: &str, tour: &str) -> Run {
         })
         .init_resource::<Happened>()
         .init_resource::<Secrets>()
+        .init_resource::<Hottest>()
+        .add_systems(Last, |mut h: ResMut<Hottest>, mut r: MessageReader<BandFreedom>| {
+            h.0 = r.read().fold(h.0, |hot, f| hot.max(f.lead))
+        })
         .add_systems(
             Last,
             |mut h: ResMut<Happened>,
@@ -143,7 +152,8 @@ fn play(level: &str, tour: &str) -> Run {
     let _ = std::fs::remove_file(&wav);
     let deaths = app.world().resource::<Deaths>().0.iter().map(|(f, p)| (secs(*f), p.x / TILE, rows - p.y / TILE)).collect();
     let secrets = app.world().resource::<Secrets>().0;
-    Run { deaths, goal, end: secs(timeline.frames), han, secrets }
+    let hottest = app.world().resource::<Hottest>().0;
+    Run { deaths, goal, end: secs(timeline.frames), han, secrets, hottest }
 }
 
 #[test]
@@ -212,6 +222,8 @@ fn the_no_call_tour_clears_breezy_through_the_tunnel_and_finds_the_secret() {
     let run = play(include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy-tunnel.timeline"));
     assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
     assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let loose = nat_han_adventures::game::adaptive::band_freedom(nat_han_adventures::adapt::BandMood { freedom: 1.0, intensity: 1.0 }).lead;
+    assert!(run.hottest >= loose - 1e-4, "the secret sets the band loose ({} < {loose})", run.hottest);
     let goal = run.goal.expect("the tour reaches the goal");
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }

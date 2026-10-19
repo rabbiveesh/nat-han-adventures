@@ -98,7 +98,8 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
   run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
   tracing knobs for writing one). A level can hide a secret (`secret@`: Han glimpsed behind a
-  grate, saved per level in `solo_secrets`) and name its closing stretch (`shout:`, shout
+  grate, saved per level in `solo_secrets`; finding one sets the band loose at full freedom
+  until the next decision; all ten open World 4, `Progress::world_4_unlocked`) and name its closing stretch (`shout:`, shout
   choruses): `src/game/secret.rs`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in

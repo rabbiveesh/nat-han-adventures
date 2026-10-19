@@ -586,7 +586,7 @@ const SOLO_DEATH_COOLS: f32 = 0.05;
 
 /// The band's freedom, on decisions: level start, death, checkpoint, every
 /// [`MUSIC_CHECK_SECS`] of play, and in Side B its rewinds and calls. NAT ALONE has its own
-/// mood ([`solo_mood`]).
+/// mood ([`solo_mood`]), and a secret found there turns the band all the way up.
 #[allow(clippy::too_many_arguments)]
 fn decide_music(
     mode: Res<AssistMode>,
@@ -595,11 +595,20 @@ fn decide_music(
     profile: Res<AdaptiveProfile>,
     side: Option<Res<super::sideb::SideB>>,
     solo: Option<Res<super::solo::SoloRun>>,
+    mut secret: MessageReader<super::secret::SecretFound>,
     mut was_side: Local<Option<(u32, u32)>>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
 ) {
     let Some(run) = run else { return };
+    // A secret found sets the band loose at once (the instant feedback); the next decision
+    // (a death, a checkpoint, or [`MUSIC_CHECK_SECS`] on) brings it back to following play.
+    if secret.read().count() > 0 {
+        t.decide = false;
+        t.last_decision = run.time;
+        out.write(band_freedom(BandMood { freedom: 1.0, intensity: 1.0 }));
+        return;
+    }
     // Side B decides on coming, going, every rewind and every call.
     let now_side = side.as_ref().map(|s| (s.rewinds, s.calls));
     if now_side != *was_side {

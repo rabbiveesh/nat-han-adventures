@@ -15,6 +15,9 @@ use crate::game::solo::SOLO_COUNT;
 use crate::game::{AdaptiveProfile, StoryAssistState};
 use crate::level::{LEVEL_COUNT, Topic};
 
+/// Secrets that open World 4: all of them (one in each NAT ALONE level).
+pub const SECRETS_FOR_WORLD_4: usize = SOLO_COUNT;
+
 pub fn plugin(app: &mut App) {
     app.init_resource::<Progress>();
 }
@@ -246,6 +249,17 @@ impl Progress {
     /// is cleared.
     pub fn solo_world_unlocked(&self) -> bool {
         self.side_b_rewinds[SIDE_B_COUNT - 1].is_some()
+    }
+
+    /// NAT ALONE secrets found (Han glimpsed behind a grate, `game::secret`).
+    pub fn secrets_found(&self) -> usize {
+        self.solo_secrets.iter().filter(|&&s| s).count()
+    }
+
+    /// World 4 (Nat and Han, in sight but apart: the double game) opens once
+    /// [`SECRETS_FOR_WORLD_4`] secrets are found. Not built on this branch yet: the hook.
+    pub fn world_4_unlocked(&self) -> bool {
+        self.secrets_found() >= SECRETS_FOR_WORLD_4
     }
 
     /// Tiny line-based text format:
@@ -662,6 +676,20 @@ mod tests {
         p.record(LEVEL_COUNT - 1, 0, 1.0);
         assert!(p.side_b_unlocked());
         assert!(Progress::from_text(&p.to_text()).unwrap().side_b_unlocked(), "it survives a save");
+    }
+
+    #[test]
+    fn world_4_wants_every_secret() {
+        let mut p = Progress::default();
+        assert_eq!(p.secrets_found(), 0);
+        for i in 0..SOLO_COUNT - 1 {
+            p.solo_secrets[i] = true;
+        }
+        assert!(!p.world_4_unlocked(), "nine of ten isn't enough");
+        p.solo_secrets[SOLO_COUNT - 1] = true;
+        assert_eq!(p.secrets_found(), SOLO_COUNT);
+        assert!(p.world_4_unlocked());
+        assert!(Progress::from_text(&p.to_text()).unwrap().world_4_unlocked(), "it survives a save");
     }
 
     #[test]
