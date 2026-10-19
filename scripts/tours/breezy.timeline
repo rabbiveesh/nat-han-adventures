@@ -1,101 +1,34 @@
-# Breezy Does It (levels/solo/breezy.txt): the awnings' tailwind, the ceiling-fan hall, the wind
-# elevator, the bubble bath (drift column to column at the top of each bob), the updraft up to
-# the roof and its holes, the big blow (awning, fan post, toot); then five toots, Down (Giant
-# Steps): the fan floats Nat up the tall wall, and the sunken fans up the next one, to the
-# plunger in the headwind.
-wait 0.3
-hold Right 1.6
-hold Right Space 300ms
-hold Right 0.15
-hold Right Space 300ms
-hold Right 0.6
-at 3.3
-hold Right Space 300ms
-hold Right 0.15
-hold Right Space 300ms
-hold Right 0.5
-at 4.75
-repeat 6
-hold Right Space 200ms
-hold Right 0.22
-end
-hold Right 1.1
-hold Right Space 300ms
-hold Right 1.05
-wait 0.45
-hold Right 0.4
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.4
-wait 0.45
-hold Right 0.4
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.5
-wait 0.5
-hold Right 0.3
-hold Right Space 150ms
-hold Right 0.05
-wait 0.2
-hold Right 0.3
-wait 0.3
-hold Right 0.4
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.2
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.2
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 1.95
-hold Right Space 0.3
-hold Right 0.1
-wait 0.3
-hold Right 0.0
-hold Right Space 0.3
-hold Right 0.2
-hold Right Space 200ms
-hold Right 0.3
-wait 0.3
-hold Right 0.4
-wait 0.3
-repeat 5
-  hold Space 140ms
-  wait 120ms
-  hold Space 140ms
-  wait 0.9
-end
-tap Down
-wait 1.0
-hold Right 1.0
-wait 3
-hold Right 9
-wait 1
+# Breezy Does It (levels/solo/breezy.txt): one idea, wind carrying Nat. The dip's fan floats him
+# up a step, a fan at the next step's foot; a hanging vent box blows him over a dry ditch, the
+# next over sewage (toot to land); the bubble bath (run on, the posts' updrafts hold him up;
+# toot for the bank's nugget); a vent too high to jump to (hop onto the fan under it, jump and
+# toot into its gust); the headwind pit (jump, toot as he clears the gust). Five toots by the
+# valley, the last at the top of the fan that stops short: Down (Giant Steps). The fan floats
+# him up the cliff, the canyon's sunken fans carry him over it, the awning's gust down the
+# slope, the bubble bath again tosses him high along the nuggets; the band winds down over the
+# hill, and the last vent box, the two fans and the fan pit take him to the plunger in the
+# everyday wind.
+t=0.3 press Right
+t=5.4 tap Space 500ms
+t=7.0 tap Space 300ms
+t=7.5 tap Space 300ms
+t=9.45 tap Space 300ms
+t=11.0 tap Space 100ms
+t=11.15 tap Space 300ms
+t=12.4 tap Space 300ms
+t=13.45 tap Space 100ms
+t=13.62 release Right
+t=14.3 press Right
+t=14.3 tap Space 100ms
+t=14.62 tap Space 100ms
+t=15.61 tap Space 300ms
+t=16.19 tap Space 300ms
+t=21.15 tap Space 300ms
+t=21.45 tap Down
+t=31.10 tap Space 100ms
+t=39.85 tap Space 100ms
+t=41.0 tap Space 100ms
+t=44.19 tap Space 100ms
+t=45.49 tap Space 100ms
+t=46.89 tap Space 100ms
+at 52

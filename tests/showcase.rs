@@ -8,9 +8,9 @@
 //! music in lockstep driving the beat blocks and beat crushers).
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
-//! bar lines and the crushers near him; `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play
-//! another level / timeline in `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`:
-//! trace every n frames), and
+//! bar lines, his toots, nuggets and band calls, the harmony, and the crushers near him;
+//! `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play another level / timeline in
+//! `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`: trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
 #![cfg(feature = "capture")]
 
@@ -21,7 +21,7 @@ use nat_han_adventures::{
         frame_duration,
         timeline::{Script, TimelinePlayer, play_timeline},
     },
-    events::PlayerDied,
+    events::{CallBand, Jumped, NuggetCollected, PlayerDied},
     game::{Groove, Han, Player, Pos, crushers::CrusherBlock},
     level::{Level, Levels, TILE, Topic, validate},
     state::AppState,
@@ -36,6 +36,10 @@ struct Deaths(Vec<(u64, Vec2)>);
 
 #[derive(Resource, Default)]
 struct Frame(u64);
+
+/// What the trace reports between position lines: toots, nuggets, band calls.
+#[derive(Resource, Default)]
+struct Happened(Vec<&'static str>);
 
 /// What a run did: its deaths (s, col, row), when it reached the goal (s), whether Han was in
 /// the level.
@@ -59,7 +63,16 @@ fn play(level: &str, tour: &str) -> Run {
         .init_resource::<Frame>()
         .add_systems(Last, |mut d: ResMut<Deaths>, f: Res<Frame>, mut r: MessageReader<PlayerDied>| {
             d.0.extend(r.read().map(|m| (f.0, m.pos)))
-        });
+        })
+        .init_resource::<Happened>()
+        .add_systems(
+            Last,
+            |mut h: ResMut<Happened>, mut j: MessageReader<Jumped>, mut n: MessageReader<NuggetCollected>, mut c: MessageReader<CallBand>| {
+                h.0.extend(j.read().filter(|j| j.double).map(|_| "toot"));
+                h.0.extend(n.read().map(|_| "nugget"));
+                h.0.extend(c.read().map(|_| "call"));
+            },
+        );
     app.add_plugins(audio::plugin).insert_resource(AudioCapture::new(&wav, FPS).unwrap());
     app.finish();
     app.cleanup();
@@ -91,8 +104,13 @@ fn play(level: &str, tour: &str) -> Run {
             last_bar = Some(bar);
         }
         let Some(p) = app.world_mut().query_filtered::<&Pos, With<Player>>().iter(app.world()).next().map(|p| p.0) else { continue };
+        let happened = std::mem::take(&mut app.world_mut().resource_mut::<Happened>().0);
+        if !happened.is_empty() {
+            eprintln!("t={:5.2}   {}", secs(frame), happened.join(" "));
+        }
         if frame % every == 0 {
-            eprintln!("t={:5.2} col {:6.2} row {:6.2} {state:?}", secs(frame), p.x / TILE, rows - p.y / TILE);
+            let harmony = app.world().resource::<Groove>().harmony;
+            eprintln!("t={:5.2} col {:6.2} row {:6.2} {state:?} {harmony:?}", secs(frame), p.x / TILE, rows - p.y / TILE);
         }
         if frame % 3 == 0 {
             let near: Vec<_> = app
