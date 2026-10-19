@@ -2,7 +2,8 @@
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
 //! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): each of its ten levels has a
-//!   run (`scripts/tours/<level>.timeline`) that clears it without a death.
+//!   run (`scripts/tours/<level>.timeline`) that clears it without a death (Breezy's fork has a
+//!   second, `breezy-alt.timeline`).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -178,6 +179,17 @@ macro_rules! nat_alone {
 }
 
 nat_alone!(breezy_is_a_valid_level, the_tour_clears_breezy, "breezy");
+
+/// Breezy's fork, the other way: the nugget lane fires the band up and the canal's long gaps
+/// take Nat along under the rooftop (`breezy.timeline` calls Giant Steps and takes the rooftop).
+#[test]
+fn the_fired_up_tour_clears_breezy_over_the_canal() {
+    let run = play(include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
 nat_alone!(bouncy_is_a_valid_level, the_tour_clears_bouncy, "bouncy");
 nat_alone!(brush_is_a_valid_level, the_tour_clears_brush, "brush");
 nat_alone!(spout_is_a_valid_level, the_tour_clears_spout, "spout");
@@ -196,5 +208,6 @@ fn check_a_level_file() {
     if let Some(d) = report.dump {
         eprintln!("{d}");
     }
+    eprintln!("gates: {:?}\nsegments: {:?}\nlessons: {:?}", report.gates, report.segments, report.lessons);
     eprintln!("{:#?}", report.errs);
 }

@@ -1,34 +1,66 @@
-# Breezy Does It (levels/solo/breezy.txt): one idea, wind carrying Nat. The dip's fan floats him
-# up a step, a fan at the next step's foot; a hanging vent box blows him over a dry ditch, the
-# next over sewage (toot to land); the bubble bath (run on, the posts' updrafts hold him up;
-# toot for the bank's nugget); a vent too high to jump to (hop onto the fan under it, jump and
-# toot into its gust); the headwind pit (jump, toot as he clears the gust). Five toots by the
-# valley, the last at the top of the fan that stops short: Down (Giant Steps). The fan floats
-# him up the cliff, the canyon's sunken fans carry him over it, the awning's gust down the
-# slope, the bubble bath again tosses him high along the nuggets; the band winds down over the
-# hill, and the last vent box, the two fans and the fan pit take him to the plunger in the
-# everyday wind.
+# Breezy Does It (levels/solo/breezy.txt), the Giant Steps route. Fans and floors that won't
+# wait: hop the bump, float over the fan dip, hop the crumbling bridge's hole; float on the
+# sewage fans from one crumbling stone to the next; hop the headwind bridge before it drops;
+# jump up into the vent's gust. At the fork take the high lane: crumbling stones a toot apart
+# (five toots since the sewage), call the band (Down) and step into the fan pit: the band
+# turns, the fan blows twice as far and lifts Nat onto the rooftop. Up there: hop the hole in
+# the crumbling bridge, one jump over the spikes under the spiky ceiling (no toot!), jump into
+# the gust and toot late to scoop the best nuggets under the spikes, hop the crumbling stones,
+# drop to the bank. Then the long-reach fans carry him over the last stretch: a fan, a
+# crumbling ledge, a fan, the mesa, a fan, a crumbling stone, the vent's gust, the climb out.
 t=0.3 press Right
-t=5.4 tap Space 500ms
-t=7.0 tap Space 300ms
-t=7.5 tap Space 300ms
-t=9.45 tap Space 300ms
-t=11.0 tap Space 100ms
-t=11.15 tap Space 300ms
-t=12.4 tap Space 300ms
-t=13.45 tap Space 100ms
-t=13.62 release Right
-t=14.3 press Right
-t=14.3 tap Space 100ms
-t=14.62 tap Space 100ms
-t=15.61 tap Space 300ms
-t=16.19 tap Space 300ms
-t=21.15 tap Space 300ms
-t=21.45 tap Down
-t=31.10 tap Space 100ms
-t=39.85 tap Space 100ms
-t=41.0 tap Space 100ms
-t=44.19 tap Space 100ms
-t=45.49 tap Space 100ms
-t=46.89 tap Space 100ms
-at 52
+t=1.05 tap Space 150ms
+t=3.05 tap Space 150ms
+t=4.9 tap Space 300ms
+t=5.3 release Right
+t=5.85 press Right
+t=6.05 tap Space 100ms
+t=6.55 tap Space 300ms
+t=6.95 release Right
+t=7.5 press Right
+t=7.7 tap Space 100ms
+t=8.13 tap Space 200ms
+t=9.5 tap Space 300ms
+t=9.85 tap Space 100ms
+t=11.6 tap Space 300ms
+t=12.05 tap Space 100ms
+t=12.95 tap Space 300ms
+t=13.3 tap Space 100ms
+t=13.85 tap Space 300ms
+t=14.2 tap Space 100ms
+t=14.6 tap Down
+t=15.07 release Right
+t=15.4 tap Right 120ms
+t=16.95 press Right
+t=16.95 tap Space 100ms
+t=18.95 tap Space 150ms
+t=20.5 tap Space 400ms
+t=22.5 tap Space 300ms
+t=23.1 tap Space 100ms
+t=23.95 tap Space 250ms
+t=24.7 tap Space 200ms
+t=25.75 tap Space 150ms
+t=26.6 tap Space 150ms
+t=28.0 tap Space 200ms
+t=29.4 tap Space 250ms
+t=30.8 tap Space 150ms
+t=31.7 tap Space 250ms
+t=32.0 release Right
+t=32.6 press Right
+t=33.1 release Right
+t=33.65 press Right
+t=33.65 tap Space 250ms
+t=34.3 release Right
+t=35.4 press Right
+t=36.25 tap Space 200ms
+t=37.95 tap Space 100ms
+t=38.9 tap Space 150ms
+t=39.8 tap Space 100ms
+t=40.25 tap Space 100ms
+t=40.5 release Right
+t=41.1 press Right
+t=41.3 tap Space 250ms
+t=42.05 tap Space 100ms
+t=43.85 tap Space 100ms
+t=45.08 tap Space 200ms
+at 48.5

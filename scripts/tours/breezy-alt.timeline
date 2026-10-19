@@ -1,0 +1,59 @@
+# Breezy Does It (levels/solo/breezy.txt), the fired-up route. The same start; at the fork take
+# the low lane, through its quick nugget line (fired up is the counter filled last), call the
+# band (Down) as the line ends, hop the fan pit, and jump the canal's long gaps between its
+# islands with the fired-up stride (jump, toot as he starts to fall; the islands' nuggets keep
+# the band hot). Over the bank's hole and the exit hole, then the last stretch fired up: hover
+# in each fan (let go of Right over it), toot off it onto the crumbling ledge, leap the mesa's
+# fan and stone at once, the vent's gust, and the climb out: stone, fan, stone, fan, stone.
+t=0.3 press Right
+t=1.05 tap Space 150ms
+t=3.05 tap Space 150ms
+t=4.9 tap Space 300ms
+t=5.3 release Right
+t=5.85 press Right
+t=6.05 tap Space 100ms
+t=6.55 tap Space 300ms
+t=6.95 release Right
+t=7.5 press Right
+t=7.7 tap Space 100ms
+t=8.13 tap Space 200ms
+t=9.5 tap Space 300ms
+t=9.85 tap Space 100ms
+t=11.6 tap Space 300ms
+t=12.05 tap Space 100ms
+t=13.95 tap Down
+t=14.85 tap Space 150ms
+t=15.97 tap Space 400ms
+t=16.45 tap Space 300ms
+t=17.37 tap Space 400ms
+t=17.85 tap Space 300ms
+t=18.72 tap Space 400ms
+t=19.2 tap Space 300ms
+t=20.52 tap Space 150ms
+t=21.1 tap Space 200ms
+t=21.85 tap Space 150ms
+t=22.3 tap Space 300ms
+t=22.42 release Right
+t=23.0 press Right
+t=23.1 tap Space 100ms
+t=23.25 release Right
+t=23.5 press Right
+t=23.5 tap Space 250ms
+t=23.83 release Right
+t=24.45 press Right
+t=24.5 tap Space 100ms
+t=24.95 tap Space 200ms
+t=25.6 tap Space 300ms
+t=26.0 tap Space 100ms
+t=26.68 tap Space 150ms
+t=27.22 tap Space 150ms
+t=27.75 tap Space 200ms
+t=27.97 release Right
+t=29.1 press Right
+t=29.15 tap Space 100ms
+t=29.55 tap Space 200ms
+t=29.82 release Right
+t=30.9 press Right
+t=30.95 tap Space 100ms
+t=31.35 tap Space 200ms
+at 34.5
