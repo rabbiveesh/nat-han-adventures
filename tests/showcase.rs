@@ -229,6 +229,16 @@ fn the_no_call_tour_clears_breezy_through_the_tunnel_and_finds_the_secret() {
 }
 
 nat_alone!(bouncy_is_a_valid_level, the_tour_clears_bouncy, "bouncy");
+
+/// Bouncy Castle's fork, the other way: the nugget lane fires the band up and the moat's belt
+/// islands carry Nat across (`bouncy.timeline` calls the waltz and takes the keep).
+#[test]
+fn the_fired_up_tour_clears_bouncy_over_the_moat() {
+    let run = play(include_str!("../levels/solo/bouncy.txt"), include_str!("../scripts/tours/bouncy-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(brush_is_a_valid_level, the_tour_clears_brush, "brush");
 nat_alone!(spout_is_a_valid_level, the_tour_clears_spout, "spout");
 nat_alone!(tilt_is_a_valid_level, the_tour_clears_tilt, "tilt");
