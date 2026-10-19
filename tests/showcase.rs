@@ -2,14 +2,15 @@
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
 //! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): each of its ten levels has a
-//!   run (`scripts/tours/<level>.timeline`) that clears it without a death (Breezy's fork has a
-//!   second, `breezy-alt.timeline`).
+//!   run (`scripts/tours/<level>.timeline`) that clears it without a death (Breezy's fork has
+//!   two more: `breezy-alt.timeline` fired up over the canal, `breezy-tunnel.timeline` with no
+//!   call, through the tunnel and its secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
-//! bar lines, his toots, nuggets and band calls, the harmony, and the crushers near him;
+//! bar lines, his toots, nuggets, band calls and secrets found, the harmony, and the crushers near him;
 //! `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play another level / timeline in
 //! `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`: trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
@@ -23,7 +24,7 @@ use nat_han_adventures::{
         timeline::{Script, TimelinePlayer, play_timeline},
     },
     events::{CallBand, Jumped, NuggetCollected, PlayerDied},
-    game::{Groove, Han, Player, Pos, crushers::CrusherBlock},
+    game::{Groove, Han, Player, Pos, crushers::CrusherBlock, secret::SecretFound},
     level::{Level, Levels, TILE, Topic, validate},
     state::AppState,
 };
@@ -38,18 +39,22 @@ struct Deaths(Vec<(u64, Vec2)>);
 #[derive(Resource, Default)]
 struct Frame(u64);
 
-/// What the trace reports between position lines: toots, nuggets, band calls.
+/// What the trace reports between position lines: toots, nuggets, band calls, secrets.
 #[derive(Resource, Default)]
 struct Happened(Vec<&'static str>);
 
 /// What a run did: its deaths (s, col, row), when it reached the goal (s), whether Han was in
-/// the level.
+/// the level, how many times it found the level's secret.
 struct Run {
     deaths: Vec<(f32, f32, f32)>,
     goal: Option<f32>,
     end: f32,
     han: bool,
+    secrets: usize,
 }
+
+#[derive(Resource, Default)]
+struct Secrets(usize);
 
 fn play(level: &str, tour: &str) -> Run {
     let level = Level::parse(level).unwrap();
@@ -66,12 +71,21 @@ fn play(level: &str, tour: &str) -> Run {
             d.0.extend(r.read().map(|m| (f.0, m.pos)))
         })
         .init_resource::<Happened>()
+        .init_resource::<Secrets>()
         .add_systems(
             Last,
-            |mut h: ResMut<Happened>, mut j: MessageReader<Jumped>, mut n: MessageReader<NuggetCollected>, mut c: MessageReader<CallBand>| {
+            |mut h: ResMut<Happened>,
+             mut secrets: ResMut<Secrets>,
+             mut j: MessageReader<Jumped>,
+             mut n: MessageReader<NuggetCollected>,
+             mut c: MessageReader<CallBand>,
+             mut s: MessageReader<SecretFound>| {
                 h.0.extend(j.read().filter(|j| j.double).map(|_| "toot"));
                 h.0.extend(n.read().map(|_| "nugget"));
                 h.0.extend(c.read().map(|_| "call"));
+                let found = s.read().count();
+                secrets.0 += found;
+                h.0.extend((0..found).map(|_| "secret"));
             },
         );
     app.add_plugins(audio::plugin).insert_resource(AudioCapture::new(&wav, FPS).unwrap());
@@ -128,7 +142,8 @@ fn play(level: &str, tour: &str) -> Run {
     }
     let _ = std::fs::remove_file(&wav);
     let deaths = app.world().resource::<Deaths>().0.iter().map(|(f, p)| (secs(*f), p.x / TILE, rows - p.y / TILE)).collect();
-    Run { deaths, goal, end: secs(timeline.frames), han }
+    let secrets = app.world().resource::<Secrets>().0;
+    Run { deaths, goal, end: secs(timeline.frames), han, secrets }
 }
 
 #[test]
@@ -186,6 +201,17 @@ nat_alone!(breezy_is_a_valid_level, the_tour_clears_breezy, "breezy");
 fn the_fired_up_tour_clears_breezy_over_the_canal() {
     let run = play(include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy-alt.timeline"));
     assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Breezy's fork with no call: down into the tunnel, up the fan slot to the secret (Han behind a
+/// grate, found once), the nerve fork's spiky low line, the plunger.
+#[test]
+fn the_no_call_tour_clears_breezy_through_the_tunnel_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy-tunnel.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
     let goal = run.goal.expect("the tour reaches the goal");
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }

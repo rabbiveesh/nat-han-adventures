@@ -3411,14 +3411,20 @@ fn line_errors(level: &Level) -> Vec<String> {
     let all = std::iter::once(&level.intro)
         .chain(&level.says)
         .chain(level.say_at.iter().map(|s| &s.text))
-        .chain(level.hints.iter().map(|s| &s.text));
+        .chain(level.hints.iter().map(|s| &s.text))
+        .chain(level.secret.iter().map(|s| &s.text));
     for line in all {
         if line.chars().count() > MAX_LINE {
             errs.push(format!("line longer than {MAX_LINE} chars: {line:?}"));
         }
     }
     // Han barks; the lesson cards teach. Only the intro is a sentence.
-    let barks = level.says.iter().chain(level.say_at.iter().map(|s| &s.text)).chain(level.hints.iter().map(|s| &s.text));
+    let barks = level
+        .says
+        .iter()
+        .chain(level.say_at.iter().map(|s| &s.text))
+        .chain(level.hints.iter().map(|s| &s.text))
+        .chain(level.secret.iter().map(|s| &s.text));
     for line in barks {
         if !super::is_bark(line) {
             errs.push(format!("Han barks at most {MAX_BARK_WORDS} words: {line:?}"));
@@ -3590,6 +3596,15 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
                 m.r1,
                 m.topic.word()
             ));
+        }
+    }
+
+    // A secret: some reached cell within finding distance of the grate.
+    if let Some(s) = &level.secret {
+        let r2 = (super::SECRET_RADIUS / TILE).powi(2);
+        let (sc, sr) = (s.col as i32, s.row as i32);
+        if !g.order.iter().any(|c| (((c.0 - sc).pow(2) + (c.1 - sr).pow(2)) as f32) <= r2) {
+            errs.push(format!("secret@{sc},{sr}: Nat never gets close enough to find it"));
         }
     }
 

@@ -59,6 +59,8 @@ pub struct Progress {
     pub solo_nuggets: [Option<u32>; SOLO_COUNT],
     /// Best time per cleared NAT ALONE level, seconds.
     pub solo_time: [Option<f32>; SOLO_COUNT],
+    /// The NAT ALONE levels whose secret (Han behind a grate, `game::secret`) Nat has found.
+    pub solo_secrets: [bool; SOLO_COUNT],
 }
 
 /// Han's tricks, each taught by a lesson card at its first hint spot (`ui::lesson`).
@@ -143,6 +145,7 @@ impl Default for Progress {
             solo_unlocked: 1,
             solo_nuggets: [None; SOLO_COUNT],
             solo_time: [None; SOLO_COUNT],
+            solo_secrets: [false; SOLO_COUNT],
         }
     }
 }
@@ -259,13 +262,15 @@ impl Progress {
     /// sideb-level 0 14
     /// solo-unlocked 3
     /// solo-level 0 20 11.500
+    /// solo-secrets 0 3
     /// ```
     /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
     /// `audio-delay <ms>` only when set; `taught` the band counters taught, `taught-call` the
     /// call lesson seen, `tricks` Han's tricks taught, `tips` the other mechanics' cards seen, only
     /// when any; `sideb-unlocked`, and `sideb-level <index> <fewest rewinds>` per cleared Side B
     /// level, once Side B's been cleared at all; `solo-unlocked` and `solo-level <index> <best
-    /// nuggets> <best time secs>` the same for NAT ALONE.)
+    /// nuggets> <best time secs>` the same for NAT ALONE, `solo-secrets` the NAT ALONE levels
+    /// whose secret was found, when any.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -309,6 +314,10 @@ impl Progress {
             if let (Some(n), Some(t)) = (self.solo_nuggets[i], self.solo_time[i]) {
                 s.push_str(&format!("solo-level {i} {n} {t:.3}\n"));
             }
+        }
+        let secrets: Vec<String> = (0..SOLO_COUNT).filter(|&i| self.solo_secrets[i]).map(|i| i.to_string()).collect();
+        if !secrets.is_empty() {
+            s.push_str(&format!("solo-secrets {}\n", secrets.join(" ")));
         }
         s
     }
@@ -372,6 +381,11 @@ impl Progress {
                     {
                         p.solo_nuggets[i] = Some(n);
                         p.solo_time[i] = Some(t.max(0.0));
+                    }
+                }
+                ["solo-secrets", levels @ ..] => {
+                    for i in levels.iter().filter_map(|i| i.parse::<usize>().ok()).filter(|&i| i < SOLO_COUNT) {
+                        p.solo_secrets[i] = true;
                     }
                 }
                 ["tricks", words @ ..] => {
@@ -661,6 +675,9 @@ mod tests {
         assert_eq!((p.unlocked, p.best_nuggets[0]), (1, None), "the story's untouched");
         p.record_solo(SOLO_COUNT - 1, 30, 20.0);
         assert_eq!(p.solo_unlocked, SOLO_COUNT);
+        p.solo_secrets[0] = true;
+        p.solo_secrets[3] = true;
+        assert!(p.to_text().contains("solo-secrets 0 3\n"));
         assert_eq!(Progress::from_text(&p.to_text()), Some(p));
     }
 

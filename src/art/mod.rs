@@ -131,6 +131,8 @@ pub enum SpriteId {
     /// Beat blocks: there, and gone (an outline). 16x16.
     BeatRed,
     BeatBlue,
+    /// The secret's grate: bars over a hole in the wall (Han behind it). 16x32.
+    Grate,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -166,7 +168,7 @@ impl SpriteId {
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
-            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue,
+            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
         ];
         for w in tiles::WORLDS {
             v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
@@ -178,7 +180,7 @@ impl SpriteId {
     pub fn size(self) -> (u32, u32) {
         use SpriteId::*;
         match self {
-            GoalFlag => (16, 32),
+            GoalFlag | Grate => (16, 32),
             HanBraced => (16, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
@@ -262,6 +264,7 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         Bumper => gadgets::bumper(),
         BeatRed => gadgets::beat_red(),
         BeatBlue => gadgets::beat_blue(),
+        Grate => gadgets::grate(),
     }
 }
 

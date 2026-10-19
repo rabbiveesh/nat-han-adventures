@@ -28,6 +28,12 @@
 //!   save (`ui::lesson`). The validator ([`validate`]) checks that every mechanic is taught by a
 //!   hint before the player first meets it, and that every hint names a topic.
 //! - `solo: nat`: Nat plays it alone (no Han: no barks, boosts or tricks).
+//! - `secret@<col>,<row>: text` (NAT ALONE): a *secret*, Han glimpsed through a grate. The cell
+//!   and the one above it must be solid (the grate is a wall): Han is drawn standing behind
+//!   it, feet on the cell's floor. The first time in a level visit Nat comes within
+//!   [`SECRET_RADIUS`] of it, Han barks the line and the save remembers it was found
+//!   (`game::secret`). [`validate`] checks Nat can get that close.
+//! - `shout: <col>`: from that column on, the band plays shout choruses (the closing stretch).
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
@@ -148,6 +154,8 @@ pub mod validate;
 pub const TILE: f32 = 16.0;
 /// Han says a hint when Nat comes this close (px) to its cell's center.
 pub const HINT_RADIUS: f32 = 2.5 * TILE;
+/// Nat finds a `secret@` when he comes this close (px) to the grate's center.
+pub const SECRET_RADIUS: f32 = 1.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
 /// Han nearly never talks: everything he says but a level's intro is a bark of at most this
@@ -897,6 +905,10 @@ pub struct Level {
     pub gates: Vec<GateMark>,
     /// `solo: nat`: Nat alone, no Han in the level.
     pub solo: bool,
+    /// `secret@col,row:` Han behind a grate (its bark in `text`).
+    pub secret: Option<Spot>,
+    /// `shout:` the column the shout choruses start at.
+    pub shout: Option<usize>,
 }
 
 impl Level {
@@ -1060,6 +1072,8 @@ impl Level {
         let mut hints = Vec::new();
         let mut deaths = None;
         let mut solo = false;
+        let mut secret = None;
+        let mut shout = None;
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
@@ -1089,6 +1103,15 @@ impl Level {
                     solo = true;
                 }
                 "say" => says.push(value.to_string()),
+                "shout" => shout = Some(value.parse().map_err(|_| format!("bad shout column `{value}`"))?),
+                k if k.starts_with("secret@") => {
+                    let at = &k["secret@".len()..];
+                    let (col, row) = at
+                        .split_once(',')
+                        .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
+                        .ok_or_else(|| format!("expected `secret@<col>,<row>`, got `{k}`"))?;
+                    secret = Some(Spot { col, row, text: value.to_string(), topics: Vec::new() });
+                }
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
                 }
@@ -1306,9 +1329,15 @@ impl Level {
             crushers[k].beat = beat.unwrap_or(0);
         }
 
-        for s in say_at.iter().chain(&hints) {
+        for s in say_at.iter().chain(&hints).chain(&secret) {
             if s.col >= width || s.row >= height {
                 return Err(format!("line at col {} row {} is outside the grid", s.col, s.row));
+            }
+        }
+        if let Some(s) = &secret {
+            let tile = |c: usize, r: usize| tiles[r * width + c];
+            if s.row == 0 || !tile(s.col, s.row).is_solid() || !tile(s.col, s.row - 1).is_solid() {
+                return Err(format!("secret@{},{}: the grate (that cell and the one above) must be solid", s.col, s.row));
             }
         }
         Ok(Level {
@@ -1329,6 +1358,8 @@ impl Level {
             crushers,
             gates,
             solo,
+            secret,
+            shout,
         })
     }
 }
@@ -1448,6 +1479,18 @@ mod tests {
         assert!(l.in_chasm(35) && !l.in_chasm(41));
         assert!(Level::parse("name: T\ngate: toot 1,1 2,2\n---\nPG\n##\n").is_err());
         assert!(Level::parse("name: T\ngate: giant 1,1\n---\nPG\n##\n").is_err());
+    }
+
+    #[test]
+    fn parses_the_secret_and_the_shout() {
+        let src = "name: T\nsolo: nat\nsecret@3,1: Nat?!\nshout: 2\n---\n...#G\nP..##\n#####\n";
+        let l = Level::parse(src).unwrap();
+        let s = l.secret.as_ref().unwrap();
+        assert_eq!((s.col, s.row, s.text.as_str()), (3, 1, "Nat?!"));
+        assert_eq!(l.shout, Some(2));
+        // The grate is a wall: its cell and the one above must be solid.
+        assert!(Level::parse("name: T\nsecret@2,1: x\n---\n...#G\nP..##\n#####\n").is_err());
+        assert!(Level::parse("name: T\nsecret@9,9: x\n---\nPG\n##\n").is_err());
     }
 
     #[test]
