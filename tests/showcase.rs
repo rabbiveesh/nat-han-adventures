@@ -4,7 +4,8 @@
 //! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): each of its ten levels has a
 //!   run (`scripts/tours/<level>.timeline`) that clears it without a death (Breezy's fork has
 //!   two more: `breezy-alt.timeline` fired up over the canal, `breezy-tunnel.timeline` with no
-//!   call, through the tunnel and its secret).
+//!   call, through the tunnel and its secret; Bouncy Castle's too: `bouncy-alt.timeline` fired up
+//!   over the moat, `bouncy-dungeon.timeline` with no call, through the dungeon and its secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -236,6 +237,18 @@ nat_alone!(bouncy_is_a_valid_level, the_tour_clears_bouncy, "bouncy");
 fn the_fired_up_tour_clears_bouncy_over_the_moat() {
     let run = play(include_str!("../levels/solo/bouncy.txt"), include_str!("../scripts/tours/bouncy-alt.timeline"));
     assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Bouncy Castle's fork with no call: down the moat into the dungeon, back to the secret (Han
+/// behind a grate, found once), the loader and the belt, up the chimney, the stepping stones
+/// under the roof (the long side of the backwards fork), the plunger.
+#[test]
+fn the_no_call_tour_clears_bouncy_through_the_dungeon_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/bouncy.txt"), include_str!("../scripts/tours/bouncy-dungeon.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
     let goal = run.goal.expect("the tour reaches the goal");
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
