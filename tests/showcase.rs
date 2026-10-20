@@ -404,6 +404,29 @@ fn the_no_call_tour_clears_spin_through_the_sump_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(pingpong_is_a_valid_level, the_tour_clears_pingpong, "pingpong");
+
+/// Ping Pong Palace's fork, the other way: four quick nuggets in the landing's trench fire the
+/// band up, the islands ten apart, then the bank shot (`pingpong.timeline` calls Giant Steps up
+/// the chimney and takes the gallery).
+#[test]
+fn the_fired_up_tour_clears_pingpong_over_the_islands() {
+    let run = play(include_str!("../levels/solo/pingpong.txt"), include_str!("../scripts/tours/pingpong-fired.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Ping Pong Palace's fork with no call: the secret under the landing (Han behind a grate, found
+/// once), the cellar's low hops under the cushions, the elevator's hatch, and the tunnel instead
+/// of the bank shot.
+#[test]
+fn the_no_call_tour_clears_pingpong_through_the_cellar_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/pingpong.txt"), include_str!("../scripts/tours/pingpong-cellar.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(flush_is_a_valid_level, the_tour_clears_flush, "flush");
 
 #[test]
