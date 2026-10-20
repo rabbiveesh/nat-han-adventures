@@ -4,13 +4,30 @@
 
 use bevy::prelude::*;
 
+use super::Particle;
 use crate::art::{SpriteId, Sprites};
+use crate::events::EncoreCue;
 use crate::game::encore::{Encore, GRATE_WIDTH};
 use crate::game::{ActiveLevel, LevelEntity};
 use crate::level::TILE;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (spawn_seam.run_if(resource_added::<Encore>), update_seam).chain().run_if(resource_exists::<Sprites>));
+    app.add_systems(Update, (spawn_seam.run_if(resource_added::<Encore>), update_seam, duck).chain().run_if(resource_exists::<Sprites>));
+}
+
+/// The last chord's rubber duck: it pops up under Nat, big, and sinks away.
+fn duck(mut commands: Commands, mut cues: MessageReader<EncoreCue>, sprites: Res<Sprites>) {
+    for cue in cues.read() {
+        if let EncoreCue::Boing { pos } = *cue {
+            commands.spawn((
+                Name::new("EncoreDuck"),
+                LevelEntity,
+                Particle { vel: Vec2::new(0.0, -30.0), gravity: 0.0, life: 0.9, max_life: 0.9, fade: true },
+                Sprite::from_image(sprites.get(SpriteId::Bumper)),
+                Transform::from_translation((pos + Vec2::new(0.0, TILE)).extend(4.5)).with_scale(Vec3::splat(2.0)),
+            ));
+        }
+    }
 }
 
 #[derive(Component)]

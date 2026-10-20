@@ -1,0 +1,50 @@
+# NAT ALONE's encore at The Grand Flush's goal, for `scripts/record-run --capture` (format:
+# src/capture/timeline.rs). Start on the plunger's stage, right of the beat crushers:
+#   NATHAN_SOLO=10 NATHAN_START=507 scripts/record-run --capture out.mp4 scripts/tours/encore-solo.timeline
+# To the goal flag (ENCORE!), then show off in the lap under the ceiling: call the band (Down)
+# again and again and hop about (Giant Steps bumps the ceiling). The Basie ending's last chord:
+# the duck bounces Nat up through the grate, Han pops out of the throne below, SLAM. ~40 s.
+
+wait 1
+
+# To the goal flag: ENCORE!
+hold Right 400ms
+wait 0.5
+
+# Giant Steps: float up to the ceiling and back.
+tap Down
+wait 0.4
+repeat 2
+  hold Space 160ms
+  wait 250ms
+  hold Space 160ms
+  wait 1.1
+end
+
+# Fired up: dash about right of the crushers.
+tap Down
+wait 0.3
+hold Right 300ms
+hold Left 300ms
+hold Right Space 250ms
+wait 0.6
+
+# Melting, more calls, hopping on the spot.
+tap Down
+wait 0.5
+repeat 3
+  hold Space 200ms
+  wait 300ms
+end
+tap Down
+wait 0.4
+hold Space 160ms
+wait 250ms
+hold Space 160ms
+wait 0.8
+tap Down
+wait 0.4
+hold Left 150ms
+
+# The lap ends; the band's ending, the duck, up through the grate, Han, SLAM, to be continued.
+wait 16

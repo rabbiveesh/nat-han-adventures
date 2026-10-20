@@ -30,14 +30,17 @@ struct Mid;
 #[derive(Component)]
 struct Sub;
 
-fn spawn(mut commands: Commands, font: Res<UiFont>) {
+fn spawn(mut commands: Commands, font: Res<UiFont>, encore: Res<Encore>) {
     let f = &*font;
+    // NAT ALONE's gag fills the screen top to bottom (Nat up top, Han at the bottom): its words go
+    // in the middle, between the two floors.
+    let mid = if encore.gag == Gag::Grate { JustifyContent::Center } else { JustifyContent::FlexEnd };
     commands
         .spawn((Name::new("Encore"), EncoreText, Node { justify_content: JustifyContent::FlexEnd, ..fullscreen() }, GlobalZIndex(4)))
         .with_children(|root| {
             root.spawn((label(f, "ENCORE!", 16.0, GOLD), Top));
             root.spawn((label(f, "DOWN: CALL THE BAND", 8.0, CREAM), Hint, Node { margin: UiRect::new(px(0.0), px(0.0), px(6.0), px(BOTTOM)), ..default() }));
-            root.spawn(Node { justify_content: JustifyContent::FlexEnd, ..fullscreen() }).with_children(|m| {
+            root.spawn(Node { justify_content: mid, ..fullscreen() }).with_children(|m| {
                 m.spawn((label(f, "", 24.0, CREAM), Mid, Node { margin: UiRect::bottom(px(8.0)), ..default() }));
                 m.spawn((label(f, "", 8.0, GOLD), Sub, Node { margin: UiRect::bottom(px(BOTTOM + 4.0)), ..default() }));
             });
