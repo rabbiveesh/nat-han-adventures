@@ -12,7 +12,8 @@
 //!   secret; Tilt!'s: `tilt-alt.timeline` fired up over the outlane, `tilt-outlane.timeline` with
 //!   no call, through the outlane and its secret; Gone With the Wind's: `wind-alt.timeline` fired
 //!   up down the low road's tailwind stair, `wind-sewer.timeline` with no call, through the sewer
-//!   and its secret).
+//!   and its secret; Crusher Disco's: `disco-alt.timeline` fired up over the dance floor,
+//!   `disco-cellar.timeline` with no call, through the cellar and its secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -354,6 +355,29 @@ fn the_no_call_tour_clears_wind_through_the_sewer_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(disco_is_a_valid_level, the_tour_clears_disco, "disco");
+
+/// Crusher Disco's fork, the other way: the nugget line under the riser's steps fires the band
+/// up, the leap off the dance floor's edge onto its islands (under their crushers on the beat),
+/// then the dodge row under the high lane (`disco.timeline` calls Giant Steps, climbs the drum
+/// riser and rides the lift crusher up to the high lane).
+#[test]
+fn the_fired_up_tour_clears_disco_over_the_dance_floor() {
+    let run = play(include_str!("../levels/solo/disco.txt"), include_str!("../scripts/tours/disco-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Crusher Disco's fork with no call: off the dance floor's edge into the cellar, back to the
+/// secret (Han behind a grate, found once), the cellar's beat stones and stairs, the lift's ride.
+#[test]
+fn the_no_call_tour_clears_disco_through_the_cellar_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/disco.txt"), include_str!("../scripts/tours/disco-cellar.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(spin_is_a_valid_level, the_tour_clears_spin, "spin");
 nat_alone!(pingpong_is_a_valid_level, the_tour_clears_pingpong, "pingpong");
 nat_alone!(flush_is_a_valid_level, the_tour_clears_flush, "flush");

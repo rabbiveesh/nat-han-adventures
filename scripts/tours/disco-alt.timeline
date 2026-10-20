@@ -45,4 +45,4 @@ t=39.12 tap Space 150ms
 t=39.3 release Right
 t=40.25 press Right
 t=40.62 tap Space 150ms
-t=48 release Right
+t=46 release Right
