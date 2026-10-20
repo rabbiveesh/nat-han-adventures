@@ -20,6 +20,7 @@ t=14.08 tap Space 300ms
 t=14.76 tap Space 300ms
 t=15.75 tap Space 200ms
 t=18.6 tap Space 200ms
+t=20.42 tap Space 250ms
 t=21.95 release Right
 t=21.95 press Left
 t=22.25 tap Space 300ms
