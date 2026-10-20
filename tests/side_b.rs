@@ -88,6 +88,12 @@ fn until(app: &mut App, secs: f32, mut done: impl FnMut(&mut App) -> bool) -> Op
 }
 
 fn tap(app: &mut App, k: KeyCode) {
+    // `SIDE_B_TIMELINE=1`: the taps as a `scripts/record-run --capture` timeline.
+    if std::env::var("SIDE_B_TIMELINE").is_ok() {
+        let t = app.world().resource::<Time>().elapsed_secs();
+        let key = format!("{k:?}").trim_start_matches("Arrow").to_string();
+        eprintln!("t={t:.4} tap {key} 1f");
+    }
     k.press(app.world_mut());
     app.update();
     k.release(app.world_mut());
@@ -149,40 +155,32 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
              295.5/10 306/0 330.5/11 340.5/10 356/0 372/1",
         ),
     ],
-    // Fork in the Pipe.
+    // Fork in the Pipe: up on the shelf (Giant Steps) or leap the gap under it (fired up); then
+    // the long drip (melting, called in the bar before the turn: one bar's slack) or over its
+    // roof (Giant Steps, any time); then melting, fired up and Giant Steps back to back.
     &[
-        ("leap", "5.5/11 9/0 57/1 106/0 129/1"),
-        ("drop", "5.5/12 9/0 61/2 73.5/11 106/0 129/1"),
-        ("under", "1.5/12 9/2 56.5/10 62/2 73.5/11 106/0 129/1"),
+        ("leap, drip", "2/11 36/1 40/12 144/2 165/11 175/10 233/2 257/1 279/0"),
+        ("shelf, roof", "36/0 135/0 205/12 220/11 233/2 257/1 279/0"),
+        ("leap, roof", "2/11 36/1 40/10 135/0 205/12 218/10 233/2 257/1 279/0"),
+        ("shelf, drip", "36/0 60/12 144/2 165/11 175/10 233/2 257/1 279/0"),
     ],
-    // Clog Dance: the deck fork (three ways), then the alley (two), all six combinations clear.
+    // Clog Dance: through the clog hall (no music: Han minds the stomps) or over its roof (Giant
+    // Steps); then the split, where the nuggets on the way decide: the high road (Giant Steps
+    // twice) or the sewer under it (melting twice). Every combination clears.
     &[
-        ("leap, over", "5/11 9/0 38/12 45/1 90/0 125/0 182/2 214/0 244/1"),
-        ("drop, under", "5/12 7/11 9/0 38/12 50/2 90/0 182/2 214/0 244/1"),
-        ("under, over", "3/12 7/11 9/2 50/2 52/10 90/0 125/0 182/2 214/0 244/1"),
+        ("hall, sewer", "2/12 100/11 222/2 262/2 332/1"),
+        ("roof, high road", "36/0 197/11 217/0 267/0 332/1"),
+        ("hall, high road", "197/11 208/10 217/0 267/0 332/1"),
+        ("roof, sewer", "36/0 40/12 197/11 208/12 222/2 262/2 332/1"),
     ],
-    // The Final Flush: the deck fork, the alley, the deck fork again.
+    // The Final Flush: the world's forks one after another. The clog hall or its roof, the long
+    // drip or its roof, the high road or the sewer (as the nuggets went), then Giant Steps, fired
+    // up and melting back to back to the plunger.
     &[
-        (
-            "leap, over, leap",
-            "4.5/11 7.5/10 14/0 50.5/12 59/1 104/0 139/0 162.5/11 172.5/10 196/2 221.5/11 226/1 256/0 \
-             292.5/12 301/1 346/0 353/2 379.5/11 396/1",
-        ),
-        (
-            "under, over, leap",
-            "1.5/12 7.5/10 16/2 58.5/10 63/2 104/0 139/0 162.5/11 172.5/10 196/2 221.5/11 226/1 256/0 \
-             292.5/12 301/1 346/0 353/2 379.5/11 396/1",
-        ),
-        (
-            "leap, under, under",
-            "4.5/11 7.5/10 14/0 45.5/12 50.5/11 59/1 104/0 169.5/12 192/2 226/1 258/2 300.5/10 305/2 \
-             346/0 353/2 379.5/11 396/1",
-        ),
-        (
-            "drop, over, drop",
-            "7.5/12 14/0 50.5/11 62/2 104/0 139/0 162.5/12 172.5/10 196/2 226/1 256/0 292.5/12 304/2 \
-             346/0 353/2 379.5/11 396/1",
-        ),
+        ("hall, drip, sewer", "2/12 225/2 240/10 255/11 290/12 315/2 352/2 412/0 432/1 450/2"),
+        ("roof, roof, high road", "30/0 208/0 290/10 296/11 302/12 308/0 355/0 412/0 432/1 450/2"),
+        ("hall, roof, high road", "214/0 290/12 298/11 304/10 306/0 352/0 412/0 432/1 450/2"),
+        ("roof, drip, sewer", "30/0 40/12 225/2 240/10 255/11 290/12 315/2 352/2 412/0 432/1 450/2"),
     ],
 ];
 
@@ -239,11 +237,15 @@ fn nuggets_add_to_the_picked_call() {
 }
 
 #[test]
-fn the_deck_nugget_spent_on_melting_leaves_no_giant_steps_for_the_wall() {
-    // Fork in the Pipe's leap, with the deck's nugget on melting instead of Giant Steps.
-    let (f, c) = died(play(7, &plan("5.5/11 9/0 44/12 57/1 106/0 129/1")));
-    assert_eq!(f, Fate::Bonk);
-    assert!((105.0..117.0).contains(&c), "at the wall, not {c}");
+fn the_long_drip_wants_its_melting_called_on_the_right_bar() {
+    // Fork in the Pipe's leap, then the long drip: melting called a bar early wears off with Han
+    // still under the drips; a bar late and he walks into its mouth full size.
+    let early = died(play(7, &plan("2/11 36/1 40/12 132/2")));
+    assert_eq!(early.0, Fate::Spikes);
+    assert!((170.0..200.0).contains(&early.1), "in the pipe, not {}", early.1);
+    let late = died(play(7, &plan("2/11 36/1 40/12 150/2")));
+    assert_eq!(late.0, Fate::Spikes);
+    assert!((145.0..156.0).contains(&late.1), "at the mouth, not {}", late.1);
 }
 
 #[test]
@@ -415,25 +417,29 @@ fn play(level: usize, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> 
 }
 
 fn play_in(mut app: App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> {
+    play_in_app(&mut app, plan)
+}
+
+fn play_in_app(app: &mut App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> {
     for &(c, k) in plan {
-        until(&mut app, 30.0, |a| col(a) >= c || side(a).phase != Phase::Playing);
-        if side(&app).phase != Phase::Playing {
+        until(app, 30.0, |a| col(a) >= c || side(a).phase != Phase::Playing);
+        if side(app).phase != Phase::Playing {
             break;
         }
         if std::env::var("SIDE_B_TIMES").is_ok() {
             let t = app.world().resource::<nat_han_adventures::game::LevelRun>().time;
-            eprintln!("call {k} at t={t:.2} col={:.1} left={:?}", col(&mut app), side(&app).left);
+            eprintln!("call {k} at t={t:.2} col={:.1} left={:?}", col(app), side(app).left);
         }
         if k >= PICK {
-            pick(&mut app, k - PICK);
+            pick(app, k - PICK);
         } else {
-            call(&mut app, k);
+            call(app, k);
         }
     }
-    until(&mut app, 40.0, |a| side(a).phase != Phase::Playing);
-    match side(&app).phase {
+    until(app, 40.0, |a| side(a).phase != Phase::Playing);
+    match side(app).phase {
         Phase::Cleared { .. } => Ok(()),
-        _ => Err((fate(&app), col(&mut app))),
+        _ => Err((fate(app), col(app))),
     }
 }
 
@@ -445,6 +451,23 @@ fn try_a_plan() {
     let s = std::env::var("SIDE_B_PLAN").unwrap();
     let (lvl, rest) = s.split_once(':').unwrap();
     eprintln!("{:?}", play(lvl.trim().parse::<usize>().unwrap() - 1, &plan(rest)));
+}
+
+/// A level file that isn't in the game yet, played with a plan (to build one):
+/// `SIDE_B_FILE=path SIDE_B_PLAN="3/0 22/1" cargo test --test side_b try_a_file -- --ignored
+/// --nocapture` (`SIDE_B_SLOT=n`: as level n, for its tune; `SIDE_B_TRACE=1` traces Han).
+#[test]
+#[ignore]
+fn try_a_file() {
+    let src = std::fs::read_to_string(std::env::var("SIDE_B_FILE").unwrap()).unwrap();
+    let b = SideBLevel::parse(&src).unwrap();
+    let slot: usize = std::env::var("SIDE_B_SLOT").ok().and_then(|v| v.parse().ok()).unwrap_or(1) - 1;
+    let p = plan(&std::env::var("SIDE_B_PLAN").unwrap_or_default());
+    let mut app = app_starting(move |c| sideb::start_level(c, slot, b));
+    let r = play_in_app(&mut app, &p);
+    let t = app.world().resource::<nat_han_adventures::game::LevelRun>().time;
+    let bar = app.world().resource::<Groove>().clock.bar;
+    eprintln!("{r:?} at {t:.1}s bar {bar}");
 }
 
 /// How much slack each call of a level's routes has: the shifts (in columns) that still clear
@@ -466,6 +489,42 @@ fn how_tight() {
                 })
                 .collect();
             eprintln!("{name}: {i} {:?}: clears with shifts {ok:?}", plan[i]);
+        }
+    }
+}
+
+/// Every route of every level against the tune's form: when each call goes in (play time, and
+/// the bar it lands on: the clock's bar, 0-based, beat) and when Han reaches the goal. The tunes
+/// are 32 bars of 8-bar sections at 192 bpm (a bar is 1.25 s), after a 4-bar intro when the band
+/// plays one. `cargo test --test side_b route_report -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn route_report() {
+    let clock = |a: &App| {
+        let c = a.world().resource::<Groove>().clock;
+        let t = a.world().resource::<nat_han_adventures::game::LevelRun>().time;
+        format!("{t:.1}s bar {}.{}", c.bar, c.beat + 1)
+    };
+    let only: Option<usize> = std::env::var("SIDE_B_LEVEL").ok().and_then(|v| v.parse().ok());
+    for (n, routes) in ROUTES.iter().enumerate() {
+        if only.is_some_and(|o| o != n + 1) {
+            continue;
+        }
+        for (name, p) in routes.iter() {
+            let mut app = app(n);
+            let mut calls = Vec::new();
+            for &(c, k) in &plan(p) {
+                until(&mut app, 30.0, |a| col(a) >= c || side(a).phase != Phase::Playing);
+                if k >= PICK {
+                    pick(&mut app, k - PICK);
+                } else {
+                    calls.push(format!("{}@{c} {}", ["giant", "gap", "melt"][k], clock(&app)));
+                    call(&mut app, k);
+                }
+            }
+            until(&mut app, 40.0, |a| side(a).phase != Phase::Playing);
+            let end = clock(&app);
+            eprintln!("B{} {name}: goal {end} | {}", n + 1, calls.join(" | "));
         }
     }
 }
