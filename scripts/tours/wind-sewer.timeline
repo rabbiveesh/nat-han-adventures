@@ -1,0 +1,65 @@
+# Gone With the Wind (levels/solo/wind.txt), the no-call route: off the fork's edge into the sewer,
+# back into the low passage to the secret (Han behind a grate), over the sewage pits' crumbling
+# stones and the headwind off the block, up the crumbling steps and through the lid, the long way
+# round with the wind over the detour, and the shout under the downdraft roof.
+# Format: src/capture/timeline.rs.
+t=0.2 press Right
+t=2.03 tap Space 250ms
+t=2.33 tap Space 200ms
+t=3.6 tap Space 200ms
+t=4.2 tap Space 200ms
+t=4.8 tap Space 200ms
+t=5.4 tap Space 200ms
+t=5.6 tap Space 150ms
+t=6.48 tap Space 250ms
+t=6.8 tap Space 200ms
+t=7.84 tap Space 250ms
+t=8.22 tap Space 200ms
+t=9.28 tap Space 250ms
+t=9.62 tap Space 200ms
+t=10.95 tap Space 200ms
+t=11.55 tap Space 200ms
+t=12.15 tap Space 250ms
+t=12.45 tap Space 200ms
+t=13.85 tap Space 150ms
+t=14.8 tap Space 150ms
+t=16.02 tap Space 200ms
+t=16.85 tap Space 250ms
+t=17.62 tap Space 250ms
+t=19.9 tap Space 200ms
+t=20.9 tap Space 200ms
+t=21.8 tap Space 250ms
+t=22.6 release Right
+t=22.6 press Left
+t=23.8 release Left
+t=23.8 press Right
+t=25.0 tap Space 200ms
+t=26.2 tap Space 250ms
+t=26.55 tap Space 300ms
+t=27.98 tap Space 250ms
+t=28.48 tap Space 250ms
+t=29.06 tap Space 250ms
+t=30.1 tap Space 200ms
+t=31.15 tap Space 300ms
+t=31.55 tap Space 300ms
+t=31.95 tap Space 250ms
+t=32.25 tap Space 300ms
+t=32.85 tap Space 200ms
+t=33.4 tap Space 200ms
+t=33.68 tap Space 300ms
+t=34.05 tap Space 250ms
+t=34.42 tap Space 200ms
+t=34.68 tap Space 250ms
+t=35.34 tap Space 250ms
+t=35.65 tap Space 300ms
+t=36.48 tap Space 300ms
+t=37.39 tap Space 250ms
+t=37.72 tap Space 300ms
+t=38.42 tap Space 200ms
+t=39.67 tap Space 250ms
+t=40.43 tap Space 250ms
+t=41.35 tap Space 250ms
+t=42.35 tap Space 200ms
+t=42.7 tap Space 300ms
+t=44.6 release Right
+t=44.7 wait 0.1

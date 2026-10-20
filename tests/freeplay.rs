@@ -13,10 +13,10 @@ use nat_han_adventures::freeplay::course::COURSE_STAND as STAND;
 use nat_han_adventures::freeplay::dice::{parse_seed, seed_text};
 use nat_han_adventures::freeplay::generate::{Job, RoomPlan, draw, generate, physics, validate};
 use nat_han_adventures::freeplay::run::begin;
-use nat_han_adventures::freeplay::templates::{TEMPLATES, unlocked_skills};
+use nat_han_adventures::freeplay::templates::{TEMPLATES, Unlocks, unlocked_skills};
 use nat_han_adventures::freeplay::{FIXED_ROOMS, FreePlayRun, FreePlaySettings, StartFreePlay};
 use nat_han_adventures::game::{ActiveLevel, AdaptiveProfile, AssistMode, LevelTile, Player, Pos, PrevPos, stand_pos};
-use nat_han_adventures::level::ThingKind;
+use nat_han_adventures::level::{ThingKind, Tile};
 use nat_han_adventures::state::AppState;
 
 const SEEDS: u32 = 50;
@@ -195,6 +195,29 @@ fn unlocks_follow_the_story() {
     assert_eq!(served(3), ["mega wall"]);
     assert_eq!(served(5), ["buddy raft pool", "mega wall"]);
     assert_eq!(served(10), ["buddy raft pool", "cling shaft", "fired-up chasm", "mega wall", "trapeze"]);
+}
+
+/// The gadget world room (NAT ALONE's sideways and upside-down tiles) waits for NAT ALONE, and
+/// then uses only the tiles of the levels cleared.
+#[test]
+fn the_gadget_world_room_waits_for_nat_alone() {
+    use nat_han_adventures::game::solo::teaches;
+    let world = TEMPLATES.iter().position(|t| t.name == "gadget world").unwrap();
+    let unlocks = |solo| Unlocks { levels: 10, side_b: 10, solo };
+    assert!(!TEMPLATES[world].unlocked(unlocks(0)));
+    assert!(TEMPLATES[world].unlocked(unlocks(1)));
+    let request = RoomRequest { skill: Skill::Precision, band: 5, assists: AssistLevers::NONE };
+    let first = teaches('e').unwrap() + 1;
+    let later: Vec<Tile> = [('w', Tile::FanLeft), ('!', Tile::FanDown), ('b', Tile::CushionRight), ('m', Tile::CushionDown)]
+        .into_iter()
+        .filter(|(c, _)| teaches(*c).unwrap() >= first)
+        .map(|(_, t)| t)
+        .collect();
+    for seed in 0..20 {
+        let p = RoomPlan { template: world, ..RoomPlan::new(seed, 0, request, 1, false, false, unlocks(first)) };
+        let level = draw(seed, &p, 0);
+        assert!(!level.tiles.iter().any(|t| later.contains(t)), "seed {seed}: a tile from a level not cleared");
+    }
 }
 
 /// A climb is taller than the other rooms: the course is as tall as it, every room sits on its

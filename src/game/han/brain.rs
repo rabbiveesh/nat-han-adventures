@@ -14,6 +14,7 @@ use super::{
 };
 use crate::audio::Harmony;
 use crate::events::HanSays;
+use crate::game::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use crate::game::{
     ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, KICK_CARRY, MovingPlatform, Player,
     PlayerControl, Pos, PrevPos, SimClock, move_towards, platform_pos,
@@ -400,7 +401,7 @@ pub fn out_of_sight(han: Vec2, nat: Vec2) -> bool {
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
 pub(super) fn think(
     time: Res<Time>,
-    active: Res<ActiveLevel>,
+    mut active: ResMut<ActiveLevel>,
     groove: Res<Groove>,
     assists: Res<Assists>,
     clock: Res<SimClock>,
@@ -414,6 +415,9 @@ pub(super) fn think(
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), (Without<Han>, Without<Player>)>,
     mut boosted: MessageReader<HanBoosted>,
     mut says: MessageWriter<HanSays>,
+    crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Han>, Without<Player>, Without<MovingPlatform>)>,
+    mut smashed: MessageWriter<BrickSmashed>,
+    mut sprung: MessageWriter<Sprung>,
 ) {
     let dt = time.delta_secs();
     let Some(mut nav) = nav else {
@@ -485,8 +489,13 @@ pub(super) fn think(
     brain.winded = (brain.winded - dt).max(0.0);
 
     let plats: Vec<(Vec2, MovingPlatform)> = platforms.iter().map(|(_, p, _, m)| (p.0, m.clone())).collect();
-    let carriers: Vec<Carrier> =
+    let mut carriers: Vec<Carrier> =
         platforms.iter().map(|(ent, p, pr, m)| Carrier::platform(ent, p.0, pr.0, m.width)).collect();
+    let mut solids = Vec::new();
+    for (ent, block, p, pr) in &crushers {
+        carriers.push(block.carrier(ent, p.0, pr.0));
+        solids.push(block.bounds(p.0));
+    }
 
     // --- Out of the picture: sinking, gone.
     match brain.mode {
@@ -753,8 +762,26 @@ pub(super) fn think(
         }
     }
 
+    // Crushers: wait for one to rest at home long enough to get past it.
+    let crush_t = crate::game::crushers::crush_time(&clock, &groove);
+    if !parachute
+        && body.on_ground
+        && input.dir != 0.0
+        && crushers.iter().any(|(_, b, _, _)| crate::game::crushers::wait_for(b, pos.0, body.half, input.dir, phys.speed, crush_t))
+    {
+        input.dir = 0.0;
+        input.jump = false;
+    }
+
     // --- Move.
-    let drove = drive(level, &mut pos.0, &mut body, &mut brain.ctl, input, &phys, &carriers, dt);
+    let drove = drive(level, &mut pos.0, &mut body, &mut brain.ctl, input, &phys, &carriers, &solids, dt);
+    if drove.contact.sprung || drove.contact.bumped {
+        sprung.write(Sprung { pos: pos.0, han: true });
+    }
+    if drove.contact.bricks.iter().any(Option::is_some) {
+        smash(&mut active, drove.contact.smashed(), &mut smashed);
+    }
+    let level = &active.level;
     if parachute {
         body.vel.y = body.vel.y.max(-PARACHUTE_FALL);
         if drove.contact.ground {
@@ -909,13 +936,13 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> Han
     let edge = !(r..level.height as i32).any(|r| floor_at(level, c, r));
     let spikes = tile_at(dir * (half.x + 6.0), -half.y + 2.0) == Tile::SpikesUp;
     // A ceiling (spikes, or solid with air under it) within `n` tiles over his head, here or
-    // just ahead (a wall's face doesn't count).
+    // just ahead (a wall's face doesn't count; bricks don't either: he smashes through).
     let ceiling = |n: i32| {
         (1..=n).any(|k| {
             [0.0, dir * TILE, dir * 2.0 * TILE].into_iter().any(|dx| {
                 let dy = half.y + (k as f32 - 0.5) * TILE;
                 let t = tile_at(dx, dy);
-                t == Tile::SpikesDown || (t.is_solid() && !tile_at(dx, dy - TILE).is_solid())
+                t == Tile::SpikesDown || (t.is_solid() && t != Tile::Brick && !tile_at(dx, dy - TILE).is_solid())
             })
         })
     };

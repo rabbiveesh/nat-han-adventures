@@ -69,6 +69,7 @@ pub(super) fn plugin(app: &mut App) {
                 .chain()
                 .in_set(GameSet::World)
                 .after(super::platforms::move_platforms)
+                .after(super::crushers::move_crushers)
                 .after(super::hazards::float_rafts)
                 .after(super::hazards::move_flies)
                 .after(super::hazards::update_sprays),
@@ -88,6 +89,10 @@ pub const CLIMB_SPEED: f32 = 120.0;
 pub const CLING_SECS: f32 = 8.0;
 /// Han's bark when Nat boings off his head (the laughing band).
 pub const BOING_LINE: &str = "BOING!";
+/// Han's bark when a crusher flattens him (he's back by parachute [`HAN_SQUASH_RESPAWN`] s
+/// later; on Side B it's his end).
+pub const SQUASH_LINE: &str = "Pancaked!";
+pub const HAN_SQUASH_RESPAWN: f32 = 2.0;
 /// How fast Han reels himself up his plunger handle onto the trapeze (px/s).
 pub const REEL_SPEED: f32 = 320.0;
 /// Han swings on the trapeze at most this long (s) before he lets go.

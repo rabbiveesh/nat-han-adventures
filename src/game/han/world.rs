@@ -5,8 +5,9 @@
 use bevy::prelude::*;
 
 use super::brain::{HanBrain, HanMode};
-use super::{FLY_LINE, HAN_PLUG_LINGER, HAN_RAFT_WIDTH, HAN_SINK_TIME, HanAnim, JET_LINES};
+use super::{FLY_LINE, HAN_PLUG_LINGER, HAN_SQUASH_RESPAWN, SQUASH_LINE, HAN_RAFT_WIDTH, HAN_SINK_TIME, HanAnim, JET_LINES};
 use crate::events::HanSays;
+use crate::game::crushers::{CrusherBlock, squashed};
 use crate::game::{
     ActiveLevel, Assists, Body, Fly, Han, LevelEntity, MovingPlatform, Pos, PrevPos, Raft,
     CAN_HEIGHT, CAN_WIDTH, SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
@@ -87,6 +88,7 @@ pub(super) fn han_hazards(
     mut flies: Query<(Entity, &Pos, Option<&mut FlySpin>), (With<Fly>, Without<Han>)>,
     mut says: MessageWriter<HanSays>,
     mut quip: Local<f32>,
+    crushers: Query<(&CrusherBlock, &Pos), Without<Han>>,
 ) {
     let dt = time.delta_secs();
     *quip -= dt;
@@ -161,10 +163,19 @@ pub(super) fn han_hazards(
         }
     }
 
-    // Sewage: he splats and sinks, leaving his big raft.
     if !present {
         return;
     }
+    // A crusher: flat as a pancake, and back by parachute.
+    if crushers.iter().any(|(b, p)| squashed(pos.0, HALF, b.bounds(p.0))) {
+        brain.mode = HanMode::Gone { t: HAN_SQUASH_RESPAWN };
+        brain.path.clear();
+        brain.exec = None;
+        says.write(HanSays { text: SQUASH_LINE.to_string() });
+        return;
+    }
+
+    // Sewage: he splats and sinks, leaving his big raft.
     let level = &active.level;
     let (fmin, fmax) = (min + 2.0, max - 2.0);
     let mut splat: Option<(i32, i32)> = None;

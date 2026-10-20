@@ -18,6 +18,8 @@ pub fn plugin(app: &mut App) {
         .add_message::<LevelStarted>()
         .add_message::<BandFreedom>()
         .add_message::<CallBand>()
+        .add_message::<EncoreCue>()
+        .add_message::<FinalHit>()
         .add_message::<crate::audio::MusicStarted>()
         .add_message::<crate::audio::MusicChanged>();
 }
@@ -71,6 +73,8 @@ pub enum DeathCause {
     Sewage,
     Fly,
     Spray,
+    /// Squashed by a crusher.
+    Crusher,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
@@ -111,6 +115,26 @@ pub struct HintRepeated {
 /// last (`audio::director::Band::ready`), if any.
 #[derive(Message, Debug, Clone, Copy)]
 pub struct CallBand;
+
+/// The story's encore (`game::encore`), beat by beat: the band and the FX follow it.
+#[derive(Message, Debug, Clone, Copy, PartialEq)]
+pub enum EncoreCue {
+    /// Nat reached the last goal: the encore lap starts (the band goes all out).
+    Start,
+    /// A call in the encore lap (Down): `hype` calls so far.
+    Call { pos: Vec2, hype: u32 },
+    /// The lap is over: the band plays its ending.
+    End,
+    /// The ending's last chord, and its cymbal knocks Nat flying from `pos`.
+    Knock { pos: Vec2 },
+    /// Nat landed in the throne at `pos`: FLUSH.
+    Flush { pos: Vec2 },
+}
+
+/// The band's ending reached its last chord (the audio plugin hears it; the encore knocks Nat
+/// over on it).
+#[derive(Message, Debug, Clone, Copy, Default)]
+pub struct FinalHit;
 
 /// Play a one-shot sound effect (menus etc.; gameplay sounds are driven by the messages above).
 #[derive(Message, Debug, Clone, Copy)]

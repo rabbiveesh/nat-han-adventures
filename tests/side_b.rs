@@ -675,7 +675,7 @@ fn free_play_side_b_rooms_expect_rewinds() {
     use nat_han_adventures::freeplay::templates::Unlocks;
     for (band, cleared) in [(1, 1), (10, 3)] {
         let request = RoomRequest { skill: Skill::Buddy, band, assists: AssistLevers::NONE };
-        let room = Job::new(7, RoomPlan::alone(7, 2, request, 1, Unlocks { levels: 10, side_b: cleared })).run();
+        let room = Job::new(7, RoomPlan::alone(7, 2, request, 1, Unlocks { levels: 10, side_b: cleared, solo: 0 })).run();
         assert!(room.plan.template().alone());
         assert!((2..=12).contains(&room.expected_deaths), "band {band}: {}", room.expected_deaths);
         let walk = room.level.width as f32 * TILE / 70.0;

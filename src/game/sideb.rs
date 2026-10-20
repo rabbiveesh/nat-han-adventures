@@ -88,6 +88,8 @@ pub enum Fate {
     Bonk,
     /// Charged about for ages and got nowhere.
     Pooped,
+    /// Flattened by a crusher.
+    Squashed,
 }
 
 impl Fate {
@@ -98,6 +100,7 @@ impl Fate {
             Fate::Sewage => "Glub.",
             Fate::Bonk => "BONK!",
             Fate::Pooped => "Pooped.",
+            Fate::Squashed => "Pancake!",
         }
     }
 }
@@ -613,6 +616,7 @@ fn han_fate(
     mut side: ResMut<SideB>,
     mut han: Query<(&Pos, &Body, &mut HanBrain), With<Han>>,
     goal: Query<&Transform, With<Goal>>,
+    crushers: Query<(&super::crushers::CrusherBlock, &Pos), Without<Han>>,
     mut says: MessageWriter<HanSays>,
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
@@ -681,7 +685,10 @@ fn han_fate(
             return;
         }
     }
-    let fate = if matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. }) {
+    let flat = crushers.iter().any(|(b, p)| super::crushers::squashed(pos.0, body.half, b.bounds(p.0)));
+    let fate = if flat {
+        Some(Fate::Squashed)
+    } else if matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. }) {
         Some(if pos.0.y + HALF.y < 0.0 { Fate::Pit } else { Fate::Sewage })
     } else if pos.0.y + body.half.y < 0.0 {
         Some(Fate::Pit)
@@ -695,7 +702,7 @@ fn han_fate(
         None
     };
     if let Some(f) = fate {
-        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped) {
+        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped | Fate::Squashed) {
             brain.mode = HanMode::Sinking { t: 30.0 };
         }
         brain.charge = None;

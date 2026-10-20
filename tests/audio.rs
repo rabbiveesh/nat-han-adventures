@@ -697,16 +697,55 @@ mod plugin {
         app.update();
         let start = freedom(&app);
         assert!(start > story_start + 0.1, "Side B {start} vs story {story_start}");
+        // Two frames per change: the decision and the post that forwards it run in either order.
         app.world_mut().resource_mut::<SideB>().rewinds = 2;
+        // (Two frames: the decision posts on one, the engine can hear it on the next.)
+        app.update();
+        app.update();
         app.update();
         let cooled = freedom(&app);
         assert!(cooled < start && cooled > story_start, "rewound: {cooled}");
         app.world_mut().resource_mut::<SideB>().calls = 3;
+        app.update();
         app.update();
         assert!(freedom(&app) > cooled, "a call heats it back up");
         app.world_mut().remove_resource::<SideB>();
         app.update();
         app.update();
         assert!(freedom(&app) < cooled, "the story's band again");
+    }
+
+    /// NAT ALONE's band starts a drop hotter than Side B's; a death cools it, a checkpoint
+    /// brings it back.
+    #[test]
+    fn nat_alone_starts_hotter_than_side_b() {
+        use nat_han_adventures::events::{CheckpointReached, PlayerDied};
+        use nat_han_adventures::game::{adaptive::SIDE_B_BASE, solo::SoloRun};
+        let freedom = |app: &App| app.world().resource::<LivePlayer>().freedom().expect("posted").lead;
+        let mut side_b = app();
+        side_b.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        side_b.world_mut().insert_resource(nat_han_adventures::game::sideb::SideB::new(0, Vec::new()));
+        go(&mut side_b, AppState::Playing);
+        side_b.update();
+        side_b.update();
+        let side_b_start = freedom(&side_b);
+
+        let mut app = app();
+        app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
+        app.world_mut().insert_resource(SoloRun(0));
+        go(&mut app, AppState::Playing);
+        app.update();
+        app.update();
+        let start = freedom(&app);
+        assert!(start > side_b_start, "NAT ALONE {start} vs Side B {side_b_start} (base {SIDE_B_BASE})");
+        app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
+        app.update();
+        app.update();
+        let cooled = freedom(&app);
+        assert!(cooled < start, "a death cools it: {cooled}");
+        app.world_mut().write_message(CheckpointReached { index: 0, pos: Vec2::ZERO });
+        app.update();
+        app.update();
+        assert_eq!(freedom(&app), start, "a checkpoint brings it back");
     }
 }

@@ -15,6 +15,7 @@ use crate::events::PlaySfx;
 
 mod bubble;
 mod duo;
+mod encore;
 mod hud;
 mod lesson;
 mod level_select;
@@ -93,6 +94,7 @@ pub fn plugin(app: &mut App) {
             results::plugin,
             victory::plugin,
             bubble::plugin,
+            encore::plugin,
             crate::freeplay::ui::plugin,
         ));
 }

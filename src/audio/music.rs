@@ -163,6 +163,10 @@ pub enum Sfx {
     HanBlip,
     /// The laughing band's boing boost: Han's head is a spring.
     Boing,
+    /// The encore's last cymbal crash (and a big drum): it knocks Nat into the throne.
+    Crash,
+    /// A level's secret found (`game::secret`).
+    Secret,
 }
 
 #[cfg(test)]

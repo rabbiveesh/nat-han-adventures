@@ -12,7 +12,7 @@ use super::{Level, TILE};
 use crate::audio::Harmony;
 use crate::game::{
     BOOST_SPEED, Body, Carrier, Contact, FIRED_UP_SPEED, Fall, WEAK_BOOST_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, THROW_CARRY, THROW_SPEED, han_carrier, move_towards,
-    step_body, tuning::*, HanHead,
+    step_body, tuning::*, HanHead, TileMood,
 };
 
 /// Han's top running speed (px/s): a touch faster than Nat's, so he can catch up.
@@ -78,7 +78,7 @@ impl HanPhys {
             1.0
         };
         HanPhys {
-            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt() },
+            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt(), tiles: TileMood::of(groove) },
             speed: HAN_RUN_SPEED * speed,
             ground_accel: GROUND_ACCEL * speed,
             air_accel: AIR_ACCEL * speed,
@@ -95,7 +95,7 @@ impl HanPhys {
     pub fn side_b(groove: &Groove) -> HanPhys {
         let g = groove;
         HanPhys {
-            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale() },
+            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale(), tiles: TileMood::of(g) },
             speed: RUN_SPEED * g.speed_scale,
             ground_accel: GROUND_ACCEL * g.speed_scale,
             air_accel: AIR_ACCEL * g.speed_scale,
@@ -167,6 +167,7 @@ pub fn drive(
     input: HanInput,
     phys: &HanPhys,
     carriers: &[Carrier],
+    solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Drove {
     let mut out = Drove::default();
@@ -201,7 +202,7 @@ pub fn drive(
     if body.vel.y <= 0.0 {
         ctl.cut_armed = false;
     }
-    let contact = step_body(level, pos, body, phys.fall, carriers, &[], dt);
+    let contact = step_body(level, pos, body, phys.fall, carriers, &[], solids, dt);
     if contact.ground {
         ctl.toots_left = phys.toots;
         if phys.bounce && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
@@ -440,7 +441,7 @@ pub fn chain_try(
         if !jumped {
             input = HanInput { dir: d, speed: 1.0, ..default() };
         }
-        drive(level, &mut han, &mut hb, &mut hctl, input, &phys, &[], DT);
+        drive(level, &mut han, &mut hb, &mut hctl, input, &phys, &[], &[], DT);
         if hb.on_ground {
             han_floor = han.y;
         }
@@ -489,7 +490,7 @@ pub fn chain_try(
             }
         }
         let carriers: Vec<Carrier> = han_carrier(han_id, han, han_prev, &head).into_iter().collect();
-        let contact = step_body(level, &mut nat, &mut nb, Fall::of(&groove), &carriers, &[], DT);
+        let contact = step_body(level, &mut nat, &mut nb, Fall::of(&groove), &carriers, &[], &[], DT);
         if nat.y + HALF.y < 0.0 {
             return None; // fell out of the level
         }

@@ -93,7 +93,7 @@ pub fn encode_job(id: u64, seed: u32, plan: &RoomPlan) -> Option<String> {
     let skill = Skill::ALL.iter().position(|s| *s == plan.request.skill)?;
     let a = &plan.request.assists;
     Some(format!(
-        "{PROTOCOL} job {id} {seed} {} {skill} {} {} {} {} {} {} {} {} {} {} {}",
+        "{PROTOCOL} job {id} {seed} {} {skill} {} {} {} {} {} {} {} {} {} {} {} {}",
         plan.index,
         plan.request.band,
         a.coyote_mult,
@@ -106,6 +106,7 @@ pub fn encode_job(id: u64, seed: u32, plan: &RoomPlan) -> Option<String> {
         plan.hint as u8,
         line_id(plan.line)?,
         plan.world,
+        plan.solo,
     ))
 }
 
@@ -143,11 +144,12 @@ pub fn decode_job(text: &str) -> Option<(u64, u32, RoomPlan)> {
     let hint = flag(next()?)?;
     let line = line_at(next()?.parse().ok()?)?;
     let world = next()?.parse().ok()?;
+    let solo = next()?.parse().ok()?;
     if next().is_some() || template >= super::templates::TEMPLATES.len() {
         return None;
     }
     let request = RoomRequest { skill, band, assists };
-    Some((id, seed, RoomPlan { index, request, template, hint, line, world, side_b: 0 }))
+    Some((id, seed, RoomPlan { index, request, template, hint, line, world, side_b: 0, solo }))
 }
 
 /// The worker's answer to job `id`: what it found and the room's [`fingerprint`].

@@ -37,13 +37,15 @@ pub enum PlayState {
     Lesson,
 }
 
-/// Which levels the level select shows: the story's, or Side B's (`game::sideb`).
+/// Which levels the level select shows: the story's, Side B's (`game::sideb`), or NAT
+/// ALONE's (`game::solo`).
 #[derive(Resource, Debug, Clone, Copy, Default, PartialEq, Eq, Reflect)]
 #[reflect(Resource)]
 pub enum Shelf {
     #[default]
     Story,
     SideB,
+    Solo,
 }
 
 /// Index (0-based) into [`crate::level::LEVELS`] of the level being played / selected.

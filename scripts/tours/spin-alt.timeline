@@ -1,0 +1,65 @@
+# Spin Cycle (levels/solo/spin.txt), the fired-up route: as the waltz route to the table, then
+# down its hatch into the lint lane, four quick nuggets and Down, the express (a toot off its end
+# and off each belt island), the merge, and drum 2 the long way round at fired-up speed: hop the
+# low exit, spring off the floor, ride the shelf back, spring up over the back wall, out along
+# the top. Format: src/capture/timeline.rs.
+t=0.3 press Right
+t=1.3 tap Space 150ms
+t=3.3 tap Space 200ms
+t=3.65 tap Space 150ms
+t=4.7 tap Space 150ms
+t=6.6 tap Space 150ms
+t=8.05 tap Space 200ms
+t=8.35 tap Space 150ms
+t=9.76 tap Space 200ms
+t=10.02 tap Space 150ms
+t=11.1 tap Space 150ms
+t=12.78 tap Space 300ms
+t=13.6 tap Space 150ms
+t=14.82 tap Space 150ms
+t=15.35 press Left
+t=15.35 release Right
+t=15.45 tap Space 250ms
+t=16.33 tap Space 250ms
+t=17.5 tap Space 150ms
+t=17.9 press Right
+t=17.9 release Left
+t=18.12 tap Space 250ms
+t=19.15 tap Space 150ms
+t=20.45 tap Space 150ms
+t=21.75 tap Down
+t=22.2 tap Space 150ms
+t=23.12 tap Space 150ms
+t=23.57 tap Space 300ms
+t=23.95 tap Space 150ms
+t=24.52 tap Space 300ms
+t=24.92 tap Space 150ms
+t=25.5 tap Space 300ms
+t=25.9 tap Space 150ms
+t=27.2 tap Space 150ms
+t=28.85 tap Space 250ms
+t=29.58 tap Space 300ms
+t=30.7 tap Space 150ms
+t=31.1 press Left
+t=31.1 release Right
+t=31.15 tap Space 250ms
+t=31.93 tap Space 150ms
+t=32.95 tap Space 150ms
+t=33.35 press Right
+t=33.35 release Left
+t=33.55 tap Space 250ms
+t=34.45 tap Space 150ms
+t=35.55 tap Space 150ms
+t=36.2 release Right
+t=36.6 press Right
+t=36.88 tap Space 200ms
+t=38.23 tap Space 200ms
+t=39.1 tap Space 150ms
+t=40.68 tap Space 150ms
+t=41.78 release Right
+t=42.15 press Right
+t=42.33 tap Space 150ms
+t=43.4 release Right
+t=43.85 press Right
+t=44 tap Space 150ms
+t=46 release Right

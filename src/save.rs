@@ -11,8 +11,12 @@ use bevy::prelude::*;
 
 use crate::adapt::{Calibration, Outcome, PlayerProfile, Probe, Skill, StoryAssist, WindowEntry};
 use crate::game::sideb::SIDE_B_COUNT;
+use crate::game::solo::SOLO_COUNT;
 use crate::game::{AdaptiveProfile, StoryAssistState};
 use crate::level::{LEVEL_COUNT, Topic};
+
+/// Secrets that open World 4: all of them (one in each NAT ALONE level).
+pub const SECRETS_FOR_WORLD_4: usize = SOLO_COUNT;
 
 pub fn plugin(app: &mut App) {
     app.init_resource::<Progress>();
@@ -52,6 +56,14 @@ pub struct Progress {
     pub side_b_unlocked: usize,
     /// The fewest rewinds per cleared Side B level.
     pub side_b_rewinds: [Option<u32>; SIDE_B_COUNT],
+    /// NAT ALONE levels `0..solo_unlocked` are playable. Always >= 1.
+    pub solo_unlocked: usize,
+    /// Best nugget count per cleared NAT ALONE level.
+    pub solo_nuggets: [Option<u32>; SOLO_COUNT],
+    /// Best time per cleared NAT ALONE level, seconds.
+    pub solo_time: [Option<f32>; SOLO_COUNT],
+    /// The NAT ALONE levels whose secret (Han behind a grate, `game::secret`) Nat has found.
+    pub solo_secrets: [bool; SOLO_COUNT],
 }
 
 /// Han's tricks, each taught by a lesson card at its first hint spot (`ui::lesson`).
@@ -133,6 +145,10 @@ impl Default for Progress {
             taught_tips: [false; Topic::ALL.len()],
             side_b_unlocked: 1,
             side_b_rewinds: [None; SIDE_B_COUNT],
+            solo_unlocked: 1,
+            solo_nuggets: [None; SOLO_COUNT],
+            solo_time: [None; SOLO_COUNT],
+            solo_secrets: [false; SOLO_COUNT],
         }
     }
 }
@@ -191,14 +207,59 @@ impl Progress {
         best
     }
 
+    /// Record a cleared NAT ALONE level (`game::solo`): unlock the next one and keep the bests.
+    pub fn record_solo(&mut self, level: usize, nuggets: u32, time: f32) -> RecordOutcome {
+        let mut out = RecordOutcome::default();
+        if level >= SOLO_COUNT {
+            return out;
+        }
+        out.first_clear = self.solo_nuggets[level].is_none();
+        if self.solo_nuggets[level].is_none_or(|b| nuggets > b) {
+            self.solo_nuggets[level] = Some(nuggets);
+            out.new_best_nuggets = !out.first_clear;
+        }
+        if self.solo_time[level].is_none_or(|b| time < b) {
+            self.solo_time[level] = Some(time);
+            out.new_best_time = !out.first_clear;
+        }
+        let next = (level + 2).min(SOLO_COUNT);
+        if next > self.solo_unlocked {
+            self.solo_unlocked = next;
+            out.unlocked_next = true;
+        }
+        out
+    }
+
     /// Side B (`game::sideb`) opens on the title once the last story level is cleared.
     /// Side B levels cleared (free play's Side B rooms use what they taught).
     pub fn side_b_cleared(&self) -> usize {
         self.side_b_rewinds.iter().filter(|r| r.is_some()).count()
     }
 
+    /// NAT ALONE levels cleared (free play's gadget world rooms use the tiles they taught).
+    pub fn solo_cleared(&self) -> usize {
+        self.solo_nuggets.iter().filter(|n| n.is_some()).count()
+    }
+
     pub fn side_b_unlocked(&self) -> bool {
         self.best_nuggets[LEVEL_COUNT - 1].is_some()
+    }
+
+    /// NAT ALONE (`game::solo`), the third world, opens on the title once Side B's last level
+    /// is cleared.
+    pub fn solo_world_unlocked(&self) -> bool {
+        self.side_b_rewinds[SIDE_B_COUNT - 1].is_some()
+    }
+
+    /// NAT ALONE secrets found (Han glimpsed behind a grate, `game::secret`).
+    pub fn secrets_found(&self) -> usize {
+        self.solo_secrets.iter().filter(|&&s| s).count()
+    }
+
+    /// World 4 (Nat and Han, in sight but apart: the double game) opens once
+    /// [`SECRETS_FOR_WORLD_4`] secrets are found. Not built on this branch yet: the hook.
+    pub fn world_4_unlocked(&self) -> bool {
+        self.secrets_found() >= SECRETS_FOR_WORLD_4
     }
 
     /// Tiny line-based text format:
@@ -213,12 +274,17 @@ impl Progress {
     /// tips toot oneway
     /// sideb-unlocked 2
     /// sideb-level 0 14
+    /// solo-unlocked 3
+    /// solo-level 0 20 11.500
+    /// solo-secrets 0 3
     /// ```
     /// (`level <index> <best nuggets> <best time secs>`, only for completed levels;
     /// `audio-delay <ms>` only when set; `taught` the band counters taught, `taught-call` the
     /// call lesson seen, `tricks` Han's tricks taught, `tips` the other mechanics' cards seen, only
     /// when any; `sideb-unlocked`, and `sideb-level <index> <fewest rewinds>` per cleared Side B
-    /// level, once Side B's been cleared at all.)
+    /// level, once Side B's been cleared at all; `solo-unlocked` and `solo-level <index> <best
+    /// nuggets> <best time secs>` the same for NAT ALONE, `solo-secrets` the NAT ALONE levels
+    /// whose secret was found, when any.)
     pub fn to_text(&self) -> String {
         let mut s = format!("{HEADER}\nunlocked {}\n", self.unlocked);
         for i in 0..LEVEL_COUNT {
@@ -254,6 +320,18 @@ impl Progress {
             if let Some(r) = r {
                 s.push_str(&format!("sideb-level {i} {r}\n"));
             }
+        }
+        if self.solo_unlocked > 1 {
+            s.push_str(&format!("solo-unlocked {}\n", self.solo_unlocked));
+        }
+        for i in 0..SOLO_COUNT {
+            if let (Some(n), Some(t)) = (self.solo_nuggets[i], self.solo_time[i]) {
+                s.push_str(&format!("solo-level {i} {n} {t:.3}\n"));
+            }
+        }
+        let secrets: Vec<String> = (0..SOLO_COUNT).filter(|&i| self.solo_secrets[i]).map(|i| i.to_string()).collect();
+        if !secrets.is_empty() {
+            s.push_str(&format!("solo-secrets {}\n", secrets.join(" ")));
         }
         s
     }
@@ -303,6 +381,25 @@ impl Progress {
                         && i < SIDE_B_COUNT
                     {
                         p.side_b_rewinds[i] = Some(r);
+                    }
+                }
+                ["solo-unlocked", n] => {
+                    if let Ok(n) = n.parse::<usize>() {
+                        p.solo_unlocked = n.clamp(1, SOLO_COUNT);
+                    }
+                }
+                ["solo-level", i, n, t] => {
+                    if let (Ok(i), Ok(n), Ok(t)) = (i.parse::<usize>(), n.parse(), t.parse::<f32>())
+                        && i < SOLO_COUNT
+                        && t.is_finite()
+                    {
+                        p.solo_nuggets[i] = Some(n);
+                        p.solo_time[i] = Some(t.max(0.0));
+                    }
+                }
+                ["solo-secrets", levels @ ..] => {
+                    for i in levels.iter().filter_map(|i| i.parse::<usize>().ok()).filter(|&i| i < SOLO_COUNT) {
+                        p.solo_secrets[i] = true;
                     }
                 }
                 ["tricks", words @ ..] => {
@@ -582,14 +679,47 @@ mod tests {
     }
 
     #[test]
+    fn world_4_wants_every_secret() {
+        let mut p = Progress::default();
+        assert_eq!(p.secrets_found(), 0);
+        for i in 0..SOLO_COUNT - 1 {
+            p.solo_secrets[i] = true;
+        }
+        assert!(!p.world_4_unlocked(), "nine of ten isn't enough");
+        p.solo_secrets[SOLO_COUNT - 1] = true;
+        assert_eq!(p.secrets_found(), SOLO_COUNT);
+        assert!(p.world_4_unlocked());
+        assert!(Progress::from_text(&p.to_text()).unwrap().world_4_unlocked(), "it survives a save");
+    }
+
+    #[test]
+    fn nat_alone_keeps_its_own_progress() {
+        let mut p = Progress::default();
+        let first = p.record_solo(0, 20, 11.5);
+        assert!(first.first_clear && first.unlocked_next);
+        assert!(!p.record_solo(0, 18, 12.0).new_best_nuggets, "fewer nuggets is no best");
+        assert!(p.record_solo(0, 18, 9.0).new_best_time);
+        assert_eq!((p.solo_unlocked, p.solo_nuggets[0], p.solo_time[0]), (2, Some(20), Some(9.0)));
+        assert_eq!((p.unlocked, p.best_nuggets[0]), (1, None), "the story's untouched");
+        p.record_solo(SOLO_COUNT - 1, 30, 20.0);
+        assert_eq!(p.solo_unlocked, SOLO_COUNT);
+        p.solo_secrets[0] = true;
+        p.solo_secrets[3] = true;
+        assert!(p.to_text().contains("solo-secrets 0 3\n"));
+        assert_eq!(Progress::from_text(&p.to_text()), Some(p));
+    }
+
+    #[test]
     fn side_b_keeps_its_own_progress() {
         let mut p = Progress::default();
         assert!(p.record_side_b(0, 14));
         assert!(!p.record_side_b(0, 20), "more rewinds is no best");
         assert!(p.record_side_b(0, 3));
         assert_eq!((p.side_b_unlocked, p.side_b_rewinds[0]), (2, Some(3)));
+        assert!(!p.solo_world_unlocked());
         p.record_side_b(SIDE_B_COUNT - 1, 0);
         assert_eq!(p.side_b_unlocked, SIDE_B_COUNT);
+        assert!(p.solo_world_unlocked(), "clearing Side B opens NAT ALONE");
         assert_eq!(p.unlocked, 1, "the story's untouched");
         assert_eq!(Progress::from_text(&p.to_text()).unwrap(), p, "it survives a save");
     }

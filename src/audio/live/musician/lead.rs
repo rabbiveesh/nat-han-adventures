@@ -368,6 +368,16 @@ impl Lead {
         let carry = self.carry(ctx);
         let mut octave_done = false;
         let mut prev_note: Option<u8> = self.last.and_then(|e| e.sound.notes().last().copied());
+        // Grace notes, mordents and turns: quick (about `secs` a note, never slower than `max`
+        // beats), light, and slurred into the note as one breath, so they decorate it rather
+        // than chop it up.
+        let beats_per_sec = ctx.shape.sample_rate as f64 / ctx.shape.samples_per_beat;
+        let quick = |max: f64, secs: f64| (secs * beats_per_sec).min(max);
+        let light = |v: u8| (v as u32 * 3 / 4).max(1) as u8;
+        let slurred = |e: NoteEvent| NoteEvent { tie: true, fx: crate::audio::live::voice::Fx { legato: true, ..e.fx }, ..e };
+        // And sparing: at most two in a bar, never on two notes in a row (a decorated note
+        // stands out against plain ones; a run of them is just heavy).
+        let (mut trills, mut trilled_last) = (0, false);
         for k in 0..n {
             let e = self.src[k];
             let (b, d) = (ctx.rel(&e), ctx.len(&e));
@@ -401,32 +411,49 @@ impl Lead {
             }
             // At most one ornament on the note.
             let mut done = false;
+            let may_trill = trills < 2 && !trilled_last;
+            trilled_last = false;
             if !e.tie {
                 if orns.has(Orn::Octave) && !octave_done && k > 0 && k + 1 < n && d >= 0.5 && r.chance(0.5) {
                     let up = (note as i32) + 12 <= HI - 4;
                     main.sound = Sound::Note(if up { note + 12 } else { note.saturating_sub(12) });
                     octave_done = true;
                     fired.add(Orn::Octave);
-                } else if orns.has(Orn::Turn) && d >= 1.0 && on_grid && r.chance(0.6) {
+                } else if orns.has(Orn::Turn) && may_trill && d >= 1.5 && on_grid && r.chance(0.6) {
                     let t = ornament::turn(note, &scale);
+                    let q = quick(1.0 / 6.0, 0.055);
                     for (j, &x) in t[..3].iter().enumerate() {
-                        push(&mut self.dst, ctx.make(&e, b + j as f64 / 6.0, 1.0 / 6.0, Sound::Note(x)));
+                        let mut o = ctx.make(&e, b + j as f64 * q, q, Sound::Note(x));
+                        if j > 0 {
+                            o = slurred(o);
+                            o.volume = light(o.volume);
+                        }
+                        push(&mut self.dst, o);
                     }
-                    push(&mut self.dst, NoteEvent { tie: true, ..ctx.make(&main, b + 0.5, d - 0.5, main.sound) });
+                    push(&mut self.dst, slurred(ctx.make(&main, b + 3.0 * q, d - 3.0 * q, main.sound)));
                     fired.add(Orn::Turn);
+                    (trills, trilled_last) = (trills + 1, true);
                     done = true;
-                } else if orns.has(Orn::Mordent) && d >= 0.75 && r.chance(0.6) {
+                } else if orns.has(Orn::Mordent) && may_trill && d >= 0.75 && r.chance(0.6) {
                     let m = ornament::mordent(note, &scale, r.chance(0.5));
-                    push(&mut self.dst, ctx.make(&e, b, 0.125, Sound::Note(m[0])));
-                    push(&mut self.dst, NoteEvent { tie: true, ..ctx.make(&e, b + 0.125, 0.125, Sound::Note(m[1])) });
-                    push(&mut self.dst, NoteEvent { tie: true, ..ctx.make(&main, b + 0.25, d - 0.25, main.sound) });
+                    let q = quick(0.125, 0.04);
+                    push(&mut self.dst, ctx.make(&e, b, q, Sound::Note(m[0])));
+                    let mut o = slurred(ctx.make(&e, b + q, q, Sound::Note(m[1])));
+                    o.volume = light(o.volume);
+                    push(&mut self.dst, o);
+                    push(&mut self.dst, slurred(ctx.make(&main, b + 2.0 * q, d - 2.0 * q, main.sound)));
                     fired.add(Orn::Mordent);
+                    (trills, trilled_last) = (trills + 1, true);
                     done = true;
-                } else if orns.has(Orn::Grace) && d >= 0.75 && on_grid && r.chance(0.7) {
+                } else if orns.has(Orn::Grace) && may_trill && d >= 0.75 && on_grid && r.chance(0.7) {
                     let g = if r.chance(0.7) { note.saturating_sub(1) } else { scale.step(note, 1) };
-                    push(&mut self.dst, ctx.make(&e, b, 0.125, Sound::Note(g)));
-                    push(&mut self.dst, NoteEvent { tie: true, ..ctx.make(&main, b + 0.125, d - 0.125, main.sound) });
+                    let q = quick(0.125, 0.035);
+                    let mut o = ctx.make(&e, b, q, Sound::Note(g));
+                    o.volume = light(o.volume);
+                    push(&mut self.dst, o);
+                    push(&mut self.dst, slurred(ctx.make(&main, b + q, d - q, main.sound)));
                     fired.add(Orn::Grace);
+                    (trills, trilled_last) = (trills + 1, true);
                     done = true;
                 } else if orns.has(Orn::ArpFlourish)
                     && d >= 1.5

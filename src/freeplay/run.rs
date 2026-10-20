@@ -119,6 +119,8 @@ pub struct FreePlayRun {
     pub unlocked_levels: usize,
     /// Side B levels cleared when the run started (Side B rooms, and their pieces).
     pub side_b_cleared: usize,
+    /// NAT ALONE levels cleared (its tiles in gadget world rooms).
+    pub solo_cleared: usize,
     pub stats: RoomStats,
     /// Every adaptive event posted, in order (tests, the debug dump).
     pub events: Vec<AdaptEvent>,
@@ -164,7 +166,7 @@ impl FreePlayRun {
     }
 
     fn unlocks(&self) -> Unlocks {
-        Unlocks { levels: self.unlocked_levels, side_b: self.side_b_cleared }
+        Unlocks { levels: self.unlocked_levels, side_b: self.side_b_cleared, solo: self.solo_cleared }
     }
 
     /// The plan for room `index`, from the profile as it is now. Once Side B's been played,
@@ -261,6 +263,7 @@ pub fn begin(
         unlocked: unlocked.clone(),
         unlocked_levels: unlocks.levels,
         side_b_cleared: unlocks.side_b,
+        solo_cleared: unlocks.solo,
         stats: RoomStats::default(),
         events: Vec::new(),
         room_id_base: mix(seed as u64 ^ (profile.rooms_played as u64) << 32) & !0xFFFF,
@@ -293,7 +296,7 @@ fn start_run(
     mut next: ResMut<NextState<AppState>>,
 ) {
     let Some(req) = requests.read().last().copied() else { return };
-    let unlocks = Unlocks { levels: progress.unlocked, side_b: progress.side_b_cleared() };
+    let unlocks = Unlocks { levels: progress.unlocked, side_b: progress.side_b_cleared(), solo: progress.solo_cleared() };
     let (run, level) = begin(req.seed, req.endless, &mut profile.0, unlocks);
     settings.last_seed = Some(req.seed);
     // Remembered between visits (saved with the progress).
