@@ -3,8 +3,8 @@
 # up, ride the shelf back, spring up, out along the roof), three even hops over the table's
 # baskets and Down, then the dryer: caught at its wall till ONE, up onto its roof, its pit
 # trampolines on ONE (a toot at each apex for the nuggets up high), the merge, and drum 2 the
-# long way round for the high exit (caught on its floor trampoline till ONE), then the last turn: posts, the fast belt, the trough. Format:
-# src/capture/timeline.rs.
+# long way round for the high exit (caught on its floor trampoline till ONE), then the last
+# turn: the posts, the fast belt, the trough. Format: src/capture/timeline.rs.
 t=0.3 press Right
 t=1.3 tap Space 150ms
 t=3.3 tap Space 200ms
