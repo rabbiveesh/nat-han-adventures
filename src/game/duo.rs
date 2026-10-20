@@ -42,7 +42,7 @@ pub const HAN_BACK_SECS: f32 = 1.5;
 /// No progress for this long while running: he's bonked on something he can't get over.
 const HAN_STALL_SECS: f32 = 2.5;
 /// A call holds this long here (the story's hold is 20 s: a whole level of fired up).
-pub const HOLD_SECS: f32 = 8.0;
+pub const HOLD_SECS: f32 = 12.0;
 pub const LEFT_BEHIND_LINE: &str = "Nat?!";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
@@ -147,6 +147,12 @@ impl DuoLevel {
     }
 
     pub fn load(n: usize) -> DuoLevel {
+        // (Dev: `NATHAN_DUO_FILE=<path>` plays a level file as it's being built.)
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Ok(path) = std::env::var("NATHAN_DUO_FILE") {
+            let src = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            return DuoLevel::parse(&src).unwrap_or_else(|e| panic!("{path}: {e}"));
+        }
         DuoLevel::parse(DUO_SOURCES[n]).unwrap_or_else(|e| panic!("duo level {}: {e}", n + 1))
     }
 }
@@ -166,7 +172,7 @@ pub(super) fn plugin(app: &mut App) {
         FixedUpdate,
         (
             place_han.in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
-            (han_fate, nat_window, respawned).chain().in_set(GameSet::Interact).after(super::hazards::respawn),
+            (han_fate, respawned, nat_window).chain().in_set(GameSet::Interact).after(super::hazards::respawn),
             follow_han.in_set(GameSet::Follow),
         )
             .run_if(resource_exists::<Duo>),
@@ -226,7 +232,7 @@ fn replace_on_restart(mut restarts: MessageReader<RestartLevel>, mut duo: ResMut
 
 /// Which storey a point is in: Nat's (top) or Han's (bottom).
 fn top_storey(level: &Level, p: Vec2) -> bool {
-    level.cell_at(p).1 < SLAB.0 as i32
+    level.cell_at(p).1 <= SLAB.1 as i32
 }
 
 /// A spot to stand on in the storey `top`, at column `from` or the nearest one on (`dir`) from
@@ -424,9 +430,13 @@ fn respawned(
             let Ok((mut pos, mut prev)) = nat.single_mut() else {
                 return;
             };
-            let spot = duo.nat_safe.filter(|p| p.x > duo.view_left() + 2.0 * TILE).or_else(|| {
+            // (A couple of tiles back from it, on his storey's own ground: a run-up, and never
+            // the hidden stone behind the bandstand he was jumping from.)
+            let back = duo.nat_safe.and_then(|p| stand_spot(level, level.cell_at(p).0 - 2, -1, top_storey(level, p)));
+            let spot = back.filter(|p| p.x > duo.view_left() + 2.0 * TILE).or_else(|| {
                 let col = ((duo.view_left() + 3.0 * TILE) / TILE) as i32;
-                stand_spot(level, col, 1, duo.nat_safe.is_none_or(|p| top_storey(level, p)))
+                let top = duo.nat_safe.is_none_or(|p| top_storey(level, p));
+                stand_spot(level, col, 1, top).or_else(|| stand_spot(level, col, 1, !top))
             });
             if let Some(p) = spot {
                 pos.0 = p;
@@ -454,13 +464,26 @@ fn respawned(
 }
 
 /// The window rides Han (clamped to the level), catching up smoothly when he pops back in.
-fn follow_han(time: Res<Time>, active: Res<ActiveLevel>, mut duo: ResMut<Duo>, han: Query<&Pos, With<Han>>) {
-    let Ok(pos) = han.single() else { return };
+/// Once Han's home at the plunger, it waits for Nat instead (Han can wait off its right edge).
+fn follow_han(
+    time: Res<Time>,
+    active: Res<ActiveLevel>,
+    mut duo: ResMut<Duo>,
+    han: Query<(&Pos, &HanBrain), With<Han>>,
+    nat: Query<&Pos, (With<Player>, Without<Han>)>,
+) {
+    let Ok((pos, brain)) = han.single() else { return };
     if duo.han_down.is_some() {
         return;
     }
+    let mut x = pos.0.x;
+    if brain.charge.is_none()
+        && let Ok(nat) = nat.single()
+    {
+        x = x.min(nat.0.x + VIEW_HALF_W - 4.0 * TILE);
+    }
     let w = active.level.size_px().x;
-    let want = if w <= 2.0 * VIEW_HALF_W { w / 2.0 } else { pos.0.x.clamp(VIEW_HALF_W, w - VIEW_HALF_W) };
+    let want = if w <= 2.0 * VIEW_HALF_W { w / 2.0 } else { x.clamp(VIEW_HALF_W, w - VIEW_HALF_W) };
     duo.view_x = super::move_towards(duo.view_x, want, VIEW_SPEED * time.delta_secs());
 }
 
@@ -474,8 +497,11 @@ mod tests {
             let d = DuoLevel::load(n);
             assert_eq!(d.level.height, ROWS);
             let l = &d.level;
-            assert!(l.tile(d.han_start.0 as i32, d.han_start.1 as i32 + 1).is_solid(), "Han starts on a floor");
-            assert!(d.han_start.1 > SLAB.1 && l.start.1 < SLAB.0, "Nat up top, Han down below");
+            // (Han may start up top and fall: the first floor under him is down below.)
+            let (c, r) = (d.han_start.0 as i32, d.han_start.1 as i32);
+            let floor = (r + 1..ROWS as i32).find(|&row| l.tile(c, row).is_solid());
+            assert!(floor.is_some_and(|f| f > SLAB.1 as i32 + 1), "Han lands down below, on {floor:?}");
+            assert!(l.start.1 < SLAB.0, "Nat up top");
         }
     }
 

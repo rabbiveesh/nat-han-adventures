@@ -1,0 +1,50 @@
+# "Upstairs Downstairs" (levels/duo/d1.txt), the fired-up route: the same start, then Nat
+# stays up top while Han runs the cellar, and the long way at the nerve fork. tests/duo.rs.
+t=0.1 press Right
+t=0.9 tap Space 150ms
+t=2.1 tap Space 120ms
+t=3.72 tap Space 200ms
+t=6.75 release Right
+t=7.45 press Right
+t=8.40 tap Space 150ms
+t=8.95 tap Space 150ms
+t=9.50 tap Space 150ms
+t=12.90 tap Space 150ms
+t=13.20 tap Space 150ms
+t=13.50 tap Space 150ms
+t=14.10 tap Space 200ms
+t=14.34 tap Space 150ms
+t=16.10 tap Down
+t=17.00 tap Space 300ms
+t=17.50 tap Space 150ms
+t=17.92 tap Space 150ms
+t=18.55 tap Space 200ms
+# The band fork, the fired-up way: skip the toots and keep the nugget line's fired up (the
+# counter filled last). Han runs the cellar; Nat stays up top, over the pits at fired-up pace.
+t=21.92 tap Space 300ms
+t=22.70 tap Space 200ms
+t=23.30 tap Space 200ms
+t=24.87 tap Space 200ms
+t=25.95 tap Space 300ms
+t=27.00 tap Space 200ms
+t=27.80 tap Space 250ms
+t=29.00 tap Space 200ms
+t=30.10 tap Space 200ms
+t=31.30 tap Space 200ms
+# Over the merge hole on its shelf.
+t=32.20 tap Space 300ms
+# The nerve fork, the long way: drop down the hole into the cellar, up the stairs, through the
+# hole under the shelf.
+t=35.20 tap Space 150ms
+t=35.50 tap Space 150ms
+t=35.80 tap Space 150ms
+t=36.25 release Right
+t=36.31 tap Space 200ms
+t=36.55 tap Space 150ms
+t=36.42 press Right
+# The shout chorus, fired up, then down to Han.
+t=38.60 tap Space 200ms
+t=39.35 tap Space 200ms
+t=40.13 tap Space 200ms
+t=42.08 tap Space 200ms
+at 46

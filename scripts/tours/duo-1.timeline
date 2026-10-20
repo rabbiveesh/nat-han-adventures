@@ -1,26 +1,69 @@
-# The double game's spike level, "Upstairs Downstairs" (levels/duo/d1.txt), for
-# `NATHAN_DUO=1 scripts/record-run --capture out.mp4 scripts/tours/duo-1.timeline` and
-# tests/duo.rs. Nat up top, Han running down below.
+# "Upstairs Downstairs" (levels/duo/d1.txt), the double game's first level, the Giant Steps
+# route (the hard line, the best nuggets, the blind jump). For
+# `NATHAN_DUO=1 scripts/record-run --capture out.mp4 scripts/tours/duo-1.timeline duo` and
+# tests/duo.rs. Nat up top, Han running down below; the window follows Han.
+# The opening: Nat lands up top, Han falls on through to the cellar. Hop, the wobbly bridge,
+# the sewage.
 t=0.1 press Right
+t=0.9 tap Space 150ms
+t=2.1 tap Space 120ms
+t=3.72 tap Space 200ms
+# The swap: stop on the trapdoor and drop into the cellar (Han rides his vent up), over the
+# crumbling stones.
+t=6.75 release Right
+t=7.45 press Right
+t=8.40 tap Space 150ms
+t=8.95 tap Space 150ms
+t=9.50 tap Space 150ms
+# The crossing: up the stairs, jump and toot up through the hole Han just fell down.
+t=12.90 tap Space 150ms
+t=13.20 tap Space 150ms
+t=13.50 tap Space 150ms
+t=14.10 tap Space 200ms
+t=14.34 tap Space 150ms
 # Four quick nuggets: fired up's charged. Down calls it, for Han's pit.
-t=2.0 tap Down
-# Hop the brushes (fired up: fast feet).
-t=3.70 tap Space 150ms
-t=4.33 tap Space 150ms
-t=4.96 tap Space 150ms
-# Over the hole Han climbs up through, then four more nuggets (fired up keeps going).
-t=6.45 tap Space 150ms
-# Down the drop (holding Right drifts Nat past the pit under it). Brushes down here.
-t=9.05 tap Space 150ms
-# Up the steps and through the hole Han falls down.
-t=9.55 tap Space 150ms
-t=9.85 tap Space 150ms
-t=10.15 tap Space 150ms
-t=10.50 tap Space 150ms
-t=11.00 tap Space 200ms
-t=11.24 tap Space 150ms
-# Checkpoint, then the blind jump: onto the ledge hidden behind the bandstand.
-t=12.60 tap Space 150ms
-t=13.15 tap Space 200ms
-t=13.42 tap Space 150ms
-at 19
+t=16.10 tap Down
+# Fired up: over the stones, the sewage, the spikes.
+t=17.00 tap Space 300ms
+t=17.50 tap Space 150ms
+t=17.92 tap Space 150ms
+t=18.55 tap Space 200ms
+# The band fork: five toots over the pits and the hurdle charge Giant Steps (filled last, so
+# it's the call). Down: it lands as Han reaches the fork's vent, and he floats upstairs.
+t=21.84 tap Space 150ms
+t=22.06 tap Space 120ms
+t=22.70 tap Space 150ms
+t=22.92 tap Space 120ms
+t=23.30 tap Space 150ms
+t=23.52 tap Space 120ms
+t=23.70 tap Down
+# Giant Steps: hurdle, then the trapdoor down into the cellar Han left.
+t=24.92 tap Space 200ms
+t=29.82 tap Space 200ms
+t=31.85 tap Space 200ms
+t=32.45 tap Space 200ms
+# Onto the ledge Han ran under: the best nuggets, hopping its gaps.
+t=33.52 tap Space 300ms
+t=33.92 tap Space 150ms
+t=34.80 tap Space 100ms
+t=35.98 tap Space 100ms
+# The merge: up the stairs, jump and toot through the hole as Han drops down it.
+t=38.20 tap Space 150ms
+t=38.60 tap Space 150ms
+t=39.00 tap Space 150ms
+t=39.96 tap Space 200ms
+t=40.22 tap Space 150ms
+# The nerve fork: hop the hole (the long way down) and jump blind behind the bandstand:
+# a hidden stone, then out.
+t=42.08 tap Space 300ms
+t=43.10 tap Space 250ms
+t=44.12 tap Space 250ms
+# The shout chorus: over the shelf, the bridge, the sewage, the hurdle, the spikes, then down
+# to Han and the plunger together.
+t=46.12 tap Space 300ms
+t=49.00 tap Space 150ms
+t=51.00 tap Space 250ms
+t=52.55 tap Space 200ms
+t=54.25 tap Space 200ms
+t=56.62 tap Space 200ms
+at 62

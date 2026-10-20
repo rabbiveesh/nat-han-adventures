@@ -1,5 +1,5 @@
 //! The double game (`game::duo`), headless: Nat played by a timeline (the capture's format,
-//! `scripts/tours/duo-1.timeline`, the same one the video records), Han running by himself.
+//! `scripts/tours/duo-1*.timeline`, the same ones the videos record), Han running by himself.
 //! `DUO_TRACE=1` prints where everyone is, every half second.
 #![cfg(feature = "capture")]
 
@@ -9,7 +9,7 @@ use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeU
 use leafwing_input_manager::prelude::*;
 use nat_han_adventures::{
     capture::timeline::Script,
-    events::{HanSays, PlayerDied},
+    events::{HanSays, NuggetCollected, PlayerDied},
     game::{
         Han, Player, Pos,
         duo::{self, DeathRule, Duo},
@@ -19,21 +19,26 @@ use nat_han_adventures::{
 };
 
 const DT: f64 = 1.0 / 60.0;
+/// Upstairs Downstairs' routes: Giant Steps (Han upstairs, Nat down on the ledge, the blind
+/// jump), and fired up (Han in the cellar, Nat up top, the long way).
 const TOUR: &str = include_str!("../scripts/tours/duo-1.timeline");
+const ALT_TOUR: &str = include_str!("../scripts/tours/duo-1-alt.timeline");
 
 #[derive(Resource, Default, Debug)]
 struct Log {
     nat_deaths: Vec<(f32, Vec2)>,
     says: Vec<(f32, String)>,
+    nuggets: Vec<Vec2>,
     t: f32,
 }
 
-fn log(mut l: ResMut<Log>, mut d: MessageReader<PlayerDied>, mut s: MessageReader<HanSays>) {
+fn log(mut l: ResMut<Log>, mut d: MessageReader<PlayerDied>, mut s: MessageReader<HanSays>, mut n: MessageReader<NuggetCollected>) {
     let t = l.t;
     let deaths: Vec<_> = d.read().map(|d| (t, d.pos)).collect();
     l.nat_deaths.extend(deaths);
     let says: Vec<_> = s.read().map(|s| (t, s.text.clone())).collect();
     l.says.extend(says);
+    l.nuggets.extend(n.read().map(|n| n.pos));
     l.t += DT as f32;
 }
 
@@ -61,10 +66,12 @@ fn cell(p: Vec2) -> String {
     format!("({:.1},{:.1})", p.x / TILE, 18.0 - p.y / TILE)
 }
 
-/// Play the tour; returns the app at its end.
-fn play(rule: DeathRule) -> App {
+/// Play a tour; returns the app at its end.
+fn play(rule: DeathRule, tour: &str) -> App {
     let mut app = app(rule);
-    let tl = Script::parse(TOUR).expect("tour parses").compile(60);
+    // (`DUO_TOUR=<path>` plays another timeline: building a tour.)
+    let tour = std::env::var("DUO_TOUR").map_or(tour.to_string(), |p| std::fs::read_to_string(p).expect("DUO_TOUR"));
+    let tl = Script::parse(&tour).expect("tour parses").compile(60);
     let trace = std::env::var("DUO_TRACE").is_ok();
     let trace_every = std::env::var("DUO_TRACE").ok().and_then(|v| v.parse().ok()).unwrap_or(30);
     let mut next = 0;
@@ -106,19 +113,29 @@ fn play(rule: DeathRule) -> App {
         let l = app.world().resource::<Log>();
         println!("nat deaths: {:?}", l.nat_deaths.iter().map(|(t, p)| format!("{t:.1}s {}", cell(*p))).collect::<Vec<_>>());
         println!("says: {:?}", l.says);
+        println!("nuggets: {} {:?}", l.nuggets.len(), l.nuggets.iter().map(|p| cell(*p)).collect::<Vec<_>>());
     }
     app
 }
 
-/// The tour clears the level with separate deaths, Han never dying, Nat never dying.
-#[test]
-fn the_tour_clears_upstairs_downstairs() {
-    let mut app = play(DeathRule::Separate);
+/// A tour clears the level with separate deaths, Han never dying, Nat never dying.
+fn clears(tour: &str) {
+    let mut app = play(DeathRule::Separate, tour);
     let state = *app.world().resource::<State<AppState>>().get();
     let deaths = app.world().resource::<Log>().nat_deaths.len();
     let han_deaths = app.world().get_resource::<Duo>().map_or(0, |d| d.han_deaths);
     assert_eq!(state, AppState::LevelComplete, "Nat at {}", cell(pos::<Player>(&mut app)));
     assert_eq!((deaths, han_deaths), (0, 0));
+}
+
+#[test]
+fn the_tour_clears_upstairs_downstairs() {
+    clears(TOUR);
+}
+
+#[test]
+fn the_fired_up_tour_clears_it_too() {
+    clears(ALT_TOUR);
 }
 
 /// Without a call, Han dies at his first gate (the pit), and comes back where he jumped.
@@ -127,7 +144,7 @@ fn han_needs_the_call() {
     let mut app = app(DeathRule::Separate);
     KeyCode::ArrowRight.press(app.world_mut());
     let mut died = false;
-    for _ in 0..60 * 12 {
+    for _ in 0..60 * 24 {
         app.update();
         died |= app.world().resource::<Duo>().han_deaths > 0;
     }
@@ -146,5 +163,5 @@ fn both_rewind_together() {
         app.update();
     }
     let h = pos::<Han>(&mut app);
-    assert!(h.x < 12.0 * TILE, "han {}", cell(h));
+    assert!(h.x < 20.0 * TILE, "han {}", cell(h));
 }
