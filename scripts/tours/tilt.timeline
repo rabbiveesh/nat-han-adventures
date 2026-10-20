@@ -79,8 +79,11 @@ at 37.25
 hold Right Space 0.25
 hold Right 0.5
 hold Right Space 0.25
-hold Right 3.35
-hold Right 1.0
+hold Right 0.3
+hold Right Space 0.25
+hold Right 0.65
+hold Right Space 0.25
+hold Right 2.4
 at 42.1
 hold Right Space 0.2
 hold Right 0.85
@@ -106,4 +109,12 @@ hold Left 0.3
 hold Left Space 0.15
 hold Right 0.25
 hold Right Space 0.2
-hold Right 6
+hold Right 0.6
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 1.5

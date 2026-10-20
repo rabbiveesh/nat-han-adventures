@@ -64,17 +64,37 @@ hold Right 0.98
 hold Right Space 0.25
 hold Right 0.94
 hold Right Space 0.25
-hold Right 9.11
+hold Right 2.04
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 0.35
+wait 0.25
+hold Right 1.20
 hold Right Space 0.25
-hold Right 0.33
+hold Right 0.30
 hold Right Space 0.25
-hold Right 0.10
+hold Right 1.70
+hold Right Space 0.25
+hold Right 0.02
 hold Right Space 0.20
-hold Right 0.32
+hold Right 0.55
+hold Right Space 0.25
+hold Right 0.60
 hold Right Space 0.25
 hold Right 0.30
 hold Left 0.30
 hold Left Space 0.15
 hold Right 0.25
 hold Right Space 0.20
-hold Right 6
+hold Right 0.83
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 0.25
+hold Right Space 0.15
+hold Right 1.5
