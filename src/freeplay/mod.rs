@@ -3,7 +3,8 @@
 //!
 //! - [`templates`]: hand-shaped rooms per [`crate::adapt::Skill`] (jump gauntlets, shelf climbs,
 //!   flies and sprays, moving platforms, a giant wall, a long gap, a glide launch, a stain pit, a
-//!   grease chute, and Han's gates: a mega wall, a buddy raft pool, a fired-up chasm, a cling shaft, a trapeze)
+//!   grease chute, and Han's gates: a mega wall, a buddy raft pool, a fired-up chasm, a cling shaft, a trapeze; and, from the level design checklist, a
+//!   crossroads whose road the call picks, and a gadget duet: two gadgets taught, then combined)
 //!   with parameters scaled by the band, the band's rooms opening on rolling ground (humps and
 //!   dips) and the gauntlets climbing up to 7 tiles; [`templates::TEMPLATES`] is the registry
 //!   new kinds of rooms go in.

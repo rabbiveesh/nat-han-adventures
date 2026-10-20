@@ -95,6 +95,10 @@ pub const TEMPLATES: &[Template] = &[
     // The Side B room: once B1 is cleared (its pieces grow with each Side B level cleared).
     // Never picked by skill: `super::run` mixes it in now and then.
     Template { name: "han alone", skill: Skill::Buddy, unlock: 0, side_b: 1, solo: 0, height: ALONE_H, build: alone::build },
+    // The crossroads: three roads, the call picks one (served for either mode's skill).
+    Template { name: "crossroads", skill: Skill::GiantSteps, unlock: 2, side_b: 0, solo: 0, height: CROSS_H, build: crossroads },
+    Template { name: "crossroads", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: CROSS_H, build: crossroads },
+    Template { name: "gadget duet", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: H, build: gadget_duet },
 ];
 
 /// The templates for a skill.
@@ -192,6 +196,7 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     let mut top = FLOOR;
     let obstacles = 3 + d.scaled(band, 0.0, 3.0, 1) as usize;
     let mut checkpoint = None;
+    let mut bonus = false;
     for i in 0..obstacles {
         if i == obstacles / 2 {
             checkpoint = Some((c.width() + 1, top - 1));
@@ -206,7 +211,16 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 let next = (top as i32 - d.int(-2, max_up)).clamp(HIGH, LOW) as usize;
                 let x = c.width();
                 c.pit(g);
-                arc(c, x, g, top.min(next) - 1, 2);
+                if !bonus && g >= 3 && top.min(next) >= 7 && d.chance(0.4) {
+                    // The hard line: the best nuggets high over the gap, for a toot at the top
+                    // of the jump (miss the timing and you're short of the far side).
+                    bonus = true;
+                    for k in 0..3 {
+                        c.nugget(x + g / 2 + k - 1, top.min(next) - 5);
+                    }
+                } else {
+                    arc(c, x, g, top.min(next) - 1, 2);
+                }
                 let land = (lerpi(band, 5.0, 2.0) + d.int(0, 1) as usize).max(2);
                 c.ground(land, next);
                 top = next;
@@ -352,6 +366,7 @@ fn hazards(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     let n = 2 + d.scaled(band, 0.0, 4.0, 1) as usize;
     let (mut flies, mut sprays) = (false, false);
     let mut checkpoint = None;
+    let mut bonus = false;
     for i in 0..n {
         if i == n / 2 {
             checkpoint = Some((c.width() + 1, STAND));
@@ -363,6 +378,12 @@ fn hazards(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 let x = c.width();
                 c.ground(1, FLOOR);
                 c.set(x, STAND, b'S');
+                if !bonus && band >= 3 {
+                    // The hard line: a nugget in the jet, for a hop while it's off.
+                    bonus = true;
+                    c.nugget(x, STAND - 2);
+                    c.nugget(x, STAND - 1);
+                }
                 sprays = true;
             }
             1 if band >= 3 => {
@@ -1118,5 +1139,258 @@ fn beat_hall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(3, FLOOR);
     let hint: (&'static [Topic], &'static str) =
         if crushers { (&[Topic::Crusher], "Wait... go!") } else { (&[Topic::Beat], "On the beat!") };
+    Built { hint: Some(hint), checkpoint }
+}
+
+// ─── A crossroads: the call is the choice ────────────────────────────────────
+
+/// A crossroads room's rows: the rooftop, the canal and the tunnel stacked.
+pub const CROSS_H: usize = 32;
+
+/// A column of `ch` over rows `r0..=r1` (pairs), open air elsewhere.
+fn stack(c: &mut Canvas, runs: &[(usize, usize, u8)]) {
+    let runs = runs.to_vec();
+    c.column(move |r| runs.iter().find(|&&(a, b, _)| (a..=b).contains(&r)).map_or(b'.', |&(_, _, ch)| ch));
+}
+
+/// Three roads out of one fork (the level design checklist's "the call is the choice"), all in
+/// sight of each other. On the way there, two lanes charge two counters: one-way shelves a toot
+/// apart (Giant Steps) over a quick nugget line (fired up), and whichever was filled last is the
+/// call.
+/// - Giant Steps: up a 6-tile wall off the high ledge onto a rooftop slab, the slow road with
+///   the best nuggets, over spike strips to hop.
+/// - Fired up: the canal under the rooftop, 11-tile gaps between islands (one, then two from
+///   band 5), the fast road.
+/// - No call, or a missed canal jump: down a canal shaft into the tunnel under it, the long
+///   way: spikes and sprays in a low corridor.
+///
+/// All three meet on the floor before the exit. The checkpoint is before the lanes, so every
+/// try charges again.
+fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let f = c.floor();
+    // The canal's surface (out of every mode's reach from the tunnel floor), the ledge the
+    // Giant Steps wall rises from, the rooftop slab.
+    let k = f - 11;
+    let ledge = k - 4;
+    let roof = k - 10;
+    // The tunnel: open rows f-4..f-1 under a ceiling down to f-5.
+    let ceil = f - 5;
+    let bottom = c.height() - 1;
+    c.ground(2, f);
+    // Stairs up to the canal's level.
+    let mut top = f;
+    while top > k {
+        top = (top - 2).max(k);
+        let x = c.width();
+        c.ground(2, top);
+        if (f - top) % 4 == 0 {
+            c.nugget(x + 1, top - 1);
+        }
+    }
+    let checkpoint = Some((c.width() + 1, k - 1));
+    c.ground(3, k);
+    // The charging lanes: a quick nugget line low, shelves a toot apart up to the high ledge.
+    let lane = 12 + d.int(0, 2) as usize;
+    let x0 = c.width();
+    c.ground(lane, k);
+    for i in 0..4 {
+        c.nugget(x0 + 3 + 2 * i, k - 1);
+    }
+    for j in 0..2 {
+        c.set(x0 + j, ledge, b'=');
+    }
+    c.nugget(x0 + 5, ledge - 3);
+    // The high ledge (room to toot up Giant Steps on it) over the end of the lane.
+    let ledge_w = 9;
+    for j in lane - 4..lane {
+        c.set(x0 + j, ledge, b'=');
+    }
+    for _ in 0..ledge_w - 4 {
+        stack(c, &[(ledge, ledge, b'='), (k, ceil, b'#'), (f, bottom, b'#')]);
+    }
+    // The Giant Steps wall, the rooftop's start.
+    let h0 = c.width();
+    stack(c, &[(roof, ledge, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
+    // The plateau under the rooftop: the fired-up run-up, its nuggets.
+    let px = c.width();
+    for _ in 0..5 + d.int(0, 2) {
+        stack(c, &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
+    }
+    c.nugget(px + 1, k - 1);
+    c.nugget(px + 3, k - 1);
+    // The canal: gaps (shafts down to the tunnel) and islands under the rooftop.
+    let gaps = if band >= 5 { 2 } else { 1 };
+    let island = lerpi(band, 5.0, 4.0) + d.int(0, 1) as usize;
+    for _ in 0..gaps {
+        let g = c.width();
+        for _ in 0..11 {
+            stack(c, &[(roof, roof + 1, b'#'), (f, bottom, b'#')]);
+        }
+        arc(c, g + 4, 3, k - 1, 3);
+        let ix = c.width();
+        for _ in 0..island {
+            stack(c, &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
+        }
+        for j in 0..island.min(3) {
+            c.nugget(ix + j, k - 1);
+        }
+    }
+    let canal_end = c.width();
+    // The rooftop's last stretch, over the drop to the floor.
+    for _ in 0..3 {
+        stack(c, &[(roof, roof + 1, b'#'), (f, bottom, b'#')]);
+    }
+    let roof_end = c.width();
+    for j in 0..3 {
+        c.nugget(roof_end - 6 + j, roof - 1);
+    }
+    // On the rooftop: spike strips to hop, the best nuggets over them.
+    let strips = 1 + d.scaled(band, 0.0, 2.0, 0) as usize;
+    let span = (roof_end - h0 - 4) / strips;
+    for i in 0..strips {
+        let w = if band >= 6 { 2 } else { 1 };
+        let sx = h0 + 4 + i * span + span / 2;
+        for j in 0..w {
+            c.set(sx + j, roof - 1, b'^');
+        }
+        arc(c, sx - 1, w + 2, roof - 2, 3);
+    }
+    // In the tunnel: spikes and sprays, nuggets between.
+    let hazards = 2 + d.scaled(band, 0.0, 2.0, 0) as usize;
+    let t0 = h0 + 8;
+    let step = (canal_end + 3 - t0) / (hazards + 1);
+    for i in 0..hazards {
+        let hx = t0 + step * (i + 1);
+        if d.chance(0.5) {
+            c.set(hx, f - 1, b'S');
+        } else {
+            let w = if band >= 4 { 2 } else { 1 };
+            for j in 0..w {
+                c.set(hx + j, f, b'^');
+            }
+        }
+        c.nugget(hx - step / 2, f - 1);
+    }
+    // The floor where the roads meet.
+    c.ground(6, f);
+    Built { hint: Some((&[Topic::Giant, Topic::Gap], "Pick a road!")), checkpoint }
+}
+
+// ─── Precision: a gadget duet ────────────────────────────────────────────────
+
+/// Two gadgets that act on each other, told in four beats (the level design checklist's
+/// kishotenketsu): the lead alone where a slip is safe, the lead with stakes, the counter
+/// gadget joining in, then both together a few times over. Pairs:
+/// - fans and crumbling stones ("the wind carries you, the floor won't wait"): a fan in a dip
+///   floats you up a step; a crumbling bridge over sewage; a fan in the sewage to hover in and
+///   toot off onto a crumbling stone; fan, stone, fan, stone.
+/// - belts and trampolines: a belt rolls you onto a trampoline up to a ledge; a belt against
+///   you into a gap; a trampoline over a pit onto a belt that runs you at the next; belt,
+///   trampoline, belt, trampoline over sewage.
+fn gadget_duet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    let f = c.floor();
+    let bottom = c.height() - 1;
+    c.ground(4, f);
+    let n = lead_in(d);
+    hills(c, d, band, n);
+    let fans = d.chance(0.5);
+    let reps = 2 + d.scaled(band, 0.0, 2.0, 0) as usize;
+    let checkpoint;
+    if fans {
+        // Ki: a dip with a fan at its foot, too deep a step to hop out of.
+        c.ground(2, f);
+        let x = c.width();
+        for k in 0..3 {
+            stack(c, &[(f + 2, f + 2, if k == 1 { b'*' } else { b'#' }), (f + 3, bottom, b'#')]);
+        }
+        for k in (2..6).step_by(2) {
+            c.nugget(x + 1, f - k);
+        }
+        let step = f - 4;
+        let sx = c.width();
+        c.ground(4, step);
+        arc(c, sx, 4, step - 1, 1);
+        c.ground(2, f - 2);
+        c.ground(3, f);
+        // Sho: a crumbling bridge over sewage.
+        let w = d.scaled(band, 4.0, 7.0, 1).clamp(4, 7) as usize;
+        let bx = c.width();
+        c.pool(w);
+        for k in 0..w {
+            c.set(bx + k, f - 1, b'-');
+        }
+        arc(c, bx, w, f - 2, 2);
+        checkpoint = Some((c.width() + 1, f - 1));
+        c.ground(4, f);
+        // Ten, then ketsu: a fan in the sewage, a crumbling stone a toot up and over.
+        for i in 0..reps {
+            let lift = if i == 0 { 2 } else { 3 };
+            c.pool(2);
+            let fx = c.width();
+            stack(c, &[(f, f, b'*'), (f + 1, bottom, b'#')]);
+            for k in (2..6).step_by(2) {
+                c.nugget(fx, f - k);
+            }
+            c.pool(3);
+            let sx = c.width();
+            c.pool(2);
+            for k in 0..2 {
+                c.set(sx + k, f - lift, b'-');
+            }
+            c.nugget(sx, f - lift - 2);
+            c.pool(2);
+            if i + 1 == reps || i == 0 {
+                c.ground(3, f);
+            }
+        }
+    } else {
+        // Ki: a belt rolling you onto a trampoline, up onto a ledge.
+        let x = c.width();
+        c.ground(5, f);
+        for k in 0..5 {
+            c.set(x + k, f, b'}');
+        }
+        let tx = c.width();
+        c.ground(1, f);
+        c.set(tx, f, b'T');
+        let h = d.scaled(band, 4.0, 6.0, 0).clamp(4, 6) as usize;
+        let lx = c.width();
+        c.ground(4, f - h);
+        arc(c, lx, 4, f - h - 1, 1);
+        c.ground(2, f - h / 2);
+        c.ground(3, f);
+        // Sho: a belt against you into a gap.
+        let x = c.width();
+        c.ground(5, f);
+        for k in 0..5 {
+            c.set(x + k, f, b'{');
+        }
+        let g = d.scaled(band, 3.0, 4.0, 0).clamp(3, 4) as usize;
+        let gx = c.width();
+        c.pit(g);
+        arc(c, gx, g, f - 2, 2);
+        checkpoint = Some((c.width() + 1, f - 1));
+        c.ground(4, f);
+        // Ten, then ketsu: off a trampoline over the pit onto a belt that runs you at the next.
+        for _ in 0..reps {
+            let tx = c.width();
+            c.ground(1, f);
+            c.set(tx, f, b'T');
+            let g = d.scaled(band, 4.0, 6.0, 1).clamp(4, 7) as usize;
+            let gx = c.width();
+            c.pool(g);
+            arc(c, gx, g, f - 4, 3);
+            let bx = c.width();
+            let bw = 4;
+            c.ground(bw, f);
+            for k in 0..bw {
+                c.set(bx + k, f, b'}');
+            }
+        }
+        c.ground(3, f);
+    }
+    c.ground(3, f);
+    let hint: (&'static [Topic], &'static str) =
+        if fans { (&[Topic::Fan, Topic::Crumble], "Whoosh! Go go!") } else { (&[Topic::Belt, Topic::Spring], "Ride, bounce!") };
     Built { hint: Some(hint), checkpoint }
 }
