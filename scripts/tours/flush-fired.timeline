@@ -1,3 +1,7 @@
+# The Grand Flush (levels/solo/flush.txt), fired up: the medley, the lint lane's four quick
+# nuggets and Down, the express at fired-up speed, a toot off its end and off each belt island
+# (11 apart over the sump), the merge, the nerve fork's high slab, the Champion's Road fast,
+# one crusher cycle waited out before the plunger. Format: src/capture/timeline.rs.
 t=0.30 press Right
 t=0.70 tap Space 100ms
 t=2.55 tap Space 80ms
@@ -75,5 +79,6 @@ t=49.75 release Right
 t=50.80 press Right
 t=51.40 tap Space 300ms
 t=51.82 release Right
-t=52.96 press Right
-t=57.20 release Right
+t=53.30 tap Space 120ms
+t=54.53 press Right
+t=58.77 release Right

@@ -1,3 +1,7 @@
+# The Grand Flush (levels/solo/flush.txt) with no call: the medley, off the express's end into
+# the sump, back under the express to the tenth secret (Han behind a grate, found once), the
+# sump's ducks and holes, the steps and the trampoline up through the merge's hatch, the nerve
+# fork's low line, the Champion's Road. Format: src/capture/timeline.rs.
 t=0.30 press Right
 t=0.70 tap Space 100ms
 t=2.55 tap Space 80ms

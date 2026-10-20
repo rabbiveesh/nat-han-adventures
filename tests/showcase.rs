@@ -15,7 +15,11 @@
 //!   and its secret; Crusher Disco's: `disco-alt.timeline` fired up over the dance floor,
 //!   `disco-cellar.timeline` with no call, through the cellar and its secret; Spin Cycle's:
 //!   `spin-alt.timeline` fired up along the express, `spin-sump.timeline` with no call, through
-//!   the sump, its secret and drum 2's low exit).
+//!   the sump, its secret and drum 2's low exit; Ping Pong Palace's: `pingpong-fired.timeline`
+//!   fired up over the islands, `pingpong-cellar.timeline` with no call, through the cellar and
+//!   its secret; The Grand Flush's: `flush-waltz.timeline` the waltz over the roof,
+//!   `flush-fired.timeline` fired up along the express, `flush-sump.timeline` with no call,
+//!   through the sump and the tenth secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -428,6 +432,38 @@ fn the_no_call_tour_clears_pingpong_through_the_cellar_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(flush_is_a_valid_level, the_tour_clears_flush, "flush");
+
+/// The Grand Flush's fork, the waltz's way: three even hops over the table's baskets, caught on
+/// the dryer's trampoline till ONE onto the roof, its pit trampolines, the nerve fork's low line
+/// hopped in threes (`flush.timeline` calls Giant Steps and takes the balcony).
+#[test]
+fn the_waltz_tour_clears_flush_over_the_roof() {
+    let run = play(include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush-waltz.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// The Grand Flush's fork fired up: the lint lane's four quick nuggets, the express, a toot off
+/// its end and off each belt island over the sump.
+#[test]
+fn the_fired_up_tour_clears_flush_along_the_express() {
+    let run = play(include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush-fired.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// The Grand Flush's fork with no call: off the express into the sump, back to the tenth secret
+/// (Han behind a grate, found once), the sump's ducks and the hatch.
+#[test]
+fn the_no_call_tour_clears_flush_through_the_sump_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush-sump.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 
 #[test]
 fn check_a_level_file() {
