@@ -5,7 +5,9 @@
 //!   run (`scripts/tours/<level>.timeline`) that clears it without a death (Breezy's fork has
 //!   two more: `breezy-alt.timeline` fired up over the canal, `breezy-tunnel.timeline` with no
 //!   call, through the tunnel and its secret; Bouncy Castle's too: `bouncy-alt.timeline` fired up
-//!   over the moat, `bouncy-dungeon.timeline` with no call, through the dungeon and its secret).
+//!   over the moat, `bouncy-dungeon.timeline` with no call, through the dungeon and its secret; Up
+//!   the Spout!'s: `spout-alt.timeline` fired up through the vault, `spout-stair.timeline` with
+//!   no call, up the brick stair past its secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -254,6 +256,28 @@ fn the_no_call_tour_clears_bouncy_through_the_dungeon_and_finds_the_secret() {
 }
 nat_alone!(brush_is_a_valid_level, the_tour_clears_brush, "brush");
 nat_alone!(spout_is_a_valid_level, the_tour_clears_spout, "spout");
+
+/// Up the Spout!'s fork, the other way: out of the chimney the nuggets fire the band up, the
+/// long gap and the elevator, then the kicker over the merge's spikes into the brick vault
+/// (`spout.timeline` calls Giant Steps and takes the upper shaft, then the safe elevator).
+#[test]
+fn the_fired_up_tour_clears_spout_through_the_vault() {
+    let run = play(include_str!("../levels/solo/spout.txt"), include_str!("../scripts/tours/spout-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Up the Spout!'s fork with no call: down into the basement, back to the secret (Han behind a
+/// grate, found once), over the rubble and up the brick stair, storey by storey.
+#[test]
+fn the_no_call_tour_clears_spout_up_the_brick_stair_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/spout.txt"), include_str!("../scripts/tours/spout-stair.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(tilt_is_a_valid_level, the_tour_clears_tilt, "tilt");
 nat_alone!(wind_is_a_valid_level, the_tour_clears_wind, "wind");
 nat_alone!(disco_is_a_valid_level, the_tour_clears_disco, "disco");

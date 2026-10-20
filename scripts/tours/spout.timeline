@@ -16,6 +16,7 @@ t=7.35 press Left
 t=7.87 release Left
 t=7.87 press Right
 t=8.3 tap Space 100ms
+t=9.55 tap Space 300ms
 t=11.82 tap Space 100ms
 t=11.85 release Right
 t=11.85 press Left
