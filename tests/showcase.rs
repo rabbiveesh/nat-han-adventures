@@ -10,7 +10,9 @@
 //!   no call, up the brick stair past its secret; Brush Hour's: `brush-alt.timeline` fired up
 //!   along the express, `brush-underpass.timeline` with no call, through the underpass and its
 //!   secret; Tilt!'s: `tilt-alt.timeline` fired up over the outlane, `tilt-outlane.timeline` with
-//!   no call, through the outlane and its secret).
+//!   no call, through the outlane and its secret; Gone With the Wind's: `wind-alt.timeline` fired
+//!   up down the low road's tailwind stair, `wind-sewer.timeline` with no call, through the sewer
+//!   and its secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -328,6 +330,29 @@ fn the_no_call_tour_clears_tilt_through_the_outlane_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(wind_is_a_valid_level, the_tour_clears_wind, "wind");
+
+/// Gone With the Wind's fork, the other way: the nugget line under the ledges fires the band up,
+/// the leap off the edge, then the low road's stair down (each riser a wall fan: a tailwind over
+/// the crumbling floor below it) and up through the lid (`wind.timeline` calls Giant Steps and
+/// takes the high road).
+#[test]
+fn the_fired_up_tour_clears_wind_down_the_low_road() {
+    let run = play(include_str!("../levels/solo/wind.txt"), include_str!("../scripts/tours/wind-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Gone With the Wind's fork with no call: off the edge into the sewer, back to the secret (Han
+/// behind a grate, found once), over the sewage pits and up through the lid.
+#[test]
+fn the_no_call_tour_clears_wind_through_the_sewer_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/wind.txt"), include_str!("../scripts/tours/wind-sewer.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(disco_is_a_valid_level, the_tour_clears_disco, "disco");
 nat_alone!(spin_is_a_valid_level, the_tour_clears_spin, "spin");
 nat_alone!(pingpong_is_a_valid_level, the_tour_clears_pingpong, "pingpong");
