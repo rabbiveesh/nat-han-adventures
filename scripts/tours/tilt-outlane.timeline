@@ -1,4 +1,4 @@
-# Tilt! with no call: off the launch lane into the outlane, through the red door to the secret,
+# Tilt! with no call: a toot up the second lane, hops for the nuggets over the landing and the belt, off into the outlane, through the red door to the secret,
 # along the outlane's road, up the drain's duck shaft, the doors, the beat stone, the last lane.
 wait 0.3
 hold Right 0.5
@@ -51,8 +51,13 @@ hold Right 0.55
 hold Right Space 0.3
 hold Right 0.6
 hold Right Space 0.15
-hold Right 2.95
-hold Right 2.80
+hold Right 1.8
+hold Right Space 0.15
+hold Right 1.95
+hold Right Space 0.25
+hold Right 0.6
+hold Right Space 0.25
+hold Right 0.75
 hold Left 1.65
 hold Right 1.65
 hold Right Space 0.25
