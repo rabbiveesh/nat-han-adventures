@@ -9,7 +9,8 @@
 //!   the Spout!'s: `spout-alt.timeline` fired up through the vault, `spout-stair.timeline` with
 //!   no call, up the brick stair past its secret; Brush Hour's: `brush-alt.timeline` fired up
 //!   along the express, `brush-underpass.timeline` with no call, through the underpass and its
-//!   secret).
+//!   secret; Tilt!'s: `tilt-alt.timeline` fired up over the outlane, `tilt-outlane.timeline` with
+//!   no call, through the outlane and its secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -304,6 +305,28 @@ fn the_no_call_tour_clears_spout_up_the_brick_stair_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(tilt_is_a_valid_level, the_tour_clears_tilt, "tilt");
+
+/// Tilt!'s fork, the other way: the nugget line under the beat stairs fires the band up and the
+/// launch lane's belt throws Nat over the outlane, island to island, then the doors on the beat
+/// (`tilt.timeline` calls the waltz, springs off the flipper on ONE and takes the gallery).
+#[test]
+fn the_fired_up_tour_clears_tilt_over_the_outlane() {
+    let run = play(include_str!("../levels/solo/tilt.txt"), include_str!("../scripts/tours/tilt-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Tilt!'s fork with no call: down into the outlane, through the beat's door to the secret (Han
+/// behind a grate, found once), along the outlane's road and up the drain's duck shaft.
+#[test]
+fn the_no_call_tour_clears_tilt_through_the_outlane_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/tilt.txt"), include_str!("../scripts/tours/tilt-outlane.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(wind_is_a_valid_level, the_tour_clears_wind, "wind");
 nat_alone!(disco_is_a_valid_level, the_tour_clears_disco, "disco");
 nat_alone!(spin_is_a_valid_level, the_tour_clears_spin, "spin");

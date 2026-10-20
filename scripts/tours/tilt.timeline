@@ -1,4 +1,6 @@
-# Tilt! (levels/solo/tilt.txt), the waltz route. Format: src/capture/timeline.rs.
+# Tilt! (levels/solo/tilt.txt), the waltz route: the flipper's spring on ONE up to the top lane,
+# then the hanging lane, a toot over the gallery's spikes, the beat stone, the last kicker and lane.
+# Format: src/capture/timeline.rs.
 wait 0.3
 hold Right 0.5
 hold Right Space 0.15
