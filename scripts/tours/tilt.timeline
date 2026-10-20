@@ -1,62 +1,107 @@
-# Tilt! (levels/solo/tilt.txt): the pinball machine without a death. Format: src/capture/timeline.rs.
-# Up A, the drain and R2/R3, the wide shaft's bottom door onto the old pedestal (checkpoint),
-# up the tower of doors and out of its middle one, then jump and toot across into the cushion
-# shaft (walk in and it's the sewage), out of its top door and over the light-up bridge; then
-# the drain: grab the four nuggets, Down (fired up), back off the belt and run its length into a
-# long jump over the gap; then three even hops, Down (the waltz), off the edge onto the drain's
-# trampoline and its spring on ONE (toot at the top) up the wall to the plunger.
-wait 0.5
-hold Right Space 300ms
-hold Right 2.6
-wait 0.45
-hold Right 3.5
-hold Left 2.4
-hold Right 2.6
-hold Left 2.5
-hold Right 0.9
+# Tilt! (levels/solo/tilt.txt), the waltz route. Format: src/capture/timeline.rs.
 wait 0.3
-hold Right Space 250ms
-hold Right 0.1
-hold Right Space 200ms
-hold Right 2.8
-wait 0.3
-hold Right Space 250ms
-hold Right 0.1
-wait 0.7
-hold Right 0.2
-hold Right Space 300ms
-hold Right 0.1
-wait 0.9
-hold Right Space 300ms
-hold Right 0.1
-wait 0.9
-hold Right Space 300ms
-hold Right 0.1
-wait 0.9
-hold Right Space 300ms
-hold Right 0.1
 hold Right 0.5
-hold Right 0.65
-hold Left Down 0.1
-hold Left 0.6
-wait 0.6
-hold Right 0.9
-hold Right Space 0.35
-hold Right 0.15
-hold Right Space 0.3
-hold Right 0.3
-wait 0.5
-repeat 3
-hold Space 150ms
-wait 0.6
-end
-tap Down
-wait 2.5
-hold Right 0.85
 hold Right Space 0.15
-hold Right 0.9
-at 38.25
-hold Right 0.45
+hold Right 2.95
+hold Right Space 0.2
+hold Right 0.25
+at 4.7
+hold Right Space 0.25
+hold Right 0.4
+at 5.97
+hold Right Space 0.25
+hold Right 0.4
+at 7.24
+hold Right Space 0.25
+hold Right 0.4
+at 8.5
+hold Right Space 0.25
+hold Right 0.8
+hold Left 0.5
+hold Right 0.2
+hold Right Space 0.1
+hold Right 1.33
+hold Right Space 0.2
+hold Right 0.75
+hold Right Space 0.2
+hold Right 1.2
+hold Left 0.45
+hold Right 0.2
+hold Right Space 0.1
+hold Right 1.25
+hold Right Space 0.25
+hold Right 0.15
+at 17.27
+hold Right Space 0.25
+hold Right 0.4
+at 18.52
+hold Right Space 0.25
+hold Right 0.4
+at 19.77
+hold Right Space 0.25
+hold Right 0.4
+at 21.0
+hold Right Space 0.25
+hold Right 0.85
+hold Left 0.4
+hold Right 0.2
+hold Right Space 0.1
+hold Right 0.55
 hold Right Space 0.3
-hold Right 1.5
-wait 1
+hold Right 0.6
+hold Right Space 0.15
+hold Right 2.95
+at 27.55
+hold Right Space 0.2
+hold Right 0.12
+at 28.12
+hold Right Space 0.2
+hold Right 0.3
+at 28.67
+hold Right Space 0.25
+hold Right 0.3
+tap Down
+hold Right 1.0
+hold Right Space 0.2
+hold Right 0.1
+at 31.95
+hold Right Space 0.3
+hold Right 1.25
+at 34.25
+hold Right Space 0.25
+hold Right 0.5
+at 35.75
+hold Right Space 0.25
+hold Right 0.5
+at 37.25
+hold Right Space 0.25
+hold Right 0.5
+hold Right Space 0.25
+hold Right 3.35
+hold Right 1.0
+at 42.1
+hold Right Space 0.2
+hold Right 0.85
+at 43.15
+hold Right Space 0.3
+hold Right 0.9
+at 44.35
+hold Right Space 0.2
+hold Right 0.33
+at 44.88
+hold Right Space 0.25
+hold Right 1.4
+at 46.5
+hold Right Space 0.25
+hold Right 0.55
+at 47.3
+hold Right Space 0.25
+hold Right 0.35
+at 47.9
+hold Right Space 0.25
+hold Right 0.3
+hold Left 0.3
+hold Left Space 0.15
+hold Right 0.25
+hold Right Space 0.2
+hold Right 6
