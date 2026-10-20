@@ -7,7 +7,9 @@
 //!   call, through the tunnel and its secret; Bouncy Castle's too: `bouncy-alt.timeline` fired up
 //!   over the moat, `bouncy-dungeon.timeline` with no call, through the dungeon and its secret; Up
 //!   the Spout!'s: `spout-alt.timeline` fired up through the vault, `spout-stair.timeline` with
-//!   no call, up the brick stair past its secret).
+//!   no call, up the brick stair past its secret; Brush Hour's: `brush-alt.timeline` fired up
+//!   along the express, `brush-underpass.timeline` with no call, through the underpass and its
+//!   secret).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -255,6 +257,29 @@ fn the_no_call_tour_clears_bouncy_through_the_dungeon_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(brush_is_a_valid_level, the_tour_clears_brush, "brush");
+
+/// Brush Hour's fork, the other way: the low lane's nuggets fire the band up, down the hole onto
+/// the express's runway and across its islands, 12 apart (`brush.timeline` calls Giant Steps
+/// and takes the gantry).
+#[test]
+fn the_fired_up_tour_clears_brush_along_the_express() {
+    let run = play(include_str!("../levels/solo/brush.txt"), include_str!("../scripts/tours/brush-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Brush Hour's fork with no call: off the runway's end into the underpass, back against the
+/// traffic to the secret (Han behind a grate, found once), the crates and the drain, then the
+/// braid's slow lane and its on-ramp up to the fast lane.
+#[test]
+fn the_no_call_tour_clears_brush_through_the_underpass_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/brush.txt"), include_str!("../scripts/tours/brush-underpass.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(spout_is_a_valid_level, the_tour_clears_spout, "spout");
 
 /// Up the Spout!'s fork, the other way: out of the chimney the nuggets fire the band up, the
