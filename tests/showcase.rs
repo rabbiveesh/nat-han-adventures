@@ -13,7 +13,9 @@
 //!   no call, through the outlane and its secret; Gone With the Wind's: `wind-alt.timeline` fired
 //!   up down the low road's tailwind stair, `wind-sewer.timeline` with no call, through the sewer
 //!   and its secret; Crusher Disco's: `disco-alt.timeline` fired up over the dance floor,
-//!   `disco-cellar.timeline` with no call, through the cellar and its secret).
+//!   `disco-cellar.timeline` with no call, through the cellar and its secret; Spin Cycle's:
+//!   `spin-alt.timeline` fired up along the express, `spin-sump.timeline` with no call, through
+//!   the sump, its secret and drum 2's low exit).
 //!
 //! The runs play here the way the capture plays them (the keyboard-message path, 30 fps, the
 //! music in lockstep driving the beat blocks and beat crushers).
@@ -379,6 +381,28 @@ fn the_no_call_tour_clears_disco_through_the_cellar_and_finds_the_secret() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 nat_alone!(spin_is_a_valid_level, the_tour_clears_spin, "spin");
+
+/// Spin Cycle's fork, the other way: four quick nuggets in the lint lane fire the band up, the
+/// express's belt islands over the sump, drum 2 round at fired-up speed (`spin.timeline` calls
+/// the waltz on the table and springs on ONE up onto the dryer).
+#[test]
+fn the_fired_up_tour_clears_spin_along_the_express() {
+    let run = play(include_str!("../levels/solo/spin.txt"), include_str!("../scripts/tours/spin-alt.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// Spin Cycle's fork with no call: the lint trap's secret (Han behind a grate, found once), the
+/// sump against its belt, the one-way hatch, and drum 2's low exit through the spin-dry.
+#[test]
+fn the_no_call_tour_clears_spin_through_the_sump_and_finds_the_secret() {
+    let run = play(include_str!("../levels/solo/spin.txt"), include_str!("../scripts/tours/spin-sump.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert_eq!(run.secrets, 1, "Nat finds the secret once");
+    let goal = run.goal.expect("the tour reaches the goal");
+    assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
 nat_alone!(pingpong_is_a_valid_level, the_tour_clears_pingpong, "pingpong");
 nat_alone!(flush_is_a_valid_level, the_tour_clears_flush, "flush");
 
