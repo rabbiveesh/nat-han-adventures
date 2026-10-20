@@ -47,4 +47,4 @@ wait 0.4
 hold Left 150ms
 
 # The lap ends; the band's ending, the duck, up through the grate, Han, SLAM, to be continued.
-wait 16
+wait 19
