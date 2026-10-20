@@ -1,5 +1,6 @@
 //! The encore's words on screen (`game::encore`): ENCORE! and how to call the band in the lap,
-//! FLUSH! when Nat goes in, then TO BE CONTINUED...
+//! FLUSH! when Nat goes in (Side B: GLUG! as Han plunges, SHLOOP! as Nat goes back down), then
+//! TO BE CONTINUED...
 
 use bevy::prelude::*;
 
@@ -75,6 +76,8 @@ fn show(
     if let Ok((mut text, mut font, mut color)) = mid.single_mut() {
         let (want, size, c) = match e.phase {
             EncorePhase::Flushing => ("FLUSH!", 24.0, Color::srgb(0.6, 0.85, 1.0)),
+            EncorePhase::Plunging if e.t >= crate::game::encore::side_b::PLUNGE_SECS => ("GLUG!", 24.0, Color::srgb(0.6, 0.85, 1.0)),
+            EncorePhase::Sucked => ("SHLOOP!", 24.0, Color::srgb(0.6, 0.85, 1.0)),
             EncorePhase::Continued => ("TO BE CONTINUED...", 16.0, CREAM),
             _ => ("", 24.0, CREAM),
         };

@@ -234,6 +234,10 @@ pub enum HanPose {
     Cling,
     /// On the trapeze (the waltz): hanging from his plunger stuck in the ceiling.
     Trapeze,
+    /// Side B's encore: plunging the throne.
+    Plunge,
+    /// Side B's encore: the plunger yanked out, held up high.
+    Yank,
 }
 
 /// For visuals: what Han is doing and which way he faces.

@@ -598,8 +598,13 @@ fn decide_music(
     mut was_side: Local<Option<(u32, u32)>>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
+    encore: Option<Res<super::encore::Encore>>,
 ) {
     let Some(run) = run else { return };
+    // (The encore has the band all out: `audio::plugin`'s `encore_band`.)
+    if encore.is_some() {
+        return;
+    }
     // Side B decides on coming, going, every rewind and every call.
     let now_side = side.as_ref().map(|s| (s.rewinds, s.calls));
     if now_side != *was_side {

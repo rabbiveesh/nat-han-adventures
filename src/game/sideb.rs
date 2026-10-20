@@ -406,9 +406,15 @@ fn leave(mut commands: Commands, side: Option<Res<SideB>>, mut mode: ResMut<supe
 
 /// Left/Right picks a call on the set list, Down or Jump plays it (Han jumps by himself, and
 /// on a phone the jump zone is the big button).
-fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>, mut calls: MessageWriter<CallMode>) {
+fn choose_and_call(
+    input: Single<&ActionState<Action>>,
+    mut side: ResMut<SideB>,
+    mut calls: MessageWriter<CallMode>,
+    encore: Option<Res<super::encore::Encore>>,
+) {
     let n = side.setlist.len();
-    if n == 0 {
+    // (The encore's calls are free: `encore`.)
+    if n == 0 || encore.is_some() {
         return;
     }
     if input.just_pressed(&Action::Left) {
@@ -450,7 +456,12 @@ fn beacon(
     mut nat: Query<(Entity, &mut Pos, &mut Body, &mut PlayerControl, Has<Finished>), (With<Player>, Without<Han>)>,
     mut han: Query<(&Pos, &Body, &mut HanBrain), (With<Han>, Without<Player>)>,
     mut says: MessageWriter<HanSays>,
+    encore: Option<Res<super::encore::Encore>>,
 ) {
+    // (The encore moves Nat and Han itself.)
+    if encore.is_some() {
+        return;
+    }
     let Ok((e, mut pos, mut body, mut ctl, finished)) = nat.single_mut() else { return };
     if !finished {
         commands.entity(e).insert(Finished);
@@ -621,6 +632,7 @@ fn han_fate(
     mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
     progress: Option<ResMut<crate::save::Progress>>,
+    (run, encore, mut cues): (Res<super::LevelRun>, Option<Res<super::encore::Encore>>, MessageWriter<crate::events::EncoreCue>),
 ) {
     let dt = time.delta_secs();
     let level = &active.level;
@@ -636,6 +648,8 @@ fn han_fate(
             }
             return;
         }
+        // (The last level's encore takes it from here: `encore::side_b`.)
+        Phase::Cleared { .. } if encore.is_some() => return,
         Phase::Cleared { t } => {
             if t - dt <= 0.0 && side.room.is_some() {
                 commands.queue(end_room);
@@ -682,6 +696,10 @@ fn han_fate(
                 progress.record_side_b(side.level, side.rewinds);
             }
             say(&mut says, CLEARED_LINE);
+            // Side B's last goal: Han's encore (and what goes wrong in it).
+            if super::encore::side_b::is_finale(side.level, side.room.is_some()) {
+                super::encore::side_b::start(&mut commands, &active, &run, pos.0, &mut cues);
+            }
             return;
         }
     }

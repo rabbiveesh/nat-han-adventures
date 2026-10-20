@@ -155,32 +155,38 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
              295.5/10 306/0 330.5/11 340.5/10 356/0 372/1",
         ),
     ],
-    // Fork in the Pipe: up on the shelf (Giant Steps) or leap the gap under it (fired up); then
-    // the long drip (melting, called in the bar before the turn: one bar's slack) or over its
-    // roof (Giant Steps, any time); then melting, fired up and Giant Steps back to back.
+    // Fork in the Pipe: Giant Steps, fired up and melting to warm up; then up on the shelf (Giant
+    // Steps; a drip pipe up there) or leap the gap under it (fired up; a drip under the shelf);
+    // then the long drip (melting, in time) or over its roof (Giant Steps); then fired up, Giant
+    // Steps and melting back to back. Something every second or so, a call every three.
     &[
-        ("leap, drip", "2/11 36/1 40/12 144/2 165/11 175/10 233/2 257/1 279/0"),
-        ("shelf, roof", "36/0 135/0 205/12 220/11 233/2 257/1 279/0"),
-        ("leap, roof", "2/11 36/1 40/10 135/0 205/12 218/10 233/2 257/1 279/0"),
-        ("shelf, drip", "36/0 60/12 144/2 165/11 175/10 233/2 257/1 279/0"),
+        ("shelf, roof", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/10 129/0 139/12 175/2 228/10 245/0 261/11 269/10 279/12 317/1 347/0 361/2"),
+        ("shelf, drip", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/10 129/0 139/12 175/2 233.7/12 255/2 261/11 270/10 279/12 321/1 336/0 365/2"),
+        ("leap, roof", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/11 141/1 156/12 171/2 228/10 243/0 261/11 269/10 279/12 323/1 341/0 363/2"),
+        ("leap, drip", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/11 141/1 156/12 171/2 233.7/12 253/2 261/11 270/10 279/12 319/1 349/0 361/2"),
     ],
-    // Clog Dance: through the clog hall (no music: Han minds the stomps) or over its roof (Giant
-    // Steps); then the split, where the nuggets on the way decide: the high road (Giant Steps
-    // twice) or the sewer under it (melting twice). Every combination clears.
+    // Clog Dance: a lone clog, fired up, Giant Steps; then through the clog hall (no call: Han
+    // minds the stomps) or over its roof (Giant Steps, more nuggets); then the split, where the
+    // nugget line decides: the high road (Giant Steps twice) or the sewer under it (melting
+    // twice); then fired up, Giant Steps and melting to the plunger.
     &[
-        ("hall, sewer", "2/12 100/11 222/2 262/2 332/1"),
-        ("roof, high road", "36/0 197/11 217/0 267/0 332/1"),
-        ("hall, high road", "197/11 208/10 217/0 267/0 332/1"),
-        ("roof, sewer", "36/0 40/12 197/11 208/12 222/2 262/2 332/1"),
+        ("hall, high road", "1/11 6.7/10 41/1 69/0 167/10 174/10 181/10 193/0 219/0 235/11 257/0 271/10 293/12 309/1 337/0 351/2"),
+        ("hall, sewer", "1/11 6.7/10 41/1 69/0 174/12 181/12 204/2 231/11 248/2 267/10 293/12 305/1 337/0 353/2"),
+        ("roof, high road", "1/11 6.7/10 41/1 53/10 69/0 97/0 167/10 174/10 181/10 197/0 219/0 235/11 257/0 271/10 293/12 309/1 337/0 353/2"),
+        ("roof, sewer", "1/11 6.7/10 41/1 53/10 69/0 97/0 174/12 181/12 204/2 231/11 248/2 267/10 293/12 309/1 337/0 351/2"),
     ],
     // The Final Flush: the world's forks one after another. The clog hall or its roof, the long
-    // drip or its roof, the high road or the sewer (as the nuggets went), then Giant Steps, fired
-    // up and melting back to back to the plunger.
+    // drip or its roof, the high road or the sewer (as the nuggets went), then fired up, Giant
+    // Steps and melting back to back to the plunger. Every combination clears.
     &[
-        ("hall, drip, sewer", "2/12 225/2 240/10 255/11 290/12 315/2 352/2 412/0 432/1 450/2"),
-        ("roof, roof, high road", "30/0 208/0 290/10 296/11 302/12 308/0 355/0 412/0 432/1 450/2"),
-        ("hall, roof, high road", "214/0 290/12 298/11 304/10 306/0 352/0 412/0 432/1 450/2"),
-        ("roof, drip, sewer", "30/0 40/12 225/2 240/10 255/11 290/12 315/2 352/2 412/0 432/1 450/2"),
+        ("hall, roof, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 195/10 213/0 251/10 279/10 295/0 319/0 341/10 373/0 389/11 408/10 414/12 419/1 453/0 467/2"),
+        ("hall, roof, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 195/10 213/0 279/12 304/2 333/12 362/2 396/11 408/10 414/12 419/1 453/0 465/2"),
+        ("hall, drip, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 202/12 223/2 249/10 279/10 299/0 319/0 341/10 373/0 389/11 408/10 414/12 425/1 453/0 469/2"),
+        ("hall, drip, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 202/12 223/2 279/12 300/2 333/12 356/2 396/11 408/10 414/12 425/1 453/0 467/2"),
+        ("roof, roof, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 195/10 221/0 251/10 279/10 291/0 319/0 341/10 373/0 389/11 408/10 414/12 425/1 453/0 469/2"),
+        ("roof, roof, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 195/10 221/0 279/12 302/2 333/12 358/2 396/11 408/10 414/12 425/1 453/0 469/2"),
+        ("roof, drip, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 202/12 221/2 249/10 279/10 297/0 319/0 341/10 373/0 389/11 408/10 414/12 423/1 453/0 465/2"),
+        ("roof, drip, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 202/12 221/2 279/12 306/2 333/12 364/2 396/11 408/10 414/12 421/1 453/0 467/2"),
     ],
 ];
 
@@ -231,21 +237,22 @@ fn set_lists_come_in_one_order() {
 fn nuggets_add_to_the_picked_call() {
     let mut app = app(7);
     pick(&mut app, 2);
-    until(&mut app, 5.0, |a| col(a) >= 10.0).unwrap();
+    until(&mut app, 5.0, |a| col(a) >= 13.0).unwrap();
     assert_eq!(side(&app).refills, 2);
     assert_eq!(side(&app).left, vec![0, 0, 2], "both runway nuggets to melting");
 }
 
 #[test]
-fn the_long_drip_wants_its_melting_called_on_the_right_bar() {
-    // Fork in the Pipe's leap, then the long drip: melting called a bar early wears off with Han
-    // still under the drips; a bar late and he walks into its mouth full size.
-    let early = died(play(7, &plan("2/11 36/1 40/12 132/2")));
-    assert_eq!(early.0, Fate::Spikes);
-    assert!((170.0..200.0).contains(&early.1), "in the pipe, not {}", early.1);
-    let late = died(play(7, &plan("2/11 36/1 40/12 150/2")));
+fn the_long_drip_wants_its_melting_called_in_time() {
+    // Fork in the Pipe's low road, then the long drip (columns 258-295): melting called in time
+    // gets Han through it (he meets his end later, at the closing gap, with no more calls); a
+    // bar late and he walks into its mouth full size.
+    let lead = "2/10 7.7/11 19/0 22/12 51/1 65/2 101/11 141/1 156/12 171/2 233.7/12";
+    let in_time = died(play(7, &plan(&format!("{lead} 245/2"))));
+    assert!(in_time.1 > 296.0, "through the drip, not {in_time:?}");
+    let late = died(play(7, &plan(&format!("{lead} 261/2"))));
     assert_eq!(late.0, Fate::Spikes);
-    assert!((145.0..156.0).contains(&late.1), "at the mouth, not {}", late.1);
+    assert!((250.0..262.0).contains(&late.1), "at the mouth, not {}", late.1);
 }
 
 #[test]
@@ -374,7 +381,11 @@ fn a_cleared_level_goes_on_to_the_next() {
 }
 
 #[test]
-fn the_last_level_goes_back_to_side_bs_level_select() {
+fn the_last_level_ends_in_hans_encore_gone_wrong() {
+    use nat_han_adventures::game::{
+        Player,
+        encore::{Encore, EncorePhase, Finale},
+    };
     let n = SIDE_B_COUNT - 1;
     let mut app = app(n);
     for (c, k) in plan(ROUTES[n][0].1) {
@@ -385,10 +396,39 @@ fn the_last_level_goes_back_to_side_bs_level_select() {
             call(&mut app, k);
         }
     }
-    until(&mut app, 60.0, |a| a.world().get_resource::<SideB>().is_none()).expect("left Side B");
+    until(&mut app, 30.0, |a| a.world().get_resource::<Encore>().is_some()).expect("an encore at the goal");
+    let e = app.world().resource::<Encore>().clone();
+    assert_eq!((e.finale, e.phase), (Finale::SideB, EncorePhase::Lap));
+    assert_eq!(app.world().resource::<Progress>().side_b_rewinds[n], Some(0), "saved at the goal");
+    assert!(said(&app, sideb::CLEARED_LINE));
+    // Calls are free in the lap, Down or Jump, and Han dances on the stage.
+    let calls = side(&app).calls;
+    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Space);
+    assert_eq!(app.world().resource::<Encore>().calls, 2);
+    assert_eq!(side(&app).calls, calls, "not the set list's");
+    until(&mut app, 2.0, |_| false);
+    let x = han(&mut app).x;
+    assert!((e.stage.0..=e.stage.1).contains(&x), "Han on the stage");
+    // The last chord: up on the throne, plunge, and up comes Nat on the plunger...
+    let phase = |a: &App| a.world().resource::<Encore>().phase;
+    until(&mut app, 30.0, |a| phase(a) == EncorePhase::Plunging).expect("plunging");
+    let seat = app.world().resource::<Encore>().seat();
+    assert!(han(&mut app).distance(seat) < 16.0, "on the throne");
+    until(&mut app, 3.0, |a| phase(a) == EncorePhase::Yanked).expect("yanked");
+    until(&mut app, 0.2, |_| false);
+    assert!(app.world().resource::<Encore>().nat_shown());
+    assert!(said(&app, "NAT!!"));
+    let nat = |a: &mut App| a.world_mut().query_filtered::<&Pos, With<Player>>().single(a.world()).unwrap().0;
+    assert!(nat(&mut app).y > seat.y + 16.0, "Nat up on the cup");
+    // ...and back down he goes, deeper.
+    until(&mut app, 5.0, |a| phase(a) == EncorePhase::Continued).expect("to be continued");
+    let bowl = app.world().resource::<Encore>().bowl();
+    assert!(nat(&mut app).y < bowl.y && (nat(&mut app).x - bowl.x).abs() < 4.0, "down the bowl");
+    assert!(said(&app, "...oops."));
+    until(&mut app, 5.0, |a| a.world().get_resource::<SideB>().is_none()).expect("left Side B");
     assert_eq!(*app.world().resource::<State<AppState>>().get(), AppState::LevelSelect);
     assert_eq!(*app.world().resource::<Shelf>(), Shelf::SideB);
-    assert_eq!(app.world().resource::<Progress>().side_b_rewinds[n], Some(0));
 }
 
 /// Pick set-list call `k` (Left/Right) and call it (Down).
