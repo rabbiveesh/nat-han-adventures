@@ -129,6 +129,12 @@ pub enum EncoreCue {
     Knock { pos: Vec2 },
     /// Nat landed in the throne at `pos`: FLUSH.
     Flush { pos: Vec2 },
+    /// NAT ALONE's encore: the last chord's rubber duck bounces Nat sky high from `pos`.
+    Boing { pos: Vec2 },
+    /// ...up through the grate in the ceiling at `pos`.
+    Through { pos: Vec2 },
+    /// The shutter slams over the hole at `pos`: Nat upstairs, Han downstairs.
+    Slam { pos: Vec2 },
 }
 
 /// The band's ending reached its last chord (the audio plugin hears it; the encore knocks Nat

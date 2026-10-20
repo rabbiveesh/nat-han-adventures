@@ -615,7 +615,12 @@ fn encore_band(mut cues: MessageReader<EncoreCue>, mut audio: NonSendMut<Audio>)
             EncoreCue::End => {
                 h.post(Input::EndWith(EndKind::Basie));
             }
-            EncoreCue::Call { .. } | EncoreCue::Knock { .. } | EncoreCue::Flush { .. } => {}
+            EncoreCue::Call { .. }
+            | EncoreCue::Knock { .. }
+            | EncoreCue::Flush { .. }
+            | EncoreCue::Boing { .. }
+            | EncoreCue::Through { .. }
+            | EncoreCue::Slam { .. } => {}
         }
     }
 }
@@ -828,7 +833,9 @@ fn play_sfx(
     let mut queue: Vec<(Sfx, f32)> = Vec::new();
     for cue in encore.read() {
         match cue {
-            EncoreCue::Knock { .. } => queue.push((Sfx::Crash, 0.0)),
+            EncoreCue::Knock { .. } | EncoreCue::Through { .. } => queue.push((Sfx::Crash, 0.0)),
+            EncoreCue::Boing { .. } => queue.push((Sfx::Boing, 0.0)),
+            EncoreCue::Slam { .. } => queue.push((Sfx::Land, 4.0)),
             EncoreCue::Flush { .. } => {
                 queue.push((Sfx::Flush, 0.0));
                 *flushed = true;

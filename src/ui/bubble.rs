@@ -12,7 +12,7 @@ use bevy::window::PrimaryWindow;
 
 use super::{UiFont, VIRTUAL_HEIGHT, palette::INK};
 use crate::events::HanSays;
-use crate::game::{GameCamera, Han, VisualSet, secret::HanGlimpse};
+use crate::game::{GameCamera, Han, VisualSet, encore::StageHan, secret::HanGlimpse};
 use crate::state::AppState;
 
 /// Characters per line.
@@ -147,7 +147,7 @@ fn spawn_pending(
     mut commands: Commands,
     pending: Option<ResMut<Pending>>,
     time: Res<Time>,
-    han: Query<Option<&HanGlimpse>, Or<(With<Han>, With<HanGlimpse>)>>,
+    han: Query<Option<&HanGlimpse>, Or<(With<Han>, With<HanGlimpse>, With<StageHan>)>>,
     old: Query<(Entity, &SpeechBubble)>,
     font: Option<Res<UiFont>>,
     window: Option<Single<&Window, With<PrimaryWindow>>>,
@@ -259,7 +259,7 @@ fn follow(
     mut commands: Commands,
     han: Query<
         (&Transform, &GlobalTransform, Has<ChildOf>, Option<&HanGlimpse>),
-        (Or<(With<Han>, With<HanGlimpse>)>, Without<SpeechBubble>, Without<BubbleBox>),
+        (Or<(With<Han>, With<HanGlimpse>, With<StageHan>)>, Without<SpeechBubble>, Without<BubbleBox>),
     >,
     camera: Query<(&Transform, &Projection), (With<GameCamera>, Without<SpeechBubble>, Without<BubbleBox>, Without<Han>)>,
     mut bubbles: Query<(Entity, &mut Transform, &mut Visibility), (With<SpeechBubble>, Without<BubbleBox>)>,
