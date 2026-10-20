@@ -3,7 +3,7 @@
 //! a wall. The first time in a level visit Nat comes close, Han barks the line ("Nat?!"), a
 //! little fanfare plays and [`SecretFound`] tells the save (`Progress::solo_secrets`).
 //!
-//! Also the level's `shout:` column: from there on the band plays shout choruses
+//! Also the level's `shout:` spot (a column, or a row in a tower): from there on the band plays shout choruses
 //! ([`ShoutChorus`], the audio plugin forces them).
 
 use bevy::prelude::*;
@@ -87,8 +87,8 @@ fn shout(
     mut shouting: ResMut<Shouting>,
     mut out: MessageWriter<ShoutChorus>,
 ) {
-    let (Some(col), Ok(nat)) = (active.level.shout, player.single()) else { return };
-    if !shouting.0 && nat.0.x >= col as f32 * TILE {
+    let (Some(at), Ok(nat)) = (active.level.shout, player.single()) else { return };
+    if !shouting.0 && at.reached(nat.0, active.level.height) {
         shouting.0 = true;
         out.write(ShoutChorus(true));
     }
