@@ -585,6 +585,9 @@ pub struct Map<'a> {
     /// The cushions (wall and ceiling) and wall brushes: flights near them steer
     /// ([`Map::near_pinball`]).
     steer: Vec<Cell>,
+    /// Ducks with their face open: a kicker (run or jump back into it, it throws you the other
+    /// way) is a flight that steers, too.
+    kicks: Vec<Cell>,
     /// Per cell: the top horizontal speed (px/s, normal time) of a moving platform you can
     /// stand on there (0: none). See [`Map::carry`].
     carry: Vec<f32>,
@@ -785,6 +788,13 @@ impl<'a> Map<'a> {
                     t.fling() != 0.0 || t.fan().is_some() || matches!(t, Tile::CushionDown | Tile::SpikesLeft | Tile::SpikesRight)
                 })
                 .collect(),
+            kicks: (0..h)
+                .flat_map(|r| (0..w).map(move |c| (c, r)))
+                .filter(|&(c, r)| {
+                    let face = level.tile(c, r).bumper();
+                    face != 0.0 && level.tile(c + face as i32, r) == Tile::Empty
+                })
+                .collect(),
             carry,
             derive_marks: false,
             derived: Vec::new(),
@@ -893,6 +903,7 @@ impl<'a> Map<'a> {
     fn near_pinball(&self, (c, r): Cell) -> bool {
         self.shafts.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
             || self.steer.iter().any(|s| (s.0 - c).abs() <= PIN_STEER && (s.1 - r).abs() <= PIN_STEER)
+            || self.kicks.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
     }
 
     /// The gusts the box centered at (x, y) is in (the game's `step_body` looks at its
@@ -3411,14 +3422,20 @@ fn line_errors(level: &Level) -> Vec<String> {
     let all = std::iter::once(&level.intro)
         .chain(&level.says)
         .chain(level.say_at.iter().map(|s| &s.text))
-        .chain(level.hints.iter().map(|s| &s.text));
+        .chain(level.hints.iter().map(|s| &s.text))
+        .chain(level.secret.iter().map(|s| &s.text));
     for line in all {
         if line.chars().count() > MAX_LINE {
             errs.push(format!("line longer than {MAX_LINE} chars: {line:?}"));
         }
     }
     // Han barks; the lesson cards teach. Only the intro is a sentence.
-    let barks = level.says.iter().chain(level.say_at.iter().map(|s| &s.text)).chain(level.hints.iter().map(|s| &s.text));
+    let barks = level
+        .says
+        .iter()
+        .chain(level.say_at.iter().map(|s| &s.text))
+        .chain(level.hints.iter().map(|s| &s.text))
+        .chain(level.secret.iter().map(|s| &s.text));
     for line in barks {
         if !super::is_bark(line) {
             errs.push(format!("Han barks at most {MAX_BARK_WORDS} words: {line:?}"));
@@ -3590,6 +3607,15 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
                 m.r1,
                 m.topic.word()
             ));
+        }
+    }
+
+    // A secret: some reached cell within finding distance of the grate.
+    if let Some(s) = &level.secret {
+        let r2 = (super::SECRET_RADIUS / TILE).powi(2);
+        let (sc, sr) = (s.col as i32, s.row as i32);
+        if !g.order.iter().any(|c| (((c.0 - sc).pow(2) + (c.1 - sr).pow(2)) as f32) <= r2) {
+            errs.push(format!("secret@{sc},{sr}: Nat never gets close enough to find it"));
         }
     }
 

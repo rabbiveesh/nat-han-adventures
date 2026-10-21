@@ -5,6 +5,7 @@
 //! gameplay components are added (and only if the [`Sprites`] resource exists).
 
 mod camera;
+mod encore;
 mod gadgets;
 mod particles;
 
@@ -52,6 +53,7 @@ pub(super) fn plugin(app: &mut App) {
     .add_systems(PostUpdate, fade_side_stain_sprites.run_if(resource_exists::<Sprites>))
     .add_observer(player_sprite)
     .add_observer(han_sprite)
+    .add_observer(stage_han_sprite)
     .add_observer(gate_markers)
     .init_resource::<MarkersDrawn>()
     .add_systems(Update, new_gate_markers.run_if(resource_exists::<Sprites>))
@@ -77,6 +79,7 @@ pub(super) fn plugin(app: &mut App) {
     camera::plugin(app);
     particles::plugin(app);
     gadgets::plugin(app);
+    encore::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
 }
@@ -370,6 +373,13 @@ fn player_sprite(add: On<Add, Player>, sprites: Option<Res<Sprites>>, mut comman
     let Some(sprites) = sprites else { return };
     let child = character_child(&sprites, SpriteId::PooIdle);
     commands.entity(add.entity).insert(Visibility::default()).with_child(child);
+}
+
+/// NAT ALONE's encore: Han, just for the gag (`game::encore`), drawn like Han.
+fn stage_han_sprite(add: On<Add, crate::game::encore::StageHan>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    let child = character_child(&sprites, SpriteId::HanIdle);
+    commands.entity(add.entity).insert(Visibility::Hidden).with_child(child);
 }
 
 fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
@@ -679,7 +689,7 @@ fn animate_player(
 fn animate_han(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    mut han: Query<(&HanAnim, &Children, &mut Visibility), With<Han>>,
+    mut han: Query<(&HanAnim, &Children, &mut Visibility), Or<(With<Han>, With<crate::game::encore::StageHan>)>>,
     mut kids: Query<(&mut Sprite, &mut CharacterSprite, &mut Transform)>,
     mut was_jumping: Local<bool>,
 ) {

@@ -1,109 +1,60 @@
-# Up the Spout! (levels/solo/spout.txt): up S1's duck shaft and a toot past its trap door, the
-# fans, the beat bridge and S2's duck chimney (the old tower); then along to the second duck
-# shaft (steer out of its door), the beat ladder (jump as your step goes, land as the next comes)
-# and the cushion chimney: zigzag up between the cushions, toot out over the top onto the shelf.
-# Then the room's fans: five toots, Down (Giant Steps), and the fans float Nat up the wall onto
-# the ledge; three even hops, Down (the waltz), and the trampoline's spring on ONE up the last
-# wall to the plunger.
-wait 0.3
-hold Right 0.9
-hold Right Space 300ms
-hold Right 0.6
-hold Left 1.0
-hold Right 0.4
-hold Right Space 150ms
-hold Right 0.7
-hold Right 0.5
-wait 1.0
-hold Right 0.4
-wait 0.4
-hold Right 0.35
-wait 1.0
-hold Right 0.4
-wait 0.3
-wait 0.05
-hold Left Space 250ms
-hold Left 0.35
-wait 0.65
-hold Left Space 250ms
-hold Left 0.15
-wait 0.85
-hold Left Space 250ms
-hold Left 0.15
-wait 0.85
-hold Left Space 250ms
-hold Left 0.3
-wait 0.5
-hold Left 0.4
-hold Left Space 300ms
-hold Left 0.6
-repeat 3
-hold Left Space 100ms
-hold Left 0.4
+t=0.2 press Right
+t=0.8 tap Space 150ms
+t=1.05 tap Space 100ms
+t=1.75 tap Space 150ms
+t=4.25 tap Space 100ms
+t=4.3 release Right
+t=4.3 press Left
+t=4.85 tap Space 150ms
+t=5.1 tap Space 100ms
+t=6.2 tap Space 150ms
+t=6.62 tap Space 150ms
+t=6.95 release Left
+t=7.0 tap Space 150ms
+t=7.22 tap Space 100ms
+t=7.35 press Left
+t=7.87 release Left
+t=7.87 press Right
+t=8.3 tap Space 100ms
+t=9.55 tap Space 300ms
+t=11.82 tap Space 100ms
+t=11.85 release Right
+t=11.85 press Left
+t=12.8 tap Space 150ms
+t=13.7 tap Space 150ms
+t=13.95 tap Space 100ms
+t=15.65 tap Space 150ms
+repeat 30
+wait 0.15
+tap Space 80ms
 end
-hold Left 0.2
-hold Right 2.0
-hold Right 4.2
-hold Left 0.5
-hold Right 0.4
-wait 1.15
-hold Left Space 300ms
-hold Left 0.1
-wait 0
-wait 1.02
-hold Left Space 300ms
-hold Left 0.0
-wait 0
-wait 0.94
-hold Right Space 300ms
-hold Right 0.0
-wait 0
-wait 0.94
-hold Left Space 300ms
-hold Left 0.0
-wait 0
-wait 0.98
-hold Right Space 300ms
-hold Right 0.0
-wait 0
-wait 0.94
-hold Left Space 300ms
-hold Left 0.0
-wait 0
-wait 0.94
-hold Right Space 300ms
-hold Right 0.0
-wait 0
-wait 0.66
-hold Left Space 300ms
-hold Left 0.0
-wait 0
-hold Left 1.7
-wait 0.1
-hold Left Space 200ms
-hold Left 0.3
-wait 0.2
-repeat 5
-hold Space 140ms
-wait 120ms
-hold Space 140ms
-wait 0.9
+t=22.45 release Left
+t=22.45 press Right
+t=22.75 tap Space 150ms
+t=23.0 tap Space 100ms
+t=23.4 tap Down
+t=23.9 tap Space 400ms
+t=24.4 tap Space 300ms
+t=26.5 tap Space 150ms
+t=26.8 tap Space 80ms
+t=27.25 tap Space 80ms
+t=27.55 tap Space 80ms
+t=29.1 tap Space 200ms
+t=29.45 tap Space 100ms
+t=32.0 tap Space 150ms
+t=32.6 release Right
+t=32.6 press Left
+t=32.95 release Left
+t=32.95 press Right
+t=33.2 tap Space 100ms
+t=35.75 release Right
+t=35.75 press Left
+t=35.8 tap Space 150ms
+t=36.75 tap Space 300ms
+t=37.15 tap Space 200ms
+t=38.4 tap Space 150ms
+repeat 12
+wait 0.15
+tap Space 80ms
 end
-tap Down
-wait 1.0
-hold Right 0.95
-wait 0.3
-hold Right 0.25
-wait 1.3
-hold Right 1.0
-wait 0.3
-repeat 3
-hold Space 150ms
-wait 0.6
-end
-tap Down
-wait 2.5
-hold Right 2.05
-hold Right Space 0.3
-hold Right 1.5
-wait 1
+wait 1.5

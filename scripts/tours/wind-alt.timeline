@@ -1,0 +1,48 @@
+# Gone With the Wind (levels/solo/wind.txt), the fired-up route: the nugget line under the ledges,
+# Down, the leap only fired-up legs make, then the low road's stair down (each riser a wall fan:
+# a tailwind sprint over the crumbling floor below it), up through the lid, against the wind over
+# the detour's causeway, and the shout under the downdraft roof.
+# Format: src/capture/timeline.rs.
+t=0.2 press Right
+t=2.03 tap Space 250ms
+t=2.33 tap Space 200ms
+t=3.6 tap Space 200ms
+t=4.2 tap Space 200ms
+t=4.8 tap Space 200ms
+t=5.4 tap Space 200ms
+t=5.6 tap Space 150ms
+t=6.48 tap Space 250ms
+t=6.8 tap Space 200ms
+t=7.84 tap Space 250ms
+t=8.22 tap Space 200ms
+t=9.28 tap Space 250ms
+t=9.62 tap Space 200ms
+t=10.95 tap Space 200ms
+t=11.55 tap Space 200ms
+t=12.15 tap Space 250ms
+t=12.45 tap Space 200ms
+t=13.85 tap Space 150ms
+t=14.8 tap Space 150ms
+t=16.02 tap Space 200ms
+t=16.85 tap Space 250ms
+t=17.62 tap Space 250ms
+t=19.8 tap Down
+t=21.45 tap Space 300ms
+t=22.0 tap Space 300ms
+t=23.3 tap Space 300ms
+t=25.26 tap Space 300ms
+t=27.45 tap Space 200ms
+t=29.2 tap Space 250ms
+t=29.85 tap Space 250ms
+t=30.42 tap Space 300ms
+t=30.75 tap Space 300ms
+t=31.45 tap Space 300ms
+t=31.8 tap Space 300ms
+t=32.42 tap Space 200ms
+t=33.13 tap Space 250ms
+t=33.76 tap Space 250ms
+t=34.39 tap Space 250ms
+t=34.92 tap Space 250ms
+t=35.33 tap Space 300ms
+t=37.2 release Right
+t=37.3 wait 0.1

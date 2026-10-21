@@ -68,7 +68,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -615,8 +615,25 @@ fn encore_band(mut cues: MessageReader<EncoreCue>, mut audio: NonSendMut<Audio>)
             EncoreCue::End => {
                 h.post(Input::EndWith(EndKind::Basie));
             }
-            EncoreCue::Call { .. } | EncoreCue::Knock { .. } | EncoreCue::Flush { .. } => {}
+            EncoreCue::Call { .. }
+            | EncoreCue::Knock { .. }
+            | EncoreCue::Flush { .. }
+            | EncoreCue::Boing { .. }
+            | EncoreCue::Through { .. }
+            | EncoreCue::Slam { .. } => {}
         }
+    }
+}
+
+/// A level's closing stretch (`shout:`, `game::secret`): shout choruses from the next bar.
+fn shout_band(mut shouts: MessageReader<crate::game::secret::ShoutChorus>, mut audio: NonSendMut<Audio>) {
+    use super::live::chorus::{Call, Chorus};
+    let Some(h) = audio.handle.as_mut() else {
+        shouts.clear();
+        return;
+    };
+    for s in shouts.read() {
+        h.post(Input::ForceChorus(s.0.then_some(Call { chorus: Chorus::Shout, key_up: false })));
     }
 }
 
@@ -816,7 +833,9 @@ fn play_sfx(
     let mut queue: Vec<(Sfx, f32)> = Vec::new();
     for cue in encore.read() {
         match cue {
-            EncoreCue::Knock { .. } => queue.push((Sfx::Crash, 0.0)),
+            EncoreCue::Knock { .. } | EncoreCue::Through { .. } => queue.push((Sfx::Crash, 0.0)),
+            EncoreCue::Boing { .. } => queue.push((Sfx::Boing, 0.0)),
+            EncoreCue::Slam { .. } => queue.push((Sfx::Land, 4.0)),
             EncoreCue::Flush { .. } => {
                 queue.push((Sfx::Flush, 0.0));
                 *flushed = true;

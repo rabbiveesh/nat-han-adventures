@@ -1,0 +1,68 @@
+# Ping Pong Palace (levels/solo/pingpong.txt), the no-call route: as the Giant Steps route up
+# the chimney, no call. Off the runway's end into the cellar, back left under the landing to
+# the nugget and the secret, then the cellar: a hole, low hops under the cushion ceiling
+# (jump high and it slams you into the drink), two ducks, up the elevator and toot through
+# its hatch. At the merge the tunnel: low hops over its holes, the kicker, the duck shaft.
+# Format: src/capture/timeline.rs.
+t=0.3 press Right
+t=1.05 tap Space 250ms
+t=2.55 tap Space 120ms
+t=3.1 tap Space 80ms
+t=3.6 tap Space 80ms
+t=5.9 release Right
+t=5.9 press Left
+t=6.35 release Left
+t=6.35 press Right
+t=6.5 tap Space 100ms
+t=8.4 tap Space 300ms
+t=9.05 tap Space 120ms
+t=9.6 tap Space 300ms
+t=10.2 tap Space 120ms
+t=10.75 tap Space 300ms
+t=11.65 tap Space 300ms
+t=12.1 release Right
+t=12.1 press Left
+t=12.4 release Left
+t=12.4 press Right
+t=12.7 tap Space 150ms
+t=14.04 tap Space 90ms
+t=14.68 tap Space 90ms
+t=15.32 tap Space 90ms
+t=15.96 tap Space 90ms
+t=16.6 tap Space 90ms
+t=17.75 tap Space 300ms
+t=18.10 tap Space 80ms
+t=18.32 tap Space 80ms
+t=18.54 tap Space 80ms
+t=18.76 tap Space 80ms
+t=18.98 tap Space 80ms
+t=19.20 tap Space 80ms
+t=19.42 tap Space 80ms
+t=20.45 tap Space 120ms
+t=22.75 release Right
+t=22.75 press Left
+t=24.38 release Left
+t=24.45 press Right
+t=26.43 tap Space 300ms
+t=28.82 tap Space 130ms
+t=30.55 tap Space 90ms
+t=31.3 tap Space 90ms
+t=32.6 tap Space 150ms
+t=34.45 tap Space 80ms
+t=35.1 tap Space 150ms
+t=35.80 tap Space 150ms
+t=37.55 tap Space 100ms
+t=38.50 tap Space 100ms
+t=39.97 release Right
+t=40.00 press Left
+t=40.32 release Left
+t=40.32 press Right
+t=40.50 tap Space 250ms
+t=41.65 release Right
+t=41.63 tap Space 60ms
+t=41.83 tap Space 60ms
+t=42.03 tap Space 60ms
+t=42.23 tap Space 60ms
+t=42.43 tap Space 60ms
+t=42.55 press Right
+t=43.55 release Right

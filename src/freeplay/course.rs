@@ -78,6 +78,8 @@ impl Course {
             crushers: Vec::new(),
             gates: Vec::new(),
             solo: false,
+            secret: None,
+            shout: None,
         };
         (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)
     }

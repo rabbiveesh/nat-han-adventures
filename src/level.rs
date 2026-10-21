@@ -28,6 +28,13 @@
 //!   save (`ui::lesson`). The validator ([`validate`]) checks that every mechanic is taught by a
 //!   hint before the player first meets it, and that every hint names a topic.
 //! - `solo: nat`: Nat plays it alone (no Han: no barks, boosts or tricks).
+//! - `secret@<col>,<row>: text` (NAT ALONE): a *secret*, Han glimpsed through a grate. The cell
+//!   and the one above it must be solid (the grate is a wall): Han is drawn standing behind
+//!   it, feet on the cell's floor. The first time in a level visit Nat comes within
+//!   [`SECRET_RADIUS`] of it, Han barks the line and the save remembers it was found
+//!   (`game::secret`). [`validate`] checks Nat can get that close.
+//! - `shout: <col>`: from that column on, the band plays shout choruses (the closing stretch);
+//!   `shout: row <row>` (a tower): once above that row.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
@@ -148,6 +155,8 @@ pub mod validate;
 pub const TILE: f32 = 16.0;
 /// Han says a hint when Nat comes this close (px) to its cell's center.
 pub const HINT_RADIUS: f32 = 2.5 * TILE;
+/// Nat finds a `secret@` when he comes this close (px) to the grate's center.
+pub const SECRET_RADIUS: f32 = 1.5 * TILE;
 /// Longest line Han says (intro, checkpoint lines, hints).
 pub const MAX_LINE: usize = 60;
 /// Han nearly never talks: everything he says but a level's intro is a bark of at most this
@@ -897,6 +906,27 @@ pub struct Level {
     pub gates: Vec<GateMark>,
     /// `solo: nat`: Nat alone, no Han in the level.
     pub solo: bool,
+    /// `secret@col,row:` Han behind a grate (its bark in `text`).
+    pub secret: Option<Spot>,
+    /// `shout:` where the shout choruses start.
+    pub shout: Option<Shout>,
+}
+
+/// Where a level's closing stretch starts (`shout:`): past a column, or (a tower) above a row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum Shout {
+    Col(usize),
+    Row(usize),
+}
+
+impl Shout {
+    /// Is a body at `pos` (world px) in the closing stretch of a level `height` rows tall?
+    pub fn reached(self, pos: Vec2, height: usize) -> bool {
+        match self {
+            Shout::Col(c) => pos.x >= c as f32 * TILE,
+            Shout::Row(r) => pos.y >= (height - r) as f32 * TILE,
+        }
+    }
 }
 
 impl Level {
@@ -1060,6 +1090,8 @@ impl Level {
         let mut hints = Vec::new();
         let mut deaths = None;
         let mut solo = false;
+        let mut secret = None;
+        let mut shout = None;
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
@@ -1089,6 +1121,21 @@ impl Level {
                     solo = true;
                 }
                 "say" => says.push(value.to_string()),
+                "shout" => {
+                    let bad = || format!("bad shout `{value}` (want `<col>` or `row <row>`)");
+                    shout = Some(match value.strip_prefix("row ") {
+                        Some(r) => Shout::Row(r.trim().parse().map_err(|_| bad())?),
+                        None => Shout::Col(value.parse().map_err(|_| bad())?),
+                    });
+                }
+                k if k.starts_with("secret@") => {
+                    let at = &k["secret@".len()..];
+                    let (col, row) = at
+                        .split_once(',')
+                        .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
+                        .ok_or_else(|| format!("expected `secret@<col>,<row>`, got `{k}`"))?;
+                    secret = Some(Spot { col, row, text: value.to_string(), topics: Vec::new() });
+                }
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
                 }
@@ -1306,9 +1353,15 @@ impl Level {
             crushers[k].beat = beat.unwrap_or(0);
         }
 
-        for s in say_at.iter().chain(&hints) {
+        for s in say_at.iter().chain(&hints).chain(&secret) {
             if s.col >= width || s.row >= height {
                 return Err(format!("line at col {} row {} is outside the grid", s.col, s.row));
+            }
+        }
+        if let Some(s) = &secret {
+            let tile = |c: usize, r: usize| tiles[r * width + c];
+            if s.row == 0 || !tile(s.col, s.row).is_solid() || !tile(s.col, s.row - 1).is_solid() {
+                return Err(format!("secret@{},{}: the grate (that cell and the one above) must be solid", s.col, s.row));
             }
         }
         Ok(Level {
@@ -1329,6 +1382,8 @@ impl Level {
             crushers,
             gates,
             solo,
+            secret,
+            shout,
         })
     }
 }
@@ -1448,6 +1503,23 @@ mod tests {
         assert!(l.in_chasm(35) && !l.in_chasm(41));
         assert!(Level::parse("name: T\ngate: toot 1,1 2,2\n---\nPG\n##\n").is_err());
         assert!(Level::parse("name: T\ngate: giant 1,1\n---\nPG\n##\n").is_err());
+    }
+
+    #[test]
+    fn parses_the_secret_and_the_shout() {
+        let src = "name: T\nsolo: nat\nsecret@3,1: Nat?!\nshout: 2\n---\n...#G\nP..##\n#####\n";
+        let l = Level::parse(src).unwrap();
+        let s = l.secret.as_ref().unwrap();
+        assert_eq!((s.col, s.row, s.text.as_str()), (3, 1, "Nat?!"));
+        assert_eq!(l.shout, Some(Shout::Col(2)));
+        let tower = Level::parse("name: T\nshout: row 1\n---\n....G\nP..##\n#####\n").unwrap();
+        assert_eq!(tower.shout, Some(Shout::Row(1)));
+        // Row 1's top edge is 2 tiles up from the bottom of a 3-row level.
+        assert!(Shout::Row(1).reached(Vec2::new(0.0, 2.0 * TILE), 3));
+        assert!(!Shout::Row(1).reached(Vec2::new(0.0, 1.5 * TILE), 3));
+        // The grate is a wall: its cell and the one above must be solid.
+        assert!(Level::parse("name: T\nsecret@2,1: x\n---\n...#G\nP..##\n#####\n").is_err());
+        assert!(Level::parse("name: T\nsecret@9,9: x\n---\nPG\n##\n").is_err());
     }
 
     #[test]

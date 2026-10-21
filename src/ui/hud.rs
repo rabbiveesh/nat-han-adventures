@@ -278,7 +278,16 @@ fn band_toast(
     font: Res<UiFont>,
     mut reader: MessageReader<MusicChanged>,
     old: Query<Entity, With<BandToast>>,
+    encore: Option<Res<crate::game::encore::Encore>>,
 ) {
+    // Past the encore's lap the gag has the screen: no toasts over it.
+    if encore.is_some_and(|e| e.phase != crate::game::encore::EncorePhase::Lap) {
+        reader.clear();
+        for e in &old {
+            commands.entity(e).despawn();
+        }
+        return;
+    }
     let Some(change) = reader.read().last() else { return };
     let (why, what) = band_lines(&change.now);
     for e in &old {

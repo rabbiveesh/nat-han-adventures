@@ -17,13 +17,13 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::MenuMove => 0.55,
         Sfx::HanBlip => 0.6,
         Sfx::Jump | Sfx::Land => 0.75,
-        Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect => 0.85,
+        Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect | Sfx::Secret => 0.85,
         Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing | Sfx::Crash => 1.0,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 12] = [
+    pub const ALL: [Sfx; 13] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -36,6 +36,7 @@ impl Sfx {
         Sfx::HanBlip,
         Sfx::Boing,
         Sfx::Crash,
+        Sfx::Secret,
     ];
 }
 
@@ -57,6 +58,7 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::HanBlip => return han_blip(0),
         Sfx::Boing => boing(),
         Sfx::Crash => crash(),
+        Sfx::Secret => secret(),
     };
     finish(mono, level(sfx))
 }
@@ -281,6 +283,29 @@ fn checkpoint() -> Vec<f32> {
         }
     }
     // A quiet echo, a 16th later: NES-style "fake reverb".
+    let delay = secs(0.09);
+    out.resize(out.len() + delay, 0.0);
+    for i in (delay..out.len()).rev() {
+        out[i] += out[i - delay] * 0.3;
+    }
+    out
+}
+
+/// A secret found: a sneaky little rising arpeggio that lands a semitone off and slides home
+/// ("huh?... oh!"), on the triangle with a pulse sparkle on top.
+fn secret() -> Vec<f32> {
+    let notes = [(587.3, 0.08), (698.5, 0.08), (880.0, 0.08), (1108.7, 0.08), (1174.7, 0.35)];
+    let (mut tri, mut sparkle) = (Osc::default(), Osc::default());
+    let mut out = Vec::new();
+    for (k, &(f, d)) in notes.iter().enumerate() {
+        let n = secs(d);
+        let last = k == notes.len() - 1;
+        for i in 0..n {
+            let env = if last { (1.0 - i as f32 / n as f32).powf(1.5) } else { 1.0 };
+            let s = tri.tri(f) * 0.7 + sparkle.pulse(2.0 * f, 0.125) * 0.25;
+            out.push(s * env * env_ar(i, n, 0.002, if last { 0.01 } else { 0.004 }));
+        }
+    }
     let delay = secs(0.09);
     out.resize(out.len() + delay, 0.0);
     for i in (delay..out.len()).rev() {

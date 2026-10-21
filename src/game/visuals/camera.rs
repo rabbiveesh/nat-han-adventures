@@ -110,7 +110,8 @@ fn follow_player(
     gc.look += (facing * LOOK_AHEAD - gc.look) * k(2.5);
     let touch = touch.is_some_and(|t| t.0);
     let lift = if touch { 16.0 + TOUCH_LIFT } else { 16.0 };
-    let target = ptf.translation.truncate() + Vec2::new(gc.look, lift);
+    // (NAT ALONE's encore gag: upstairs and down at once.)
+    let target = encore.as_ref().and_then(|e| e.focus()).unwrap_or(ptf.translation.truncate() + Vec2::new(gc.look, lift));
     let mut p = tf.translation.truncate() - gc.wobble;
     p.x += (target.x - p.x) * k(6.0);
     p.y += (target.y - p.y) * k(4.0);
@@ -137,6 +138,7 @@ fn follow_player(
         match e.phase {
             EncorePhase::Knocked => 4.0 * (1.0 - e.t / 0.5).max(0.0),
             EncorePhase::Flushing => 1.5 * (1.0 - e.t / crate::game::encore::FLUSH_SECS).max(0.0),
+            EncorePhase::Slam if e.t >= crate::game::encore::SHUT_SECS => 4.0 * (1.0 - (e.t - crate::game::encore::SHUT_SECS) / 0.5).max(0.0),
             _ => 0.0,
         }
     });

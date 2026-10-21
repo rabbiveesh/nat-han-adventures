@@ -323,26 +323,27 @@ pub fn belt() -> Vec<Pixels> {
 
 const FAN_PAL: Palette = &[
     ('k', hex(0x16181e)),
-    ('S', hex(0x7a808c)), // frame
-    ('s', hex(0xa8aeb8)), // frame lit
-    ('b', hex(0x5aa0d8)), // blades
-    ('h', hex(0xd8ecff)), // hub shine
-    ('g', hex(0x3a3e48)), // vents
+    ('S', hex(0x3a98c8)), // frame: a bright vent blue
+    ('s', hex(0x9ee4ff)), // frame lit
+    ('d', hex(0x1c2c40)), // the dark shaft behind the blades
+    ('b', hex(0xd8f6ff)), // blades
+    ('h', hex(0xffffff)), // hub shine
+    ('g', hex(0x24506a)), // vents
 ];
 const FAN: [&[&str]; 2] = [
     &[
         "kkkkkkkkkkkkkkkk",
         "kSSSSSSSSSSSSSSk",
         "kssssssssssssssk",
-        "ksk....bb....ksk",
-        "ks....bbbb....sk",
-        "ks.....bb.....sk",
-        "ksbb...hh...bbsk",
+        "kskddddbbddddksk",
+        "ksddddbbbbddddsk",
+        "ksdddddbbdddddsk",
+        "ksbbdddhhdddbbsk",
         "ksbbbbhkkhbbbbsk",
-        "ksbb...hh...bbsk",
-        "ks.....bb.....sk",
-        "ks....bbbb....sk",
-        "ksk....bb....ksk",
+        "ksbbdddhhdddbbsk",
+        "ksdddddbbdddddsk",
+        "ksddddbbbbddddsk",
+        "kskddddbbddddksk",
         "kSSSSSSSSSSSSSSk",
         "kgkgkgkgkgkgkggk",
         "kSSSSSSSSSSSSSSk",
@@ -352,15 +353,15 @@ const FAN: [&[&str]; 2] = [
         "kkkkkkkkkkkkkkkk",
         "kSSSSSSSSSSSSSSk",
         "kssssssssssssssk",
-        "ksk.b.......bksk",
-        "ks.bbb.....bbbsk",
-        "ks..bbb...bbb.sk",
-        "ks....bhhb....sk",
-        "ks.....kk.....sk",
-        "ks....bhhb....sk",
-        "ks..bbb...bbb.sk",
-        "ks.bbb.....bbbsk",
-        "ksk.b.......bksk",
+        "kskdbdddddddbksk",
+        "ksdbbbdddddbbbsk",
+        "ksddbbbdddbbbdsk",
+        "ksddddbhhbddddsk",
+        "ksdddddkkdddddsk",
+        "ksddddbhhbddddsk",
+        "ksddbbbdddbbbdsk",
+        "ksdbbbdddddbbbsk",
+        "kskdbdddddddbksk",
         "kSSSSSSSSSSSSSSk",
         "kgkgkgkgkgkgkggk",
         "kSSSSSSSSSSSSSSk",
@@ -378,8 +379,58 @@ pub fn wisp() -> Vec<Pixels> {
     vec![grid(WISP, WISP_PAL)]
 }
 
-const WISP_PAL: Palette = &[('w', [255, 255, 255, 150]), ('W', [255, 255, 255, 80])];
-const WISP: &[&str] = &[".W..", ".w..", "..w.", "..wW", ".w..", ".W.."];
+const WISP_PAL: Palette = &[('w', [255, 255, 255, 255]), ('W', [255, 255, 255, 150])];
+const WISP: &[&str] = &[".W..", ".ww.", "..w.", "..wW", ".ww.", ".W.."];
+
+// ---------------------------------------------------------------- the secret's grate
+
+const GRATE_PAL: Palette = &[
+    ('k', hex(0x16181e)),
+    ('B', hex(0x8a909c)), // bars
+    ('L', hex(0xc8ced8)), // bars lit
+    ('r', hex(0xb06030)), // rust
+];
+/// Bars over a hole in the wall, 16x32: the transparent gaps show the dark room behind (and
+/// Han in it).
+const GRATE: &[&str] = &[
+    "kkkkkkkkkkkkkkkk",
+    "kBBBBBBBBBBBBBBk",
+    "kBLkLkkLkkLkLBBk",
+    "kBkkLkkLkkLkkBBk",
+    "kB.kL..L..L.kBBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kBLLBLLBLLBLLBBk",
+    "kBkkBkkBkkBkkBBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..Lr.BBk",
+    "kBLLBLLBLLBLLBBk",
+    "kBkkBkkBkkBkkBBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L.rL..BBk",
+    "kB..L..L..L..BBk",
+    "kB..L..L..L..BBk",
+    "kBrrBBBBBBBBBBBk",
+    "kBBBBBBBBBBBBBBk",
+    "kkkkkkkkkkkkkkkk",
+];
+
+/// The secret's grate (`game::secret`): bars over a hole in the wall. 16x32.
+pub fn grate() -> Vec<Pixels> {
+    vec![grid(GRATE, GRATE_PAL)]
+}
 
 // ---------------------------------------------------------------- bumper: a rubber duck
 
@@ -494,5 +545,6 @@ pub fn grids() -> Vec<(&'static str, Vec<&'static str>, Palette)> {
     }
     v.push(("BUMPER", BUMPER.to_vec(), DUCK_PAL));
     v.push(("WISP", WISP.to_vec(), WISP_PAL));
+    v.push(("GRATE", GRATE.to_vec(), GRATE_PAL));
     v
 }
