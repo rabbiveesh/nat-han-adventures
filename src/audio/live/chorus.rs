@@ -26,7 +26,7 @@
 //! | Breaks | the tune, a solo break every section | time, then out | time, then out | time, then out |
 //! | Riffs | solos (the tune when calm) | a riff behind | walks | time |
 //! | Strolling | solos | lays out | walks | lighter |
-//! | Soli | the tune exactly | the tune a third below | walks | time |
+//! | Soli | the tune exactly | an alto and a tenor (pulse 3) in counterpoint ([`super::soli`]) | the soli's line, or walks | time |
 //! | Shout | the tune up an octave, punchy | stabs with the lead | walks | crashes, fills, louder |
 //!
 //! Stop-time and breaks work section by section (8 bars): stop-time hits on the ONE of every
@@ -76,7 +76,8 @@ pub enum Chorus {
     Riffs,
     /// The comp lays out: lead, bass and drums.
     Strolling,
-    /// Lead and comp play the tune together, in harmony.
+    /// The tune in four voices: the lead's tune, the comp's alto and tenor lines and the bass,
+    /// a counterpoint texture per section ([`super::soli`]).
     Soli,
     /// The climax: the whole band riffs, loud.
     Shout,

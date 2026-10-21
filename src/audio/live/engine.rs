@@ -723,7 +723,7 @@ impl Engine {
             if band.swell != 0.0 {
                 e.gain *= 1.0 + band.swell;
             }
-            if band.key_up && e.ch < 3 {
+            if band.key_up && e.ch != 3 {
                 e.sound = transpose(e.sound, 1, musician::range(e.ch as usize).1);
                 e.anchor = e.anchor.saturating_add(1);
             }

@@ -95,6 +95,9 @@ impl Musician for Bass {
                 b = z;
             }
             fired.add(Orn::LayOut);
+        } else if band.soli.is_some_and(|s| s.texture.writes_bass()) && has_harm {
+            // The soli writes the bass's line (the comp plays it on this channel).
+            fired.add(Orn::LayOut);
         } else if has_harm && feel != Feel::Swing {
             fired.add(self.feel_line(ctx, &tmpl, prev, anticipated));
         } else if has_harm && orns.has(Orn::Ostinato) {

@@ -37,6 +37,8 @@ pub const NOISE_GAIN: f32 = 0.30;
 /// Stereo placement of the pulses: -1 left .. 1 right. Kept small: mostly centred.
 pub const PULSE1_PAN: f32 = -0.2;
 pub const PULSE2_PAN: f32 = 0.2;
+/// The third pulse (the soli's tenor), off to the other side of the lead.
+pub const PULSE3_PAN: f32 = -0.4;
 /// Note edges, in seconds.
 pub const ATTACK: f32 = 0.002;
 pub const RELEASE: f32 = 0.008;

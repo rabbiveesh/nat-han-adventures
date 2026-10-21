@@ -39,6 +39,7 @@ use super::chorus::{self, Chorus, EndBar, EndStep, Intro};
 use super::feel::{self, Feel};
 use super::musician::{BarSlot, PhrasePlan, Target};
 use super::ornament::{self, Harm};
+use super::soli::{self, SoliBar};
 
 /// Who's soloing in a trading-fours stretch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -145,6 +146,8 @@ pub struct BandPlan {
     pub solo_break: bool,
     /// Louder (> 0) or softer, as a fraction of the volume: a shout chorus, a vamp-out.
     pub swell: f32,
+    /// A soli chorus's bar: its section's texture ([`super::soli`]).
+    pub soli: Option<SoliBar>,
 }
 
 impl BandPlan {
@@ -350,6 +353,11 @@ impl BandPlan {
             Chorus::TwoFeel => plan.swell = -0.12,
             Chorus::Strolling => plan.swell = -0.1,
             Chorus::Shout => plan.swell = 0.15,
+            Chorus::Soli if swing => {
+                let s = soli::plan(input.seed, slot.pass, slot.song_bar, input.bars);
+                plan.swell = s.swell();
+                plan.soli = Some(s);
+            }
             _ => {}
         }
         if let Some(e) = plan.ending {
@@ -458,8 +466,9 @@ impl BandPlan {
             }
         }
 
-        // The band's reharmonization: comp and bass together, high freedom.
-        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet && plan.chorus != Chorus::Soli {
+        // The band's reharmonization: comp and bass together, high freedom (a soli's lines
+        // follow it too).
+        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet {
             let p = 0.5 * high(comp);
             if let Some(h) = harm_now
                 && h.chord.family() == Family::Dominant

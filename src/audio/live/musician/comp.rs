@@ -21,7 +21,8 @@ use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{self, Harm, Orn, Orns};
-use crate::audio::live::voice::{NoteEvent, Sound};
+use crate::audio::live::soli::{self, SoliBar, Tone};
+use crate::audio::live::voice::{Fx, NoteEvent, Sound};
 use crate::audio::mml::Arp;
 
 /// The comp's range.
@@ -38,11 +39,30 @@ pub struct Comp {
     last: Option<NoteEvent>,
     /// The middle of the written part's register (where voicings sit).
     center: u8,
+    /// The soli's other lines: its writer, the tune this bar and the last, the tenor's and
+    /// the bass's events.
+    soli: soli::Writer,
+    tune: Vec<Tone>,
+    prev_tune: Vec<Tone>,
+    tenor: Vec<NoteEvent>,
+    bass: Vec<NoteEvent>,
 }
 
 impl Comp {
     pub(super) fn new(p: Player) -> Self {
-        Comp { p, src: work(), dst: work(), lead: work(), last: None, center: 64 }
+        Comp {
+            p,
+            src: work(),
+            dst: work(),
+            lead: work(),
+            last: None,
+            center: 64,
+            soli: soli::Writer::new(),
+            tune: Vec::with_capacity(64),
+            prev_tune: Vec::with_capacity(64),
+            tenor: work(),
+            bass: work(),
+        }
     }
 }
 
@@ -68,6 +88,20 @@ impl Musician for Comp {
         let mut fired = Orns::default();
         self.src.clear();
         ctx.written(1, &mut self.src);
+        // The tune, for the soli (this bar's and the last's).
+        std::mem::swap(&mut self.tune, &mut self.prev_tune);
+        self.tune.clear();
+        self.lead.clear();
+        ctx.written(0, &mut self.lead);
+        for w in &self.lead {
+            if let Sound::Note(n) = w.sound
+                && self.tune.len() < self.tune.capacity()
+            {
+                self.tune.push(Tone { b: ctx.rel(w), d: ctx.len(w), n, tie: w.tie, slide: 0 });
+            }
+        }
+        self.tenor.clear();
+        self.bass.clear();
         // Where the written part sits.
         let (sum, count) = self.src.iter().flat_map(|e| e.sound.notes()).fold((0u32, 0u32), |(s, c), &n| (s + n as u32, c + 1));
         if count > 0 {
@@ -122,9 +156,13 @@ impl Musician for Comp {
             } else if h0.is_some() && own_chorus && band.chorus == Chorus::Riffs {
                 self.riff(ctx, &tmpl);
                 fired.add(Orn::Riff);
-            } else if h0.is_some() && own_chorus && band.chorus == Chorus::Soli {
-                self.soli(ctx, &tmpl);
+            } else if h0.is_some() && own_chorus && let Some(s) = band.soli {
+                let plane = phrase_last && orns.has(Orn::PlaneChords) && ctx.long_dominant(bb - 2.0, bb);
+                self.soli(ctx, &tmpl, s, plane);
                 fired.add(Orn::Soli);
+                if plane {
+                    fired.add(Orn::PlaneChords);
+                }
             } else if h0.is_some() && own_chorus && band.chorus == Chorus::Shout {
                 self.shout(ctx, &tmpl);
                 fired.add(Orn::ShoutStabs);
@@ -188,8 +226,12 @@ impl Musician for Comp {
                     }
                 }
             }
-            // The band's reharmonization.
+            // The band's reharmonization (a soli's lines are written in it already).
             for sub in band.subs.iter().flatten() {
+                if fired.has(Orn::Soli) {
+                    fired.add(Orn::Reharm);
+                    continue;
+                }
                 let h = Harm::new(sub.chord);
                 let mut struck = false;
                 for e in &mut self.dst {
@@ -297,7 +339,7 @@ impl Musician for Comp {
                 }
             }
             // Room for the drums' big fill at a phrase end.
-            if phrase_last && band.hits == 0 && matches!(band.fill, Fill::Full | Fill::PressRoll) && !fired.has(Orn::PlaneChords) {
+            if phrase_last && band.hits == 0 && matches!(band.fill, Fill::Full | Fill::PressRoll) && !fired.has(Orn::PlaneChords) && !fired.has(Orn::Soli) {
                 clear_from(ctx, &mut self.dst, bb - 2.0);
                 fired.add(Orn::LayOut);
             }
@@ -317,6 +359,10 @@ impl Musician for Comp {
         }
         tidy(&mut self.dst);
         out.extend(self.dst.iter().copied());
+        for v in [&mut self.tenor, &mut self.bass] {
+            tidy(v);
+            out.extend(v.iter().copied());
+        }
         self.last = self.dst.last().copied().or(self.last);
         fired
     }
@@ -340,14 +386,6 @@ const RIFFS: [[Figure; 2]; 3] = [
     // Punches on the off-beats.
     [&[(1.5, 0.3, 2), (2.5, 0.3, 2), (3.5, 0.45, 3)], &[(0.5, 0.3, 4), (1.0, 0.7, 2)]],
 ];
-
-/// A harmony note under melody note `n`: a chord tone a third (or fourth) below, else a sixth
-/// below, else a diatonic third.
-fn under(h: &Harm, n: u8) -> u8 {
-    let n = n as i32;
-    let find = |lo: i32, hi: i32| (lo..=hi).rev().find(|&x| x >= 0 && h.is_chord_tone(x as u8));
-    find(n - 5, n - 3).or_else(|| find(n - 9, n - 6)).map_or_else(|| h.scale.step(n as u8, -2), |x| x as u8)
-}
 
 impl Comp {
     /// A riff behind the lead: the chorus's riff, its two bars in turn, each note the chord
@@ -377,21 +415,46 @@ impl Comp {
         }
     }
 
-    /// The soli: the lead's written line, a third (or a sixth) below, note for note.
-    fn soli(&mut self, ctx: &Ctx, t: &NoteEvent) {
-        self.lead.clear();
-        ctx.written(0, &mut self.lead);
-        for k in 0..self.lead.len() {
-            let w = self.lead[k];
-            let Sound::Note(n) = w.sound else { continue };
-            let b = ctx.rel(&w);
-            let Some(h) = ctx.harm_at(b.max(0.0)) else {
-                continue;
-            };
-            let mut e = ctx.make(t, b, ctx.len(&w) * 0.95, Sound::Note(under(&h, n)));
-            e.tie = w.tie;
-            e.duty = w.duty;
-            push(&mut self.dst, e);
+    /// The soli ([`soli`]): the alto, the tenor (pulse 3) and, where the texture has one, the
+    /// bass's line (the bass musician walks otherwise), written against the tune.
+    /// `plane`: over a long dominant at a phrase's end, the inner voices plane into the next
+    /// chord.
+    fn soli(&mut self, ctx: &Ctx, t: &NoteEvent, plan: SoliBar, plane: bool) {
+        let harm = |b: f64| ctx.harm_at(b);
+        let swing = |b: f64| ctx.swing8(b);
+        let bar = soli::Bar { plan, bb: ctx.bb(), lead: &self.tune, prev_lead: &self.prev_tune, harm: &harm, swing: &swing };
+        let mut r = ctx.rng(Role::Comp, 61);
+        self.soli.write(&bar, &mut r);
+        if plane
+            && let (Some(next), Some(top)) = (ctx.plain_harm_at(ctx.bb()), ctx.next_first_note(0))
+        {
+            self.soli.plane(&bar, &next, top);
+        }
+        // The lines a step under the tune's level; the clarinet thin, the trombone round.
+        let volume = (t.volume + 1).clamp(6, 10);
+        let lines = [(&self.soli.alto, 1u8), (&self.soli.tenor, 4)];
+        for (line, ch) in lines {
+            let mut tt = *t;
+            tt.ch = ch;
+            tt.volume = volume;
+            tt.duty = if ch == 4 || plan.texture == soli::Texture::Locked { 2 } else { 1 };
+            tt.salt ^= ch as u64 * 0x51_1A;
+            for x in line {
+                let mut e = ctx.make(&tt, x.b, x.d, Sound::Note(x.n));
+                e.tie = x.tie;
+                if x.slide != 0 {
+                    e.fx = Fx { slide: x.slide, slide_frames: if x.slide <= -4 { 10 } else { 5 }, ..Fx::NONE };
+                }
+                push(if ch == 1 { &mut self.dst } else { &mut self.tenor }, e);
+            }
+        }
+        if !self.soli.bass.is_empty() {
+            self.src.clear();
+            ctx.written(2, &mut self.src);
+            let tb = ctx.template(2, self.src.first().copied());
+            for x in &self.soli.bass {
+                push(&mut self.bass, ctx.make(&tb, x.b, x.d, Sound::Note(x.n)));
+            }
         }
     }
 

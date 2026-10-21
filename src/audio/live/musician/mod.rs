@@ -43,7 +43,8 @@
 //! (the table in [`super::chorus`]): [`arranged`] turns the rolled ornaments into what the
 //! chorus asks (the bass walks or plays in two, the comp Charlestons, the drums play lighter,
 //! the lead keeps to the tune for a soli), and each commit plays the chorus's own parts: the
-//! lead's solos, breaks and shout line, the comp's riffs, soli line and shout stabs, the
+//! lead's solos, breaks and shout line, the comp's riffs, soli lines (alto, tenor on pulse 3,
+//! and the bass's line, [`super::soli`]) and shout stabs, the
 //! band's stop-time hits and breaks. Intros and endings are the same: their changes are the
 //! band's substitutions, and each player has its part (the lead lays out and picks up into the
 //! head; the plinks are the comp's; everyone plays the last chord). These are arrangements the
@@ -827,7 +828,7 @@ use musician_common;
 pub fn range(ch: usize) -> (i32, i32) {
     match ch {
         0 => (lead::LO, lead::HI),
-        1 => (comp::LO, comp::HI),
+        1 | 4 => (comp::LO, comp::HI),
         _ => (bass::LO - 4, bass::HI + 4),
     }
 }
