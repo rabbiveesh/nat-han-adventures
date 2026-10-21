@@ -45,6 +45,12 @@ Breezy's v3 status against each point, the pilot all the others follow:
 ## 1. One idea, developed (kishotenketsu)
 A level is about one thing, told with two characters (section 8). Breezy: **the wind carries
 you; the floor won't wait** (fans and crumbling floors).
+
+**Teaching is for the story only** (Veesh, 2026-10-21). The learning progression (introduce a
+mechanic where failing is safe, then build on it level by level) belongs to the story levels.
+The post-game worlds (Side B, NAT ALONE, World 4) and free play assume the player knows the
+mechanics: a level can open on an interesting idea with stakes, and the "Ki" beat below is a
+quick statement of the level's idea, not a tutorial.
 - **Ki (introduce), where failing is safe.** A fan dip too wide to jump floats Nat up the step.
   A crumbling bridge over a dry ditch has a hole to hop; dawdle and it drops you onto the
   ditch's fan, which floats you back out.
@@ -142,19 +148,17 @@ Name the lead and the counter-gadget, and say how each mode changes their intera
   - No call: the everyday fans, headwinds you must hop through.
 
 ## 9. The band's form
-- The song's sections are 8 bars (about 14.5 s). Put the checkpoints and the calls near the
+- The song's sections are 8 bars (about 14.5 s). Where it costs little space, put the checkpoints and the calls near the
   turns (bar 8 ≈ 22 s, bar 16 ≈ 36 s, bar 24 ≈ 51 s): Breezy's natural call spot lands Giant
   Steps on bar 8.
 - **`shout: <col>`**: from that column on the band plays shout choruses (the closing stretch).
 - A stretch where toots on readable spots keep Giant Steps alive: the rooftop's toot pits.
-- **Balance lining up to the music against empty space** (Veesh, 2026-10-21). Jazz lives on
-  space: not every bar is a hit, and a level that answers every beat is as tiring as a band
-  that never lays out. After a hard phrase, give a bar or two of plain ground (a rest bar, a
-  breath before the next idea), and let some stretches ignore the music entirely. Lock to the
-  band at the moments that matter (the turns, the call, the shout, a crusher phrase to echo);
-  elsewhere the rhythm is the player's own. The flow rule (section 4) is about waits and
-  autopilot, not about filling every second: a short rest that follows a hard phrase is space,
-  not a gap.
+- **Balance lining up to the music against density** (Veesh, 2026-10-21). Matching the music
+  leads to too much rest: stretching or padding a level so a call, a checkpoint or a phrase
+  lands on an 8-bar turn leaves blank runs. Aim for something to do about every second and a
+  call chance about every 3 s. Line up to the band where it costs little space (the shout
+  chorus over the closing stretch, a crusher phrase to echo); elsewhere fill the stretch and
+  let the turn fall where it falls.
 
 ## 10. Secrets
 World 3 has Nat lost alone; the secret is a glimpse of Han on the other side of a wall (World 4:
