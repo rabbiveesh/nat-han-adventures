@@ -59,10 +59,12 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   reharms, trades, flourishes and the feel in step); at high freedom the band picks feels on
   its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz); each pass is
   a chorus the band arranges by the dial (`chorus.rs`: two-feel, stop-time, breaks, riffs,
-  strolling, soli, shout + key-up), level tunes open with a pedal/vamp intro, `Input::End`
+  strolling, soli, shout + key-up; the soli is four-voice counterpoint, `soli.rs`: a texture per
+  8-bar section (front line, canon, chorale, answers, line cliché, locked drop-2), the tenor on a
+  third pulse (VRC6-style, channel 4, only the soli plays it)), level tunes open with a pedal/vamp intro, `Input::End`
   plays an ending (the jingle gets a Basie one);
   `cargo run --release --example ornaments` renders listening WAVs with a log of what fired
-  per bar (`-- <dir> feels`: the feels; `-- <dir> choruses`: the choruses, combos with feels, whole shows). Offline renders
+  per bar (`-- <dir> feels`: the feels; `-- <dir> choruses`: the choruses, combos with feels, whole shows; `-- <dir> soli`: soli choruses). Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator

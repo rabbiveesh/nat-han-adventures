@@ -54,6 +54,11 @@ impl Musician for Bass {
             self.remember();
             return fired;
         }
+        // The soli writes the bass's line (the comp plays it on this channel).
+        if ctx.band.soli.is_some_and(|s| s.texture.writes_bass()) && (ctx.plain_harm_at(0.0).is_some() || ctx.band.subs[0].is_some()) {
+            fired.add(Orn::LayOut);
+            return fired;
+        }
         let intent = self.p.intent(ctx.bar.index);
         let band = ctx.band;
         let orns = super::arranged(Role::Bass, band, intent.orns);

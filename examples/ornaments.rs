@@ -8,6 +8,7 @@
 //! cargo run --release --example ornaments -- out/ tiger_rag      # one song, somewhere else
 //! cargo run --release --example ornaments -- out/ all before     # a file-name prefix
 //! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
+//! cargo run --release --example ornaments -- out/ soli           # soli choruses (see `soli`)
 //! ```
 //!
 //! Files: `<prefix>_<song>_f035.wav` + `.txt`, and `instruments_<song>.wav` (each song's
@@ -160,6 +161,10 @@ fn main() {
         choruses(dir);
         return;
     }
+    if only.as_deref() == Some("soli") {
+        soli(dir, &prefix);
+        return;
+    }
     if only.as_deref() == Some("feels") {
         feels(dir);
         return;
@@ -241,6 +246,9 @@ fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(
             }
             if p.feel != Feel::Swing {
                 band.push(format!("feel: {} (since bar {})", p.feel.label(), p.feel_since + 1));
+            }
+            if let Some(s) = p.soli {
+                band.push(format!("soli: {}{}{}", s.texture.label(), if s.stretto { " (stretto)" } else { "" }, if s.tenor { "" } else { ", no tenor yet" }));
             }
             if !band.is_empty() {
                 let _ = writeln!(log, "    band:  {}", band.join("; "));
@@ -359,6 +367,32 @@ fn choruses(dir: &Path) {
     let file = parse(stem);
     let (out, l, _) = run(&file, move |bar| if bar == 1 { vec![free(0.5)] } else { vec![] }, 32, |_| "", false, false);
     save(&format!("jingle_{stem}"), &out, &l);
+}
+
+/// Soli choruses: a few songs, each forced to soli for two passes in a row (freedom 0.5, so
+/// the second pass rolls other textures), to `<prefix>_soli_<song>.wav` with its log; and
+/// one loose (0.8: the band's reharmonizations, planing into phrases), `_f080`.
+fn soli(dir: &Path, prefix: &str) {
+    let call = Call { chorus: Chorus::Soli, key_up: false };
+    let takes = [
+        ("sweet_georgia_brown", 0.5f32),
+        ("tiger_rag", 0.5),
+        ("i_got_rhythm", 0.5),
+        ("st_louis_blues", 0.5),
+        ("when_the_saints", 0.5),
+        ("sweet_georgia_brown", 0.8),
+    ];
+    for (stem, f) in takes {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: 0.5 }] } else { vec![] }
+        };
+        let (out, log, _) = run(&file, script, 2 * file_bars(&file), |_| "", false, false);
+        let name = if f == 0.5 { format!("{prefix}_soli_{stem}") } else { format!("{prefix}_soli_{stem}_f{:03}", (f * 100.0).round() as u32) };
+        write_wav(&dir.join(format!("{name}.wav")), &out);
+        std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+        println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    }
 }
 
 /// A song's pass, in bars.

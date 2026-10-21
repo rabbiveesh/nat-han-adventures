@@ -288,7 +288,8 @@ fn the_reharm_keeps_bass_and_comp_together() {
                         assert_eq!(bass.sound.notes()[0] % 12, s.chord.root, "{m:?} bar {}: the bass missed the sub's root", b.c.slot.index);
                     }
                     for e in b.ch(1).filter(in_sub) {
-                        if b.c.band.hits != 0 {
+                        // (A soli's lines pass through other notes: `tests/choruses.rs`.)
+                        if b.c.band.hits != 0 || b.c.band.soli.is_some() {
                             continue;
                         }
                         assert!(e.sound.notes().iter().all(|&n| h.is_chord_tone(n) || b.c.orns[1].has(Orn::Polychord)), "{m:?} bar {}: comp {:?} over {}", b.c.slot.index, e.sound, s.chord);
@@ -427,7 +428,7 @@ fn musicians_switch_instruments_and_back() {
                     }
                 }
                 if b.c.orns[ch as usize].has(Orn::Switch) {
-                    assert!(b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)));
+                    assert!(b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)), "{m:?} bar {} {r:?}: {:?}", b.c.slot.index, b.ch(ch).map(|e| (e.inst, e.beat)).collect::<Vec<_>>());
                     switched += 1;
                 }
             }

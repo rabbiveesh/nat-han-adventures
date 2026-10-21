@@ -216,7 +216,7 @@ impl Tone {
     pub fn builtin(ch: usize) -> Tone {
         match ch {
             0 => Tone::PULSE1,
-            1 => Tone::PULSE2,
+            1 | 4 => Tone::PULSE2,
             _ => Tone::TRIANGLE,
         }
     }
