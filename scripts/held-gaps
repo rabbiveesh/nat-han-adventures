@@ -1,0 +1,18 @@
+#!/usr/bin/env python3
+"""Flow check for a tour: stretches over 2 s with no new input (only a held key).
+
+usage: scripts/held-gaps scripts/tours/<level>.timeline [goal_time_s]
+Reads the timeline's `t=<s> tap|press|release` lines (docs/level-design.md, section 4).
+"""
+import re
+import sys
+
+ts = []
+for line in open(sys.argv[1]):
+    m = re.match(r"t=([\d.]+) (tap|press|release)", line)
+    if m:
+        ts.append(float(m.group(1)))
+goal = float(sys.argv[2]) if len(sys.argv) > 2 else max(ts)
+ts = sorted(set(ts)) + [goal]
+gaps = [(b - a, a, b) for a, b in zip(ts, ts[1:]) if b - a > 2.0]
+print("gaps > 2 s:", [(round(g, 2), a, b) for g, a, b in gaps])
