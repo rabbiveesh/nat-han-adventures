@@ -1046,7 +1046,7 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, m
     }
     // (Waiting, he stops short of the edge: he'd slide over it.)
     let edge_soon = gap_at(DRIP_BERTH);
-    if body.on_ground && (edge_soon || wall) && !impatient && !(climbs && wall && !edge_soon) {
+    if body.on_ground && !impatient && (edge_soon || (wall && !climbs)) {
         // A platform's track crossing the gap ahead (a ferry), or up the wall (a lift): wait
         // for it, then on.
         let near = (pos.x - dir * half.x, pos.x + dir * (half.x + 4.0 * TILE));
