@@ -430,14 +430,17 @@ impl Comp {
         {
             self.soli.plane(&bar, &next, top);
         }
-        // The lines a step under the tune's level; the clarinet thin, the trombone round.
-        let volume = (t.volume + 1).clamp(6, 10);
+        // The lines well under the tune (two of them sustaining where the comp's arpeggio
+        // only flickered): the alto a step under the comp's level, the tenor two, both one
+        // more in the locked voicing (every tune note doubled twice); thin duties, so they
+        // sit apart from the lead's.
+        let locked = plan.texture == soli::Texture::Locked;
         let lines = [(&self.soli.alto, 1u8), (&self.soli.tenor, 4)];
         for (line, ch) in lines {
             let mut tt = *t;
             tt.ch = ch;
-            tt.volume = volume;
-            tt.duty = if ch == 4 || plan.texture == soli::Texture::Locked { 2 } else { 1 };
+            tt.volume = (t.volume as i32 - if ch == 1 { 1 } else { 2 } - locked as i32).clamp(3, 9) as u8;
+            tt.duty = if ch == 1 && plan.texture == soli::Texture::FrontLine { 0 } else { 1 };
             tt.salt ^= ch as u64 * 0x51_1A;
             for x in line {
                 let mut e = ctx.make(&tt, x.b, x.d, Sound::Note(x.n));

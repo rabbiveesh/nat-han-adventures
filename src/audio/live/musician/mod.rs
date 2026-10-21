@@ -461,7 +461,7 @@ pub fn arranged(role: Role, band: &BandPlan, orns: Orns) -> Orns {
             }
         }
         Role::Drums => {
-            if matches!(chorus, Chorus::TwoFeel | Chorus::Strolling) || band.intro.is_some() {
+            if matches!(chorus, Chorus::TwoFeel | Chorus::Strolling | Chorus::Soli) || band.intro.is_some() {
                 drop(&mut o, &[Orn::Ghost, Orn::OpenHat, Orn::BrokenTime]);
             }
             if chorus == Chorus::Shout || band.ending.is_some() {

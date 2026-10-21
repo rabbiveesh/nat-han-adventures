@@ -85,7 +85,7 @@ impl SoliBar {
     /// How much louder (or softer) the band plays the bar.
     pub fn swell(&self) -> f32 {
         if self.texture == Texture::Locked {
-            0.1
+            0.04
         } else if self.section == 0 && !self.last {
             -0.06
         } else {
@@ -157,7 +157,7 @@ pub struct Bar<'a> {
 
 /// The voices' registers.
 pub const ALTO: (i32, i32) = (55, 84);
-pub const TENOR: (i32, i32) = (45, 67);
+pub const TENOR: (i32, i32) = (48, 67);
 pub const BASS: (i32, i32) = (31, 52);
 
 const A: usize = 0;
@@ -586,7 +586,7 @@ impl Writer {
     /// the alto may hold over the bar line into the new chord and resolve down a step.
     fn guide_line(&mut self, bar: &Bar, r: &mut Rng, k: usize, suspend: bool) {
         let bb = bar.bb;
-        let (range, near) = if k == A { (ALTO, at(bar.lead, 0.0).map_or(66, |l| l as i32 - 7).clamp(58, 74)) } else { (TENOR, 55) };
+        let (range, near) = if k == A { (ALTO, at(bar.lead, 0.0).map_or(66, |l| l as i32 - 7).clamp(58, 74)) } else { (TENOR, 57) };
         let mut beats = [0.0f64; 12];
         let mut n = 0;
         for &c in &self.changes {
@@ -628,6 +628,8 @@ impl Writer {
                 w.above = at(&self.tenor, b);
             } else {
                 w.below = at(&self.alto, b);
+                // (Clear of the bass: the low register muddies fast.)
+                w.above = at(&self.bass, b).map(|x| x.saturating_add(4));
             }
             w.repeat = if new_chord { 0.2 } else { 3.0 };
             w.resolve = new_chord && prev.is_some_and(|p| self.prev_harm.is_some_and(|ph| is_seventh(&ph, p)) || is_seventh(&h, p) && !new_chord);
@@ -821,6 +823,7 @@ impl Writer {
                     let mut w = Want::new(TENOR, a as i32 - 7, self.prev_of(T, b), h, true);
                     w.against = &ag[..k];
                     w.below = Some(a);
+                    w.above = at(&self.bass, b).map(|x| x.saturating_add(4));
                     w.repeat = 1.0;
                     let t = pick(&w, r);
                     push(&mut self.tenor, Tone::new(b, d, t));
