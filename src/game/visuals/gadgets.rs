@@ -58,15 +58,17 @@ fn crusher_sprite(add: On<Add, CrusherBlock>, q: Query<&CrusherBlock>, sprites: 
 /// The dark room behind the grate.
 const GLIMPSE_ROOM: Color = Color::srgb(0.07, 0.08, 0.11);
 
-/// Han glimpsed behind a grate: the dark room, Han facing the open side, the bars over both.
+/// Han glimpsed behind a grate: the dark room, Han facing the open side, the bars over both
+/// (Side B: Nat).
 fn glimpse_sprite(
     add: On<Add, HanGlimpse>,
-    q: Query<&Transform, With<HanGlimpse>>,
+    q: Query<(&Transform, &HanGlimpse)>,
     active: Option<Res<ActiveLevel>>,
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(sprites), Some(active), Ok(tf)) = (sprites, active, q.get(add.entity)) else { return };
+    let (Some(sprites), Some(active), Ok((tf, glimpse))) = (sprites, active, q.get(add.entity)) else { return };
+    let who = if glimpse.nat { SpriteId::PooIdle } else { SpriteId::HanIdle };
     // Face the side Nat finds him from (the open one).
     let (c, r) = ((tf.translation.x / TILE).floor() as i32, active.level.height as i32 - 1 - (tf.translation.y / TILE).floor() as i32);
     let facing_left = !active.level.tile(c - 1, r).is_solid();
@@ -74,7 +76,7 @@ fn glimpse_sprite(
         g.spawn((Sprite::from_color(GLIMPSE_ROOM, Vec2::new(14.0, 30.0)), Transform::from_xyz(0.0, TILE / 2.0, 0.0)));
         g.spawn((
             GlimpsedHan,
-            Sprite { image: sprites.get(SpriteId::HanIdle), flip_x: facing_left, ..default() },
+            Sprite { image: sprites.get(who), flip_x: facing_left, ..default() },
             Transform::from_xyz(0.0, 0.0, 0.1),
         ));
         g.spawn((Sprite::from_image(sprites.get(SpriteId::Grate)), Transform::from_xyz(0.0, TILE / 2.0, 0.2)));
@@ -96,7 +98,11 @@ fn glimpse_wave(
         for c in children {
             let Ok(mut sprite) = han.get_mut(*c) else { continue };
             let t = time.elapsed_secs();
-            let image = if g.found {
+            // (Nat, found, hops for joy.)
+            let image = if g.nat {
+                let id = if g.found && ((t * 4.0) as usize).is_multiple_of(2) { SpriteId::PooJump } else { SpriteId::PooIdle };
+                sprites.frame(id, (t * 2.0) as usize % sprites.frames(id).len())
+            } else if g.found {
                 sprites.frame(SpriteId::HanIntercept, (t * 6.0) as usize % 2)
             } else {
                 sprites.frame(SpriteId::HanIdle, (t * 2.0) as usize % sprites.frames(SpriteId::HanIdle).len())

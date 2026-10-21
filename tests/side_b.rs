@@ -158,34 +158,43 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
     // Up the Pipe, a climb (Han turns at walls): a lift, a chimney of up-through floors, then
     // the giant wall (Giant Steps, over to the high gutter) or back over the trapdoor into the
     // cistern (its ferry and lift); then the leap (fired up, to the rim) or short of it, onto
-    // the low road; then the last chimney to the summit.
+    // the low road; the chimney up to the attic, back left: its hole (fired up, he leaps it;
+    // otherwise down to the crawlway, its ferry and Nat behind a grate); the last chimney to the
+    // roof and its wall (Giant Steps climbs it; otherwise he waits for the lift).
     &[
-        ("cistern, low road", ""),
-        ("giant wall, low road", "1/10 45/0"),
-        ("cistern, rim", "100/11 112/1"),
-        ("giant wall, rim", "1/10 45/0 100/11 112/1"),
+        ("cistern, low road, crawlway, lift", ""),
+        ("giant wall, low road, crawlway, lift", "1/10 45/0"),
+        ("giant wall, rim, crawlway, lift", "1/10 45/0 100/11 112/1"),
+        ("giant wall, rim, leap, lift", "1/10 45/0 100/11 112/1 t=29.5/1"),
+        ("giant wall, rim, leap, roof wall", "1/10 45/0 100/11 112/1 t=29.5/1 t=36/10 t=38/0"),
     ],
     // The U-Bend, a maze: the drip door (melted, he's through; otherwise he turns, drops through
     // the trapdoor behind him and a duck sends him round the detour), the hole (fired up, he
-    // leaps it; otherwise down to the ferry), the giant wall (Giant Steps, over it to the goal;
-    // otherwise back through a trapdoor to the sewer's ferry and lift).
+    // leaps it; otherwise down to the ferry, and Nat behind a grate), the giant wall (Giant
+    // Steps, over it to the high road; otherwise back through a trapdoor to the sewer's ferry
+    // and lift), then the switchback (Giant Steps over the last wall; otherwise back over a
+    // trapdoor to the lane under the high road and round), and the last run.
     &[
         ("the long way", ""),
         ("drip door", "1/12 16/2"),
         ("drip door, leap", "1/12 16/2 40/11 66/1"),
         ("drip door, leap, giant wall", "1/12 16/2 40/11 66/1 100/10 120/0"),
+        ("drip door, leap, giant wall, last wall", "1/12 16/2 40/11 66/1 100/10 120/0 230/0"),
         ("leap", "1/11 60/1"),
         ("giant wall", "100/10 124/0"),
+        ("last wall", "1/10 230/0"),
     ],
     // The Final Flush, over the sewage lake: a ferry, a lift, then the grease slide (fired up, he
     // flies to the deck and its crushers; otherwise down to the drain's ferries and lift), then
-    // the drip tunnel (melted, he's through to the throne; otherwise back over the trapdoor to
-    // the drain's loop).
+    // the drip tunnel (melted, he's through; otherwise back over the trapdoor to the drain's
+    // loop, and Nat behind a grate), then the flume's two canals (fired up, he jumps them;
+    // otherwise he waits for their ferries) to the throne.
     &[
-        ("slide, drip", "1/10 44/0 70/11 158/1"),
-        ("drain, drain", ""),
-        ("deck, drain", "1/10 40/0"),
-        ("drain, drip", "1/11 158/1"),
+        ("slide, drip, flume", "1/10 44/0 70/11 158/1 180/10 200/0 236/0"),
+        ("drain, drain, ferries", ""),
+        ("deck, drain, ferries", "1/10 40/0"),
+        ("drain, drip, ferries", "1/11 158/1"),
+        ("drain, drain, flume", "1/10 200/0"),
     ],
 ];
 
@@ -280,6 +289,35 @@ fn han_waits_for_a_ferry_and_rides_a_lift_to_the_top() {
     until(&mut app, 10.0, |a| col(a) >= 49.0).expect("over the canal and up the lift");
     assert_eq!(side(&app).phase, Phase::Playing);
     assert!(han(&mut app).y > 20.0 * TILE, "up on the high deck");
+}
+
+#[test]
+fn the_long_way_finds_nat_behind_a_grate() {
+    // B8-B10 hide Nat on the route with no calls (the crawlway, the ferry pit, the drain's loop):
+    // Han finds him there, and the save remembers. The quick route goes by.
+    for (level, long, quick) in [(7, 0, 4), (8, 0, 4), (9, 1, 0)] {
+        for (route, found) in [(long, true), (quick, false)] {
+            let mut app = app(level);
+            play_in_app(&mut app, &plan(ROUTES[level][route].1)).unwrap();
+            let name = ROUTES[level][route].0;
+            assert_eq!(app.world().resource::<Progress>().side_b_secrets[level], found, "B{} {name}", level + 1);
+        }
+    }
+}
+
+#[test]
+fn hans_closing_stretch_starts_the_shout() {
+    // Side B's `shout:` goes by Han (Nat's off screen): B9's switchback, from column 250.
+    #[derive(Resource, Default)]
+    struct Shouts(Vec<bool>);
+    let mut app = app(8);
+    app.init_resource::<Shouts>().add_systems(Last, |mut n: ResMut<Shouts>, mut s: MessageReader<nat_han_adventures::game::secret::ShoutChorus>| {
+        n.0.extend(s.read().map(|s| s.0))
+    });
+    until(&mut app, 60.0, |a| col(a) >= 245.0).unwrap();
+    assert!(app.world().resource::<Shouts>().0.is_empty(), "not yet");
+    until(&mut app, 10.0, |a| !a.world().resource::<Shouts>().0.is_empty()).expect("the shout");
+    assert!(col(&mut app) >= 250.0);
 }
 
 #[test]
