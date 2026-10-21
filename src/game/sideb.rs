@@ -143,6 +143,9 @@ fn set_list_rank(c: SetCall) -> u8 {
 pub struct SideBLevel {
     pub level: Level,
     pub setlist: Vec<(SetCall, u32)>,
+    /// `turns: walls`: Han turns round at a wall he can't get over (a maze), instead of
+    /// bonking himself out.
+    pub turns: bool,
 }
 
 impl SideBLevel {
@@ -150,6 +153,7 @@ impl SideBLevel {
     /// start with one) on top of the usual format (`level` module docs).
     pub fn parse(src: &str) -> Result<SideBLevel, String> {
         let mut setlist = Vec::new();
+        let mut turns = false;
         let mut rest = String::new();
         let mut in_header = true;
         for line in src.lines() {
@@ -166,6 +170,10 @@ impl SideBLevel {
                         setlist.push((h, n));
                     }
                 }
+                Some((k, v)) if in_header && k.trim() == "turns" => match v.trim() {
+                    "walls" => turns = true,
+                    w => return Err(format!("no such turns `{w}`")),
+                },
                 _ => {
                     rest.push_str(line);
                     rest.push('\n');
@@ -175,7 +183,7 @@ impl SideBLevel {
         // Always in the same order, whatever the header says: the strip mustn't give the
         // solution's order away.
         setlist.sort_by_key(|&(c, _)| set_list_rank(c));
-        Ok(SideBLevel { level: Level::parse(&rest)?, setlist })
+        Ok(SideBLevel { level: Level::parse(&rest)?, setlist, turns })
     }
 
     /// Level `n`'s name (its `name:` header), without parsing the rest.
@@ -215,6 +223,7 @@ pub struct SideB {
     /// Charging since this long, from this x, with this many landings since.
     pub charging: Option<f32>,
     pub charge_x: f32,
+    pub charge_y: f32,
     pub charge_landings: u32,
     pub was_grounded: bool,
     /// How the last try ended.
@@ -226,6 +235,12 @@ pub struct SideB {
     /// A free play Side B room (`crate::freeplay`) rather than a Side B level: where it is.
     #[reflect(ignore)]
     pub room: Option<AloneRoom>,
+    /// The level's `turns: walls`, and which way Han's running then (he starts towards the
+    /// goal), with where he last landed against a wall and how many in a row there.
+    pub turns: bool,
+    pub dir: Option<f32>,
+    pub bonk_at: Vec2,
+    pub bonks: u32,
 }
 
 /// A free play Side B room in the course (cells and columns of the loaded level): Nat waits in
@@ -256,6 +271,7 @@ impl SideB {
             frontier: false,
             charging: None,
             charge_x: 0.0,
+            charge_y: 0.0,
             charge_landings: 0,
             was_grounded: true,
             fate: None,
@@ -263,7 +279,16 @@ impl SideB {
             calls: 0,
             refills: 0,
             room: None,
+            turns: false,
+            dir: None,
+            bonk_at: Vec2::NAN,
+            bonks: 0,
         }
+    }
+
+    /// Side B level `n`, `b`.
+    pub fn of(n: usize, b: &SideBLevel) -> SideB {
+        SideB { turns: b.turns, ..SideB::new(n, b.setlist.clone()) }
     }
 
     /// Back to the top: the set list refilled.
@@ -273,6 +298,7 @@ impl SideB {
             selected: self.selected,
             fate: self.fate,
             room: self.room,
+            turns: self.turns,
             ..SideB::new(self.level, self.setlist.clone())
         };
     }
@@ -289,7 +315,7 @@ pub fn start(commands: &mut Commands, n: usize) {
 
 /// Start `b` as Side B level `n` (tests: a free play Side B room on its own).
 pub fn start_level(commands: &mut Commands, n: usize, b: SideBLevel) {
-    commands.insert_resource(SideB::new(n, b.setlist));
+    commands.insert_resource(SideB::of(n, &b));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
     commands.insert_resource(crate::state::Shelf::SideB);
@@ -474,7 +500,8 @@ fn beacon(
     let Ok((hpos, hbody, mut brain)) = han.single_mut() else { return };
     let goal = side.room.map_or(level.goal, |r| r.goal);
     let goal = (goal.0 as i32, goal.1 as i32);
-    let dir = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
+    let toward = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
+    let dir = if side.turns { turn_at_walls(level, &mut side, hpos.0, hbody, toward) } else { toward };
     // Re-plan from where he stands (mid-air he's carrying out a move already).
     if hbody.on_ground && side.phase == Phase::Playing {
         let map = Map::for_han(level);
@@ -494,7 +521,9 @@ fn beacon(
             crate::level::nav::Route::Budget => {}
         }
         // Got somewhere since he charged (up the wall, over the gap): that charge is over.
-        if side.charging.is_some() && (hpos.0.x - side.charge_x).abs() > 3.0 * TILE {
+        // (Up or down a lift counts; riding one too.)
+        let moved = (hpos.0.x - side.charge_x).abs() > 3.0 * TILE || (hpos.0.y - side.charge_y).abs() > 2.0 * TILE;
+        if side.charging.is_some() && (moved || hbody.riding.is_some()) {
             side.charging = None;
         }
         // At the frontier: charge!
@@ -502,6 +531,7 @@ fn beacon(
         if side.frontier && there && side.charging.is_none() {
             side.charging = Some(0.0);
             side.charge_x = hpos.0.x;
+            side.charge_y = hpos.0.y;
             side.charge_landings = 0;
             says.write(HanSays { text: charge_line(level, from, dir).to_string() });
         }
@@ -512,6 +542,7 @@ fn beacon(
     // He always just goes for it (`han::brain::charge`); the charge at the frontier is when he
     // yells about it, and how long he keeps it up.
     brain.charge = (side.phase == Phase::Playing).then_some(dir);
+    brain.maze = side.turns;
     if hbody.on_ground && !side.was_grounded && side.charging.is_some() {
         side.charge_landings += 1;
     }
@@ -522,6 +553,43 @@ fn beacon(
     body.on_ground = true;
     body.riding = None;
     ctl.facing = dir;
+}
+
+/// `turns: walls`: which way Han runs. He turns round when he's landed twice in a row at the
+/// same spot against a wall (he jumped and didn't get over it), or a bumper bats him back.
+fn turn_at_walls(level: &Level, side: &mut SideB, at: Vec2, body: &Body, toward: f32) -> f32 {
+    let dir = *side.dir.get_or_insert(toward);
+    let mut turn = body.launch * dir < -crate::level::BUMPER_SPEED * 0.5;
+    // (On grease he can't jump: a wall turns him straight away. So do drips he's too big for.)
+    let ahead = |dy: f32| {
+        let (c, r) = level.cell_at(at + Vec2::new(dir * (body.half.x + 3.0), dy));
+        level.tile(c, r).is_solid()
+    };
+    if body.on_ground && (ahead(0.0) || ahead(-body.half.y + 2.0)) && crate::game::physics::grease_underfoot(level, at, body.half) {
+        turn = true;
+    }
+    let (c, r) = level.cell_at(at + Vec2::new(dir * (body.half.x + super::han::DRIP_BERTH), 0.0));
+    if body.on_ground && body.half.y > HALF.y * 0.8 && level.tile(c, r) == Tile::SpikesDown {
+        turn = true;
+    }
+    if body.on_ground && !side.was_grounded && side.phase == Phase::Playing {
+        let wall = ahead(0.0) || ahead(-body.half.y + 2.0);
+        if wall && at.distance(side.bonk_at) < 1.5 * TILE {
+            side.bonks += 1;
+        } else {
+            side.bonks = if wall { 1 } else { 0 };
+            side.bonk_at = at;
+        }
+        turn |= side.bonks >= 2;
+    }
+    if turn {
+        side.bonks = 0;
+        side.bonk_at = Vec2::NAN;
+        side.charging = None;
+        side.dir = Some(-dir);
+        return -dir;
+    }
+    dir
 }
 
 /// Han's charge barks (he's nearly silent, as everywhere: `level::is_bark`).
@@ -660,7 +728,7 @@ fn han_fate(
                 if n < SIDE_B_SOURCES.len() {
                     commands.queue(move |w: &mut World| {
                         let b = SideBLevel::load(n);
-                        w.insert_resource(SideB::new(n, b.setlist));
+                        w.insert_resource(SideB::of(n, &b));
                         w.insert_resource(GeneratedLevel(b.level));
                         w.write_message(RestartLevel);
                     });
@@ -712,9 +780,9 @@ fn han_fate(
         Some(Fate::Pit)
     } else if on_spikes(level, pos.0, body.half) {
         Some(Fate::Spikes)
-    } else if side.charge_landings >= 2 && (pos.0.x - side.charge_x).abs() < 2.5 * TILE {
+    } else if !side.turns && side.charge_landings >= 2 && (pos.0.x - side.charge_x).abs() < 2.5 * TILE && (pos.0.y - side.charge_y).abs() < 1.5 * TILE {
         Some(Fate::Bonk)
-    } else if side.charging.is_some_and(|t| t > CHARGE_GIVE_UP) {
+    } else if !side.turns && side.charging.is_some_and(|t| t > CHARGE_GIVE_UP) {
         Some(Fate::Pooped)
     } else {
         None

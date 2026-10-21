@@ -183,6 +183,12 @@ pub struct HanBrain {
     /// Side B (`game::sideb`): no route on, so he charges this way regardless, jumping (and
     /// tooting at the top) at whatever's in front of him. Brave, and often fatal.
     pub charge: Option<f32>,
+    /// Side B: jumped for a moving platform (steering for it till he lands).
+    pub boarding: bool,
+    /// Side B: in the air from a jump (toots are for jumps: off a ledge he just drops).
+    pub leapt: bool,
+    /// Side B's mazes (`turns: walls`): fired up, he jumps holes he'd otherwise drop down.
+    pub maze: bool,
 }
 
 impl Default for HanBrain {
@@ -216,6 +222,9 @@ impl Default for HanBrain {
             behind: 0.0,
             gap: 0.0,
             charge: None,
+            boarding: false,
+            leapt: false,
+            maze: false,
         }
     }
 }
@@ -750,7 +759,21 @@ pub(super) fn think(
         && brain.mode == HanMode::Follow
         && let Some(dir) = brain.charge
     {
-        input = charge(level, &pos.0, &body, &brain.ctl, dir);
+        let on_plat = body.riding.is_some_and(|e| platforms.iter().any(|(ent, ..)| ent == e));
+        let leaps = brain.maze && groove.fired_up();
+        // (Fired up he won't wait for a ferry, and in Giant Steps not for a lift: he jumps.)
+        let impatient = brain.maze && groove.fired_up();
+        let climbs = brain.maze && groove.giant_steps();
+        input = charge(level, &pos.0, &body, &brain.ctl, on_plat, brain.maze, leaps, (impatient, climbs), dir, &plats, &mut brain.boarding);
+        if body.on_ground {
+            brain.leapt = input.jump;
+        } else if !brain.leapt {
+            input.toot = false;
+        }
+        // Grease: no jumping off it (his speed is all he takes over its edge).
+        if body.on_ground && crate::game::physics::grease_underfoot(level, pos.0, body.half) {
+            input.jump = false;
+        }
     }
     // Keep off a chute's grease (on foot).
     if !side_b && !parachute && input.dir != 0.0 && body.on_ground {
@@ -919,20 +942,50 @@ fn move_towards_v(from: Vec2, to: Vec2, step: f32) -> Vec2 {
     if d.length() <= step { to } else { from + d.normalize() * step }
 }
 
+/// How far ahead (px) Han sees drips coming: enough to stop short at full tilt.
+pub const DRIP_BERTH: f32 = 12.0;
+
+/// How far (columns) Han jumps off a platform for the ground ahead.
+const RIDE_LEAP: i32 = 3;
+
 /// Side B: Han just goes for it. Run `dir`; jump at a wall, an edge or spikes ahead; a full
-/// jump and a toot at the top, unless there's a ceiling over him (then a hop). No looking
-/// where he's going: the music decides how far a jump gets him.
-fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> HanInput {
+/// jump and a toot at the top (a jump's: off a ledge he just drops), unless there's a ceiling
+/// over him (then a hop). No looking where he's going: the music decides how far a jump gets
+/// him.
+///
+/// Moving platforms are the one thing he's patient about (in a maze, fired up he's `impatient`
+/// and jumps instead, and in Giant Steps he `climbs` a wall instead of waiting for its lift): at an edge or a wall with a platform's track just ahead he waits
+/// for it to come round and gets on; on one he walks up to its front and holds still until
+/// there's ground to get off onto (level with his feet, a hop up, or a short jump away), and
+/// a lift he rides to the top. In a maze (`turns: walls`) he won't walk into drips he's too big
+/// for, and fired up (`leaps`) he jumps a hole he'd otherwise drop down.
+#[allow(clippy::too_many_arguments)]
+fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, maze: bool, leaps: bool, (impatient, climbs): (bool, bool), dir: f32, plats: &[(Vec2, MovingPlatform)], boarding: &mut bool) -> HanInput {
     // (His own size: melting shrinks him.)
     let half = body.half;
     let tile_at = |dx: f32, dy: f32| {
         let (c, r) = level.cell_at(*pos + Vec2::new(dx, dy));
         level.tile(c, r)
     };
+    // (In a maze he won't walk into drips unless he's melted small enough to fit under.)
+    let drips = maze && half.y > HALF.y * 0.8 && tile_at(dir * (half.x + DRIP_BERTH), 0.0) == Tile::SpikesDown;
+    if drips && body.on_ground {
+        // (He stops short: `game::sideb` turns him round.)
+        return HanInput { dir: 0.0, speed: 1.0, ..default() };
+    }
     let wall = tile_at(dir * (half.x + 3.0), 0.0).is_solid() || tile_at(dir * (half.x + 3.0), -half.y + 2.0).is_solid();
-    // A gap ahead: nothing to land on under the next step (a drop with a floor he walks off).
-    let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 2.0), -half.y - 2.0));
-    let edge = !(r..level.height as i32).any(|r| floor_at(level, c, r));
+    // A gap `ahead` px on: nothing to land on under the next step (a drop with a floor he walks
+    // off). (Sewage is no floor, whatever's under it. Fired up in a maze, a drop is a hole to
+    // leap.)
+    let gap_at = |ahead: f32| {
+        let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + ahead), -half.y - 2.0));
+        let below = (r..level.height as i32).map(|r| level.tile(c, r)).position(|t| t == Tile::Liquid || t.is_solid() || t.is_one_way());
+        match below {
+            Some(k) => level.tile(c, r + k as i32) == Tile::Liquid || (leaps && k > 0),
+            None => true,
+        }
+    };
+    let edge = gap_at(2.0);
     let spikes = tile_at(dir * (half.x + 6.0), -half.y + 2.0) == Tile::SpikesUp;
     // A ceiling (spikes, or solid with air under it) within `n` tiles over his head, here or
     // just ahead (a wall's face doesn't count; bricks don't either: he smashes through).
@@ -945,6 +998,86 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> Han
             })
         })
     };
+    let feet = pos.y - half.y;
+    // Ground to get onto from a platform: its top near his feet, a step ahead (walk or hop
+    // off) or a jump away (the column).
+    let shore = || {
+        let (_, r) = level.cell_at(Vec2::new(pos.x, feet + 2.5 * TILE));
+        (0..RIDE_LEAP).find_map(|k| {
+            let (c, _) = level.cell_at(*pos + Vec2::new(dir * (half.x + (k as f32 + 0.75) * TILE), 0.0));
+            let top = (r.max(0)..level.height as i32)
+                .find(|&r| floor_at(level, c, r) && !level.tile(c, r - 1).is_solid())
+                .map(|r| level.tile_center(c as usize, r as usize).y + TILE / 2.0)?;
+            (top - feet > -0.6 * TILE && top - feet < 2.5 * TILE).then_some((k, top))
+        })
+    };
+    // In the air for a platform (getting on, not off): steer for it, no toots.
+    if body.on_ground {
+        *boarding = false;
+    }
+    if *boarding && !body.on_ground {
+        let under = plats.iter().filter(|(p, _)| (p.x - pos.x).abs() < 4.0 * TILE && p.y + TILE / 2.0 < feet + 0.5 * TILE && p.y > feet - 6.0 * TILE);
+        if let Some((p, _)) = under.min_by(|a, b| (a.0.x - pos.x).abs().total_cmp(&(b.0.x - pos.x).abs())) {
+            let dx = p.x - pos.x;
+            return HanInput { dir: if dx.abs() > 2.0 { dx.signum() } else { 0.0 }, speed: 1.0, jump: false, hold: true, toot: false };
+        }
+    }
+    // The platform he's on, and if it's a lift, whether it's at its top: he rides lifts all the
+    // way up (getting off on the way would be a short trip).
+    let ridden = plats.iter().find(|(p, m)| (p.y + TILE / 2.0 - feet).abs() < 4.0 && (p.x - pos.x).abs() < m.width as f32 * TILE / 2.0 + half.x);
+    let lifting = ridden.is_some_and(|(p, m)| m.travel.y != 0.0 && p.y < m.base.y.max(m.base.y + m.travel.y) - 4.0);
+    if on_plat {
+        if let Some((k, top)) = shore().filter(|_| !lifting) {
+            let up = top - feet > 0.4 * TILE;
+            return HanInput { dir, speed: 1.0, jump: (up || k > 0) && body.on_ground, hold: true, toot: false };
+        }
+        // Nothing yet: up to the front of the platform, and wait there.
+        let front = plats
+            .iter()
+            .filter(|(p, _)| (p.y + TILE / 2.0 - feet).abs() < 4.0 && (p.x - pos.x).abs() < 8.0 * TILE)
+            .map(|(p, m)| p.x + dir * (m.width as f32 * TILE / 2.0 - half.x - 2.0))
+            .min_by(|a, b| (a - pos.x).abs().total_cmp(&(b - pos.x).abs()));
+        let walk = front.is_some_and(|x| (x - pos.x) * dir > 2.0);
+        return HanInput { dir: if walk { dir } else { 0.0 }, speed: 0.5, ..default() };
+    }
+    // (Waiting, he stops short of the edge: he'd slide over it.)
+    let edge_soon = gap_at(DRIP_BERTH);
+    if body.on_ground && (edge_soon || wall) && !impatient && !(climbs && wall && !edge_soon) {
+        // A platform's track crossing the gap ahead (a ferry), or up the wall (a lift): wait
+        // for it, then on.
+        let near = (pos.x - dir * half.x, pos.x + dir * (half.x + 4.0 * TILE));
+        let (n0, n1) = (near.0.min(near.1), near.0.max(near.1));
+        let mut track = false;
+        let mut ready = false;
+        let mut far = f32::INFINITY;
+        for (p, m) in plats {
+            let w = m.width as f32 * TILE / 2.0;
+            let (a, b) = (m.base, m.base + m.travel);
+            let (x0, x1) = (a.x.min(b.x) - w, a.x.max(b.x) + w);
+            let (y0, y1) = (a.y.min(b.y) + TILE / 2.0, a.y.max(b.y) + TILE / 2.0);
+            if x1 < n0 || x0 > n1 || y1 < feet - 5.0 * TILE || y0 > feet + 1.5 * TILE {
+                continue;
+            }
+            track = true;
+            // Here now: its near end within a couple of tiles, its top under him or a hop up.
+            let top = p.y + TILE / 2.0;
+            let gap = (if dir > 0.0 { p.x - w - (pos.x + half.x) } else { (pos.x - half.x) - (p.x + w) }).max(0.0);
+            // (A lift: it's under him or across his way, not ahead.)
+            let under = (p.x - pos.x).abs() < w + half.x;
+            if (gap < 1.5 * TILE || under) && top < feet + 1.5 * TILE && top > feet - 3.0 * TILE {
+                ready = true;
+                far = far.min(gap);
+            }
+        }
+        if track && !ready {
+            return HanInput { dir: 0.0, speed: 1.0, ..default() };
+        }
+        if track {
+            // (A hop when it's right there, a jump when it's a little way off.)
+            *boarding = true;
+            return HanInput { dir, speed: 1.0, jump: true, hold: far > 1.5 * TILE, toot: false };
+        }
+    }
     let jump = body.on_ground && (wall || edge || spikes);
     let toot = !body.on_ground && body.vel.y <= 0.0 && ctl.toots_left > 0 && !ceiling(5);
     HanInput { dir, speed: 1.0, jump, hold: !ceiling(1), toot }

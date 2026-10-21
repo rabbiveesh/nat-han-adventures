@@ -138,7 +138,7 @@ impl Default for PlayerControl {
 }
 
 /// Is any grease under the feet of a box centered at `pos` (half extents `half`)?
-pub(super) fn grease_underfoot(level: &Level, pos: Vec2, half: Vec2) -> bool {
+pub(crate) fn grease_underfoot(level: &Level, pos: Vec2, half: Vec2) -> bool {
     let j = idx(pos.y - half.y - 0.5);
     let (xs, _) = cells(pos - half, pos + half);
     xs.into_iter().any(|i| tile_at(level, i, j) == Tile::Grease)

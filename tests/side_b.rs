@@ -68,7 +68,7 @@ fn trace(app: &mut App, t: f32) {
         let melt = app.world().resource::<nat_han_adventures::audio::plugin::Director>().melt_until;
         let half = app.world_mut().query_filtered::<&nat_han_adventures::game::Body, With<Han>>().single(app.world()).unwrap().half;
         eprintln!("   bounce={b} phrase={ph:?} melt_until={melt:?} half={half:?}");
-        eprintln!("t={t:5.2} han=({:.2},{:.2}) target={:?} frontier={} charging={:?} landings={} cx={:.2} phase={:?} groove={g:?}", p.x / TILE, p.y / TILE, s.target, s.frontier, s.charging, s.charge_landings, s.charge_x / TILE, s.phase);
+        eprintln!("t={t:5.2} han=({:.2},{:.2}) target={:?} frontier={} charging={:?} landings={} cx={:.2} phase={:?} dir={:?} groove={g:?}", p.x / TILE, p.y / TILE, s.target, s.frontier, s.charging, s.charge_landings, s.charge_x / TILE, s.phase, s.dir);
     }
 }
 
@@ -155,50 +155,58 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
              295.5/10 306/0 330.5/11 340.5/10 356/0 372/1",
         ),
     ],
-    // Fork in the Pipe: Giant Steps, fired up and melting to warm up; then up on the shelf (Giant
-    // Steps; a drip pipe up there) or leap the gap under it (fired up; a drip under the shelf);
-    // then the long drip (melting, in time) or over its roof (Giant Steps); then fired up, Giant
-    // Steps and melting back to back. Something every second or so, a call every three.
+    // Up the Pipe, a climb (Han turns at walls): a lift, a chimney of up-through floors, then
+    // the giant wall (Giant Steps, over to the high gutter) or back over the trapdoor into the
+    // cistern (its ferry and lift); then the leap (fired up, to the rim) or short of it, onto
+    // the low road; then the last chimney to the summit.
     &[
-        ("shelf, roof", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/10 129/0 139/12 175/2 228/10 245/0 261/11 269/10 279/12 317/1 347/0 361/2"),
-        ("shelf, drip", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/10 129/0 139/12 175/2 233.7/12 255/2 261/11 270/10 279/12 321/1 336/0 365/2"),
-        ("leap, roof", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/11 141/1 156/12 171/2 228/10 243/0 261/11 269/10 279/12 323/1 341/0 363/2"),
-        ("leap, drip", "2/10 7.7/11 19/0 22/12 51/1 65/2 101/11 141/1 156/12 171/2 233.7/12 253/2 261/11 270/10 279/12 319/1 349/0 361/2"),
+        ("cistern, low road", ""),
+        ("giant wall, low road", "1/10 45/0"),
+        ("cistern, rim", "100/11 112/1"),
+        ("giant wall, rim", "1/10 45/0 100/11 112/1"),
     ],
-    // Clog Dance: a lone clog, fired up, Giant Steps; then through the clog hall (no call: Han
-    // minds the stomps) or over its roof (Giant Steps, more nuggets); then the split, where the
-    // nugget line decides: the high road (Giant Steps twice) or the sewer under it (melting
-    // twice); then fired up, Giant Steps and melting to the plunger.
+    // The U-Bend, a maze: the drip door (melted, he's through; otherwise he turns, drops through
+    // the trapdoor behind him and a duck sends him round the detour), the hole (fired up, he
+    // leaps it; otherwise down to the ferry), the giant wall (Giant Steps, over it to the goal;
+    // otherwise back through a trapdoor to the sewer's ferry and lift).
     &[
-        ("hall, high road", "1/11 6.7/10 41/1 69/0 167/10 174/10 181/10 193/0 219/0 235/11 257/0 271/10 293/12 309/1 337/0 351/2"),
-        ("hall, sewer", "1/11 6.7/10 41/1 69/0 174/12 181/12 204/2 231/11 248/2 267/10 293/12 305/1 337/0 353/2"),
-        ("roof, high road", "1/11 6.7/10 41/1 53/10 69/0 97/0 167/10 174/10 181/10 197/0 219/0 235/11 257/0 271/10 293/12 309/1 337/0 353/2"),
-        ("roof, sewer", "1/11 6.7/10 41/1 53/10 69/0 97/0 174/12 181/12 204/2 231/11 248/2 267/10 293/12 309/1 337/0 351/2"),
+        ("the long way", ""),
+        ("drip door", "1/12 16/2"),
+        ("drip door, leap", "1/12 16/2 40/11 66/1"),
+        ("drip door, leap, giant wall", "1/12 16/2 40/11 66/1 100/10 120/0"),
+        ("leap", "1/11 60/1"),
+        ("giant wall", "100/10 124/0"),
     ],
-    // The Final Flush: the world's forks one after another. The clog hall or its roof, the long
-    // drip or its roof, the high road or the sewer (as the nuggets went), then fired up, Giant
-    // Steps and melting back to back to the plunger. Every combination clears.
+    // The Final Flush, over the sewage lake: a ferry, a lift, then the grease slide (fired up, he
+    // flies to the deck and its crushers; otherwise down to the drain's ferries and lift), then
+    // the drip tunnel (melted, he's through to the throne; otherwise back over the trapdoor to
+    // the drain's loop).
     &[
-        ("hall, roof, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 195/10 213/0 251/10 279/10 295/0 319/0 341/10 373/0 389/11 408/10 414/12 419/1 453/0 467/2"),
-        ("hall, roof, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 195/10 213/0 279/12 304/2 333/12 362/2 396/11 408/10 414/12 419/1 453/0 465/2"),
-        ("hall, drip, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 202/12 223/2 249/10 279/10 299/0 319/0 341/10 373/0 389/11 408/10 414/12 425/1 453/0 469/2"),
-        ("hall, drip, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 202/12 223/2 279/12 300/2 333/12 356/2 396/11 408/10 414/12 425/1 453/0 467/2"),
-        ("roof, roof, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 195/10 221/0 251/10 279/10 291/0 319/0 341/10 373/0 389/11 408/10 414/12 425/1 453/0 469/2"),
-        ("roof, roof, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 195/10 221/0 279/12 302/2 333/12 358/2 396/11 408/10 414/12 425/1 453/0 469/2"),
-        ("roof, drip, high road", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 202/12 221/2 249/10 279/10 297/0 319/0 341/10 373/0 389/11 408/10 414/12 423/1 453/0 465/2"),
-        ("roof, drip, sewer", "1/10 6.7/11 19/0 22/12 49/1 67/2 97/10 123/0 202/12 221/2 279/12 306/2 333/12 364/2 396/11 408/10 414/12 421/1 453/0 467/2"),
+        ("slide, drip", "1/10 44/0 70/11 158/1"),
+        ("drain, drain", ""),
+        ("deck, drain", "1/10 40/0"),
+        ("drain, drip", "1/11 158/1"),
     ],
 ];
 
 /// A plan from its text (`5/12 7/0`: pick melting at column 5, call Giant Steps at 7).
+/// A plan: `col/call` (the call when Han reaches that column) or `t=secs/call` (at that play
+/// time: in a maze or a climb he comes by a column more than once).
 fn plan(s: &str) -> Vec<(f32, usize)> {
     s.split_whitespace()
         .map(|p| {
             let (c, k) = p.split_once('/').unwrap();
-            (c.parse().unwrap(), k.parse().unwrap())
+            let k: usize = k.parse().unwrap();
+            match c.strip_prefix("t=") {
+                Some(t) => (t.parse().unwrap(), k | AT_TIME),
+                None => (c.parse().unwrap(), k),
+            }
         })
         .collect()
 }
+
+/// A plan step's call made at a time, not a column.
+const AT_TIME: usize = 1 << 16;
 
 fn died(r: Result<(), (Option<Fate>, f32)>) -> (Fate, f32) {
     match r {
@@ -235,7 +243,7 @@ fn set_lists_come_in_one_order() {
 
 #[test]
 fn nuggets_add_to_the_picked_call() {
-    let mut app = app(7);
+    let mut app = app(8);
     pick(&mut app, 2);
     until(&mut app, 5.0, |a| col(a) >= 13.0).unwrap();
     assert_eq!(side(&app).refills, 2);
@@ -243,16 +251,35 @@ fn nuggets_add_to_the_picked_call() {
 }
 
 #[test]
-fn the_long_drip_wants_its_melting_called_in_time() {
-    // Fork in the Pipe's low road, then the long drip (columns 258-295): melting called in time
-    // gets Han through it (he meets his end later, at the closing gap, with no more calls); a
-    // bar late and he walks into its mouth full size.
-    let lead = "2/10 7.7/11 19/0 22/12 51/1 65/2 101/11 141/1 156/12 171/2 233.7/12";
-    let in_time = died(play(7, &plan(&format!("{lead} 245/2"))));
-    assert!(in_time.1 > 296.0, "through the drip, not {in_time:?}");
-    let late = died(play(7, &plan(&format!("{lead} 261/2"))));
-    assert_eq!(late.0, Fate::Spikes);
-    assert!((250.0..262.0).contains(&late.1), "at the mouth, not {}", late.1);
+fn in_the_maze_drips_turn_han_round_unless_hes_melted() {
+    // The U-Bend's drip door (columns 38-47): full size, he stops short and turns back (and drops
+    // through the trapdoor he crossed); melted, he's through.
+    let mut full = app(8);
+    until(&mut full, 10.0, |a| side(a).dir == Some(-1.0)).expect("turned at the drips");
+    assert_eq!(side(&full).phase, Phase::Playing, "alive");
+    let at = col(&mut full);
+    assert!((30.0..38.0).contains(&at), "at the door, not {at}");
+    let mut app = app(8);
+    for (c, k) in plan("1/12 16/2") {
+        until(&mut app, 10.0, |a| col(a) >= c).unwrap();
+        if k >= PICK { pick(&mut app, k - PICK) } else { call(&mut app, k) }
+    }
+    until(&mut app, 10.0, |a| col(a) >= 49.0).expect("through the door");
+    assert_eq!(side(&app).dir, Some(1.0));
+    assert!(han(&mut app).y > 12.0 * TILE, "on the main lane, not the detour");
+}
+
+#[test]
+fn han_waits_for_a_ferry_and_rides_a_lift_to_the_top() {
+    // The Final Flush's first canal (columns 20-27) and the lift up to the high deck (46-48).
+    let mut app = app(9);
+    until(&mut app, 10.0, |a| col(a) >= 19.0).unwrap();
+    let at = col(&mut app);
+    until(&mut app, 0.5, |_| false);
+    assert!((col(&mut app) - at).abs() < 1.5, "waiting at the canal");
+    until(&mut app, 10.0, |a| col(a) >= 49.0).expect("over the canal and up the lift");
+    assert_eq!(side(&app).phase, Phase::Playing);
+    assert!(han(&mut app).y > 20.0 * TILE, "up on the high deck");
 }
 
 #[test]
@@ -462,7 +489,10 @@ fn play_in(mut app: App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32
 
 fn play_in_app(app: &mut App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>, f32)> {
     for &(c, k) in plan {
-        until(app, 30.0, |a| col(a) >= c || side(a).phase != Phase::Playing);
+        let timed = k & AT_TIME != 0;
+        let k = k & !AT_TIME;
+        let now = |a: &App| a.world().resource::<nat_han_adventures::game::LevelRun>().time;
+        until(app, 60.0, |a| (if timed { now(a) >= c } else { col(a) >= c }) || side(a).phase != Phase::Playing);
         if side(app).phase != Phase::Playing {
             break;
         }
@@ -476,7 +506,7 @@ fn play_in_app(app: &mut App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>
             call(app, k);
         }
     }
-    until(app, 40.0, |a| side(a).phase != Phase::Playing);
+    until(app, 90.0, |a| side(a).phase != Phase::Playing);
     match side(app).phase {
         Phase::Cleared { .. } => Ok(()),
         _ => Err((fate(app), col(app))),
@@ -575,7 +605,7 @@ fn alone_room(seed: u64, band: u8, cleared: usize) -> (SideBLevel, Vec<(f32, usi
     use nat_han_adventures::freeplay::{alone, canvas::Canvas, dice::Dice};
     let mut c = Canvas::with_height(alone::ALONE_H);
     let drawn = alone::draw(&mut c, &mut Dice::new(seed), band, cleared);
-    (SideBLevel { level: c.finish_with(2, "Go!", 0), setlist: alone::setlist(cleared) }, drawn.solution)
+    (SideBLevel { level: c.finish_with(2, "Go!", 0), setlist: alone::setlist(cleared), turns: false }, drawn.solution)
 }
 
 /// Every Side B room free play draws clears with the plan it was drawn with: every band, with
