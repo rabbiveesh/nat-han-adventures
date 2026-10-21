@@ -121,6 +121,7 @@ fn touch_goal(
     encore: Option<Res<super::encore::Encore>>,
     generated: Option<Res<super::GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    solo: Option<Res<super::solo::SoloRun>>,
     mut cues: MessageWriter<crate::events::EncoreCue>,
     mut says: MessageWriter<HanSays>,
     mut player: Query<(Entity, &Pos, &mut Body), Alive>,
@@ -137,9 +138,16 @@ fn touch_goal(
     if encore.is_some() || !overlap(pos.0, body.half, min, max) {
         return;
     }
-    // The story's last goal: the band takes an encore first (`encore`), and it ends the level.
-    if super::encore::is_finale(active.index, generated.is_none() && side_b.is_none()) {
-        super::encore::start(&mut commands, &active, &run, &mut cues, &mut says);
+    // The story's last goal (and NAT ALONE's): the band takes an encore first (`encore`), and
+    // it ends the level.
+    use super::encore::{Gag, is_finale, is_solo_finale, start};
+    let gag = if is_finale(active.index, generated.is_none() && side_b.is_none()) {
+        Some(Gag::Throne)
+    } else {
+        is_solo_finale(solo.as_deref()).then_some(Gag::Grate)
+    };
+    if let Some(gag) = gag {
+        start(&mut commands, &active, &run, gag, &mut cues, &mut says);
         return;
     }
     body.vel = Vec2::ZERO;

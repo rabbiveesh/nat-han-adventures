@@ -411,7 +411,7 @@ fn a_cleared_level_goes_on_to_the_next() {
 fn the_last_level_ends_in_hans_encore_gone_wrong() {
     use nat_han_adventures::game::{
         Player,
-        encore::{Encore, EncorePhase, Finale},
+        encore::{Encore, EncorePhase, Gag},
     };
     let n = SIDE_B_COUNT - 1;
     let mut app = app(n);
@@ -425,7 +425,7 @@ fn the_last_level_ends_in_hans_encore_gone_wrong() {
     }
     until(&mut app, 30.0, |a| a.world().get_resource::<Encore>().is_some()).expect("an encore at the goal");
     let e = app.world().resource::<Encore>().clone();
-    assert_eq!((e.finale, e.phase), (Finale::SideB, EncorePhase::Lap));
+    assert_eq!((e.gag, e.phase), (Gag::Plunge, EncorePhase::Lap));
     assert_eq!(app.world().resource::<Progress>().side_b_rewinds[n], Some(0), "saved at the goal");
     assert!(said(&app, sideb::CLEARED_LINE));
     // Calls are free in the lap, Down or Jump, and Han dances on the stage.

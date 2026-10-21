@@ -80,8 +80,12 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   the band all out, a shout chorus a key up), then a Basie ending whose last chord (`FinalHit`,
   the engine's `end_step`) knocks Nat into the throne; Han dives and misses; FLUSH; to be
   continued (into Side B). Each world is to end in an "encore gone wrong" that leads into the
-  next. `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
-  scripts/tours/encore.timeline 10` (`NATHAN_START=<col>`: start on that column's floor).
+  next: NAT ALONE's (`Gag::Grate`, The Grand Flush's goal) plays its lap under a ceiling, and the
+  last chord's rubber duck bounces Nat up through its grate; Han pops out of the throne below
+  ("Nat?!"), a shutter SLAMs over the hole: Nat upstairs, Han downstairs (into World 4; "find
+  all ten grates" while it's shut). `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
+  scripts/tours/encore.timeline 10` (`NATHAN_START=<col>`: start on that column's floor);
+  NAT ALONE's: `NATHAN_SOLO=10 NATHAN_START=507 ... scripts/tours/encore-solo.timeline`.
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
   header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
@@ -97,7 +101,11 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once Side B's B10 is cleared (the third world),
   Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
   run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
-  tracing knobs for writing one).
+  tracing knobs for writing one). A level can hide a secret (`secret@`: Han glimpsed behind a
+  grate, saved per level in `solo_secrets`; finding one sets the band loose at full freedom
+  until the next decision; all ten open World 4, `Progress::world_4_unlocked`) and name its closing stretch (`shout:`, a column or `row N` in a tower; shout
+  choruses): `src/game/secret.rs`. How a NAT ALONE level is built (the design checklist every level
+  follows, per-level notes, lessons): `docs/level-design.md`; `scripts/held-gaps <tour>` checks its flow rule.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

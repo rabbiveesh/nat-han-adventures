@@ -1,6 +1,8 @@
 //! The story's encore (`game::encore`), played headless: the last level's goal starts an
 //! encore lap instead of the results card; calls are free; the ending knocks Nat into the
-//! throne, Han dives and misses, FLUSH, and then the level is complete.
+//! throne, Han dives and misses, FLUSH, and then the level is complete. NAT ALONE's last level
+//! ends in its own: the duck bounces Nat up through the grate, Han pops out of the throne, the
+//! shutter slams between them.
 
 use std::time::Duration;
 
@@ -8,7 +10,9 @@ use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeU
 use leafwing_input_manager::prelude::*;
 use nat_han_adventures::{
     events::*,
-    game::encore::{CONTINUED_SECS, ENDING_TIMEOUT, Encore, EncorePhase, FLUSH_SECS, LAP_SECS},
+    game::encore::{CONTINUED_SECS, ENDING_TIMEOUT, Encore, EncorePhase, FLUSH_SECS, Gag, LAP_SECS, SLAM_SECS, StageHan, UPSTAIRS_SECS},
+    game::solo::{SOLO_COUNT, SoloRun},
+    game::{GeneratedLevel, secret::HanGlimpse},
     game::sideb::CallMode,
     game::{Han, HanAnim, HanPose, LevelRun, Player, Pos},
     level::{LEVEL_COUNT, Level, Levels},
@@ -27,7 +31,33 @@ const STAGE: &str = "name: Stage
 ##############################
 ";
 
+const SOLO_STAGE: &str = "name: Solo stage
+solo: nat
+---
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+.P...........G................
+##############################
+";
+
 fn app(level: usize) -> App {
+    app_with(level, None)
+}
+
+/// NAT ALONE's level `n` (0-based), on the solo stage.
+fn solo_app(n: usize) -> App {
+    app_with(0, Some(n))
+}
+
+fn app_with(level: usize, solo: Option<usize>) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
         .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
@@ -41,6 +71,10 @@ fn app(level: usize) -> App {
     app.finish();
     app.cleanup();
     app.update();
+    // (After the title's entered: it leaves NAT ALONE.)
+    if let Some(n) = solo {
+        app.insert_resource(SoloRun(n)).insert_resource(GeneratedLevel(Level::parse(SOLO_STAGE).expect("solo stage parses")));
+    }
     app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
     app.update();
     app.update();
@@ -164,3 +198,61 @@ fn the_bands_last_chord_knocks_nat_over() {
     app.world_mut().write_message(FinalHit);
     until(&mut app, EncorePhase::Knocked, 0.1);
 }
+
+#[test]
+fn nat_alone_ends_with_nat_upstairs_and_han_downstairs() {
+    let mut app = solo_app(SOLO_COUNT - 1);
+    KeyCode::ArrowRight.press(app.world_mut());
+    step(&mut app, 1.5);
+    KeyCode::ArrowRight.release(app.world_mut());
+    assert_eq!(phase(&app), Some(EncorePhase::Lap));
+    let e = app.world().resource::<Encore>().clone();
+    assert_eq!(e.gag, Gag::Grate);
+    let seam = e.seam.expect("a ceiling over the stage");
+    assert!((seam.hole - e.throne.x).abs() < 0.01, "the grate's over the throne");
+    // The ceiling's real for Nat in the lap: Giant Steps can't jump through it.
+    tap(&mut app, KeyCode::ArrowDown);
+    for _ in 0..6 {
+        tap(&mut app, KeyCode::Space);
+        tap(&mut app, KeyCode::Space);
+        step(&mut app, 0.2);
+        let nat = pos::<Player>(&mut app);
+        assert!(nat.y < seam.bottom, "under the ceiling: {nat} vs {}", seam.bottom);
+    }
+    until(&mut app, EncorePhase::Ending, LAP_SECS);
+    until(&mut app, EncorePhase::Knocked, ENDING_TIMEOUT + 0.1);
+    // Up through the grate (it breaks), landing on the ceiling's top beside the hole.
+    until(&mut app, EncorePhase::Upstairs, 3.0);
+    let e = app.world().resource::<Encore>().clone();
+    assert!(e.through, "through the grate");
+    let nat = pos::<Player>(&mut app);
+    assert!(nat.y > seam.top, "Nat's upstairs: {nat} vs top {}", seam.top);
+    // Han pops out of the throne and stands under the hole, looking up; "Nat?!".
+    step(&mut app, UPSTAIRS_SECS - 0.1);
+    let han = pos::<StageHan>(&mut app);
+    assert!(han.y < seam.bottom, "Han's downstairs: {han}");
+    assert!((han.x - seam.hole).abs() <= GRATE_HALF + 1.0, "under the hole: {han} vs {}", seam.hole);
+    assert!(app.world_mut().query_filtered::<(), With<HanGlimpse>>().iter(app.world()).next().is_none(), "one Han to talk over");
+    until(&mut app, EncorePhase::Slam, 0.2);
+    until(&mut app, EncorePhase::Continued, SLAM_SECS + 0.2);
+    assert_eq!(app.world().resource::<Encore>().shutter(), 1.0, "the hole's shut");
+    step(&mut app, CONTINUED_SECS + 0.1);
+    assert_eq!(state(&app), AppState::LevelComplete);
+    assert_eq!(counted::<LevelCompleted>(&app), 1);
+    let cues = &app.world().resource::<Cues>().0;
+    for want in ["Boing", "Through", "Slam"] {
+        assert!(cues.iter().any(|c| format!("{c:?}").starts_with(want)), "no {want} cue: {cues:?}");
+    }
+    assert!(!cues.iter().any(|c| matches!(c, EncoreCue::Flush { .. })), "no flush in NAT ALONE");
+}
+
+#[test]
+fn other_nat_alone_levels_end_at_the_goal() {
+    let mut app = solo_app(0);
+    KeyCode::ArrowRight.press(app.world_mut());
+    step(&mut app, 3.0);
+    assert_eq!(state(&app), AppState::LevelComplete);
+    assert!(phase(&app).is_none());
+}
+
+const GRATE_HALF: f32 = nat_han_adventures::game::encore::GRATE_WIDTH / 2.0;

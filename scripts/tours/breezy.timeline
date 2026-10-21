@@ -1,101 +1,66 @@
-# Breezy Does It (levels/solo/breezy.txt): the awnings' tailwind, the ceiling-fan hall, the wind
-# elevator, the bubble bath (drift column to column at the top of each bob), the updraft up to
-# the roof and its holes, the big blow (awning, fan post, toot); then five toots, Down (Giant
-# Steps): the fan floats Nat up the tall wall, and the sunken fans up the next one, to the
-# plunger in the headwind.
-wait 0.3
-hold Right 1.6
-hold Right Space 300ms
-hold Right 0.15
-hold Right Space 300ms
-hold Right 0.6
-at 3.3
-hold Right Space 300ms
-hold Right 0.15
-hold Right Space 300ms
-hold Right 0.5
-at 4.75
-repeat 6
-hold Right Space 200ms
-hold Right 0.22
-end
-hold Right 1.1
-hold Right Space 300ms
-hold Right 1.05
-wait 0.45
-hold Right 0.4
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.4
-wait 0.45
-hold Right 0.4
-wait 0.45
-hold Right 0.45
-wait 0.45
-hold Right 0.5
-wait 0.5
-hold Right 0.3
-hold Right Space 150ms
-hold Right 0.05
-wait 0.2
-hold Right 0.3
-wait 0.3
-hold Right 0.4
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.2
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.2
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.3
-wait 0.3
-hold Right 1.95
-hold Right Space 0.3
-hold Right 0.1
-wait 0.3
-hold Right 0.0
-hold Right Space 0.3
-hold Right 0.2
-hold Right Space 200ms
-hold Right 0.3
-wait 0.3
-hold Right 0.4
-wait 0.3
-repeat 5
-  hold Space 140ms
-  wait 120ms
-  hold Space 140ms
-  wait 0.9
-end
-tap Down
-wait 1.0
-hold Right 1.0
-wait 3
-hold Right 9
-wait 1
+# Breezy Does It (levels/solo/breezy.txt), the Giant Steps route. Fans and floors that won't
+# wait: float over the fan dip, hop the crumbling bridge's hole; float on the sewage fans from
+# one crumbling stone to the next; hop the headwind bridge; jump up into the vent's gust; hop
+# the holes under the ceiling vents (pressed down: jump from the clear spot). At the fork take
+# the high lane, crumbling stones a toot apart, call the band (Down; it lands on bar 8, the
+# song's first turn) and step into the fan pit: the fan blows twice as far and lifts Nat onto
+# the rooftop. Up there: the crumbling bridge, spikes, the gust and a late toot to scoop the
+# best nuggets under the spiky ceiling, then a toot over each spike pit (their nuggets mark the
+# spot; every toot refills Giant Steps), crumbles over spikes, the drop to the bank. The nerve
+# fork: the safe climb (the crumbling ledge, a toot up onto the spiky roof, hop its spikes and
+# its crumbling bridge's hole). The shout chorus from the bank on: the last stretch with the
+# long-reach fans, the vent's gust, the climb out.
+t=0.3 press Right
+t=1.05 tap Space 150ms
+t=3.05 tap Space 150ms
+t=4.9 tap Space 300ms
+t=5.3 release Right
+t=5.85 press Right
+t=6.05 tap Space 100ms
+t=6.55 tap Space 300ms
+t=6.95 release Right
+t=7.5 press Right
+t=7.7 tap Space 100ms
+t=8.13 tap Space 200ms
+t=9.5 tap Space 300ms
+t=9.85 tap Space 100ms
+t=11.6 tap Space 300ms
+t=12.05 tap Space 100ms
+t=14.42 tap Space 150ms
+t=15.45 tap Space 200ms
+t=16.63 tap Space 150ms
+t=18.28 tap Space 300ms
+t=18.63 tap Space 100ms
+t=19.18 tap Space 300ms
+t=19.53 tap Space 100ms
+t=19.93 tap Down
+t=20.40 release Right
+t=20.73 tap Right 120ms
+t=22.40 press Right
+t=22.40 tap Space 100ms
+t=24.40 tap Space 150ms
+t=25.95 tap Space 400ms
+t=27.95 tap Space 300ms
+t=28.55 tap Space 100ms
+t=29.40 tap Space 250ms
+t=30.15 tap Space 200ms
+t=30.68 tap Space 250ms
+t=31.3 tap Space 200ms
+t=32.55 tap Space 200ms
+t=33.25 tap Space 150ms
+t=33.9 tap Space 200ms
+t=36.55 tap Space 200ms
+t=37.95 tap Space 300ms
+t=38.4 tap Space 150ms
+t=39.65 tap Space 300ms
+t=40.25 tap Space 300ms
+t=40.6 tap Space 200ms
+t=41.8 tap Space 200ms
+t=42.85 tap Space 200ms
+t=43.95 tap Space 300ms
+t=47.7 tap Space 250ms
+t=49.95 tap Space 250ms
+t=50.35 tap Space 200ms
+t=51.55 tap Space 200ms
+t=55.3 tap Space 250ms
+at 61

@@ -1,0 +1,61 @@
+# Breezy Does It (levels/solo/breezy.txt), the fired-up route: the fast, risky one. The same
+# start; at the fork take the low lane through its quick nugget line (fired up is the counter
+# filled last), call the band (Down) as the line ends, hop the fan pit, and jump the canal's
+# long gaps with the fired-up stride (jump, toot as he starts to fall): the crumbling island
+# (off it before it drops), the headwind gap (toot early, above the wind), the last island
+# under a ceiling vent (jump from its clear end). Over the bank's hole; at the nerve fork the
+# climb (land on the crumbling ledge by letting go of Right, jump and toot onto the spiky
+# roof, hop along it), then the shout chorus to the plunger: toot off the fans, let go of
+# Right to land on the climb's crumbling stones. Fired up the whole way.
+t=0.3 press Right
+t=1.05 tap Space 150ms
+t=3.05 tap Space 150ms
+t=4.9 tap Space 300ms
+t=5.3 release Right
+t=5.85 press Right
+t=6.05 tap Space 100ms
+t=6.55 tap Space 300ms
+t=6.95 release Right
+t=7.5 press Right
+t=7.7 tap Space 100ms
+t=8.13 tap Space 200ms
+t=9.5 tap Space 300ms
+t=9.85 tap Space 100ms
+t=11.6 tap Space 300ms
+t=12.05 tap Space 100ms
+t=14.42 tap Space 150ms
+t=15.45 tap Space 200ms
+t=16.63 tap Space 150ms
+t=19.28 tap Down
+t=20.30 tap Space 150ms
+t=21.42 tap Space 400ms
+t=21.90 tap Space 300ms
+t=22.74 tap Space 400ms
+t=23.16 tap Space 300ms
+t=23.95 tap Space 400ms
+t=24.4 tap Space 300ms
+t=25.55 tap Space 400ms
+t=26.0 tap Space 300ms
+t=27.33 tap Space 150ms
+t=27.98 tap Space 300ms
+t=28.92 tap Space 280ms
+t=29.15 release Right
+t=29.35 press Right
+t=29.35 tap Space 250ms
+t=29.65 tap Space 200ms
+t=30.22 tap Space 200ms
+t=30.8 tap Space 200ms
+t=31.35 tap Space 300ms
+t=33.32 release Right
+t=34.10 press Right
+t=34.10 tap Space 150ms
+t=35.00 tap Space 300ms
+t=35.65 tap Space 150ms
+t=36.12 tap Space 250ms
+t=36.45 tap Space 200ms
+t=36.65 release Right
+t=37.05 press Right
+t=37.05 tap Space 250ms
+t=37.4 tap Space 200ms
+t=37.93 tap Space 200ms
+at 43.5

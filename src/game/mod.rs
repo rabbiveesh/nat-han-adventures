@@ -21,6 +21,7 @@ mod lifecycle;
 mod physics;
 mod pickups;
 mod platforms;
+pub mod secret;
 pub mod sideb;
 pub mod solo;
 mod visuals;
@@ -124,6 +125,7 @@ pub fn plugin(app: &mut App) {
             adaptive::plugin,
             sideb::plugin,
             solo::plugin,
+            secret::plugin,
             crushers::plugin,
             encore::plugin,
         ));

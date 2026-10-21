@@ -1,118 +1,62 @@
-# Brush Hour (levels/solo/brush.txt): down the stair-well's brush-tipped ledges, along the belts,
-# up the fan relays; then the gallery (hop the posts, onto the tall one and off; low hops onto
-# the low posts under the ceiling fans), down the drain's belt ledges and through the wash; then
-# the long drain: grab the four nuggets, Down (fired up), back off the belt and run its length into
-# one long jump (a little toot, under the brushes) over the bottomless drain; then five toots,
-# Down (Giant Steps), and the fan floats Nat up through the roof to the plunger.
-wait 0.3
-hold Right 0.75
-wait 0.5
-repeat 3
-hold Right Space 100ms
-hold Right 0.2
-wait 0.3
-hold Left Space 100ms
-hold Left 0.2
-wait 0.3
-end
-hold Right 0.9
-hold Right Space 250ms
-hold Right 0.25
-hold Right Space 250ms
-hold Right 0.1
-hold Right Space 250ms
-hold Right 0.4
-hold Right Space 250ms
-hold Right 0.7
-wait 0.4
-hold Right 0.2
-wait 0.4
-hold Left 0.2
-wait 0.4
-hold Right 0.2
-wait 0.4
-hold Left 0.2
-wait 0.4
-hold Right 0.2
-wait 0.4
-hold Left 0.3
-wait 0.4
-hold Right 2.85
-hold Right Space 0.3
-hold Right 0.2
-hold Right 0.1
-hold Right Space 0.3
-wait 0.3
-hold Right Space 200ms
-hold Right 0.1
-hold Right 0.3
-hold Right Space 0.3
-hold Right 0.2
-hold Right 0.7
-hold Right Space 200ms
-hold Right 0.2
-hold Right Space 200ms
-hold Right 0.1
-hold Right 0.3
-hold Right Space 200ms
-hold Right 0.2
-hold Right Space 200ms
-hold Right 0.1
-hold Right 0.7
-wait 0.2
-hold Right 0.15
-hold Right Space 200ms
-hold Right 0.3
-wait 0.1
-hold Left 0.1
-hold Left Space 100ms
-hold Left 0.3
-wait 0.1
-hold Right 0.1
-hold Right Space 100ms
-hold Right 0.3
-wait 0.1
-hold Left 0.1
-hold Left Space 100ms
-hold Left 0.3
-wait 0.1
-hold Right 0.05
-hold Right Space 100ms
-hold Right 0.2
-wait 0.1
-hold Right 0.8
-hold Right Space 300ms
-hold Right 0.2
-hold Right 0.5
-hold Right Space 300ms
-wait 0.1
-hold Right Space 300ms
-hold Right 0.2
-hold Right 0.2
-hold Right Space 300ms
-hold Right 0.3
-hold Right 0.5
-hold Right Space 300ms
-wait 0.1
-hold Right Space 300ms
-hold Right 0.2
-hold Right 2.95
-hold Left Down 0.1
-hold Left 0.9
-wait 0.5
-hold Right 0.7
-hold Right Space 0.35
-hold Right 0.15
-hold Right Space 0.3
-hold Right 0.4
-wait 0.4
-repeat 5
-  hold Space 140ms
-  wait 120ms
-  hold Space 140ms
-  wait 0.9
-end
-tap Down
-wait 1.0
-hold Right 3
-wait 1
+t=0.2 press Right
+t=1.3 tap Space 300ms
+t=1.95 tap Space 300ms
+t=3.6 tap Space 300ms
+t=4.4 tap Space 300ms
+t=5.15 tap Space 300ms
+t=6.0 tap Space 300ms
+t=6.75 tap Space 300ms
+t=7.45 tap Space 300ms
+t=7.8 tap Space 300ms
+t=8.55 tap Space 200ms
+t=8.85 tap Space 300ms
+t=9.5 tap Space 250ms
+t=10.2 tap Space 200ms
+t=10.5 tap Space 150ms
+t=11.1 tap Space 200ms
+t=11.4 tap Space 150ms
+t=13.4 tap Space 300ms
+t=14.08 tap Space 300ms
+t=14.76 tap Space 300ms
+t=15.8 tap Space 200ms
+t=16.1 tap Space 200ms
+t=16.9 tap Space 200ms
+t=17.2 tap Space 200ms
+t=17.9 tap Space 200ms
+t=18.2 tap Space 200ms
+t=18.8 tap Down
+t=18.88 tap Space 220ms
+t=19.18 tap Space 200ms
+t=19.85 tap Space 300ms
+t=20.3 tap Space 200ms
+t=22.0 tap Space 300ms
+t=22.37 tap Space 200ms
+t=23.55 tap Space 300ms
+t=23.95 tap Space 200ms
+t=25.5 tap Space 300ms
+t=25.9 tap Space 200ms
+t=27.5 tap Space 300ms
+t=27.9 tap Space 200ms
+t=28.85 tap Space 300ms
+t=29.95 tap Space 300ms
+t=31.78 tap Space 80ms
+t=32.76 tap Space 80ms
+t=33.74 tap Space 80ms
+t=34.3 tap Space 300ms
+t=37.15 tap Space 300ms
+t=39.05 tap Space 300ms
+t=39.45 tap Space 200ms
+t=41.0 tap Space 300ms
+t=41.42 tap Space 200ms
+t=43.70 tap Space 120ms
+t=45.65 tap Space 120ms
+t=47.25 tap Space 120ms
+t=49.48 tap Space 300ms
+t=49.88 tap Space 200ms
+t=51.08 tap Space 150ms
+t=52.10 tap Space 300ms
+t=52.50 tap Space 200ms
+t=53.45 tap Space 350ms
+t=53.88 tap Space 200ms
+t=55.90 tap Space 300ms
+wait 4

@@ -1,4 +1,5 @@
-//! Han's speech bubble: a world-space bubble above the [`Han`] entity showing his
+//! Han's speech bubble: a world-space bubble above the [`Han`] entity (or Han glimpsed behind a
+//! secret's grate, [`HanGlimpse`]) showing his
 //! [`HanSays`] lines with a typewriter reveal. A newer line replaces the old one once that has
 //! been readable for [`MIN_READ`] after its reveal (lines queue meanwhile, at most
 //! [`QUEUE_MAX`]: a hint right after a checkpoint line doesn't wipe it).
@@ -11,7 +12,7 @@ use bevy::window::PrimaryWindow;
 
 use super::{UiFont, VIRTUAL_HEIGHT, palette::INK};
 use crate::events::HanSays;
-use crate::game::{GameCamera, Han, VisualSet};
+use crate::game::{GameCamera, Han, VisualSet, encore::StageHan, secret::HanGlimpse};
 use crate::state::AppState;
 
 /// Characters per line.
@@ -131,6 +132,11 @@ fn receive(mut commands: Commands, pending: Option<ResMut<Pending>>, mut reader:
     commands.insert_resource(Pending { queue, wait: WAIT_FOR_HAN });
 }
 
+/// Han speaks, or Han behind a secret's grate once Nat's found him.
+fn speaks(glimpse: Option<&HanGlimpse>) -> bool {
+    glimpse.is_none_or(|g| g.found)
+}
+
 /// Still reading the bubble on screen?
 fn reading(b: &SpeechBubble) -> bool {
     let total: usize = b.lines.iter().map(|l| l.chars().count()).sum();
@@ -141,13 +147,13 @@ fn spawn_pending(
     mut commands: Commands,
     pending: Option<ResMut<Pending>>,
     time: Res<Time>,
-    han: Query<(), With<Han>>,
+    han: Query<Option<&HanGlimpse>, Or<(With<Han>, With<HanGlimpse>, With<StageHan>)>>,
     old: Query<(Entity, &SpeechBubble)>,
     font: Option<Res<UiFont>>,
     window: Option<Single<&Window, With<PrimaryWindow>>>,
 ) {
     let Some(mut pending) = pending else { return };
-    if han.is_empty() {
+    if !han.iter().any(speaks) {
         pending.wait -= time.delta_secs();
         if pending.wait <= 0.0 {
             commands.remove_resource::<Pending>();
@@ -251,7 +257,10 @@ fn typewriter(
 #[allow(clippy::type_complexity)]
 fn follow(
     mut commands: Commands,
-    han: Query<(&Transform, &GlobalTransform, Has<ChildOf>), (With<Han>, Without<SpeechBubble>, Without<BubbleBox>)>,
+    han: Query<
+        (&Transform, &GlobalTransform, Has<ChildOf>, Option<&HanGlimpse>),
+        (Or<(With<Han>, With<HanGlimpse>, With<StageHan>)>, Without<SpeechBubble>, Without<BubbleBox>),
+    >,
     camera: Query<(&Transform, &Projection), (With<GameCamera>, Without<SpeechBubble>, Without<BubbleBox>, Without<Han>)>,
     mut bubbles: Query<(Entity, &mut Transform, &mut Visibility), (With<SpeechBubble>, Without<BubbleBox>)>,
     mut boxes: Query<(&BubbleBox, &mut Transform), Without<SpeechBubble>>,
@@ -263,7 +272,10 @@ fn follow(
         }
         _ => None,
     });
-    let pos = han.iter().next().map(|(t, g, child)| if child { g.translation() } else { t.translation });
+    let pos = han
+        .iter()
+        .find(|h| speaks(h.3))
+        .map(|(t, g, child, _)| if child { g.translation() } else { t.translation });
     for (e, mut t, mut vis) in &mut bubbles {
         let Some(p) = pos else {
             commands.entity(e).despawn();

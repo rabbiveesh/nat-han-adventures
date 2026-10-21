@@ -9,7 +9,7 @@
 
 use bevy::prelude::*;
 
-use super::{CONTINUED_SECS, ENDING_TIMEOUT, Encore, EncorePhase, Finale, LAP_SECS, THRONE_OFFSET};
+use super::{CONTINUED_SECS, ENDING_TIMEOUT, Encore, EncorePhase, Gag, LAP_SECS, THRONE_OFFSET};
 use crate::events::{EncoreCue, FinalHit, HanSays};
 use crate::game::physics::{Body, Finished};
 use crate::game::{ActiveLevel, Groove, Han, HanAnim, HanPose, LevelRun, Nudge, Player, Pos, cell_floor};
@@ -82,7 +82,9 @@ pub fn start(commands: &mut Commands, active: &ActiveLevel, run: &LevelRun, han:
     }
     let half = Body::player().half.x;
     commands.insert_resource(Encore {
-        finale: Finale::SideB,
+        gag: Gag::Plunge,
+        seam: None,
+        through: false,
         phase: EncorePhase::Lap,
         t: 0.0,
         calls: 0,
@@ -236,7 +238,7 @@ pub(super) fn run(
                 next.set(AppState::LevelSelect);
             }
         }
-        EncorePhase::Knocked | EncorePhase::Flushing => {}
+        EncorePhase::Knocked | EncorePhase::Flushing | EncorePhase::Upstairs | EncorePhase::Slam => {}
     }
     // Nat: hidden in the beacon's spot until the plunger brings him up.
     let Ok((nat, mut np, mut tf, finished)) = nat.single_mut() else { return };

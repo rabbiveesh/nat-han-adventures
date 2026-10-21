@@ -1,0 +1,65 @@
+# Breezy Does It (levels/solo/breezy.txt), the no-call route. The same start; at the fork call
+# nothing and drop past the canal into the tunnel: hop the spikes, toot over the crumbling pit
+# into the hurdle's headwind. Under the last island the secret: a fan in the floor blows up a
+# slot; stop in it (let go of Right), float up into the nook, and there's Han behind a grate
+# ("Nat?!"). Drop out through the hole, on under the bank (another crumbling pit, the low crawl
+# into the wind, the hurdle), up the fan and the crumbling ledge to the bank. The nerve fork:
+# the spiky low line, little hops from crumbling stone to stone under the ceiling spikes. The
+# shout chorus to the plunger: hover in the fan, toot onto the crumbling stone, the vent's
+# gust, the climb out (jump off each stone and toot over the next fan).
+t=0.3 press Right
+t=1.05 tap Space 150ms
+t=3.05 tap Space 150ms
+t=4.9 tap Space 300ms
+t=5.3 release Right
+t=5.85 press Right
+t=6.05 tap Space 100ms
+t=6.55 tap Space 300ms
+t=6.95 release Right
+t=7.5 press Right
+t=7.7 tap Space 100ms
+t=8.13 tap Space 200ms
+t=9.5 tap Space 300ms
+t=9.85 tap Space 100ms
+t=11.6 tap Space 300ms
+t=12.05 tap Space 100ms
+t=14.42 tap Space 150ms
+t=15.45 tap Space 200ms
+t=16.63 tap Space 150ms
+t=23.7 tap Space 300ms
+t=24.05 tap Space 250ms
+t=27.45 release Right
+t=27.98 press Left
+t=28.3 tap Space 150ms
+t=28.7 release Left
+t=29.1 press Right
+t=31.7 tap Space 100ms
+t=33.75 tap Space 300ms
+t=34.75 release Right
+t=35.38 press Right
+t=35.38 tap Space 150ms
+t=35.85 tap Space 250ms
+t=36.15 tap Space 150ms
+t=36.85 tap Space 100ms
+t=37.72 tap Space 100ms
+t=38.15 tap Space 100ms
+t=38.57 tap Space 100ms
+t=39.0 tap Space 100ms
+t=39.42 tap Space 100ms
+t=39.85 tap Space 100ms
+t=40.27 tap Space 100ms
+t=40.65 tap Space 100ms
+t=42.42 release Right
+t=43.0 press Right
+t=43.0 tap Space 150ms
+t=44.15 tap Space 250ms
+t=44.5 tap Space 200ms
+t=45.15 tap Space 200ms
+t=45.65 tap Space 250ms
+t=46.1 tap Space 200ms
+t=46.62 tap Space 250ms
+t=47.05 tap Space 200ms
+t=47.55 tap Space 200ms
+t=20.45 tap Space 150ms
+t=22.88 tap Space 150ms
+at 53
