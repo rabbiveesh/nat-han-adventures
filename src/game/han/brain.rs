@@ -767,7 +767,11 @@ pub(super) fn think(
         input = charge(level, &pos.0, &body, &brain.ctl, on_plat, brain.maze, leaps, (impatient, climbs), dir, &plats, &mut brain.boarding);
         if body.on_ground {
             brain.leapt = input.jump;
-        } else if !brain.leapt {
+        } else if !brain.leapt && !{
+            // (A fan's updraft lifts him without a jump: his toot still rides it.)
+            let (c, r) = level.cell_at(pos.0);
+            level.updraft(c, r)
+        } {
             input.toot = false;
         }
         // Grease: no jumping off it (his speed is all he takes over its edge).
