@@ -13,7 +13,7 @@
 //! | Front line | a clarinet obbligato: runs while the tune holds, long notes while it moves | a trombone: guide tones, smeared into | two-beat (root, fifth) |
 //! | Canon | the tune a bar later (two beats in the section's last two bars: stretto), an octave down, bent to the chords | guide tones | walks |
 //! | Chorale | guide tones, suspended over the bar line | the other guide tones | half notes against the tune |
-//! | Answers | rests while the tune plays, answers each gap with its last motif (inverted or moved a step) | under the answer | walks |
+//! | Answers | a background figure behind the busy tune, and in each gap an answer: its last motif (inverted or moved a step) | under both | walks |
 //! | Line cliché | a long chord tone | 5 ♯5 6 ♭7 (minor: 1 7 ♭7 6) under a long chord | a pedal |
 //! | Locked | drop-2 under every tune note | (a diminished chord under a passing note) | hits with the line |
 //!
@@ -154,6 +154,14 @@ pub struct Bar<'a> {
     /// Where an 8th written at a beat starts (swung).
     pub swing: &'a dyn Fn(f64) -> f64,
 }
+
+/// The answers' background figures behind a busy tune (beat, length; the off-beats swung):
+/// Charleston pads, off-beat punches, a long-short-long.
+const BACKGROUNDS: [&[(f64, f64)]; 3] = [
+    &[(0.0, 1.4), (1.5, 0.45), (2.5, 1.4)],
+    &[(0.5, 0.35), (1.5, 0.35), (2.5, 0.35), (3.5, 0.4)],
+    &[(0.0, 0.9), (1.5, 1.0), (3.0, 0.9)],
+];
 
 /// The voices' registers.
 pub const ALTO: (i32, i32) = (55, 84);
@@ -784,6 +792,36 @@ impl Writer {
             }
             last_attack = Some(t.b);
         }
+        // Behind the tune where it's busy: a background figure (the section's own, as a band's
+        // backgrounds go), guide tones in both voices, out of the gaps' way.
+        let figure = BACKGROUNDS[bar.plan.section as usize % BACKGROUNDS.len()];
+        for &(b0, d) in figure {
+            let b = (bar.swing)(b0);
+            if b >= bb - 1e-6 || gaps[..g].iter().any(|&(s, e)| b < e + 0.25 && b + d > s) {
+                continue;
+            }
+            let Some(h) = (bar.harm)(b) else { continue };
+            let d = d.min(bb - b);
+            let (ag, k) = self.against(bar, b, A);
+            let mut w = Want::new(ALTO, at(bar.lead, b).map_or(64, |l| l as i32 - 7), self.prev_of(A, b), h, true);
+            w.guide = true;
+            w.against = &ag[..k];
+            w.below = at(bar.lead, b).or(before(bar.lead, b, None));
+            w.repeat = 0.5;
+            let a = pick(&w, r);
+            push(&mut self.alto, Tone::new(b, d, a));
+            if bar.plan.tenor {
+                let (ag, k) = self.against(bar, b, T);
+                let mut w = Want::new(TENOR, a as i32 - 6, self.prev_of(T, b), h, true);
+                w.guide = true;
+                w.against = &ag[..k];
+                w.below = Some(a);
+                w.above = at(&self.bass, b).map(|x| x.saturating_add(4));
+                w.repeat = 0.5;
+                let t = pick(&w, r);
+                push(&mut self.tenor, Tone::new(b, d, t));
+            }
+        }
         for &(s, e) in &gaps[..g] {
             // The motif: the tune's last notes before the gap (this bar's, else the last bar's).
             let mut motif = [0u8; 4];
@@ -830,6 +868,8 @@ impl Writer {
                 }
             }
         }
+        self.alto.sort_unstable_by(|x, y| x.b.total_cmp(&y.b));
+        self.tenor.sort_unstable_by(|x, y| x.b.total_cmp(&y.b));
     }
 
     /// The line cliché: under a chord a whole bar long (or more), the tenor creeps 5 ♯5 6 ♭7
