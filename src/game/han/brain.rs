@@ -764,7 +764,9 @@ pub(super) fn think(
         // (Fired up he won't wait for a ferry, and in Giant Steps not for a lift: he jumps.)
         let impatient = brain.maze && groove.fired_up();
         let climbs = brain.maze && groove.giant_steps();
-        input = charge(level, &pos.0, &body, &brain.ctl, on_plat, brain.maze, leaps, (impatient, climbs), dir, &plats, &mut brain.boarding);
+        // (Where each platform will be as he lands on it: a ferry pulling away is no ferry yet.)
+        let soon: Vec<Vec2> = plats.iter().map(|(_, m)| platform_pos(m, clock.platform_time + BOARD_LEAD * groove.platform_rate())).collect();
+        input = charge(level, &pos.0, &body, &brain.ctl, on_plat, brain.maze, leaps, (impatient, climbs), dir, (&plats, &soon), &mut brain.boarding);
         if body.on_ground {
             brain.leapt = input.jump;
         } else if !brain.leapt && !{
@@ -948,6 +950,8 @@ fn move_towards_v(from: Vec2, to: Vec2, step: f32) -> Vec2 {
 
 /// How far ahead (px) Han sees drips coming: enough to stop short at full tilt.
 pub const DRIP_BERTH: f32 = 12.0;
+/// How far ahead (s) Han looks at a platform he'd jump onto: about his hop's air time.
+const BOARD_LEAD: f32 = 0.4;
 
 /// How far (columns) Han jumps off a platform for the ground ahead.
 const RIDE_LEAP: i32 = 3;
@@ -964,7 +968,7 @@ const RIDE_LEAP: i32 = 3;
 /// a lift he rides to the top. In a maze (`turns: walls`) he won't walk into drips he's too big
 /// for, and fired up (`leaps`) he jumps a hole he'd otherwise drop down.
 #[allow(clippy::too_many_arguments)]
-fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, maze: bool, leaps: bool, (impatient, climbs): (bool, bool), dir: f32, plats: &[(Vec2, MovingPlatform)], boarding: &mut bool) -> HanInput {
+fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, maze: bool, leaps: bool, (impatient, climbs): (bool, bool), dir: f32, (plats, soon): (&[(Vec2, MovingPlatform)], &[Vec2]), boarding: &mut bool) -> HanInput {
     // (His own size: melting shrinks him.)
     let half = body.half;
     let tile_at = |dx: f32, dy: f32| {
@@ -1054,7 +1058,7 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, m
         let mut track = false;
         let mut ready = false;
         let mut far = f32::INFINITY;
-        for (p, m) in plats {
+        for ((p, m), later) in plats.iter().zip(soon) {
             let w = m.width as f32 * TILE / 2.0;
             let (a, b) = (m.base, m.base + m.travel);
             let (x0, x1) = (a.x.min(b.x) - w, a.x.max(b.x) + w);
@@ -1065,10 +1069,13 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, m
             track = true;
             // Here now: its near end within a couple of tiles, its top under him or a hop up.
             let top = p.y + TILE / 2.0;
-            let gap = (if dir > 0.0 { p.x - w - (pos.x + half.x) } else { (pos.x - half.x) - (p.x + w) }).max(0.0);
+            let gap_to = |x: f32| (if dir > 0.0 { x - w - (pos.x + half.x) } else { (pos.x - half.x) - (x + w) }).max(0.0);
+            let gap = gap_to(p.x);
             // (A lift: it's under him or across his way, not ahead.)
             let under = (p.x - pos.x).abs() < w + half.x;
-            if (gap < 1.5 * TILE || under) && top < feet + 1.5 * TILE && top > feet - 3.0 * TILE {
+            // (Still there when he lands: not pulling away, not dropping out of reach.)
+            let stays = gap_to(later.x) < 1.5 * TILE && later.y + TILE / 2.0 > feet - 3.0 * TILE;
+            if (gap < 1.5 * TILE || under) && stays && top < feet + 1.5 * TILE && top > feet - 3.0 * TILE {
                 ready = true;
                 far = far.min(gap);
             }
