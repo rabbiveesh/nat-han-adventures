@@ -102,6 +102,7 @@ pub const TEMPLATES: &[Template] = &[
     // A set (`super::sets`): rooftop over the canal, its bridge the crossroads' fork.
     Template { name: "rooftop set", skill: Skill::GiantSteps, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::rooftop },
     Template { name: "rooftop set", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::rooftop },
+    Template { name: "ferry set", skill: Skill::MovingPlatforms, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::ferry },
     Template { name: "gadget duet", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: H, build: gadget_duet },
 ];
 
@@ -135,7 +136,7 @@ pub fn unlocked_skills(unlocks: impl Into<Unlocks>) -> Vec<Skill> {
     out
 }
 
-fn lerp(band: Band, lo: f32, hi: f32) -> f32 {
+pub(super) fn lerp(band: Band, lo: f32, hi: f32) -> f32 {
     lo + (hi - lo) * t(band)
 }
 

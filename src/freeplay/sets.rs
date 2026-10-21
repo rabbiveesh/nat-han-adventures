@@ -13,15 +13,24 @@
 //! difficulty is the set's band, once for all four sections. A checkpoint sits on the turns
 //! into the bridge and the shout.
 //!
-//! The one motif so far is **rooftop over the canal**: rooftops of wandering heights over a
-//! sewage canal, hops and toot gaps between them, chimneys to hop and awnings with nuggets
-//! over the gaps.
+//! The motifs ([`Motif`]):
+//! - **rooftop over the canal**: rooftops of wandering heights over a sewage canal, hops and
+//!   toot gaps between them, chimneys to hop and awnings with nuggets over the gaps;
+//! - **sewer ferries**: rubber-duck ferries across the canal under hanging spikes (ride low: a
+//!   jump fits under them, a toot doesn't), plunger lifts up to the next roof.
 
 use super::canvas::Canvas;
 use super::dice::Dice;
-use super::templates::{Built, CANAL_RISE, Dressing, fork, lerpi};
+use super::templates::{Built, CANAL_RISE, Dressing, fork, lerp, lerpi};
 use crate::adapt::Band;
-use crate::level::Topic;
+use crate::level::{PlatformKind, Topic};
+
+/// What a set is grown from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Motif {
+    Rooftop,
+    Ferry,
+}
 
 /// What the variation changes about the head's motif.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -30,6 +39,10 @@ pub enum Change {
     Crumble,
     /// Flies hover over the gaps: every hop is a flat one, under them.
     Flies,
+    /// The ferries come in pairs: off one duck onto the next mid-canal.
+    Convoy,
+    /// The ferries are quicker and smaller.
+    Rush,
 }
 
 /// A section's part in the set.
@@ -49,8 +62,13 @@ pub struct Chart {
 }
 
 impl Chart {
-    pub fn new(d: &mut Dice, band: Band) -> Chart {
-        let change = if band >= 3 && d.chance(0.5) { Change::Flies } else { Change::Crumble };
+    pub fn new(d: &mut Dice, band: Band, motif: Motif) -> Chart {
+        let change = match motif {
+            Motif::Rooftop if band >= 3 && d.chance(0.5) => Change::Flies,
+            Motif::Rooftop => Change::Crumble,
+            Motif::Ferry if d.chance(0.5) => Change::Convoy,
+            Motif::Ferry => Change::Rush,
+        };
         Chart {
             sections: [
                 (Role::Head, 50 + d.int(0, 8) as usize),
@@ -67,10 +85,20 @@ pub const SET_H: usize = super::templates::CROSS_H;
 
 /// Rooftop over the canal, as a free play room: the whole set on one canvas.
 pub fn rooftop(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
-    let chart = Chart::new(d, band);
+    set(c, d, band, Motif::Rooftop)
+}
+
+/// Sewer ferries, as a free play room.
+pub fn ferry(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
+    set(c, d, band, Motif::Ferry)
+}
+
+/// A whole set on one canvas.
+fn set(c: &mut Canvas, d: &mut Dice, band: Band, motif: Motif) -> Built {
+    let chart = Chart::new(d, band, motif);
     let f = c.floor();
     let k = f - CANAL_RISE;
-    let mut s = Lay { top: f, nuggets: 0, budget: 0 };
+    let mut s = Lay { motif, top: f, nuggets: 0, budget: 0, ferries: 0 };
     for &(role, len) in &chart.sections {
         match role {
             // Up from the floor to the canal's level over the head.
@@ -101,9 +129,12 @@ pub fn rooftop(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
 
 /// Laying a section's beats: the current roof's surface row, nuggets placed so far.
 struct Lay {
+    motif: Motif,
     top: usize,
     nuggets: usize,
     budget: usize,
+    /// Ferries (and lifts) left for this section: a room has at most 9 moving platforms.
+    ferries: usize,
 }
 
 /// Nuggets a section lays at most: the shout's are the best ones (the bridge's own come on
@@ -144,6 +175,7 @@ impl Lay {
     ) {
         self.nuggets = 0;
         self.budget = budget(role);
+        self.ferries = 3;
         // A section opens on a roof (never on a gap right out of the pipe or the checkpoint).
         c.ground(2, self.top);
         let x0 = c.width();
@@ -167,6 +199,20 @@ impl Lay {
             }
             last = beat as usize;
             let w = d.int(2, widest as i32) as usize;
+            if self.motif == Motif::Ferry {
+                // Every other beat a ferry or a lift (while there are platforms left), hops between.
+                let rush = role == Role::Variation(Change::Rush) || (shout && band >= 5);
+                let convoy = role == Role::Variation(Change::Convoy) || shout;
+                if beat % 2 == 0 && self.ferries > 0 {
+                    if self.top > aim + 2 && self.top >= lo + 3 {
+                        self.lift(c, d, band, (self.top - aim).clamp(3, 4));
+                    } else {
+                        self.ferry(c, d, band, convoy && self.ferries >= 2, rush);
+                    }
+                    continue;
+                }
+                beat = if beat == 2 { 0 } else { beat };
+            }
             match beat {
                 // A hop: a short gap, a step up or down.
                 0 => {
@@ -216,6 +262,47 @@ impl Lay {
                 }
             }
         }
+    }
+
+    /// A duck ferry across the canal (two in a row for a convoy), under hanging spikes: a jump
+    /// fits under them, a toot doesn't. Nuggets ride along.
+    fn ferry(&mut self, c: &mut Canvas, d: &mut Dice, band: Band, convoy: bool, rush: bool) {
+        let pw = if rush { 2 } else { lerpi(band, 3.0, 2.0) };
+        let w = if convoy { d.int(11, 13) as usize } else { d.int(6, 8) as usize };
+        let period = d.u() * 0.4 + if rush { lerp(band, 3.0, 2.2) } else { lerp(band, 3.8, 2.8) };
+        let x = c.width();
+        c.pool(w);
+        let top = self.top;
+        if convoy {
+            let half = w / 2;
+            c.platform(x, top, pw, (half - pw) as f32, 0.0, period, d.u(), PlatformKind::Duck);
+            c.platform(x + half, top, pw, (w - half - pw) as f32, 0.0, period, d.u(), PlatformKind::Duck);
+            self.ferries -= 2;
+        } else {
+            c.platform(x, top, pw, (w - pw) as f32, 0.0, period, d.u(), PlatformKind::Duck);
+            self.ferries -= 1;
+        }
+        // Spikes hanging overhead (no pipe: nothing to climb onto), not over the first and last
+        // columns: room to jump on and off.
+        for j in x + 2..x + w - 1 {
+            c.set(j, top - 5, b'v');
+        }
+        self.nugget(c, x + w / 3, top - 1);
+        self.nugget(c, x + 2 * w / 3, top - 1);
+        self.land(c, d.int(2, 3) as usize, top, false);
+    }
+
+    /// A plunger lift `h` up out of a pit to the next roof.
+    fn lift(&mut self, c: &mut Canvas, d: &mut Dice, band: Band, h: usize) {
+        let pw = lerpi(band, 3.0, 2.0);
+        let period = d.u() * 0.4 + lerp(band, 3.4, 2.6);
+        let x = c.width();
+        c.pit(pw + 1);
+        c.platform(x, self.top, pw, 0.0, h as f32, period, d.u(), PlatformKind::Plunger);
+        self.ferries -= 1;
+        let top = self.top - h;
+        self.land(c, 3, top, false);
+        self.nugget(c, x + pw + 2, top - 1);
     }
 
     /// The next roof's row: `want` tiles up (negative: down) from this one, at most `up` up and

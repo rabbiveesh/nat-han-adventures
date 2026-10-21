@@ -13,7 +13,7 @@ use nat_han_adventures::{
     audio::{self, capture::AudioCapture},
     capture::{frame_duration, timeline::keyboard_input},
     events::PlayerDied,
-    game::{Body, Player, Pos},
+    game::{Body, MovingPlatform, Player, Pos, SimClock, platform_pos},
     level::{Level, Levels, TILE, Tile},
     state::AppState,
 };
@@ -33,6 +33,11 @@ struct Bot {
     deaths: Vec<(u64, f32, f32)>,
     trace: bool,
     takeoff: i32,
+    /// The moving platforms and their clock, this frame.
+    plats: Vec<MovingPlatform>,
+    ptime: f32,
+    /// Frames spent waiting at an edge.
+    waited: u64,
     gravity: f32,
 }
 
@@ -74,17 +79,32 @@ impl Bot {
 /// stand on no lower than row `floor`, `false` in something deadly, off the bottom, against a
 /// wall, or down a shaft.
 fn lands_safe(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32) -> bool {
-    lands_safe_tooting(b, pos, vel, half, floor, None)
+    lands_safe_tooting(b, pos, vel, half, floor, None, false)
 }
 
-/// [`lands_safe`], tooting after `toot` seconds.
-fn lands_safe_tooting(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32, toot: Option<f32>) -> bool {
+/// [`lands_safe`], tooting after `toot` seconds; `walk`: starting on the ground, walking on
+/// until it ends.
+fn lands_safe_tooting(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32, toot: Option<f32>, mut walk: bool) -> bool {
     let rows = b.level.height as f32;
     let (mut p, mut v) = (pos, vel);
+    let top_speed = vel.x.max(150.0);
     let dt = 1.0 / 120.0;
     for step in 0..360 {
         if toot.is_some_and(|t| (step as f32 * dt - t).abs() < dt / 2.0) {
             v.y = 330.0;
+        }
+        v.x = (v.x + 1000.0 * dt).min(top_speed);
+        if walk {
+            let feet = rows - (p.y - half.y) / TILE;
+            let (l, r) = (((p.x - half.x) / TILE + 0.02).floor() as i32, ((p.x + half.x) / TILE - 0.02).floor() as i32);
+            walk = (l..=r).any(|col| b.standable(col, feet.round() as i32));
+            if walk {
+                p.x += v.x * dt;
+                if b.level.tile(((p.x + half.x) / TILE).floor() as i32, feet.round() as i32 - 1).is_solid() {
+                    return false;
+                }
+                continue;
+            }
         }
         v.y = (v.y - b.gravity * dt).max(-420.0);
         let feet_before = rows - (p.y - half.y) / TILE;
@@ -106,6 +126,18 @@ fn lands_safe_tooting(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32, too
                 }
             }
         }
+        // Landing on a moving platform.
+        let t = b.ptime + (step + 1) as f32 * dt;
+        if v.y < 0.0 {
+            for plat in &b.plats {
+                let at = platform_pos(plat, t);
+                let (top, hw) = (at.y + TILE / 2.0, plat.width as f32 * TILE / 2.0);
+                let (was, now) = (p.y - v.y * dt - half.y, p.y - half.y);
+                if was >= top - 1.0 && now <= top + 1.0 && (p.x - at.x).abs() < hw + half.x - 2.0 {
+                    return rows - top / TILE <= floor as f32 + 1.0;
+                }
+            }
+        }
         // Crossing a tile's top on the way down.
         if v.y < 0.0 && feet.floor() > feet_before.floor() {
             let row = feet.floor() as i32;
@@ -123,8 +155,16 @@ fn lands_safe_tooting(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32, too
     false
 }
 
-fn drive(mut bot: ResMut<Bot>, nat: Query<(&Pos, &Body), With<Player>>, mut out: MessageWriter<KeyboardInput>) {
+fn drive(
+    mut bot: ResMut<Bot>,
+    nat: Query<(&Pos, &Body), With<Player>>,
+    plats: Query<&MovingPlatform>,
+    clock: Res<SimClock>,
+    mut out: MessageWriter<KeyboardInput>,
+) {
     let b = &mut *bot;
+    b.plats = plats.iter().cloned().collect();
+    b.ptime = clock.platform_time;
     // (A beat to start, as the tours do: the game takes a moment to take keys.)
     let Ok((pos, body)) = nat.single().map_err(drop).and_then(|n| if b.frame < 9 { Err(()) } else { Ok(n) }) else {
         b.frame += 1;
@@ -136,7 +176,6 @@ fn drive(mut bot: ResMut<Bot>, nat: Query<(&Pos, &Body), With<Player>>, mut out:
     let feet = rows - (pos.0.y - body.half.y) / TILE;
     let stand = (feet - 0.5).floor() as i32;
     let front = (x + body.half.x / TILE + 0.05).floor() as i32;
-    b.set(KeyCode::ArrowRight, true, &mut out);
     if let Some(c) = b.call
         && !b.called
         && x >= c
@@ -167,6 +206,24 @@ fn drive(mut bot: ResMut<Bot>, nat: Query<(&Pos, &Body), With<Player>>, mut out:
                 b.space_since = None;
                 b.set(KeyCode::Space, false, &mut out);
             }
+            b.set(KeyCode::ArrowRight, true, &mut out);
+            b.frame += 1;
+            return;
+        }
+        let jump = Vec2::new(body.vel.x.max(0.0), 380.0);
+        // A jump lands somewhere, maybe with a toot at or after its top.
+        let jump_lands = |b: &Bot| {
+            lands_safe(b, pos.0, jump, body.half, stand + 4)
+                || [0.27, 0.4, 0.5].iter().any(|&t| lands_safe_tooting(b, pos.0, jump, body.half, stand + 4, Some(t), false))
+        };
+        if body.riding.is_some() {
+            // On a ferry or a lift: ride it until a jump lands.
+            let go = jump_lands(b);
+            b.set(KeyCode::ArrowRight, go, &mut out);
+            if go {
+                b.space_since = Some(b.frame);
+                b.set(KeyCode::Space, true, &mut out);
+            }
             b.frame += 1;
             return;
         }
@@ -175,18 +232,20 @@ fn drive(mut bot: ResMut<Bot>, nat: Query<(&Pos, &Body), With<Player>>, mut out:
         let wall = b.level.tile(front + 1, stand).is_solid() || b.level.tile(front + 1, stand - 1).is_solid();
         let deadly = (stand..=stand + 1).any(|r| b.level.tile(front + 1, r).is_deadly());
         // (Over a pit: walk off instead when only that lands somewhere, e.g. off an awning
-        // onto the roof below it.)
-        let off = Vec2::new((front + 1) as f32 * TILE + body.half.x + 0.5, pos.0.y);
-        let walk_instead = pit
-            && !wall
-            && !deadly
-            && !lands_safe(b, pos.0, Vec2::new(150.0, 380.0), body.half, stand + 4)
-            && lands_safe(b, off, Vec2::new(150.0, 0.0), body.half, stand + 4);
-        if (pit || wall || deadly) && !walk_instead {
+        // onto the roof below it; or wait at the edge for a ferry.)
+        let (mut walk_instead, mut wait) = (false, false);
+        if pit && !wall && !deadly && !jump_lands(b) {
+            walk_instead = lands_safe_tooting(b, pos.0, Vec2::new(body.vel.x.max(0.0), 0.0), body.half, stand + 4, None, true);
+            wait = !walk_instead && b.waited < 5 * FPS as u64;
+        }
+        b.waited = if wait { b.waited + 1 } else { 0 };
+        b.set(KeyCode::ArrowRight, !wait, &mut out);
+        if (pit || wall || deadly) && !walk_instead && !wait {
             b.space_since = Some(b.frame);
             b.set(KeyCode::Space, true, &mut out);
         }
     } else {
+        b.set(KeyCode::ArrowRight, true, &mut out);
         // In the air: hold the jump to its top; then toot when the fall ends badly.
         if b.space_since.is_some() && body.vel.y <= 0.0 {
             b.space_since = None;
@@ -197,8 +256,8 @@ fn drive(mut bot: ResMut<Bot>, nat: Query<(&Pos, &Body), With<Player>>, mut out:
             let safe = lands_safe(b, pos.0, vel, body.half, floor);
             // Toot as late as still works (the later, the farther), or at the takeoff's height
             // when nothing works.
-            let now = lands_safe_tooting(b, pos.0, vel, body.half, floor, Some(0.0));
-            let later = lands_safe_tooting(b, pos.0, vel, body.half, floor, Some(2.0 / FPS as f32));
+            let now = lands_safe_tooting(b, pos.0, vel, body.half, floor, Some(0.0), false);
+            let later = lands_safe_tooting(b, pos.0, vel, body.half, floor, Some(2.0 / FPS as f32), false);
             let low = feet >= b.takeoff as f32 + 1.0;
             if b.trace {
                 eprintln!("  falling col {x:.2} feet {feet:.2} safe {safe} toot now {now} later {later}");
@@ -243,6 +302,9 @@ fn bot_plays_a_level() {
         deaths: Vec::new(),
         trace: std::env::var("BOT_TRACE").is_ok(),
         takeoff: 0,
+        plats: Vec::new(),
+        ptime: 0.0,
+        waited: 0,
         gravity: nat_han_adventures::game::tuning::GRAVITY,
     })
     .add_systems(PreUpdate, drive.before(bevy::input::InputSystems))
