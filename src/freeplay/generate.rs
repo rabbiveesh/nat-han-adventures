@@ -245,6 +245,12 @@ impl Room {
 
 /// Draw attempt `attempt` of `plan` (no validation).
 pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
+    let src = draw_text(seed, plan, attempt);
+    Level::parse(&src).unwrap_or_else(|e| panic!("free play canvas made a bad level ({e}):\n{src}"))
+}
+
+/// [`draw`]'s level text.
+pub fn draw_text(seed: u32, plan: &RoomPlan, attempt: u32) -> String {
     let mut d = Dice::new(stream(seed, ROOM_STREAM, plan.index as u64 * 1024 + attempt as u64));
     let mut c = Canvas::with_height(plan.template().height);
     let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal, side_b: plan.side_b, solo: plan.solo };
@@ -263,7 +269,7 @@ pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
         c.checkpoint(col, row, "On the house!");
     }
     let min_nuggets = if plan.template().alone() { 0 } else { super::canvas::MIN_NUGGETS };
-    c.finish_with(plan.world, plan.line, min_nuggets)
+    c.finish_text(plan.world, plan.line, min_nuggets)
 }
 
 /// Validate a drawn room: the report, with its errors.

@@ -38,6 +38,7 @@ pub mod dice;
 pub mod generate;
 pub mod offload;
 pub mod run;
+pub mod sets;
 pub mod templates;
 pub mod ui;
 

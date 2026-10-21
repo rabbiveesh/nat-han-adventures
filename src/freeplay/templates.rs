@@ -10,6 +10,7 @@
 //! any other room's, so a new gate kind needs only the validator to know it.
 
 use super::alone::{self, ALONE_H};
+use super::sets::{self, SET_H};
 use super::canvas::*;
 use super::dice::{Dice, t};
 use crate::adapt::{Band, Skill};
@@ -98,6 +99,9 @@ pub const TEMPLATES: &[Template] = &[
     // The crossroads: three roads, the call picks one (served for either mode's skill).
     Template { name: "crossroads", skill: Skill::GiantSteps, unlock: 2, side_b: 0, solo: 0, height: CROSS_H, build: crossroads },
     Template { name: "crossroads", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: CROSS_H, build: crossroads },
+    // A set (`super::sets`): rooftop over the canal, its bridge the crossroads' fork.
+    Template { name: "rooftop set", skill: Skill::GiantSteps, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::rooftop },
+    Template { name: "rooftop set", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::rooftop },
     Template { name: "gadget duet", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: H, build: gadget_duet },
 ];
 
@@ -135,12 +139,12 @@ fn lerp(band: Band, lo: f32, hi: f32) -> f32 {
     lo + (hi - lo) * t(band)
 }
 
-fn lerpi(band: Band, lo: f32, hi: f32) -> usize {
+pub(super) fn lerpi(band: Band, lo: f32, hi: f32) -> usize {
     lerp(band, lo, hi).round().max(0.0) as usize
 }
 
 /// Nuggets in an arc over columns `c0..c0+n` peaking `h` rows above `stand`.
-fn arc(c: &mut Canvas, c0: usize, n: usize, stand: usize, h: usize) {
+pub(super) fn arc(c: &mut Canvas, c0: usize, n: usize, stand: usize, h: usize) {
     for k in 0..n {
         let x = (k as f32 + 0.5) / n as f32 * 2.0 - 1.0;
         let up = ((1.0 - x * x) * h as f32).round() as usize;
@@ -1146,9 +1150,12 @@ fn beat_hall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 
 /// A crossroads room's rows: the rooftop, the canal and the tunnel stacked.
 pub const CROSS_H: usize = 32;
+/// How far above the floor the crossroads' canal is (out of every mode's reach from the
+/// tunnel floor under it).
+pub const CANAL_RISE: usize = 11;
 
 /// A column of `ch` over rows `r0..=r1` (pairs), open air elsewhere.
-fn stack(c: &mut Canvas, runs: &[(usize, usize, u8)]) {
+pub(super) fn stack(c: &mut Canvas, runs: &[(usize, usize, u8)]) {
     let runs = runs.to_vec();
     c.column(move |r| runs.iter().find(|&&(a, b, _)| (a..=b).contains(&r)).map_or(b'.', |&(_, _, ch)| ch));
 }
@@ -1168,14 +1175,7 @@ fn stack(c: &mut Canvas, runs: &[(usize, usize, u8)]) {
 /// try charges again.
 fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     let f = c.floor();
-    // The canal's surface (out of every mode's reach from the tunnel floor), the ledge the
-    // Giant Steps wall rises from, the rooftop slab.
-    let k = f - 11;
-    let ledge = k - 4;
-    let roof = k - 10;
-    // The tunnel: open rows f-4..f-1 under a ceiling down to f-5.
-    let ceil = f - 5;
-    let bottom = c.height() - 1;
+    let k = f - CANAL_RISE;
     c.ground(2, f);
     // Stairs up to the canal's level.
     let mut top = f;
@@ -1189,6 +1189,25 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     }
     let checkpoint = Some((c.width() + 1, k - 1));
     c.ground(3, k);
+    fork(c, d, band, false);
+    Built { hint: Some((&[Topic::Giant, Topic::Gap], "Pick a road!")), checkpoint }
+}
+
+/// The crossroads' fork, from the canal's level (the canvas's floor - 11, where Nat stands at
+/// the start of it) to the floor where its roads meet: the charging lanes, the high ledge and
+/// its Giant Steps wall, the rooftop, the canal and the tunnel. Shared with the sets
+/// (`super::sets`), whose bridge it is.
+/// `lean`: fewer nuggets (a set has its own sections' to fit under the validator's cap).
+pub(super) fn fork(c: &mut Canvas, d: &mut Dice, band: Band, lean: bool) {
+    let f = c.floor();
+    // The canal's surface (out of every mode's reach from the tunnel floor), the ledge the
+    // Giant Steps wall rises from, the rooftop slab.
+    let k = f - CANAL_RISE;
+    let ledge = k - 4;
+    let roof = k - 10;
+    // The tunnel: open rows f-4..f-1 under a ceiling down to f-5.
+    let ceil = f - 5;
+    let bottom = c.height() - 1;
     // The charging lanes: a quick nugget line low, shelves a toot apart up to the high ledge.
     let lane = 12 + d.int(0, 2) as usize;
     let x0 = c.width();
@@ -1216,8 +1235,10 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     for _ in 0..5 + d.int(0, 2) {
         stack(c, &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
     }
-    c.nugget(px + 1, k - 1);
-    c.nugget(px + 3, k - 1);
+    if !lean {
+        c.nugget(px + 1, k - 1);
+        c.nugget(px + 3, k - 1);
+    }
     // The canal: gaps (shafts down to the tunnel) and islands under the rooftop.
     let gaps = if band >= 5 { 2 } else { 1 };
     let island = lerpi(band, 5.0, 4.0) + d.int(0, 1) as usize;
@@ -1226,6 +1247,7 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         for _ in 0..11 {
             stack(c, &[(roof, roof + 1, b'#'), (f, bottom, b'#')]);
         }
+        // (Each gap needs its own nugget line: a call's mode only lasts so long.)
         arc(c, g + 4, 3, k - 1, 3);
         let ix = c.width();
         for _ in 0..island {
@@ -1236,13 +1258,17 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         }
     }
     let canal_end = c.width();
-    // The rooftop's last stretch, over the drop to the floor.
+    // The rooftop's last stretch, over the drop to the floor: sewage at the foot of the last
+    // island (nowhere for Han to stand and boost anyone back up its face), then floor.
+    for _ in 0..4 {
+        stack(c, &[(roof, roof + 1, b'#'), (f, f, b'~'), (f + 1, bottom, b'#')]);
+    }
     for _ in 0..3 {
         stack(c, &[(roof, roof + 1, b'#'), (f, bottom, b'#')]);
     }
     let roof_end = c.width();
     for j in 0..3 {
-        c.nugget(roof_end - 6 + j, roof - 1);
+        c.nugget(roof_end - 3 + j, roof - 1);
     }
     // On the rooftop: spike strips to hop, the best nuggets over them.
     let strips = 1 + d.scaled(band, 0.0, 2.0, 0) as usize;
@@ -1253,7 +1279,11 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         for j in 0..w {
             c.set(sx + j, roof - 1, b'^');
         }
-        arc(c, sx - 1, w + 2, roof - 2, 3);
+        if lean {
+            c.nugget(sx, roof - 4);
+        } else {
+            arc(c, sx - 1, w + 2, roof - 2, 3);
+        }
     }
     // In the tunnel: spikes and sprays, nuggets between.
     let hazards = 2 + d.scaled(band, 0.0, 2.0, 0) as usize;
@@ -1269,11 +1299,12 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 c.set(hx + j, f, b'^');
             }
         }
-        c.nugget(hx - step / 2, f - 1);
+        if !lean || i == 0 {
+            c.nugget(hx - step / 2, f - 1);
+        }
     }
     // The floor where the roads meet.
     c.ground(6, f);
-    Built { hint: Some((&[Topic::Giant, Topic::Gap], "Pick a road!")), checkpoint }
 }
 
 // ─── Precision: a gadget duet ────────────────────────────────────────────────

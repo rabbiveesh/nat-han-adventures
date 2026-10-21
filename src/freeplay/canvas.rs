@@ -243,7 +243,13 @@ impl Canvas {
 
     /// [`Canvas::finish`], topping the nuggets up to `min_nuggets` (a Side B room's nuggets are
     /// its calls: `super::alone` puts in exactly those).
-    pub fn finish_with(mut self, world: u8, checkpoint_line: &str, min_nuggets: usize) -> Level {
+    pub fn finish_with(self, world: u8, checkpoint_line: &str, min_nuggets: usize) -> Level {
+        let src = self.finish_text(world, checkpoint_line, min_nuggets);
+        Level::parse(&src).unwrap_or_else(|e| panic!("free play canvas made a bad level ({e}):\n{src}"))
+    }
+
+    /// [`Canvas::finish_with`]'s level text (what `NATHAN_LEVEL_FILE` plays).
+    pub fn finish_text(mut self, world: u8, checkpoint_line: &str, min_nuggets: usize) -> String {
         let (floor, stand) = (self.floor, self.stand());
         while self.width() + EXIT < MIN_WIDTH {
             self.ground(1, floor);
@@ -272,6 +278,6 @@ impl Canvas {
             src.push_str(std::str::from_utf8(row).expect("ascii"));
             src.push('\n');
         }
-        Level::parse(&src).unwrap_or_else(|e| panic!("free play canvas made a bad level ({e}):\n{src}"))
+        src
     }
 }
