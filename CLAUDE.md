@@ -95,7 +95,8 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (`han::brain::charge`: he also waits for and rides ferries, rides lifts to the top, stops at
   drips unless melted, never jumps off grease; fired up he leaps holes), so a wrong call and he
   comically dies, the level rewinds. `turns: walls` levels (B8-B10) are mazes: he turns round at
-  walls, ducks, grease walls and drips (`sideb::turn_at_walls`). Each
+  walls, ducks, grease walls and drips (`sideb::turn_at_walls`). Their `secret@` is Nat behind a
+  grate that Han finds (`sideb_secrets`), and their `shout:` goes by Han. Each
   level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
   `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,
