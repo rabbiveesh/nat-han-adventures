@@ -536,3 +536,80 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
     assert_eq!(deaths(&app), 0, "{what}: sank at {p}");
     assert!(p.x > (far as f32 + 0.5) * TILE, "{what}: across at {p} (far shore col {far})");
 }
+
+/// How forgiving a cling shaft is for a person: Nat waits on the shaft's floor; once Han's up
+/// his wall, after `a` × 0.05 s Nat jumps (held, a toot at the top) while holding towards Han
+/// for `b` × 2 frames, lets go once he rides, then jumps off away from the wall and toots near the top. The
+/// share of (a, b) on a 12 × 12 grid that gets him out of the shaft.
+/// `cargo test --test han_campaign trick_windows -- --ignored --nocapture`.
+#[test]
+#[ignore]
+fn trick_windows() {
+    let (what, level, m) = marks(Topic::Shaft).remove(0);
+    let n = 12;
+    let mut wins = 0;
+    for a in 0..n {
+        for b in 0..n {
+            let mut app = app(&level);
+            app.world_mut().insert_resource(Groove { nervous: true, ..Groove::default() });
+            let r = m.r1;
+            let c = (m.c0..=m.c1).find(|&c| !level.tile(c, r).is_solid() && level.tile(c, r + 1).is_solid()).unwrap();
+            put::<Player>(&mut app, stand(&level, c + 1, r));
+            let han = single::<Han>(&mut app);
+            let mut kick = 0.0;
+            for _ in 0..(20.0 / DT) as usize {
+                app.update();
+                let head = *app.world().get::<HanHead>(han).unwrap();
+                if head.boost && head.kick != 0.0 {
+                    kick = head.kick;
+                    break;
+                }
+            }
+            assert!(kick != 0.0, "{what}: Han never clung");
+            let floor = pos::<Player>(&mut app).y;
+            let (to, away) = if kick > 0.0 { (LEFT, RIGHT) } else { (RIGHT, LEFT) };
+            step(&mut app, a as f32 * 0.05);
+            to.press(app.world_mut());
+            tap(&mut app);
+            let mut rode = false;
+            for k in 0..60 {
+                app.update();
+                if k == 2 * b {
+                    to.release(app.world_mut());
+                }
+                if k == 15 {
+                    JUMP.release(app.world_mut());
+                }
+                if k == 17 {
+                    JUMP.press(app.world_mut());
+                }
+                if body::<Player>(&mut app).riding == Some(han) {
+                    rode = true;
+                    break;
+                }
+            }
+            to.release(app.world_mut());
+            JUMP.release(app.world_mut());
+            if rode {
+                step(&mut app, 0.15);
+                away.press(app.world_mut());
+                tap(&mut app);
+                step(&mut app, 0.33);
+                tap(&mut app);
+                for _ in 0..(1.5 / DT) as usize {
+                    app.update();
+                    if body::<Player>(&mut app).on_ground && pos::<Player>(&mut app).y > floor + 6.0 * TILE {
+                        break;
+                    }
+                }
+                away.release(app.world_mut());
+            }
+            step(&mut app, 1.0);
+            let ok = deaths(&app) == 0 && pos::<Player>(&mut app).y > floor + 6.0 * TILE && body::<Player>(&mut app).on_ground;
+            wins += ok as usize;
+            eprint!("{}", if ok { '#' } else if rode { 'r' } else { '.' });
+        }
+        eprintln!();
+    }
+    eprintln!("cling shaft ({what}): {:.0}% of timings get out", 100.0 * wins as f32 / (n * n) as f32);
+}

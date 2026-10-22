@@ -107,13 +107,17 @@ pub enum HanMode {
     },
     /// On the trapeze (the waltz): his plunger stuck in the ceiling at `anchor`, the handle
     /// `len` long, swinging towards `dir` through the bottom on ONE; `on` once he's reeled up
-    /// onto the swing, `t` seconds on it.
+    /// onto the swing, `t` seconds on it. He hangs still at the bottom for Nat to hop onto
+    /// his cap; with Nat on, the next ONE he swings off and flings him (`swinging` from
+    /// then; `bar`, last step's place in the bar).
     Trapeze {
         anchor: Vec2,
         len: f32,
         dir: f32,
         on: bool,
         t: f32,
+        swinging: bool,
+        bar: f32,
     },
 }
 
@@ -577,7 +581,7 @@ pub(super) fn think(
             body.vel = Vec2::ZERO;
             body.on_ground = false;
             let up = pos.0.y >= top;
-            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall * KICK_CARRY };
+            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall * KICK_CARRY, fling: false, hold: false };
             set_anim(&mut anim, HanPose::Cling, wall < 0.0, &groove, false);
             return;
         }
@@ -595,14 +599,18 @@ pub(super) fn think(
         && (nat.pos.x - pos.0.x).abs() < 4.0 * TILE
         && let Some((anchor, len, dir)) = trapeze_near(level, nat_cell, -brain.side)
     {
-        brain.mode = HanMode::Trapeze { anchor, len, dir, on: false, t: 0.0 };
+        brain.mode = HanMode::Trapeze { anchor, len, dir, on: false, t: 0.0, swinging: false, bar: 0.0 };
         brain.exec = None;
         brain.path.clear();
     }
-    if let HanMode::Trapeze { anchor, len, dir, on, t } = brain.mode {
+    if let HanMode::Trapeze { anchor, len, dir, on, t, swinging, bar: last } = brain.mode {
         let t = t + dt;
         let bar = (groove.clock.beat as f32 + groove.clock.phase) / groove.clock.beats_per_bar.max(1) as f32;
-        let (swing, vel) = trapeze_at(anchor, len, dir, bar, groove.clock.beat_secs * groove.clock.beats_per_bar as f32);
+        let bar_secs = groove.clock.beat_secs * groove.clock.beats_per_bar as f32;
+        // (Hanging still at the bottom until Nat's on and it's ONE: then off with the swing.)
+        let one = bar < last;
+        let swinging = swinging || (on && nat_on_han && one);
+        let (swing, vel) = trapeze_at(anchor, len, dir, if swinging { bar } else { 0.0 }, bar_secs);
         // Nat flew off (or walked off, or gave up and landed back on the lip's side).
         let nat_left = nat.grounded && !nat_on_han && (on || t > 1.0) && !level.in_mark(Topic::Trapeze, nat_cell);
         let past = nat.grounded && !nat_on_han && (nat.pos.x - anchor.x) * dir > TILE;
@@ -610,14 +618,18 @@ pub(super) fn think(
             // Let go: he flies off with the swing (and parachutes back).
             brain.mode = HanMode::Follow;
             brain.replan = 0.0;
-            body.vel = if on { vel } else { Vec2::ZERO };
+            body.vel = if on && swinging { vel } else { Vec2::ZERO };
         } else {
             let on = on || pos.0.distance(swing) < 4.0;
-            brain.mode = HanMode::Trapeze { anchor, len, dir, on, t };
+            brain.mode = HanMode::Trapeze { anchor, len, dir, on, t, swinging, bar };
             pos.0 = if on { swing } else { move_towards_v(pos.0, swing, REEL_SPEED * dt) };
             body.vel = Vec2::ZERO;
             body.on_ground = false;
-            *head = HanHead { solid: on, boost: on && brain.winded == 0.0, block: false, weak: false, kick: if on { vel.x } else { 0.0 } };
+            // The fling: on ONE, the bottom of the swing, Nat goes with its full speed, no
+            // jump needed (a jump off him any time is a boost with the swing's speed then).
+            let fling = on && swinging && one && nat_on_han;
+            let kick = if on && swinging { vel.x } else { 0.0 };
+            *head = HanHead { solid: on, boost: on && brain.winded == 0.0, block: false, weak: false, kick, fling, hold: on && !swinging };
             set_anim(&mut anim, HanPose::Trapeze, dir < 0.0, &groove, false);
             return;
         }
@@ -736,7 +748,23 @@ pub(super) fn think(
             }
         }
         HanMode::Follow => {
-            if !brain.braced && !nat_dead {
+            // Nat hopping straight up beside him, coming down: asking for a boost. He steps
+            // under him (no goalkeeper's leap: just under, for Nat to land on his cap). Only when
+            // Nat faces him (turned back to him): hopping on the spot facing away is for the
+            // band, and he stays beside.
+            let asking = !nat_dead
+                && !nat.grounded
+                && nctl.facing * (pos.0.x - nat.pos.x) > 0.0
+                && nat_above
+                && nat.vel.y < 0.0
+                && nat.vel.x.abs() < 40.0
+                && dx_nat.abs() < 2.5 * TILE
+                && body.on_ground
+                && brain.winded == 0.0
+                && !in_zone;
+            if asking {
+                input = HanInput { dir: if dx_nat.abs() > 2.0 { dx_nat.signum() } else { 0.0 }, speed: 1.0, ..default() };
+            } else if !brain.braced && !nat_dead {
                 input = follow(level, &mut nav, brain, &me, &body, &nat, slot_x, &plats, &clock, &groove, dt, &mut says);
             }
         }
@@ -868,6 +896,8 @@ pub(super) fn think(
         boost: up && holds && brain.winded == 0.0,
         block: matches!(brain.mode, HanMode::Ahead { .. }),
         kick: 0.0,
+        fling: false,
+        hold: false,
         // (By a mega wall, while Giant Steps plays, the mega-boost: full strength.)
         weak: level.weak_boost(my_cell, groove.granted()) || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.granted()),
     };
