@@ -8,12 +8,14 @@ use bevy::prelude::*;
 
 use crate::art::{SpriteId, Sprites};
 use crate::game::crushers::{BrickSmashed, Crumble, CrusherBlock, Sprung};
+use crate::audio::Harmony;
 use crate::game::secret::HanGlimpse;
+use crate::game::sideb::{CallSign, SetCall};
 use crate::game::{ActiveLevel, Groove, LevelEntity, LevelTile};
 use crate::level::{CrushDir, FAN_REACH, FIRED_UP_TILES, GIANT_FAN_REACH, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_observer(crusher_sprite).add_observer(glimpse_sprite).add_systems(
+    app.add_observer(crusher_sprite).add_observer(glimpse_sprite).add_observer(sign_sprite).add_systems(
         PostUpdate,
         (crumble_sprites, smashed_bricks, squash_trampolines, beat_sprites, fan_wisps, glimpse_wave)
             .in_set(super::VisualSet::Animate)
@@ -52,6 +54,21 @@ fn crusher_sprite(add: On<Add, CrusherBlock>, q: Query<&CrusherBlock>, sprites: 
         }
         // The face, in the middle.
         c.spawn((Sprite::from_image(sprites.get(SpriteId::CrusherFace)), Transform::from_xyz(0.0, 0.0, 0.1)));
+    });
+}
+
+/// Side B's call sign: the call's set list icon on a little board.
+fn sign_sprite(add: On<Add, CallSign>, q: Query<&CallSign>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let (Some(sprites), Ok(sign)) = (sprites, q.get(add.entity)) else { return };
+    let icon = match sign.0 {
+        SetCall::Mode(Harmony::Quartal) => SpriteId::IconNugget,
+        SetCall::Mode(_) => SpriteId::IconHorn,
+        SetCall::Melt => SpriteId::IconSweat,
+    };
+    commands.entity(add.entity).insert(Visibility::default()).with_children(|s| {
+        s.spawn((Sprite::from_color(Color::srgb(0.65, 0.48, 0.12), Vec2::splat(14.0)), Transform::default()));
+        s.spawn((Sprite::from_color(Color::srgb(0.12, 0.08, 0.05), Vec2::splat(12.0)), Transform::from_xyz(0.0, 0.0, 0.05)));
+        s.spawn((Sprite::from_image(sprites.get(icon)), Transform::from_xyz(0.0, 0.0, 0.1)));
     });
 }
 

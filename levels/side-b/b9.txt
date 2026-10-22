@@ -9,6 +9,7 @@ gate: giant 138,11 141,17
 secret@108,25: Nat?!
 shout: 250
 gate: giant 250,5 252,10
+gate: gap 76,18 77,20
 ---
 .
 .

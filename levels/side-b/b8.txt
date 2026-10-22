@@ -1,6 +1,6 @@
 name: Up the Pipe
 world: 2
-setlist: giant gap
+setlist: giant gap melt
 turns: walls
 1: dx=0 dy=6 period=3
 gate: giant 73,49 76,55
@@ -11,6 +11,8 @@ secret@95,32: Nat?!
 shout: row 22
 gate: giant 124,15 127,21
 5: dx=0 dy=6 period=3
+gate: gap 130,49 138,53
+gate: gap 130,29 137,31
 ---
 .
 .................................................................................................................................................................................#

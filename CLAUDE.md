@@ -88,7 +88,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   NAT ALONE's: `NATHAN_SOLO=10 NATHAN_START=507 ... scripts/tours/encore-solo.timeline`.
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
-  header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
+  header, empty at the start, shown in one fixed order, all three calls on every level; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call, 1/2/3 pick and call at once (on a phone the strip sits along the bottom and a tap on a third of the screen calls its cell); signs (`CallSign`) by each `gate:` and drip run show which call gets Han past; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
   shrinks Han; a call holds 6 s, not the story's 20). Side B plays its own tunes (`Music::SideB`, `Music::side_b`: its levels in runs, one tune
   to each run; free play's Han rooms take them in turn; the band starts hot there and still follows play, `adaptive::side_b_mood`;
   `cargo run --release --example side_b_tunes` renders them as played). Han just runs and jumps at what's ahead

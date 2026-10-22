@@ -385,6 +385,7 @@ pub(super) fn plugin(app: &mut App) {
             (
                 choose_and_call.run_if(in_state(PlayState::Running)),
                 refill_on_restart.run_if(in_state(AppState::Playing)),
+                spawn_signs,
             )
                 .run_if(resource_exists::<SideB>),
         )
@@ -400,6 +401,75 @@ pub(super) fn plugin(app: &mut App) {
         app.add_systems(OnEnter(s), leave);
     }
     app.add_systems(Startup, dev_start);
+}
+
+/// A sign by an obstacle that a call gets Han past (its icon, as on the set list): over a
+/// giant wall, over a gap, at each end of a drip run. So the level shows which call it wants
+/// where, ahead of Han, and a fork shows both of its ways.
+#[derive(Component, Debug, Clone, Copy, PartialEq)]
+pub struct CallSign(pub SetCall);
+
+/// Where a level's signs go (cell, call): its `gate: giant` and `gate: gap` marks, and each
+/// run of drips (ceiling spikes: melted, Han fits under them) at its open ends.
+pub fn call_signs(level: &Level) -> Vec<((i32, i32), SetCall)> {
+    let mut out = Vec::new();
+    for g in &level.gates {
+        match g.topic {
+            Topic::Giant => out.push(((g.c0, g.r0 - 1), SetCall::Mode(Harmony::Coltrane))),
+            Topic::Gap => out.push((((g.c0 + g.c1) / 2, g.r0 - 2), SetCall::Mode(Harmony::Quartal))),
+            _ => {}
+        }
+    }
+    let drip = |c: i32, r: i32| level.tile(c, r) == Tile::SpikesDown;
+    for r in 0..level.height as i32 {
+        let mut c = 0;
+        while c < level.width as i32 {
+            if !drip(c, r) {
+                c += 1;
+                continue;
+            }
+            let c0 = c;
+            while drip(c, r) {
+                c += 1;
+            }
+            // (A run's open ends, from either side: over Han's head where there's room.)
+            for end in [c0 - 1, c] {
+                if !level.tile(end, r).is_solid() {
+                    let up = if level.tile(end, r - 1).is_solid() { r } else { r - 1 };
+                    out.push(((end, up), SetCall::Melt));
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The signs come with their Side B level.
+fn spawn_signs(
+    mut commands: Commands,
+    side: Res<SideB>,
+    active: Option<Res<ActiveLevel>>,
+    signs: Query<(), With<CallSign>>,
+    mut done: Local<Option<(usize, (usize, usize))>>,
+) {
+    let Some(active) = active else { return };
+    // (In free play, only the room Han has: the run's other rooms are Nat's.)
+    let cols = side.room.map_or((0, active.level.width), |r| r.cols);
+    // (Once per level and room; again after a restart clears them.)
+    if signs.is_empty() {
+        *done = None;
+    }
+    if *done == Some((side.level, cols)) {
+        return;
+    }
+    *done = Some((side.level, cols));
+    for ((c, r), call) in call_signs(&active.level) {
+        if !(cols.0 as i32..cols.1 as i32).contains(&c) || c < 0 || r < 0 || c >= active.level.width as i32 || r >= active.level.height as i32 {
+            continue;
+        }
+        let at = active.level.tile_center(c as usize, r as usize);
+        commands.spawn((Name::new("CallSign"), super::LevelEntity, CallSign(call), Transform::from_translation(at.extend(1.5))));
+    }
 }
 
 /// Hidden ways in (Side B is a prototype): `NATHAN_SIDE_B=1 cargo run`, or `?sideb=1` on the
@@ -431,7 +501,8 @@ fn leave(mut commands: Commands, side: Option<Res<SideB>>, mut mode: ResMut<supe
 }
 
 /// Left/Right picks a call on the set list, Down or Jump plays it (Han jumps by himself, and
-/// on a phone the jump zone is the big button).
+/// on a phone the jump zone is the big button). 1/2/3 pick and play a call in one go (on a
+/// phone, a tap on its third of the screen); an empty one is just picked, for the nuggets.
 fn choose_and_call(
     input: Single<&ActionState<Action>>,
     mut side: ResMut<SideB>,
@@ -449,7 +520,11 @@ fn choose_and_call(
     if input.just_pressed(&Action::Right) {
         side.selected = (side.selected + 1) % n;
     }
-    let call = input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
+    let direct = Action::CALLS.iter().take(n).position(|a| input.just_pressed(a));
+    if let Some(k) = direct {
+        side.selected = k;
+    }
+    let call = direct.is_some() || input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
     if call && side.phase == Phase::Playing {
         let k = side.selected;
         if side.left[k] > 0 {

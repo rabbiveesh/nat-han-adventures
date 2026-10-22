@@ -190,11 +190,11 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
     // loop, and Nat behind a grate), then the flume's two canals (fired up, he jumps them;
     // otherwise he waits for their ferries) to the throne.
     &[
-        ("slide, drip, flume", "1/10 44/0 70/11 158/1 180/10 200/0 236/0"),
+        ("slide, drip, flume", "1/11 44/1 70/12 158/2 180/11 200/1 236/1"),
         ("drain, drain, ferries", ""),
-        ("deck, drain, ferries", "1/10 40/0"),
-        ("drain, drip, ferries", "1/11 158/1"),
-        ("drain, drain, flume", "1/10 200/0"),
+        ("deck, drain, ferries", "1/11 40/1"),
+        ("drain, drip, ferries", "1/12 158/2"),
+        ("drain, drain, flume", "1/11 200/1"),
     ],
 ];
 
@@ -227,8 +227,8 @@ fn died(r: Result<(), (Option<Fate>, f32)>) -> (Fate, f32) {
 #[test]
 fn level_one_parses_with_its_set_list() {
     let b = sideb::SideBLevel::load(0);
-    // Nothing to start with: the calls are the nuggets Han grabs.
-    assert_eq!(b.setlist, vec![(SetCall::Mode(Harmony::Coltrane), 0), (SetCall::Mode(Harmony::Quartal), 0)]);
+    // Nothing to start with: the calls are the nuggets Han grabs. All three, as on every level.
+    assert_eq!(b.setlist, vec![(SetCall::Mode(Harmony::Coltrane), 0), (SetCall::Mode(Harmony::Quartal), 0), (SetCall::Melt, 0)]);
 }
 
 #[test]
@@ -324,10 +324,24 @@ fn hans_closing_stretch_starts_the_shout() {
 fn jump_calls_the_band_too() {
     let mut app = app(0);
     until(&mut app, 5.0, |a| col(a) >= 7.0).unwrap();
-    assert_eq!(side(&app).left, vec![2, 0], "the runway's two nuggets");
+    assert_eq!(side(&app).left, vec![2, 0, 0], "the runway's two nuggets");
     tap(&mut app, KeyCode::Space);
     assert_eq!(side(&app).calls, 1);
-    assert_eq!(side(&app).left, vec![1, 0]);
+    assert_eq!(side(&app).left, vec![1, 0, 0]);
+}
+
+#[test]
+fn a_number_picks_and_calls_at_once() {
+    // (On a phone, a tap on a third of the screen: index.html presses 1, 2 or 3.)
+    let mut app = app(0);
+    until(&mut app, 5.0, |a| col(a) >= 7.0).unwrap();
+    assert_eq!(side(&app).left, vec![2, 0, 0]);
+    // An empty call is only picked (for the nuggets to come).
+    tap(&mut app, KeyCode::Digit2);
+    assert_eq!((side(&app).selected, side(&app).calls), (1, 0));
+    tap(&mut app, KeyCode::Digit1);
+    assert_eq!((side(&app).selected, side(&app).calls), (0, 1));
+    assert_eq!(side(&app).left, vec![1, 0, 0]);
 }
 
 #[test]
@@ -643,7 +657,7 @@ fn alone_room(seed: u64, band: u8, cleared: usize) -> (SideBLevel, Vec<(f32, usi
     use nat_han_adventures::freeplay::{alone, canvas::Canvas, dice::Dice};
     let mut c = Canvas::with_height(alone::ALONE_H);
     let drawn = alone::draw(&mut c, &mut Dice::new(seed), band, cleared);
-    (SideBLevel { level: c.finish_with(2, "Go!", 0), setlist: alone::setlist(cleared), turns: false }, drawn.solution)
+    (SideBLevel { level: c.finish_with(2, "Go!", 0), setlist: alone::setlist(), turns: false }, drawn.solution)
 }
 
 /// Every Side B room free play draws clears with the plan it was drawn with: every band, with
@@ -768,7 +782,7 @@ fn free_play_mixes_in_a_side_b_room() {
         let s = side(&app).clone();
         let cols = s.room.expect("a free play Side B room").cols;
         assert_eq!(cols, (placed.col0, placed.col0 + placed.width));
-        assert_eq!(s.setlist, alone::setlist(3));
+        assert_eq!(s.setlist, alone::setlist());
         assert!(s.left.iter().all(|&n| n == 0), "the set list starts empty");
         assert!(col(&mut app) < (placed.col0 + 4) as f32, "Han comes in through the pipe");
         let nuggets = nuggets_in(&mut app, cols);
@@ -848,4 +862,23 @@ fn free_play_side_b_rooms_expect_rewinds() {
         let walk = room.level.width as f32 * TILE / 70.0;
         assert!(room.par_secs > walk * (1.0 + room.expected_deaths as f32 / 2.0), "par {} for {} rewinds", room.par_secs, room.expected_deaths);
     }
+}
+
+#[test]
+fn signs_show_which_call_gets_han_past() {
+    use nat_han_adventures::game::sideb::{CallSign, call_signs};
+    // B3, Drip Pipe: a horn over its giant wall, a nugget over its gap, a drop at each end of
+    // its three drip runs.
+    let b = sideb::SideBLevel::load(2);
+    let signs = call_signs(&b.level);
+    let count = |c: SetCall| signs.iter().filter(|s| s.1 == c).count();
+    assert_eq!(count(SetCall::Mode(Harmony::Coltrane)), 1);
+    assert_eq!(count(SetCall::Mode(Harmony::Quartal)), 1);
+    assert_eq!(count(SetCall::Melt), 6);
+    // And they're in the level when it plays.
+    let mut app = app(2);
+    app.update();
+    app.update();
+    let n = app.world_mut().query::<&CallSign>().iter(app.world()).count();
+    assert_eq!(n, signs.len());
 }
