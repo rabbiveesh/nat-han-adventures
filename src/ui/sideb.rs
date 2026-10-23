@@ -1,8 +1,8 @@
 //! Side B's set list strip (in place of the band's counter strip): one cell per call, the
 //! horn for Giant Steps, the nugget for fired up, with the calls left; the picked one in a gold
-//! frame with "CALL" under it (Down or Jump calls, or 1/2/3 straight away); the playing mode's
+//! frame with "CALL" under it (Down or Jump calls; 1/2/3 pick, and call the picked one); the playing mode's
 //! timer drains under its cell. On a phone the strip sits along the bottom, a cell over each
-//! third of the screen, and a tap on a third calls its cell (index.html). And the banner:
+//! third of the screen: a tap on a third picks its cell, a second tap calls it (index.html). And the banner:
 //! REWIND! when Han's done for, CLEAR! at the goal.
 
 use bevy::prelude::*;

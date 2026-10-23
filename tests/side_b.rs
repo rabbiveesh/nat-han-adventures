@@ -331,14 +331,17 @@ fn jump_calls_the_band_too() {
 }
 
 #[test]
-fn a_number_picks_and_calls_at_once() {
+fn a_number_picks_then_calls() {
     // (On a phone, a tap on a third of the screen: index.html presses 1, 2 or 3.)
     let mut app = app(0);
     until(&mut app, 5.0, |a| col(a) >= 7.0).unwrap();
     assert_eq!(side(&app).left, vec![2, 0, 0]);
-    // An empty call is only picked (for the nuggets to come).
+    // Another call is only picked (for the nuggets to come), charged or not.
     tap(&mut app, KeyCode::Digit2);
     assert_eq!((side(&app).selected, side(&app).calls), (1, 0));
+    tap(&mut app, KeyCode::Digit1);
+    assert_eq!((side(&app).selected, side(&app).calls, &side(&app).left[..]), (0, 0, &[2, 0, 0][..]));
+    // The picked one again: called.
     tap(&mut app, KeyCode::Digit1);
     assert_eq!((side(&app).selected, side(&app).calls), (0, 1));
     assert_eq!(side(&app).left, vec![1, 0, 0]);

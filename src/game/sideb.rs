@@ -520,11 +520,14 @@ fn choose_and_call(
     if input.just_pressed(&Action::Right) {
         side.selected = (side.selected + 1) % n;
     }
+    // 1/2/3 (a tap on a third of a phone's screen): picks that call, or calls it if it's
+    // already the picked one (so a call can be picked for nuggets without spending it).
     let direct = Action::CALLS.iter().take(n).position(|a| input.just_pressed(a));
+    let again = direct == Some(side.selected);
     if let Some(k) = direct {
         side.selected = k;
     }
-    let call = direct.is_some() || input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
+    let call = again || input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
     if call && side.phase == Phase::Playing {
         let k = side.selected;
         if side.left[k] > 0 {
