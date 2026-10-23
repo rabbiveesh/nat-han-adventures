@@ -26,7 +26,7 @@ use super::{ActiveLevel, GameSet, Han, HanAnim, HanPose, LevelEntity, LevelRun, 
 use crate::audio::Harmony;
 use crate::events::{EncoreCue, FinalHit, HanSays, LevelCompleted};
 use crate::input::Action;
-use crate::level::{LEVEL_COUNT, TILE};
+use crate::level::{LEVEL_COUNT, Level, TILE};
 use crate::state::{AppState, PlayState};
 
 /// How long the encore lap lasts before the band plays its ending.
@@ -201,6 +201,33 @@ pub fn is_solo_finale(solo: Option<&SoloRun>) -> bool {
     solo.is_some_and(|s| s.0 + 1 == SOLO_COUNT)
 }
 
+/// The stage: the floor the goal stands on, as far left as it runs (its first column), to the
+/// level's end; and the throne's bottom-center.
+fn stage(level: &Level) -> (i32, Vec2) {
+    let (gc, gr) = level.goal;
+    let goal = cell_floor(level, gc, gr);
+    let floor_row = gr as i32 + 1;
+    let mut left = gc as i32;
+    while left > 0 && level.tile(left - 1, floor_row).is_solid() && !level.tile(left - 1, gr as i32).is_solid() {
+        left -= 1;
+    }
+    (left, goal + Vec2::new(THRONE_OFFSET, 0.0))
+}
+
+/// [`Gag::Grate`]'s ceiling over `level`'s stage. The Grand Flush builds most of it in (all
+/// but the grate's hole and the end the arrival's arc flies through), and the grate's drawn
+/// from the start: a hint of where the encore goes.
+pub fn seam(level: &Level) -> Seam {
+    let (left, throne) = stage(level);
+    Seam {
+        bottom: throne.y + SEAM_RISE,
+        top: throne.y + SEAM_RISE + TILE,
+        x0: left as f32 * TILE,
+        x1: level.size_px().x,
+        hole: throne.x,
+    }
+}
+
 /// Start the encore at the goal (`goal`: the flag's bottom-center).
 pub(super) fn start(
     commands: &mut Commands,
@@ -211,23 +238,9 @@ pub(super) fn start(
     says: &mut MessageWriter<HanSays>,
 ) {
     let level = &active.level;
-    let (gc, gr) = level.goal;
-    let goal = cell_floor(level, gc, gr);
-    // The stage: the floor the goal stands on, as far left as it runs, to the level's end.
-    let floor_row = gr as i32 + 1;
-    let mut left = gc as i32;
-    while left > 0 && level.tile(left - 1, floor_row).is_solid() && !level.tile(left - 1, gr as i32).is_solid() {
-        left -= 1;
-    }
+    let (left, throne) = stage(level);
     let half = Body::player().half.x;
-    let throne = goal + Vec2::new(THRONE_OFFSET, 0.0);
-    let seam = (gag == Gag::Grate).then(|| Seam {
-        bottom: goal.y + SEAM_RISE,
-        top: goal.y + SEAM_RISE + TILE,
-        x0: left as f32 * TILE,
-        x1: level.size_px().x,
-        hole: throne.x,
-    });
+    let seam = (gag == Gag::Grate).then(|| seam(level));
     commands.insert_resource(Encore {
         gag,
         seam,
