@@ -5,6 +5,7 @@
 # shout: over each red onto its blue, a rest by each island's crusher.
 # Format: src/capture/timeline.rs.
 t=0.78 press Right
+t=1.82 tap Space 150ms
 t=2.95 tap Space 150ms
 t=4.25 tap Space 150ms
 t=5.05 tap Space 150ms
@@ -38,6 +39,7 @@ t=27.08 tap Space 200ms
 t=28.75 tap Space 250ms
 t=29.6 tap Space 250ms
 t=29.92 tap Space 200ms
+t=30.85 tap Space 150ms
 t=31.55 tap Space 250ms
 t=31.85 tap Space 200ms
 t=33.3 tap Space 250ms
