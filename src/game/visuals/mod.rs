@@ -85,9 +85,11 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 /// Side B: Nat's off screen (he stays in the world as Han's beacon, `game::sideb`).
-fn hide_nat(mut nat: Query<&mut Visibility, With<Player>>) {
+/// (Until Side B's encore: Han's plunger brings him up, `game::encore::side_b`.)
+fn hide_nat(mut nat: Query<&mut Visibility, With<Player>>, encore: Option<Res<crate::game::encore::Encore>>) {
+    let shown = encore.is_some_and(|e| e.nat_shown());
     for mut v in &mut nat {
-        v.set_if_neq(Visibility::Hidden);
+        v.set_if_neq(if shown { Visibility::Inherited } else { Visibility::Hidden });
     }
 }
 
@@ -720,6 +722,9 @@ fn animate_han(
                 HanPose::Splat => (SpriteId::HanSplat, (t * 3.0) as usize % 3),
                 HanPose::Paddle => (SpriteId::HanPaddle, (t * 8.0) as usize),
                 HanPose::Roll => (SpriteId::HanRoll, (t * 14.0) as usize),
+                // (Two frames a plunge: `encore::side_b::PLUNGE_SECS`.)
+                HanPose::Plunge => (SpriteId::HanPlunge, (t * 5.0) as usize),
+                HanPose::Yank => (SpriteId::HanYank, 0),
             };
             let img = sprites.frame(id, frame);
             if sprite.image != img {

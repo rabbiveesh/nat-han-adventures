@@ -116,7 +116,8 @@ pub struct HintRepeated {
 #[derive(Message, Debug, Clone, Copy)]
 pub struct CallBand;
 
-/// The story's encore (`game::encore`), beat by beat: the band and the FX follow it.
+/// The encore (`game::encore`: the story's, and Side B's), beat by beat: the band and the FX
+/// follow it.
 #[derive(Message, Debug, Clone, Copy, PartialEq)]
 pub enum EncoreCue {
     /// Nat reached the last goal: the encore lap starts (the band goes all out).
@@ -125,10 +126,15 @@ pub enum EncoreCue {
     Call { pos: Vec2, hype: u32 },
     /// The lap is over: the band plays its ending.
     End,
-    /// The ending's last chord, and its cymbal knocks Nat flying from `pos`.
+    /// The ending's last chord, and its cymbal knocks Nat flying from `pos` (Side B: Han hops
+    /// up on the throne from there).
     Knock { pos: Vec2 },
     /// Nat landed in the throne at `pos`: FLUSH.
     Flush { pos: Vec2 },
+    /// Side B: Han plunges the throne (the bowl at `pos`): GLUG.
+    Plunge { pos: Vec2 },
+    /// Side B: Han yanks the plunger out, and Nat comes up stuck to it.
+    Pop { pos: Vec2 },
     /// NAT ALONE's encore: the last chord's rubber duck bounces Nat sky high from `pos`.
     Boing { pos: Vec2 },
     /// ...up through the grate in the ceiling at `pos`.

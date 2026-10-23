@@ -64,6 +64,8 @@ pub struct Progress {
     pub solo_time: [Option<f32>; SOLO_COUNT],
     /// The NAT ALONE levels whose secret (Han behind a grate, `game::secret`) Nat has found.
     pub solo_secrets: [bool; SOLO_COUNT],
+    /// The Side B levels whose secret (Nat behind a grate, found by Han) has been found.
+    pub side_b_secrets: [bool; SIDE_B_COUNT],
 }
 
 /// Han's tricks, each taught by a lesson card at its first hint spot (`ui::lesson`).
@@ -149,6 +151,7 @@ impl Default for Progress {
             solo_nuggets: [None; SOLO_COUNT],
             solo_time: [None; SOLO_COUNT],
             solo_secrets: [false; SOLO_COUNT],
+            side_b_secrets: [false; SIDE_B_COUNT],
         }
     }
 }
@@ -333,6 +336,10 @@ impl Progress {
         if !secrets.is_empty() {
             s.push_str(&format!("solo-secrets {}\n", secrets.join(" ")));
         }
+        let secrets: Vec<String> = (0..SIDE_B_COUNT).filter(|&i| self.side_b_secrets[i]).map(|i| i.to_string()).collect();
+        if !secrets.is_empty() {
+            s.push_str(&format!("sideb-secrets {}\n", secrets.join(" ")));
+        }
         s
     }
 
@@ -400,6 +407,11 @@ impl Progress {
                 ["solo-secrets", levels @ ..] => {
                     for i in levels.iter().filter_map(|i| i.parse::<usize>().ok()).filter(|&i| i < SOLO_COUNT) {
                         p.solo_secrets[i] = true;
+                    }
+                }
+                ["sideb-secrets", levels @ ..] => {
+                    for i in levels.iter().filter_map(|i| i.parse::<usize>().ok()).filter(|&i| i < SIDE_B_COUNT) {
+                        p.side_b_secrets[i] = true;
                     }
                 }
                 ["tricks", words @ ..] => {
@@ -706,6 +718,8 @@ mod tests {
         p.solo_secrets[0] = true;
         p.solo_secrets[3] = true;
         assert!(p.to_text().contains("solo-secrets 0 3\n"));
+        p.side_b_secrets[7] = true;
+        assert!(p.to_text().contains("sideb-secrets 7\n"));
         assert_eq!(Progress::from_text(&p.to_text()), Some(p));
     }
 

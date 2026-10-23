@@ -147,6 +147,52 @@ pub fn han_braced() -> Vec<Pixels> {
         .collect()
 }
 
+/// The plunger cup down (5 wide), for plunging: its rim at the bottom.
+const CUP_DOWN: &[&str] = &["kRRRk", "kRRRk", "kkkkk"];
+/// ...squashed flat on the bottom of a plunge (7 wide).
+const CUP_SQUASHED: &[&str] = &["kRRRRRk", "kkkkkkk"];
+
+/// Plunging (Side B's encore, on the throne): both hands on the handle, cup down in front of
+/// him. 16 x 20, two frames: raised, then pushed down (crouched, the cup squashed).
+pub fn han_plunge() -> Vec<Pixels> {
+    (0..2)
+        .map(|k| {
+            let mut p = Pixels::new(16, 20);
+            let down = 2 * k;
+            p.blit(&body(k == 1), 1, 4 + down);
+            let mut rows: Vec<&str> = vec![HANDLE; 11];
+            if k == 0 {
+                rows.extend(CUP_DOWN);
+                p.blit(&grid(&rows, BUDDY_PAL), 10, 2);
+            } else {
+                p.blit(&grid(&rows, BUDDY_PAL), 10, 5);
+                p.blit(&grid(CUP_SQUASHED, BUDDY_PAL), 9, 16);
+            }
+            // Hands on the handle, an arm out to it.
+            px(&mut p, 11, 9 + down, 'r');
+            px(&mut p, 12, 8 + down, 's');
+            px(&mut p, 12, 10 + down, 's');
+            p.blit(&legs(if k == 0 { LEGS_WIDE } else { LEGS_CROUCH }), -4, 17);
+            p
+        })
+        .collect()
+}
+
+/// The plunger yanked out (Side B's encore): held up high in front of him, cup up (Nat stuck
+/// to it, drawn apart), mouth open. 16 x 20, one frame.
+pub fn han_yank() -> Vec<Pixels> {
+    let mut p = Pixels::new(16, 20);
+    p.blit(&body(true), 1, 5);
+    p.blit(&plunger(8), 10, 0);
+    for y in 7..10 {
+        px(&mut p, 11, y, 'r');
+    }
+    px(&mut p, 12, 6, 's');
+    px(&mut p, 12, 8, 's');
+    p.blit(&legs(LEGS_WIDE), -4, 17);
+    vec![p]
+}
+
 /// Intercepting: arms out like a goalkeeper. Two frames (arms up, arms level).
 pub fn han_intercept() -> Vec<Pixels> {
     (0..2)

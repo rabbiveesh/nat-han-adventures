@@ -12,7 +12,6 @@ use crate::game::{
     ActiveLevel, Assists, Body, Fly, Han, LevelEntity, MovingPlatform, Pos, PrevPos, Raft,
     CAN_HEIGHT, CAN_WIDTH, SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
 };
-use crate::level::buddy::HALF;
 use crate::level::{PlatformKind, TILE, Tile};
 
 /// A spray can's jet as Han's body changes it (on the can's entity). `top`: while Han stands in
@@ -92,10 +91,11 @@ pub(super) fn han_hazards(
 ) {
     let dt = time.delta_secs();
     *quip -= dt;
-    let Ok((pos, _body, mut brain, mut anim)) = han.single_mut() else { return };
+    let Ok((pos, body, mut brain, mut anim)) = han.single_mut() else { return };
     anim.wobble = (anim.wobble - dt).max(0.0);
     let present = !matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. });
-    let (min, max) = (pos.0 - HALF, pos.0 + HALF);
+    // (His own size: melting shrinks him.)
+    let (min, max) = (pos.0 - body.half, pos.0 + body.half);
 
     // Spray jets stop at his body, and sputter a moment after he's past.
     let mut hit = false;
@@ -133,7 +133,7 @@ pub(super) fn han_hazards(
     for (e, fpos, spin) in &mut flies {
         let mut s = spin.as_deref().copied().unwrap_or_default();
         s.cooldown = (s.cooldown - dt).max(0.0);
-        let near = present && (fpos.0 - pos.0).abs().cmple(HALF + 4.0).all();
+        let near = present && (fpos.0 - pos.0).abs().cmple(body.half + 4.0).all();
         if near && s.cooldown == 0.0 {
             // Keep the angle where it is: turns·dir + offset is unchanged when dir flips.
             let turns = clock.fly_turns;
@@ -167,7 +167,7 @@ pub(super) fn han_hazards(
         return;
     }
     // A crusher: flat as a pancake, and back by parachute.
-    if crushers.iter().any(|(b, p)| squashed(pos.0, HALF, b.bounds(p.0))) {
+    if crushers.iter().any(|(b, p)| squashed(pos.0, body.half, b.bounds(p.0))) {
         brain.mode = HanMode::Gone { t: HAN_SQUASH_RESPAWN };
         brain.path.clear();
         brain.exec = None;

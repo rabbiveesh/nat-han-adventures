@@ -71,6 +71,14 @@
       .hint { position: absolute; bottom: 18px; padding: 6px 10px; border-radius: 10px;
         border: 2px dashed rgba(255, 199, 46, 0.4); transition: opacity 1.2s; }
       #stick-zone .hint { left: 18px; } #jump-zone .hint { right: 18px; }
+      /* Side B (the game marks <body class="sideb">): no stick, no jump; each third of the
+         screen calls the set list cell drawn along the bottom over it. */
+      #calls { display: none; }
+      body.sideb #stick-zone, body.sideb #jump-zone, body.sideb #call-zone { display: none; }
+      body.sideb #calls { display: block; }
+      #calls .zone { top: 96px; bottom: 0; width: 33.34%; }
+      #call-1 { left: 0; } #call-2 { left: 33.33%; } #call-3 { right: 0; }
+      #calls .hint { left: 50%; transform: translateX(-50%); bottom: 64px; white-space: nowrap; }
       body.played .hint { opacity: 0; }
       #ring { position: fixed; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
         border: 2px solid rgba(255, 199, 46, 0.6); display: none; pointer-events: none; z-index: 6; }
@@ -107,6 +115,11 @@
       <div class="zone" id="stick-zone"><span class="hint">&#9664; slide &#9654;</span></div>
       <div class="zone" id="jump-zone" data-key="Space"><span class="hint">tap: JUMP &middot; again: TOOT</span></div>
       <div class="zone" id="call-zone" data-key="ArrowDown"></div>
+      <div id="calls">
+        <div class="zone" id="call-1" data-key="Digit1"><span class="hint">tap: CALL</span></div>
+        <div class="zone" id="call-2" data-key="Digit2"><span class="hint">tap: CALL</span></div>
+        <div class="zone" id="call-3" data-key="Digit3"><span class="hint">tap: CALL</span></div>
+      </div>
       <div class="btn" id="up" data-key="ArrowUp">&#9650;</div>
       <div class="btn" id="down" data-key="ArrowDown">&#9660;</div>
       <div class="btn" id="ok" data-key="Enter">OK</div>
@@ -164,7 +177,7 @@
         document.body.classList.add("portrait-ok");
       });
       const CODES = { ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight", ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
-        Space: " ", Enter: "Enter", Escape: "Escape" };
+        Space: " ", Enter: "Enter", Escape: "Escape", Digit1: "1", Digit2: "2", Digit3: "3" };
       const held = new Map(); // code -> number of pointers holding it
       function key(type, code) {
         canvas.dispatchEvent(new KeyboardEvent(type, { key: CODES[code], code, bubbles: true, cancelable: true }));

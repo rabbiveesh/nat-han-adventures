@@ -90,11 +90,15 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   NAT ALONE's: `NATHAN_SOLO=10 NATHAN_START=507 ... scripts/tours/encore-solo.timeline`.
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
-  header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
+  header, empty at the start, shown in one fixed order: three calls on every level, of five (`giant gap waltz nervous melt`; in the waltz Han swings a `gate: trapeze` gap on his own, letting go on ONE; nervous, he climbs a `gate: shaft` wall, also the cliff face over a drip pipe: `brain::cliff_ahead`; B4, B6 and B7 trade one call for them); a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call, 1/2/3 pick, again calls (on a phone the strip sits along the bottom: a tap on a third of the screen picks its cell, a second tap calls); signs (`CallSign`) by each `gate:` and drip run show which call gets Han past; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
   shrinks Han; a call holds 6 s, not the story's 20). Side B plays its own tunes (`Music::SideB`, `Music::side_b`: its levels in runs, one tune
   to each run; free play's Han rooms take them in turn; the band starts hot there and still follows play, `adaptive::side_b_mood`;
   `cargo run --release --example side_b_tunes` renders them as played). Han just runs and jumps at what's ahead
-  (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
+  (`han::brain::charge`: he also waits for and rides ferries, rides lifts to the top, stops at
+  drips unless melted, never jumps off grease; fired up he leaps holes), so a wrong call and he
+  comically dies, the level rewinds. `turns: walls` levels (B8-B10) are mazes: he turns round at
+  walls, ducks, grease walls and drips (`sideb::turn_at_walls`). Their `secret@` is Nat behind a
+  grate that Han finds (`sideb_secrets`), and their `shout:` goes by Han. Each
   level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
   `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
 - `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,

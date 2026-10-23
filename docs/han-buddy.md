@@ -127,13 +127,24 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   the grip goes. The validator models it as `Gate::ClingShaft` (`cling_found`).
 - **The trapeze** (the waltz): by a trapeze lip (`gate: trapeze`), Nat standing near it, Han
   reels up his plunger handle (`REEL_SPEED`) into the ceiling's edge `TRAPEZE_OUT` (3) columns
-  past the lip and swings (`HanMode::Trapeze`, `buddy::trapeze_at`): a pendulum a bar long,
-  through the bottom (Nat's feet `TRAPEZE_LIFT` rows above the lip) swinging forward on ONE at
-  `TRAPEZE_SPEED` (240 px/s). Nat rides his cap; a jump off it is the boost plus the swing's
-  speed then (`HanHead::kick`). He lets go (and falls, and parachutes back) once kicked, when
+  past the lip and hangs still at the bottom (Nat's feet `TRAPEZE_LIFT` rows above the lip),
+  an easy hop from the lip. With Nat on his cap (whose jumps and walking wait meanwhile,
+  `HanHead::hold`), the next ONE he swings off (`HanMode::Trapeze`, `buddy::trapeze_at`: a
+  pendulum a bar long, forward through the bottom on ONE at `TRAPEZE_SPEED`, 240 px/s) and
+  flings him: the boost plus the swing's speed, jump or not (`HanHead::fling`; a toot at the
+  top carries Nat past the far side's spikes). Before 2026-10-22 Nat had to board the swing in
+  motion and jump on ONE himself: 3% of a person's timings made it (`trick_windows` in
+  `tests/han.rs`). He lets go (and falls, and parachutes back) once kicked, when
   Nat lands past the swing or leaves, dies, or the waltz ends. The validator's
   `Gate::Trapeze` (`trapeze_found`) takes the jump at the bottom with a human share (80%) of
   the speed.
+- **Side B reprises both** (Han alone, a `waltz` or `nervous` call on the set list): in the
+  waltz, charging at a trapeze lip he reels up, hangs, and on the next ONE lets go at the
+  bottom with a jump and the swing's speed (`Body::launch`), a toot at the top: about 21
+  columns, where fired up's leap makes about 15. Nervous, charging into a wall in a `gate:
+  shaft` mark (also the face over a drip pipe's mouth: `brain::cliff_ahead`), he climbs it
+  to the top (up to 16 rows) and hops on. Waltz is slow to leave: a call after a trapeze goes
+  in mid-flight.
 - **The boing boost** (the laughing band, not fired up): dropping onto Han's head where he'd
   boost springs Nat off it at the full boost (`BOOST_SPEED`), no jump needed, with a "BOING!"
   bark and its own sfx (`Sfx::Boing`); once per landing chain (coming back down from it, it's
@@ -184,6 +195,10 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
 - **Intercept**: a goalkeeper dive (1.4x speed and accel), stays under Nat (cuts his jump
   while Nat rises close above), toots into a descending Nat when lined up at the moment of
   contact. Brace range 1.5-3.5 tiles, intercept range 3-7 tiles (eagerness).
+- **Stepping under** (the buddy jump): Nat hopping almost straight up (under 40 px/s across)
+  within 2.5 tiles of him, facing him (hopping on the spot facing away is for the band), coming down, outside the band zones: Han walks under him (no dive,
+  no jump) for Nat to land on his cap. A person's hop from beside him now always gets the
+  boost (`trick_windows` in `tests/han.rs`; 67% before 2026-10-22, when he only braced).
 - **Lemme check that**: Nat still and facing sewage, a can or a swarm within 4 tiles for
   2.0 / 1.5 / 0.7 s (lazy / neutral / eager), outside the band zones. It's an escort: Han never leads by more than
   1.5 tiles, he's solid from the side so Nat can't overtake him into the jets, every jet he's

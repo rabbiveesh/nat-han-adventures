@@ -14,6 +14,9 @@
 //!
 //! The band and the FX follow [`EncoreCue`]s; the knock waits for the band's [`FinalHit`]
 //! (with no band, after [`ENDING_TIMEOUT`]).
+//!
+//! Side B ends in one too ([`side_b`]): Han's encore at B10's goal, and his celebratory plunge
+//! that goes wrong.
 
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
@@ -28,6 +31,8 @@ use crate::events::{EncoreCue, FinalHit, HanSays, LevelCompleted};
 use crate::input::Action;
 use crate::level::{LEVEL_COUNT, TILE};
 use crate::state::{AppState, PlayState};
+
+pub mod side_b;
 
 /// How long the encore lap lasts before the band plays its ending.
 pub const LAP_SECS: f32 = 12.0;
@@ -91,6 +96,8 @@ pub struct Encore {
     /// Up through the grate (it's broken: a hole).
     pub through: bool,
     knock: Option<Knock>,
+    /// Side B: Han's dance in the lap, and the seat he plunges from.
+    dance: side_b::Dance,
 }
 
 /// How the encore goes wrong.
@@ -101,6 +108,9 @@ pub enum Gag {
     /// NAT ALONE (World 3): the duck bounces Nat up through the grate, the shutter slams between
     /// him and Han (into World 4).
     Grate,
+    /// Side B (World 2): Han's celebratory plunge yanks Nat up, and the throne slurps him
+    /// back down, deeper (into NAT ALONE). [`side_b`] runs it.
+    Plunge,
 }
 
 /// NAT ALONE's ceiling over the encore's stage: the floor of the room above.
@@ -126,11 +136,19 @@ pub enum EncorePhase {
     Knocked,
     /// In the throne: FLUSH.
     Flushing,
+    /// [`Gag::Plunge`]: Han hops up onto the throne on the last chord...
+    Hop,
+    /// ...and plunges it (GLUG)...
+    Plunging,
+    /// ...and yanks his plunger out with Nat stuck on the cup...
+    Yanked,
+    /// ...who slips off and the throne slurps him back down, deeper.
+    Sucked,
     /// [`Gag::Grate`]: Nat's upstairs; Han pops out of the throne below and sees him.
     Upstairs,
     /// [`Gag::Grate`]: the shutter slams over the hole.
     Slam,
-    /// "To be continued...", then the results card.
+    /// "To be continued...", then the results card (Side B: its level select).
     Continued,
 }
 
@@ -148,6 +166,11 @@ impl Encore {
     /// Where Nat lands, in the bowl.
     pub fn bowl(&self) -> Vec2 {
         self.throne + BOWL
+    }
+
+    /// Is Nat on screen (Side B keeps him hidden until the plunger brings him up)?
+    pub fn nat_shown(&self) -> bool {
+        self.gag != Gag::Plunge || matches!(self.phase, EncorePhase::Yanked | EncorePhase::Sucked)
     }
 
     /// Where Nat lands upstairs (his middle): beside the hole.
@@ -186,9 +209,14 @@ pub struct StageHan;
 pub(super) fn plugin(app: &mut App) {
     app.register_type::<Encore>()
         .register_type::<StageHan>()
-        .add_systems(FixedUpdate, run_encore.in_set(GameSet::Follow).run_if(resource_exists::<Encore>))
+        .add_systems(FixedUpdate, run_encore.in_set(GameSet::Follow).run_if(is(|g| g != Gag::Plunge)))
+        .add_systems(FixedUpdate, side_b::run.in_set(GameSet::Follow).run_if(is(|g| g == Gag::Plunge)))
         .add_systems(Update, call_in_encore.run_if(in_state(PlayState::Running).and_then(resource_exists::<Encore>)))
         .add_systems(OnExit(AppState::Playing), |mut commands: Commands| commands.remove_resource::<Encore>());
+}
+
+fn is(gag: fn(Gag) -> bool) -> impl Fn(Option<Res<Encore>>) -> bool + Clone {
+    move |e: Option<Res<Encore>>| e.is_some_and(|e| gag(e.gag))
 }
 
 /// Is `index` the level that ends in the encore (the story's last; not free play or Side B)?
@@ -239,6 +267,7 @@ pub(super) fn start(
         throne,
         time_at_goal: run.time,
         knock: None,
+        dance: default(),
     });
     cues.write(EncoreCue::Start);
     // (No Han to say it in NAT ALONE: the words on screen do.)
@@ -247,20 +276,27 @@ pub(super) fn start(
     }
 }
 
-/// Down in the lap: the next call, free.
+/// Down in the lap (on Side B, Jump too): the next call, free.
 fn call_in_encore(
     input: Single<&ActionState<Action>>,
     mut encore: ResMut<Encore>,
     player: Query<&Pos, With<Player>>,
+    han: Query<&Pos, With<Han>>,
     mut calls: MessageWriter<CallMode>,
     mut cues: MessageWriter<EncoreCue>,
 ) {
-    if encore.phase != EncorePhase::Lap || !input.just_pressed(&Action::Down) {
+    let side_b = encore.gag == Gag::Plunge;
+    let call = input.just_pressed(&Action::Down) || (side_b && input.just_pressed(&Action::Jump));
+    if encore.phase != EncorePhase::Lap || !call {
         return;
     }
     calls.write(CallMode(CALLS[encore.calls as usize % CALLS.len()]));
     encore.calls += 1;
-    let pos = player.single().map_or(Vec2::ZERO, |p| p.0);
+    if side_b {
+        encore.dance.called();
+    }
+    let star = if side_b { han.single() } else { player.single() };
+    let pos = star.map_or(Vec2::ZERO, |p| p.0);
     cues.write(EncoreCue::Call { pos, hype: encore.calls });
 }
 
@@ -449,6 +485,8 @@ fn run_encore(
                 says.write(HanSays { text: "...Nat?".into() });
             }
         }
+        // (Side B's: `side_b::run`.)
+        EncorePhase::Hop | EncorePhase::Plunging | EncorePhase::Yanked | EncorePhase::Sucked => {}
         EncorePhase::Continued => {
             if e.t >= CONTINUED_SECS {
                 run.time = e.time_at_goal;
