@@ -567,13 +567,12 @@ pub(super) fn think(
         brain.path.clear();
     }
     // --- Side B, nervous: charging into a shaft's wall, Han climbs it on his own (the grip),
-    // up and over its top.
+    // up and over its top (grabbing it in mid-jump too: he jumps at walls).
     // (His own feet: melted, he's smaller.)
     let han_cell = level.cell_at(pos.0 - Vec2::new(0.0, body.half.y - 1.0));
     if side_b
         && brain.mode == HanMode::Follow
         && groove.grip()
-        && body.on_ground
         && let Some(dir) = brain.charge
         && level.in_shaft(han_cell)
         && let Some((x, top)) = cliff_ahead(level, pos.0, body.half, dir)
@@ -581,11 +580,8 @@ pub(super) fn think(
         brain.mode = HanMode::Cling { wall: dir, x, top, t: 0.0 };
     }
     if side_b && let HanMode::Cling { wall, x, top, t } = brain.mode {
-        if !groove.grip() {
-            // The grip's gone: he slides off.
-            brain.mode = HanMode::Follow;
-            body.vel = Vec2::ZERO;
-        } else if pos.0.y >= top {
+        // (Once he's on it, he makes it up: the call's job was to get him onto the wall.)
+        if pos.0.y >= top {
             // Over the top: a hop onto it, and on he charges.
             brain.mode = HanMode::Follow;
             pos.0.y = top;
@@ -655,12 +651,12 @@ pub(super) fn think(
     if side_b && let HanMode::Trapeze { anchor, len, dir, on, t, bar: last, .. } = brain.mode {
         let bar = (groove.clock.beat as f32 + groove.clock.phase) / groove.clock.beats_per_bar.max(1) as f32;
         let (bottom, _) = trapeze_at(anchor, len, dir, 0.0, 1.0);
-        if !waltz || t > TRAPEZE_SECS {
-            // The waltz is over: he lets go where he hangs.
+        if t > TRAPEZE_SECS {
             brain.mode = HanMode::Follow;
             body.vel = Vec2::ZERO;
-        } else if on && bar < last {
-            // ONE: he lets go at the bottom of the swing with all its speed, and a kick.
+        } else if on && (bar < last || !waltz) {
+            // ONE (or the waltz ending: once he's on it, he goes): he lets go at the bottom of
+            // the swing with all its speed, and a kick.
             brain.mode = HanMode::Follow;
             pos.0 = bottom;
             body.vel = Vec2::new(dir * phys.speed, phys.jump_speed);

@@ -148,8 +148,8 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
     // The Royal Flush (the waltz and nervous, neither Giant Steps nor fired up): cliffs,
     // trapezes, and two drip pipes with cliff faces, up or under.
     &[
-        ("up, up", "7/11 20/1 68/10 125/0 136/11 166/1 185/12 218/2 231/10 262/0 273/11 303/1 322/11 353/1"),
-        ("under, under", "7/11 20/1 68/10 125/0 136/12 166/2 185/12 218/2 231/10 262/0 273/11 303/1 322/12 349/2"),
+        ("up, up", "7/11 20/1 68/10 125/0 136/11 176/1 185/12 218/2 231/10 262/0 273/11 322/11 326/1 353/1"),
+        ("under, under", "7/11 20/1 68/10 125/0 136/12 172/2 185/12 218/2 231/10 262/0 273/11 313/1 322/12 349/2"),
     ],
     // Up the Pipe, a climb (Han turns at walls): a lift, a chimney of up-through floors, then
     // the giant wall (Giant Steps, over to the high gutter) or back over the trapdoor into the
