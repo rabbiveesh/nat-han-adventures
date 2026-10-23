@@ -112,6 +112,8 @@ pub enum SetCall {
     Mode(Harmony),
     /// The laughing band, held on its melting phrase ([`MELT_SECS`]).
     Melt,
+    /// The nervous band, held [`HOLD_SECS`]: its grip, Han climbs a shaft's wall.
+    Nervous,
 }
 
 /// Ask the band for a set-list call. Plays it at once, charged or not.
@@ -124,17 +126,21 @@ pub fn call_of(word: &str) -> Option<SetCall> {
         "giant" => Some(SetCall::Mode(Harmony::Coltrane)),
         "gap" => Some(SetCall::Mode(Harmony::Quartal)),
         "melt" => Some(SetCall::Melt),
+        "waltz" => Some(SetCall::Mode(Harmony::Waltz)),
+        "nervous" => Some(SetCall::Nervous),
         _ => None,
     }
 }
 
-/// Where a call sits on every set list: Giant Steps, fired up, melting.
+/// Where a call sits on every set list: Giant Steps, fired up, the waltz, nervous, melting.
 fn set_list_rank(c: SetCall) -> u8 {
     match c {
         SetCall::Mode(Harmony::Coltrane) => 0,
         SetCall::Mode(Harmony::Quartal) => 1,
-        SetCall::Mode(_) => 2,
-        SetCall::Melt => 3,
+        SetCall::Mode(Harmony::Waltz) => 2,
+        SetCall::Mode(_) => 3,
+        SetCall::Nervous => 4,
+        SetCall::Melt => 5,
     }
 }
 
@@ -409,14 +415,17 @@ pub(super) fn plugin(app: &mut App) {
 #[derive(Component, Debug, Clone, Copy, PartialEq)]
 pub struct CallSign(pub SetCall);
 
-/// Where a level's signs go (cell, call): its `gate: giant` and `gate: gap` marks, and each
-/// run of drips (ceiling spikes: melted, Han fits under them) at its open ends.
+/// Where a level's signs go (cell, call): its `gate: giant`, `gap`, `trapeze` (the waltz) and
+/// `shaft` (nervous) marks, and each run of drips (ceiling spikes: melted, Han fits under them)
+/// at its open ends.
 pub fn call_signs(level: &Level) -> Vec<((i32, i32), SetCall)> {
     let mut out = Vec::new();
     for g in &level.gates {
         match g.topic {
             Topic::Giant => out.push(((g.c0, g.r0 - 1), SetCall::Mode(Harmony::Coltrane))),
             Topic::Gap => out.push((((g.c0 + g.c1) / 2, g.r0 - 2), SetCall::Mode(Harmony::Quartal))),
+            Topic::Trapeze => out.push((((g.c0 + g.c1) / 2, g.r1 - 1), SetCall::Mode(Harmony::Waltz))),
+            Topic::Shaft => out.push(((g.c1, g.r1 - 3), SetCall::Nervous)),
             _ => {}
         }
     }

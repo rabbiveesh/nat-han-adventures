@@ -113,6 +113,8 @@ pub enum SpriteId {
     IconHorn,
     IconNote,
     IconSweat,
+    /// The nervous band (Side B's set list). 8x8.
+    IconJitters,
     /// Breakable brick (a bar of old soap). 16x16.
     Brick,
     /// Crumbling platform (soggy cardboard), whole and cracking. 16x16, art in the top ~9px.
@@ -171,7 +173,7 @@ impl SpriteId {
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
-            IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
+            IconLock, IconHorn, IconNote, IconSweat, IconJitters, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
             CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
         ];
         for w in tiles::WORLDS {
@@ -188,7 +190,7 @@ impl SpriteId {
             HanBraced | HanPlunge | HanYank => (16, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
-            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
+            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat | IconJitters => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
             Wisp => (4, 6),
@@ -258,6 +260,7 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         IconHorn => items::icon_horn(),
         IconNote => items::icon_note(),
         IconSweat => items::icon_sweat(),
+        IconJitters => items::icon_jitters(),
         Brick => gadgets::brick(),
         Crumble => gadgets::crumble(),
         Trampoline => gadgets::trampoline(),

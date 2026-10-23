@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use super::{palette::*, *};
 use crate::audio::{BandMeters, Harmony};
 use crate::audio::director::SUMMON_ORDER;
-use crate::game::sideb::{MELT_SECS, Phase, SetCall, SideB};
+use crate::game::sideb::{HOLD_SECS, MELT_SECS, Phase, SetCall, SideB};
 use crate::state::AppState;
 use crate::touch::TouchMode;
 
@@ -101,6 +101,7 @@ fn icon_of(c: SetCall) -> SpriteId {
         SetCall::Mode(_) => SpriteId::IconHorn,
         // A drop: melting.
         SetCall::Melt => SpriteId::IconSweat,
+        SetCall::Nervous => SpriteId::IconJitters,
     }
 }
 
@@ -227,6 +228,10 @@ fn update(
             SetCall::Melt => {
                 let now = run.as_ref().map_or(0.0, |r| r.time);
                 director.as_ref().and_then(|d| d.melt_until).map_or(0.0, |u| ((u - now) / MELT_SECS).clamp(0.0, 1.0))
+            }
+            SetCall::Nervous => {
+                let now = run.as_ref().map_or(0.0, |r| r.time);
+                director.as_ref().and_then(|d| d.nervous_until).map_or(0.0, |u| ((u - now) / HOLD_SECS).clamp(0.0, 1.0))
             }
         };
         let w = percent(share * 100.0);

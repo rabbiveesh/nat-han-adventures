@@ -64,6 +64,7 @@ fn sign_sprite(add: On<Add, CallSign>, q: Query<&CallSign>, sprites: Option<Res<
         SetCall::Mode(Harmony::Quartal) => SpriteId::IconNugget,
         SetCall::Mode(_) => SpriteId::IconHorn,
         SetCall::Melt => SpriteId::IconSweat,
+        SetCall::Nervous => SpriteId::IconJitters,
     };
     commands.entity(add.entity).insert(Visibility::default()).with_children(|s| {
         s.spawn((Sprite::from_color(Color::srgb(0.65, 0.48, 0.12), Vec2::splat(14.0)), Transform::default()));

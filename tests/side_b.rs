@@ -126,34 +126,30 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
         ("drop", "5/12 7/11 9/0 38/12 50/2 92/0 120/1 152/2"),
         ("under", "3/12 7/11 9/2 50/2 52/10 92/0 120/1 152/2"),
     ],
-    // The Big Flush: the alley and the deck, every route's nuggets exact.
+    // The Big Flush (the waltz in place of melting): two trapezes, and the alley and the deck
+    // (Giant Steps over each, or through and under with no music).
     &[
-        ("under, under", "5/12 7/11 9/0 80/12 112/2 142/1 174/2 215/10 221/2 223/11 260/0 286/1"),
-        ("over, leap", "7/12 9/0 55/0 78/11 86/10 112/2 137/11 142/1 172/0 208/11 215/1 260/0 286/1"),
-        ("over, drop", "7/12 9/0 55/0 78/11 86/10 112/2 137/12 142/1 172/0 208/11 220/2 260/0 286/1"),
+        ("over, over", "7/10 20/0 29/10 56/0 64/12 121/2 132/11 162/1 179/10 209/0 218/12 294/2 305/10 335/0 354/11 381/1"),
+        ("through, under", "7/10 20/0 64/12 121/2 132/11 162/1 218/12 294/2 305/10 335/0 354/11 381/1"),
+        ("over, under", "7/10 20/0 29/10 56/0 64/12 121/2 132/11 162/1 218/12 294/2 305/10 335/0 354/11 381/1"),
+        ("through, over", "7/10 20/0 64/12 121/2 132/11 162/1 179/10 209/0 218/12 294/2 305/10 335/0 354/11 381/1"),
     ],
     // Rush Hour.
     &[
         ("under, under", "4/12 6/11 8/0 83/0 98/2 101/1 140/12 147/2 186/2 189/10 230/1 252/0"),
         ("over, leap", "6/11 8/0 40/0 68/12 80/0 99/2 101/1 102/10 140/0 142/11 175/10 183/1 230/1 252/0"),
     ],
-    // Double Trouble.
+    // Double Trouble (nervous in place of Giant Steps): two cliffs to climb, and the drip
+    // pipe with a cliff face: up it (nervous) or under (melting).
     &[
-        ("under, under", "3/12 5/2 5/11 7/10 9/12 11/1 70/12 90/0 92/2 127/2 165/10 172/2 174/11 210/0 226/1"),
-        ("over, leap", "3/12 5/2 5/11 7/10 11/1 45/0 66/12 76/10 92/0 94/2 120/11 127/0 158/11 167/1 210/0 226/1"),
+        ("up the face", "7/12 20/2 33/10 64/0 109/11 166/1 175/11 206/1 215/10 248/0 255/12 285/2 298/11 329/1"),
+        ("under", "7/12 20/2 33/10 64/0 109/11 166/1 175/12 202/2 215/10 248/0 255/12 285/2 298/11 329/1"),
     ],
-    // The Royal Flush.
+    // The Royal Flush (the waltz and nervous, neither Giant Steps nor fired up): cliffs,
+    // trapezes, and two drip pipes with cliff faces, up or under.
     &[
-        (
-            "under, under, under",
-            "4.5/12 7.5/11 10.5/12 14/0 85.5/12 112/2 137.5/10 142/1 174/2 221/2 223.5/10 260/0 262/2 295.5/11 \
-             333.5/10 356/0 372/1",
-        ),
-        (
-            "over, leap, over",
-            "7.5/12 10.5/11 14/0 55/0 88.5/11 112/2 137.5/10 142/1 172/0 203.5/12 208.5/10 217/1 260/0 262/2 \
-             295.5/10 306/0 330.5/11 340.5/10 356/0 372/1",
-        ),
+        ("up, up", "7/11 20/1 68/10 125/0 136/11 166/1 185/12 218/2 231/10 262/0 273/11 303/1 322/11 353/1"),
+        ("under, under", "7/11 20/1 68/10 125/0 136/12 166/2 185/12 218/2 231/10 262/0 273/11 303/1 322/12 349/2"),
     ],
     // Up the Pipe, a climb (Han turns at walls): a lift, a chimney of up-through floors, then
     // the giant wall (Giant Steps, over to the high gutter) or back over the trapdoor into the
