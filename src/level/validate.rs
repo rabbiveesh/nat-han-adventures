@@ -78,7 +78,7 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
 use super::{
-    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_FLING, CUSHION_LIFT, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_FAN_REACH,
+    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_FLING, CUSHION_LIFT, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
     GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
@@ -338,8 +338,9 @@ pub struct Env {
 /// The band's bend on the gadget tiles in a mode (the game's `TileMood`): belts' and wall
 /// fans' speed multipliers (fired up), fans blowing [`GIANT_FAN_REACH`] far (Giant Steps), a
 /// trampoline's spring multiplier (the waltz: it holds you till ONE, then springs
-/// [`WALTZ_SPRING_BOOST`] faster) and a cushion's or a bumper's (the waltz, on ONE: ideal
-/// flights only, a human doesn't count on the timing).
+/// [`WALTZ_SPRING_BOOST`] faster), a cushion's or a bumper's (the waltz, on ONE: ideal
+/// flights only, a human doesn't count on the timing) and a ceiling cushion's bat down
+/// ([`GIANT_CUSHION_BAT`]: Giant Steps).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tiles {
     pub belt: f32,
@@ -347,15 +348,16 @@ pub struct Tiles {
     pub far: bool,
     pub spring: f32,
     pub fling: f32,
+    pub bat: f32,
 }
 
 impl Tiles {
-    pub const NORMAL: Tiles = Tiles { belt: 1.0, gust: 1.0, far: false, spring: 1.0, fling: 1.0 };
+    pub const NORMAL: Tiles = Tiles { belt: 1.0, gust: 1.0, far: false, spring: 1.0, fling: 1.0, bat: 1.0 };
 
     pub fn of(mode: Mode, ideal: bool) -> Tiles {
         match mode {
             Mode::FiredUp => Tiles { belt: FIRED_UP_TILES, gust: FIRED_UP_TILES, ..Tiles::NORMAL },
-            Mode::GiantSteps => Tiles { far: true, ..Tiles::NORMAL },
+            Mode::GiantSteps => Tiles { far: true, bat: GIANT_CUSHION_BAT, ..Tiles::NORMAL },
             Mode::Waltz => Tiles {
                 spring: WALTZ_SPRING_BOOST,
                 fling: if ideal { WALTZ_SPRING_BOOST } else { 1.0 },
@@ -1723,7 +1725,7 @@ fn move_body(map: &Map, env: &Env, b: &mut Body, smashed: &mut Vec<Cell>, touche
         }
         if bonk {
             // A ceiling cushion: sprung back down, the toot back.
-            b.vy = SPRING_SPEED * tiles.fling;
+            b.vy = SPRING_SPEED * tiles.fling * tiles.bat;
             b.cut = true;
             refilled = true;
         } else if hit {
@@ -1818,7 +1820,7 @@ struct PinMemo {
     flags: Vec<u32>,
     toots: bool,
     /// The physics it was walked in (gravity, the tiles' bend).
-    env: Option<(u32, u32, u32, bool, u32, u32)>,
+    env: Option<(u32, u32, u32, bool, u32, u32, u32)>,
     ids: HashMap<u64, u32>,
     nodes: Vec<PinNode>,
     walks: u32,
@@ -1930,7 +1932,7 @@ impl PinMemo {
 /// into `g`.
 fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin {
     let mut memo = std::mem::take(&mut g.pin);
-    let key = (env.gravity.to_bits(), env.tiles.belt.to_bits(), env.tiles.gust.to_bits(), env.tiles.far, env.tiles.spring.to_bits(), env.tiles.fling.to_bits());
+    let key = (env.gravity.to_bits(), env.tiles.belt.to_bits(), env.tiles.gust.to_bits(), env.tiles.far, env.tiles.spring.to_bits(), env.tiles.fling.to_bits(), env.tiles.bat.to_bits());
     if memo.flags != map.flags || memo.toots != toots || memo.env != Some(key) {
         memo = PinMemo { flags: map.flags.clone(), toots, env: Some(key), ..PinMemo::default() };
     }

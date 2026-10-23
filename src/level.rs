@@ -195,6 +195,9 @@ pub const BELT_SPEED: f32 = 40.0;
 pub const FAN_REACH: i32 = 6;
 /// ...twice that while the band plays Giant Steps (every fan, laid any way: `game::TileMood`).
 pub const GIANT_FAN_REACH: i32 = 2 * FAN_REACH;
+/// While the band plays Giant Steps a ceiling cushion (`m`) bats you back down this much
+/// slower: a soft paddle, so you can toot back up into it and rally along under it.
+pub const GIANT_CUSHION_BAT: f32 = 0.1;
 /// While the band's fired up, conveyor belts and wall fans' gusts run this much faster.
 pub const FIRED_UP_TILES: f32 = 1.5;
 /// In the waltz a trampoline catches whoever lands on it and springs them on the next ONE this

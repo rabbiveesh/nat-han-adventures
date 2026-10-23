@@ -112,6 +112,16 @@ quick statement of the level's idea, not a tutorial.
   with only a held direction key** (`scripts/held-gaps <tour>`: the timeline's press/tap/release times).
   Breezy v3's longest are under 4 s (walking a nugget lane, hovering in a fan).
 - Each beat asks for a jump, a toot or a hover at a readable spot.
+- **Density, measured:** `scripts/density [tour-prefix]` plays every NAT ALONE tour headless
+  (`density_report` in `tests/showcase.rs`) and lists, per tour, the quiet share (time beyond
+  1 s in each stretch between actions, over the run), the longest stretch and how many run
+  over 2 s; `DENSITY_GAPS=1` lists every stretch over 1 s. An action is a key pressed or
+  released, a nugget, a fan's gust entered, or a kick from a duck, cushion or spring. Aim for
+  under 10% quiet and nothing over 2 s. To fill a stretch, a spike tuft or a crate the tour hops
+  (not on a mode's runway: it breaks the fired-up readiness; and a stretch walked both ways
+  needs a hop each way). The 2026-10-23 pass: `gadgets/nat-alone/density.md` (worst before:
+  Breezy 18%, Brush 17%, Ping Pong's cellar 17%; after: Brush's Giant Steps 16%, the fast lane
+  under its rollers has no room, then Spin's sump 12%; the rest 10% or less).
 
 ## 5. Nuggets
 - They trace the lines the good runs take. Check this with each tour's trace.
@@ -515,15 +525,21 @@ decision), and all ten open World 4, the double game where Nat and Han are in si
   each gap and a nugget on each arc. No call: off the runway into the cellar: a hole, low hops
   under its cushion ceiling (a 2-wide hole under it), two ducks, the elevator (plain walls at
   its top: toot at the top of the last bat, up through the hatch).
-- Each mode changes the characters, through the physics rather than a TileMood: Giant Steps'
-  low gravity makes the duck shafts climb themselves and the throws carry farther; fired up
-  outruns the ducks' bats (let go of Right in the shafts so both ducks bat). The waltz's
-  ×1.4 fling on ONE isn't used here (gap).
+- Each mode changes the characters: Giant Steps' low gravity makes the duck shafts climb
+  themselves and the throws carry farther, and Giant Steps softens the ceiling cushions
+  (`GIANT_CUSHION_BAT`: they bat you down at a tenth of the speed, and still give the toot
+  back), so the gallery's first stretch is a rally: a spike bed under the cushions (a stone in
+  it), toot up into the cushion about every 0.36 s (hold each toot till the bonk: a released
+  toot is cut in half and falls short) and ride along under it. Fired up outruns the ducks'
+  bats (let go of Right in the shafts so both ducks bat). The waltz's ×1.4 fling on ONE isn't
+  used here (gap).
 - Second fork, the bank shot: the merge ends at a wall with a duck's face up it. Jump, toot
   into the duck, it bats you back up and refills your toot; toot at the top of its bat (Giant
   Steps doesn't need to) up through the one-way shelf behind you, onto the high score table
   (nuggets over 3-wide spiky slots, a duck to hop). Or the tunnel at its foot under a cushion
   ceiling: hop its two holes low. Giant Steps and fired up bank, no call tunnels.
+- A spike bed of 8 or more under a ceiling the validator can't rally across is a stain pit
+  ("leads nowhere much"): split it with a stone.
 - The umpire's chair: a cushion block hanging over the merge stops the bank shot's duck from
   batting you back onto the gallery's end.
 - Secret: the low passage back under the landing, where the cellar route lands (a lone nugget
@@ -584,6 +600,11 @@ decision), and all ten open World 4, the double game where Nat and Han are in si
 - Runs: GS 72.1 s, waltz 64.2 s, no call 65.4 s, fired up 56.0 s (it waits out one crusher
   cycle before the plunger). Clips: `nat-alone/w3-flush-giant.mp4`, `w3-flush-waltz.mp4`,
   `w3-flush-fired.mp4`, `w3-flush-sump.mp4`.
+- The encore's promise: the ceiling over the goal's stage is built into the level (row 21, all
+  but the grate's hole and the first four columns, where the Giant Steps arrival's arc flies
+  through) and the grate is drawn from the start, with light falling through it onto the
+  throne (it's above the screen as you come in; the beam isn't). The encore adds the missing
+  seam tiles and slams the shutter, which puts the light out.
 - Lessons: a jump and toot rises about 8 rows in Giant Steps (4.6 + the toot at the apex): the
   balcony 8 up needed lowering to 7.6. A sock hung over the walking row walls it off: hang it
   two rows up and leave two clear tiles after it to jump from. After a waltz spring a toot only

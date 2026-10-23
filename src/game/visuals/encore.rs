@@ -7,12 +7,13 @@ use bevy::prelude::*;
 use super::Particle;
 use crate::art::{SpriteId, Sprites};
 use crate::events::EncoreCue;
-use crate::game::encore::{Encore, GRATE_WIDTH};
-use crate::game::{ActiveLevel, LevelEntity};
+use crate::game::encore::{self, Encore, GRATE_WIDTH};
+use crate::game::solo::SoloRun;
+use crate::game::{ActiveLevel, Goal, LevelEntity};
 use crate::level::TILE;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, (spawn_seam.run_if(resource_added::<Encore>), update_seam, duck).chain().run_if(resource_exists::<Sprites>));
+    app.add_observer(grate_ahead).add_systems(Update, (spawn_seam.run_if(resource_added::<Encore>), update_seam, duck).chain().run_if(resource_exists::<Sprites>));
 }
 
 /// The last chord's rubber duck: it pops up under Nat, big, and sinks away.
@@ -36,14 +37,71 @@ struct Grate;
 #[derive(Component)]
 struct Shutter;
 
-/// The ceiling's tiles, the grate, and the shutter (hidden under the tiles right of the hole).
-fn spawn_seam(mut commands: Commands, encore: Res<Encore>, active: Option<Res<ActiveLevel>>, sprites: Res<Sprites>) {
+/// The grate, on its side.
+fn grate(sprites: &Sprites, at: Vec2) -> impl Bundle {
+    (
+        Name::new("SeamGrate"),
+        LevelEntity,
+        Grate,
+        Sprite::from_image(sprites.get(SpriteId::Grate)),
+        Transform::from_translation(at.extend(0.15)).with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
+    )
+}
+
+/// NAT ALONE's last level shows its grate from the start, in the ceiling over the goal: where
+/// the encore goes.
+fn grate_ahead(
+    _: On<Add, Goal>,
+    solo: Option<Res<SoloRun>>,
+    active: Option<Res<ActiveLevel>>,
+    sprites: Option<Res<Sprites>>,
+    mut commands: Commands,
+) {
+    let (Some(active), Some(sprites)) = (active, sprites) else { return };
+    if encore::is_solo_finale(solo.as_deref()) {
+        let s = encore::seam(&active.level);
+        commands.spawn(grate(&sprites, Vec2::new(s.hole, s.bottom + TILE / 2.0)));
+        // Light falls through it onto the throne, brightest at the top: the grate's above the
+        // screen as you come in, the beam isn't.
+        let floor = s.bottom - encore::SEAM_RISE;
+        for (k, alpha) in BEAM.iter().enumerate() {
+            let top = s.bottom - k as f32 * encore::SEAM_RISE / BEAM.len() as f32;
+            let h = top - floor;
+            commands.spawn((
+                Name::new("SeamBeam"),
+                LevelEntity,
+                Beam,
+                Sprite::from_color(Color::srgba(1.0, 0.95, 0.7, *alpha), Vec2::new(GRATE_WIDTH - 4.0, h)),
+                Transform::from_translation(Vec3::new(s.hole, floor + h / 2.0, 0.12)),
+            ));
+        }
+    }
+}
+
+/// The light through the grate, in layers: each a little shorter (from the top) than the one
+/// before, so it's brightest under the grate.
+const BEAM: [f32; 3] = [0.06, 0.06, 0.08];
+
+#[derive(Component)]
+struct Beam;
+
+/// The ceiling's tiles (those the level hasn't built in), the grate (unless it's up already),
+/// and the shutter (hidden under the tiles right of the hole).
+fn spawn_seam(
+    mut commands: Commands,
+    encore: Res<Encore>,
+    active: Option<Res<ActiveLevel>>,
+    sprites: Res<Sprites>,
+    grates: Query<(), With<Grate>>,
+) {
     let (Some(seam), Some(active)) = (encore.seam, active) else { return };
-    let w = active.level.world;
+    let level = &active.level;
+    let w = level.world;
     let y = seam.bottom + TILE / 2.0;
+    let row = level.height as i32 - 1 - (y / TILE).floor() as i32;
     let mut x = seam.x0 + TILE / 2.0;
     while x < seam.x1 {
-        if (x - seam.hole).abs() > GRATE_WIDTH / 2.0 {
+        if (x - seam.hole).abs() > GRATE_WIDTH / 2.0 && !level.tile((x / TILE).floor() as i32, row).is_solid() {
             commands.spawn((
                 Name::new("Seam"),
                 LevelEntity,
@@ -53,14 +111,9 @@ fn spawn_seam(mut commands: Commands, encore: Res<Encore>, active: Option<Res<Ac
         }
         x += TILE;
     }
-    // The grate: the wall grate on its side.
-    commands.spawn((
-        Name::new("SeamGrate"),
-        LevelEntity,
-        Grate,
-        Sprite::from_image(sprites.get(SpriteId::Grate)),
-        Transform::from_translation(Vec3::new(seam.hole, y, 0.15)).with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
-    ));
+    if grates.is_empty() {
+        commands.spawn(grate(&sprites, Vec2::new(seam.hole, y)));
+    }
     commands
         .spawn((Name::new("SeamShutter"), LevelEntity, Shutter, Transform::from_translation(Vec3::new(seam.hole + GRATE_WIDTH, y, 0.1)), Visibility::Hidden))
         .with_children(|s| {
@@ -74,6 +127,7 @@ fn update_seam(
     encore: Option<Res<Encore>>,
     mut grate: Query<&mut Visibility, (With<Grate>, Without<Shutter>)>,
     mut shutter: Query<(&mut Transform, &mut Visibility), (With<Shutter>, Without<Grate>)>,
+    mut beam: Query<&mut Visibility, (With<Beam>, Without<Grate>, Without<Shutter>)>,
 ) {
     let Some(e) = encore else { return };
     let Some(seam) = e.seam else { return };
@@ -85,5 +139,9 @@ fn update_seam(
         // It slides out from under the ceiling right of the hole.
         tf.translation.x = seam.hole + GRATE_WIDTH * (1.0 - s);
         vis.set_if_neq(if s > 0.0 { Visibility::Inherited } else { Visibility::Hidden });
+    }
+    // Shut: no more light from upstairs.
+    for mut vis in &mut beam {
+        vis.set_if_neq(if s > 0.0 { Visibility::Hidden } else { Visibility::Inherited });
     }
 }

@@ -42,7 +42,7 @@ use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, 
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
 use crate::level::{
-    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_FAN_REACH,
+    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
     Level, SPRING_SPEED, TILE, Tile, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 
@@ -225,7 +225,7 @@ impl Fall {
 
 /// How the band bends the gadget tiles, for every body (one band): fired up, belts and wall
 /// fans run [`FIRED_UP_TILES`] faster; Giant Steps, every fan blows [`GIANT_FAN_REACH`] tiles
-/// far; the waltz, a trampoline catches you and springs you on the next ONE
+/// far and a ceiling cushion bats you down [`GIANT_CUSHION_BAT`] as fast; the waltz, a trampoline catches you and springs you on the next ONE
 /// ([`WALTZ_SPRING_BOOST`] faster), and a cushion or a bumper hit on ONE flings you that much
 /// faster too.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -240,11 +240,13 @@ pub struct TileMood {
     pub catch: bool,
     /// Spring multiplier now: [`WALTZ_SPRING_BOOST`] on ONE in the waltz, else 1.
     pub spring: f32,
+    /// A ceiling cushion's bat down: [`GIANT_CUSHION_BAT`] in Giant Steps, else 1.
+    pub bat: f32,
 }
 
 impl Default for TileMood {
     fn default() -> Self {
-        TileMood { belt: 1.0, gust: 1.0, reach: FAN_REACH, catch: false, spring: 1.0 }
+        TileMood { belt: 1.0, gust: 1.0, reach: FAN_REACH, catch: false, spring: 1.0, bat: 1.0 }
     }
 }
 
@@ -257,6 +259,7 @@ impl TileMood {
             reach: if groove.giant_steps() { GIANT_FAN_REACH } else { FAN_REACH },
             catch: groove.waltz(),
             spring: if groove.on_the_one() { WALTZ_SPRING_BOOST } else { 1.0 },
+            bat: if groove.giant_steps() { GIANT_CUSHION_BAT } else { 1.0 },
         }
     }
 }
@@ -487,7 +490,7 @@ pub fn step_body(
         }
     }
     if bonked {
-        body.vel.y = -SPRING_SPEED * mood.spring;
+        body.vel.y = -SPRING_SPEED * mood.spring * mood.bat;
     }
     // A trampoline underfoot: up we go (in the waltz, it holds you till ONE).
     let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x)) && (!mood.catch || mood.spring > 1.0);
