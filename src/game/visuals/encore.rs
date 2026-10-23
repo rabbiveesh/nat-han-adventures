@@ -61,8 +61,29 @@ fn grate_ahead(
     if encore::is_solo_finale(solo.as_deref()) {
         let s = encore::seam(&active.level);
         commands.spawn(grate(&sprites, Vec2::new(s.hole, s.bottom + TILE / 2.0)));
+        // Light falls through it onto the throne, brightest at the top: the grate's above the
+        // screen as you come in, the beam isn't.
+        let floor = s.bottom - encore::SEAM_RISE;
+        for (k, alpha) in BEAM.iter().enumerate() {
+            let top = s.bottom - k as f32 * encore::SEAM_RISE / BEAM.len() as f32;
+            let h = top - floor;
+            commands.spawn((
+                Name::new("SeamBeam"),
+                LevelEntity,
+                Beam,
+                Sprite::from_color(Color::srgba(1.0, 0.95, 0.7, *alpha), Vec2::new(GRATE_WIDTH - 4.0, h)),
+                Transform::from_translation(Vec3::new(s.hole, floor + h / 2.0, 0.12)),
+            ));
+        }
     }
 }
+
+/// The light through the grate, in layers: each a little shorter (from the top) than the one
+/// before, so it's brightest under the grate.
+const BEAM: [f32; 3] = [0.06, 0.06, 0.08];
+
+#[derive(Component)]
+struct Beam;
 
 /// The ceiling's tiles (those the level hasn't built in), the grate (unless it's up already),
 /// and the shutter (hidden under the tiles right of the hole).
@@ -106,6 +127,7 @@ fn update_seam(
     encore: Option<Res<Encore>>,
     mut grate: Query<&mut Visibility, (With<Grate>, Without<Shutter>)>,
     mut shutter: Query<(&mut Transform, &mut Visibility), (With<Shutter>, Without<Grate>)>,
+    mut beam: Query<&mut Visibility, (With<Beam>, Without<Grate>, Without<Shutter>)>,
 ) {
     let Some(e) = encore else { return };
     let Some(seam) = e.seam else { return };
@@ -117,5 +139,9 @@ fn update_seam(
         // It slides out from under the ceiling right of the hole.
         tf.translation.x = seam.hole + GRATE_WIDTH * (1.0 - s);
         vis.set_if_neq(if s > 0.0 { Visibility::Inherited } else { Visibility::Hidden });
+    }
+    // Shut: no more light from upstairs.
+    for mut vis in &mut beam {
+        vis.set_if_neq(if s > 0.0 { Visibility::Hidden } else { Visibility::Inherited });
     }
 }
