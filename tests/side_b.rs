@@ -126,13 +126,12 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
         ("drop", "5/12 7/11 9/0 38/12 50/2 92/0 120/1 152/2"),
         ("under", "3/12 7/11 9/2 50/2 52/10 92/0 120/1 152/2"),
     ],
-    // The Big Flush (the waltz in place of melting): two trapezes, and the alley and the deck
-    // (Giant Steps over each, or through and under with no music).
+    // The Big Flush (the waltz in place of melting), in passages: pits (fired up), two
+    // trapezes (the waltz), walls (Giant Steps), the deck (Giant Steps over, or under), two
+    // trapezes, pits, walls; a checkpoint at each passage's mouth.
     &[
-        ("over, over", "7/10 20/0 29/10 56/0 64/12 121/2 132/11 162/1 179/10 209/0 218/12 294/2 305/10 335/0 354/11 381/1"),
-        ("through, under", "7/10 20/0 64/12 121/2 132/11 162/1 218/12 294/2 305/10 335/0 354/11 381/1"),
-        ("over, under", "7/10 20/0 29/10 56/0 64/12 121/2 132/11 162/1 218/12 294/2 305/10 335/0 354/11 381/1"),
-        ("through, over", "7/10 20/0 64/12 121/2 132/11 162/1 179/10 209/0 218/12 294/2 305/10 335/0 354/11 381/1"),
+        ("over", "11/11 15/1 86/12 90/2 159/10 163/0 203/10 207/0 270/12 274/2 336/11 340/1 411/10 415/0"),
+        ("under", "11/11 15/1 86/12 90/2 159/10 163/0 270/12 274/2 336/11 340/1 411/10 415/0"),
     ],
     // Rush Hour.
     &[
@@ -564,6 +563,21 @@ fn play_in_app(app: &mut App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>
     }
 }
 
+#[test]
+fn a_death_rewinds_to_the_last_checkpoint() {
+    // B4: over the pits fired up, then no waltz for the trapezes: Han falls in, and comes back
+    // at the checkpoint between the passages, its nuggets back, not at the top.
+    let mut app = app(3);
+    let r = play_in_app(&mut app, &plan("11/11 15/1"));
+    assert_eq!(r.map_err(|e| e.0), Err(Some(Fate::Pit)));
+    let mouth = side(&app).mouth.clone().expect("passed a checkpoint");
+    until(&mut app, 5.0, |a| side(a).phase == Phase::Playing);
+    assert_eq!(side(&app).rewinds, 1);
+    assert!((col(&mut app) - mouth.at.x / TILE).abs() < 1.5, "back at {} for the checkpoint at {}", col(&mut app), mouth.at.x / TILE);
+    // And on from there: the trapezes with the waltz, as the route goes.
+    assert_eq!(play_in_app(&mut app, &plan("86/12 90/2 159/10 163/0 270/12 274/2 336/11 340/1 411/10 415/0")), Ok(()));
+}
+
 /// `SIDE_B_PLAN="1: 3/0 22/1"` plays level 1 calling call 0 at column 3, call 1 at 22 (to find
 /// a level's solution): `cargo test --test side_b try_a_plan -- --ignored --nocapture`.
 #[test]
@@ -861,23 +875,4 @@ fn free_play_side_b_rooms_expect_rewinds() {
         let walk = room.level.width as f32 * TILE / 70.0;
         assert!(room.par_secs > walk * (1.0 + room.expected_deaths as f32 / 2.0), "par {} for {} rewinds", room.par_secs, room.expected_deaths);
     }
-}
-
-#[test]
-fn signs_show_which_call_gets_han_past() {
-    use nat_han_adventures::game::sideb::{CallSign, call_signs};
-    // B3, Drip Pipe: a horn over its giant wall, a nugget over its gap, a drop at each end of
-    // its three drip runs.
-    let b = sideb::SideBLevel::load(2);
-    let signs = call_signs(&b.level);
-    let count = |c: SetCall| signs.iter().filter(|s| s.1 == c).count();
-    assert_eq!(count(SetCall::Mode(Harmony::Coltrane)), 1);
-    assert_eq!(count(SetCall::Mode(Harmony::Quartal)), 1);
-    assert_eq!(count(SetCall::Melt), 6);
-    // And they're in the level when it plays.
-    let mut app = app(2);
-    app.update();
-    app.update();
-    let n = app.world_mut().query::<&CallSign>().iter(app.world()).count();
-    assert_eq!(n, signs.len());
 }

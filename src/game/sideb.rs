@@ -12,8 +12,8 @@
 //!   it (the *frontier*), and from there he **charges**: runs on, jumping at walls and edges,
 //!   tooting at the top. Without the right music playing by then, that's comically fatal.
 //! - **Han can die**: spikes, sewage, the pit, and knocking himself out on a wall he can't
-//!   climb. A death rewinds the whole level (the set list comes back with it): there are no
-//!   checkpoints on Side B.
+//!   climb. A death rewinds to the last checkpoint Han passed (the mouth of a passage: `C`),
+//!   with the set list as it was there, or to the top of the level ([`Mouth`]).
 //! - **Melting** (`melt` on the set list): the laughing band, held on its melting phrase. Han
 //!   shrinks to [`MELT_SIZE`] and ducks under ceiling spikes he'd otherwise lose his cap to,
 //!   but if it wears off while he's under them, he grows back into them.
@@ -247,6 +247,22 @@ pub struct SideB {
     pub dir: Option<f32>,
     pub bonk_at: Vec2,
     pub bonks: u32,
+    /// The last checkpoint Han passed: a death rewinds there.
+    #[reflect(ignore)]
+    pub mouth: Option<Mouth>,
+    /// The rewind under way goes back to [`SideB::mouth`] (a death's), not to the top (R).
+    pub to_mouth: bool,
+}
+
+/// A checkpoint Han's passed (the mouth of a passage): where a rewind puts him, and the set
+/// list as it was when he got there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mouth {
+    /// The checkpoint's floor.
+    pub at: Vec2,
+    pub left: Vec<u32>,
+    pub selected: usize,
+    pub dir: Option<f32>,
 }
 
 /// A free play Side B room in the course (cells and columns of the loaded level): Nat waits in
@@ -289,6 +305,8 @@ impl SideB {
             dir: None,
             bonk_at: Vec2::NAN,
             bonks: 0,
+            mouth: None,
+            to_mouth: false,
         }
     }
 
@@ -305,6 +323,24 @@ impl SideB {
             fate: self.fate,
             room: self.room,
             turns: self.turns,
+            ..SideB::new(self.level, self.setlist.clone())
+        };
+    }
+
+    /// Back to the last checkpoint: the set list as it was there.
+    fn back_to_mouth(&mut self) {
+        let Some(m) = self.mouth.clone() else { return self.rewound() };
+        *self = SideB {
+            rewinds: self.rewinds + 1,
+            fate: self.fate,
+            room: self.room,
+            turns: self.turns,
+            left: m.left.clone(),
+            selected: m.selected,
+            dir: m.dir,
+            mouth: Some(m),
+            // (Until Han's back in play: the level's own restart reads it too.)
+            to_mouth: true,
             ..SideB::new(self.level, self.setlist.clone())
         };
     }
@@ -340,7 +376,11 @@ pub fn start_room(world: &mut World, k: usize, room: AloneRoom, setlist: Vec<(Se
 /// Han back at the room's start, as he came in.
 fn han_to_start(world: &mut World, room: AloneRoom) {
     let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
-    let at = super::han::spawn_spot(&level, super::stand_pos(&level, room.start.0, room.start.1));
+    han_to(world, super::han::spawn_spot(&level, super::stand_pos(&level, room.start.0, room.start.1)));
+}
+
+/// Han standing at `at`, afresh.
+fn han_to(world: &mut World, at: Vec2) {
     let mut q = world.query_filtered::<(&mut Pos, &mut PrevPos, &mut Body, &mut HanBrain), With<Han>>();
     if let Ok((mut pos, mut prev, mut body, mut brain)) = q.single_mut(world) {
         pos.0 = at;
@@ -353,14 +393,26 @@ fn han_to_start(world: &mut World, room: AloneRoom) {
 /// A rewind in a free play Side B room: Han back at its start, its nuggets back.
 fn rewind_room(world: &mut World, room: AloneRoom) {
     han_to_start(world, room);
+    nuggets_back(world, room.cols);
+}
+
+/// A death on a Side B level past a checkpoint: Han back at it, the nuggets ahead back.
+fn rewind_to_mouth(world: &mut World, at: Vec2) {
+    han_to(world, at + Vec2::new(0.0, HALF.y));
+    let Some(width) = world.get_resource::<ActiveLevel>().map(|a| a.level.width) else { return };
+    nuggets_back(world, ((at.x / TILE).floor().max(0.0) as usize, width));
+}
+
+/// The nuggets in these columns, as the level has them.
+fn nuggets_back(world: &mut World, cols: (usize, usize)) {
     let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
-    let (x0, x1) = (room.cols.0 as f32 * TILE, room.cols.1 as f32 * TILE);
+    let (x0, x1) = (cols.0 as f32 * TILE, cols.1 as f32 * TILE);
     let mut q = world.query_filtered::<(Entity, &Transform), With<Nugget>>();
     let old: Vec<Entity> = q.iter(world).filter(|(_, tf)| (x0..x1).contains(&tf.translation.x)).map(|(e, _)| e).collect();
     for e in old {
         world.despawn(e);
     }
-    for t in level.things.iter().filter(|t| t.kind == crate::level::ThingKind::Nugget && (room.cols.0..room.cols.1).contains(&t.col)) {
+    for t in level.things.iter().filter(|t| t.kind == crate::level::ThingKind::Nugget && (cols.0..cols.1).contains(&t.col)) {
         world.spawn(super::lifecycle::nugget(&level, t.col, t.row));
     }
 }
@@ -391,7 +443,6 @@ pub(super) fn plugin(app: &mut App) {
             (
                 choose_and_call.run_if(in_state(PlayState::Running)),
                 refill_on_restart.run_if(in_state(AppState::Playing)),
-                spawn_signs,
             )
                 .run_if(resource_exists::<SideB>),
         )
@@ -399,7 +450,7 @@ pub(super) fn plugin(app: &mut App) {
             FixedUpdate,
             (
                 (beacon, melt).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
-                (han_fate, han_grabs_nuggets).chain().in_set(GameSet::Interact),
+                (han_fate, han_grabs_nuggets, han_passes_checkpoints).chain().in_set(GameSet::Interact),
             )
                 .run_if(resource_exists::<SideB>),
         );
@@ -409,75 +460,27 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, dev_start);
 }
 
-/// A sign by an obstacle that a call gets Han past (its icon, as on the set list): over a
-/// giant wall, over a gap, at each end of a drip run. So the level shows which call it wants
-/// where, ahead of Han, and a fork shows both of its ways.
-#[derive(Component, Debug, Clone, Copy, PartialEq)]
-pub struct CallSign(pub SetCall);
-
-/// Where a level's signs go (cell, call): its `gate: giant`, `gap`, `trapeze` (the waltz) and
-/// `shaft` (nervous) marks, and each run of drips (ceiling spikes: melted, Han fits under them)
-/// at its open ends.
-pub fn call_signs(level: &Level) -> Vec<((i32, i32), SetCall)> {
-    let mut out = Vec::new();
-    for g in &level.gates {
-        match g.topic {
-            Topic::Giant => out.push(((g.c0, g.r0 - 1), SetCall::Mode(Harmony::Coltrane))),
-            Topic::Gap => out.push((((g.c0 + g.c1) / 2, g.r0 - 2), SetCall::Mode(Harmony::Quartal))),
-            Topic::Trapeze => out.push((((g.c0 + g.c1) / 2, g.r1 - 1), SetCall::Mode(Harmony::Waltz))),
-            Topic::Shaft => out.push(((g.c1, g.r1 - 3), SetCall::Nervous)),
-            _ => {}
-        }
-    }
-    let drip = |c: i32, r: i32| level.tile(c, r) == Tile::SpikesDown;
-    for r in 0..level.height as i32 {
-        let mut c = 0;
-        while c < level.width as i32 {
-            if !drip(c, r) {
-                c += 1;
-                continue;
-            }
-            let c0 = c;
-            while drip(c, r) {
-                c += 1;
-            }
-            // (A run's open ends, from either side: over Han's head where there's room.)
-            for end in [c0 - 1, c] {
-                if !level.tile(end, r).is_solid() {
-                    let up = if level.tile(end, r - 1).is_solid() { r } else { r - 1 };
-                    out.push(((end, up), SetCall::Melt));
-                }
-            }
-        }
-    }
-    out
-}
-
-/// The signs come with their Side B level.
-fn spawn_signs(
-    mut commands: Commands,
-    side: Res<SideB>,
-    active: Option<Res<ActiveLevel>>,
-    signs: Query<(), With<CallSign>>,
-    mut done: Local<Option<(usize, (usize, usize))>>,
+/// Han passing a checkpoint (the mouth of a passage): a death comes back here, with the set
+/// list as it is now.
+fn han_passes_checkpoints(
+    // (Gone once a free play room's cleared: `end_room`.)
+    side: Option<ResMut<SideB>>,
+    han: Query<(&Pos, &Body), With<Han>>,
+    mut checkpoints: Query<(&mut super::Checkpoint, &Transform)>,
+    mut reached: MessageWriter<crate::events::CheckpointReached>,
 ) {
-    let Some(active) = active else { return };
-    // (In free play, only the room Han has: the run's other rooms are Nat's.)
-    let cols = side.room.map_or((0, active.level.width), |r| r.cols);
-    // (Once per level and room; again after a restart clears them.)
-    if signs.is_empty() {
-        *done = None;
-    }
-    if *done == Some((side.level, cols)) {
+    let (Some(mut side), Ok((pos, body))) = (side, han.single()) else { return };
+    if side.phase != Phase::Playing || side.room.is_some() {
         return;
     }
-    *done = Some((side.level, cols));
-    for ((c, r), call) in call_signs(&active.level) {
-        if !(cols.0 as i32..cols.1 as i32).contains(&c) || c < 0 || r < 0 || c >= active.level.width as i32 || r >= active.level.height as i32 {
+    for (mut cp, tf) in &mut checkpoints {
+        let floor = tf.translation.truncate();
+        if cp.active || (pos.0.x - floor.x).abs() > TILE || pos.0.y - body.half.y > floor.y + 2.0 * TILE || pos.0.y + body.half.y < floor.y {
             continue;
         }
-        let at = active.level.tile_center(c as usize, r as usize);
-        commands.spawn((Name::new("CallSign"), super::LevelEntity, CallSign(call), Transform::from_translation(at.extend(1.5))));
+        cp.active = true;
+        side.mouth = Some(Mouth { at: floor, left: side.left.clone(), selected: side.selected, dir: side.dir });
+        reached.write(crate::events::CheckpointReached { index: cp.index, pos: floor });
     }
 }
 
@@ -549,6 +552,13 @@ fn choose_and_call(
 
 fn refill_on_restart(mut commands: Commands, mut restarts: MessageReader<RestartLevel>, mut side: ResMut<SideB>) {
     if restarts.read().count() > 0 {
+        if side.to_mouth && side.room.is_none() {
+            side.back_to_mouth();
+            if let Some(at) = side.mouth.as_ref().map(|m| m.at) {
+                commands.queue(move |w: &mut World| rewind_to_mouth(w, at));
+            }
+            return;
+        }
         side.rewound();
         if let Some(room) = side.room {
             commands.queue(move |w: &mut World| rewind_room(w, room));
@@ -797,6 +807,7 @@ fn han_fate(
     match side.phase {
         Phase::Rewind { t } => {
             if t - dt <= 0.0 {
+                side.to_mouth = side.mouth.is_some();
                 restart.write(RestartLevel);
             } else {
                 side.phase = Phase::Rewind { t: t - dt };
@@ -827,7 +838,7 @@ fn han_fate(
             }
             return;
         }
-        Phase::Playing => {}
+        Phase::Playing => side.to_mouth = false,
     }
     let Ok((pos, body, mut brain)) = han.single_mut() else { return };
     // (A moment's grace at the top, while the level settles.)
