@@ -14,6 +14,7 @@ use crate::audio::live::chorus::EndStep;
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Orn, Orns};
+use crate::audio::live::riffs;
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Drum;
 
@@ -310,24 +311,35 @@ impl Drums {
                 Orn::Backbeat
             }
             Feel::Funk => {
-                // The vamp: 8th hats (the quarters up), the backbeat, one ghost, the kick's
-                // riff (the one hard); space between.
-                let (vamp, side) = feel::vamp(ctx.seed, ctx.bar.index, ctx.band.feel_since);
-                for k in 0..(bb * 2.0).round() as usize {
-                    let b = k as f64 * 0.5;
-                    if side == 1 && k == 7 {
+                // 16th hats (the beats up, the "e"s and "a"s soft), the backbeat, ghost snares
+                // on the "e"s and "a"s (most of a funk drummer's snare hits: the Groove MIDI
+                // Dataset's funk, 64%), and the kick with the bass's riff ([`riffs::Riff::kicks`]).
+                let side = !feel::first_of_pair(ctx.bar.index, ctx.band.feel_since) as usize;
+                let start = feel::pattern(ctx.seed, ctx.band.feel_since, riffs::funk().len());
+                let family = ctx.harm_at(0.0).map_or(crate::audio::chart::Family::Dominant, |h| h.chord.family());
+                let riff = riffs::pick(start, family);
+                for k in 0..sixteenths {
+                    let b = k as f64 * 0.25;
+                    if side == 1 && k == 14 {
                         add(&mut self.dst, b, Drum::OpenHat, v(-4));
                     } else {
-                        add(&mut self.dst, b, Drum::ClosedHat, v(if k % 2 == 0 { -3 } else { -6 }));
+                        add(&mut self.dst, b, Drum::ClosedHat, v(match k % 4 {
+                            0 => -3,
+                            2 => -5,
+                            _ => -8,
+                        }));
                     }
                 }
                 for &k in &feel::FUNK_BACKBEAT {
                     add(&mut self.dst, k as f64 * 0.25, Drum::Snare, v(2));
                 }
-                if side == 1 {
-                    add(&mut self.dst, vamp.ghost as f64 * 0.25, Drum::Snare, (vol / 4).max(2));
+                let kicks = |k: u8| riff.kicks(side).any(|x| x == k);
+                for &k in feel::FUNK_GHOSTS[side] {
+                    if !kicks(k) {
+                        add(&mut self.dst, k as f64 * 0.25, Drum::Snare, (vol / 4).max(2));
+                    }
                 }
-                for &k in vamp.kick[side] {
+                for k in riff.kicks(side) {
                     add(&mut self.dst, k as f64 * 0.25, Drum::Kick, v(if k == 0 { 2 } else { 0 }));
                 }
                 Orn::FunkGroove

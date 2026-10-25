@@ -40,7 +40,7 @@ use crate::events::{
     BandFreedom, CallBand, CheckpointReached, EncoreCue, FinalHit, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied,
 };
 use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
-use crate::level::Levels;
+use crate::level::{Level, Levels};
 use crate::state::{AppState, CurrentLevel, PlayState};
 
 use super::live::engine::{BeatClock, Engine, EngineConfig, Input};
@@ -118,6 +118,14 @@ pub fn playing_world(levels: Option<&Levels>, current: CurrentLevel, generated: 
         Some(g) => g.0.world,
         None => levels.and_then(|l| l.0.get(current.0)).map_or(1, |l| l.world),
     }
+}
+
+/// Whether the tempo holds to the written one: Side B (its calls land on bar lines, and each
+/// level's routes are timed to them) and levels played on the beat ([`Level::on_the_beat`]:
+/// NAT ALONE, beat crushers, beat blocks). Elsewhere the band's tempo drifts a little, as a
+/// band's does.
+pub fn strict_tempo(side_b: bool, level: Option<&Level>) -> bool {
+    side_b || level.is_some_and(Level::on_the_beat)
 }
 
 /// Which music goes with an app state (`world`: the level being played's, [`playing_world`]).
@@ -348,11 +356,15 @@ fn setup(world: &mut World) {
 }
 
 /// A fresh engine for a piece, its title, and the filters it starts with (the override, if
-/// the song can take it).
-fn start_engine(music: Music, overrides: &MusicOverride) -> Result<(Engine, &'static str, Filters), String> {
+/// the song can take it). `strict`: the tempo doesn't drift (the players still sit off the
+/// grid), for worlds whose play is timed to the written beat ([`strict_tempo`]).
+fn start_engine(music: Music, overrides: &MusicOverride, strict: bool) -> Result<(Engine, &'static str, Filters), String> {
     let (title, file) = library::song(music)?;
     // A level's tune starts with an intro (when the band's loose enough: see `chorus`).
-    let config = EngineConfig { intro: matches!(music, Music::World(_) | Music::SideB(_)), ..EngineConfig::default() };
+    let mut config = EngineConfig { intro: matches!(music, Music::World(_) | Music::SideB(_)), ..EngineConfig::default() };
+    if strict {
+        config.drift_bpm = 0.0;
+    }
     let engine = Engine::with_config(file, ENGINE_RATE, config)?;
     let mut filters = match overrides.0 {
         Some(f) if music != Music::LevelClear => f,
@@ -393,6 +405,8 @@ fn follow_state(
 ) {
     let world = playing_world(levels.as_deref(), *current_level, generated.as_deref());
     // Side B (and a free play Side B room, while Han has it) plays its own tunes.
+    let level = generated.as_deref().map(|g| &g.0).or_else(|| levels.as_deref().and_then(|l| l.0.get(current_level.0)));
+    let strict = strict_tempo(side.is_some(), level);
     let want = match (desired_music(*state.get(), world), side) {
         (Music::World(_), Some(s)) => s.tune(),
         (want, _) => want,
@@ -405,7 +419,7 @@ fn follow_state(
     player.decided = None;
     player.ducked = None;
     player.shape = None;
-    let (mut engine, title, filters) = match start_engine(want, &overrides) {
+    let (mut engine, title, filters) = match start_engine(want, &overrides, strict) {
         Ok(x) => x,
         Err(e) => {
             error!("music: {e}");
@@ -730,7 +744,8 @@ fn sync(
         None => now - player.seen.1 - p.ahead_secs,
     } - delay;
     let c = &p.clock;
-    let shape = (c.bpm, c.beats_per_bar, c.loop_beats, filters, p.state.tuning);
+    // (The written tempo: the playing one drifts bar by bar.)
+    let shape = (c.written_bpm, c.beats_per_bar, c.loop_beats, filters, p.state.tuning);
     let bar = c.position.bar;
     let first_bar = match player.shape {
         Some((s, first)) if s == shape && first <= bar => first,
@@ -765,13 +780,16 @@ fn sync(
             if !first {
                 // The bar line it came in at (the playhead's bar: this frame or the last).
                 let c = &p.clock;
-                let secs = c.position.song_bar as f64 * c.beats_per_bar * 60.0 / c.bpm as f64;
+                // (In the written tempo's seconds: the playing one drifts.)
+                let secs = c.position.song_bar as f64 * c.beats_per_bar * 60.0 / c.written_bpm as f64;
                 changed.write(MusicChanged { now: now_playing.clone(), at_secs: secs });
             }
         }
     }
     if let Some(mut g) = groove {
-        let beat_secs = 60.0 / heard.bpm.max(1.0) as f64;
+        // The position is the music's as played; the beat's length the written one (the physics
+        // keep one set of numbers while the band drifts around it).
+        let beat_secs = 60.0 / heard.written_bpm.max(1.0) as f64;
         g.clock = game::BeatClock::at(heard.position.song_beat, beat_secs, heard.beats_per_bar.round() as u32);
         // The laughing band's phrase and its wobble, for the phrase's nudge. The voices'
         // wobble runs on song time fitted to the loop (`Medley::new`): so does this.

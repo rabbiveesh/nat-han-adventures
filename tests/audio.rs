@@ -109,8 +109,13 @@ fn every_song_renders_through_every_filter() {
                 let r = synth::render_song_with(song, f, 42).unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
                 filtered_secs += t.elapsed().as_secs_f64();
                 filtered_audio += r.duration_secs() as f64;
-                if song.looping || harmony != Harmony::Waltz {
+                if song.looping {
                     assert_eq!(r.frames.len(), version_frames(song, f, plain.frames.len()), "{name} {f:?}: length changed");
+                } else if harmony != Harmony::Waltz {
+                    // A one-shot rings out from its last note, which sits a few ms off the beat
+                    // (each take its own way: `live::pocket`).
+                    let d = r.frames.len().abs_diff(plain.frames.len());
+                    assert!(d <= synth::SAMPLE_RATE as usize / 40, "{name} {f:?}: length changed by {d} frames");
                 }
                 check(&format!("{name} {f:?}"), &r);
             }

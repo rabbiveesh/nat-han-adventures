@@ -25,6 +25,7 @@ use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
+use crate::audio::live::soloist::{self, Changes, Line, Played, Soloist};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Arp;
 
@@ -43,11 +44,16 @@ pub struct Lead {
     end: u64,
     /// Where an improvised line left off.
     solo_note: Option<u8>,
+    /// A soloist's line, carried over bar lines ([`soloist`]).
+    line: Line,
+    /// The instrument a soloist keeps all through their solo (a persona doesn't switch), and
+    /// whose it is: the next soloist steps up on another.
+    persona_inst: Option<(Soloist, u8)>,
 }
 
 impl Lead {
     pub(super) fn new(p: Player) -> Self {
-        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None }
+        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default(), persona_inst: None }
     }
 }
 
@@ -137,7 +143,27 @@ impl Musician for Lead {
         }
         // An instrument for the phrase (or a solo / a fill on a loose night).
         let fill_bar = fired.has(Orn::Solo) || fired.has(Orn::RunFill);
-        if let Some(k) = ctx.feel_inst(0, intent.switch) {
+        // (A feel's soloists play on the feel's instruments.)
+        let persona = fired.has(Orn::Solo) && ctx.soloist.profile().is_some() && ctx.band.feel == Feel::Swing;
+        if !persona {
+            self.persona_inst = None;
+        }
+        if persona {
+            // A soloist plays their solo on one instrument, whatever the feel or the fills; the
+            // next one takes another (when the song has one) and starts their own phrase.
+            let k = match self.persona_inst {
+                Some((who, k)) if who == ctx.soloist => k,
+                Some((_, k)) => {
+                    self.line = Line::default();
+                    ctx.alternate(0, ctx.bar.index, k).unwrap_or(k)
+                }
+                None => tmpl.inst,
+            };
+            self.persona_inst = Some((ctx.soloist, k));
+            for e in &mut self.dst {
+                e.inst = k;
+            }
+        } else if let Some(k) = ctx.feel_inst(0, intent.switch) {
             for e in &mut self.dst {
                 e.inst = k;
             }
@@ -168,7 +194,10 @@ impl Musician for Lead {
             Input::Toot => self.p.cue(next_bar, super::BarIntent { answer: true, ..Default::default() }),
             // The comic wah-wah.
             Input::Death | Input::Slip => self.p.cue(next_bar, super::BarIntent { wah: true, ..Default::default() }),
-            Input::LevelStart | Input::Restart => self.solo_note = None,
+            Input::LevelStart | Input::Restart => {
+                self.solo_note = None;
+                self.line.reset();
+            }
             _ => {}
         }
     }
@@ -371,7 +400,7 @@ impl Lead {
         // Grace notes, mordents and turns: quick (about `secs` a note, never slower than `max`
         // beats), light, and slurred into the note as one breath, so they decorate it rather
         // than chop it up.
-        let beats_per_sec = ctx.shape.sample_rate as f64 / ctx.shape.samples_per_beat;
+        let beats_per_sec = ctx.shape.sample_rate as f64 / ctx.spb();
         let quick = |max: f64, secs: f64| (secs * beats_per_sec).min(max);
         let light = |v: u8| (v as u32 * 3 / 4).max(1) as u8;
         let slurred = |e: NoteEvent| NoteEvent { tie: true, fx: crate::audio::live::voice::Fx { legato: true, ..e.fx }, ..e };
@@ -552,7 +581,7 @@ impl Lead {
                 let d = ctx.len(e);
                 if d > 0.75 {
                     let keep = (d * 0.7).max(0.5);
-                    e.end = e.start + (keep * ctx.shape.samples_per_beat) as u64;
+                    e.end = e.start + (keep * ctx.spb()) as u64;
                 }
                 e.volume = (e.volume + 1).min(15);
             }
@@ -592,7 +621,7 @@ impl Lead {
                         let d = ctx.len(e);
                         if d > 0.5 {
                             let keep = (d * 0.6).max(0.4);
-                            e.end = e.start + (keep * ctx.shape.samples_per_beat) as u64;
+                            e.end = e.start + (keep * ctx.spb()) as u64;
                         }
                     }
                 }
@@ -688,7 +717,7 @@ impl Lead {
 
     /// Answer a toot: a slide into the bar's first real note, and an echo of it.
     fn answer(&mut self, ctx: &Ctx, tmpl: &NoteEvent, fired: &mut Orns) {
-        if let Some(e) = self.dst.iter_mut().find(|e| matches!(e.sound, Sound::Note(_)) && (e.end - e.start) as f64 >= ctx.shape.samples_per_beat * 0.45) {
+        if let Some(e) = self.dst.iter_mut().find(|e| matches!(e.sound, Sound::Note(_)) && (e.end - e.start) as f64 >= ctx.spb() * 0.45) {
             e.fx.slide = -3;
             e.fx.slide_frames = 5;
             fired.add(Orn::Slide);
@@ -726,6 +755,9 @@ impl Lead {
     /// An improvised bar (a solo chorus, the lead's four): an 8th-note line on the changes,
     /// chord tones on the beats, scale steps and skips between.
     fn solo(&mut self, ctx: &Ctx, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
+        if let Some(p) = ctx.soloist.profile() {
+            return self.improvise(ctx, p, t, r, phrase_last);
+        }
         let bb = ctx.bb();
         let mut cur = self.solo_note.unwrap_or(72).clamp(62, 86) as i32;
         let mut dir = if cur > 76 { -1 } else { 1 };
@@ -789,6 +821,60 @@ impl Lead {
             cur = next;
         }
         self.solo_note = Some(cur as u8);
+    }
+}
+
+impl Lead {
+    /// A soloist's bar ([`soloist::Line`]): their phrases and rests, rhythms and intervals,
+    /// swung their way.
+    fn improvise(&mut self, ctx: &Ctx, p: &soloist::Profile, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
+        let mut notes = [Played::default(); 24];
+        let n = self.line.bar(p, ctx, r, phrase_last, &mut notes);
+        // Their swing on the offbeat 8ths (straight in a feel), the band's own if it's straighter.
+        let s = if ctx.feel() == Feel::Swing && ctx.arrangement.swing > 0.0 {
+            (((p.swing - 1.0) / (p.swing + 1.0)) as f64).min(ctx.arrangement.swing as f64)
+        } else {
+            0.0
+        };
+        let swung = |b: f64| if ((b * 2.0).round() - b * 2.0).abs() < 1e-6 && (b * 2.0).round() as i64 % 2 == 1 { b + s * 0.5 } else { b };
+        let mut prev: Option<(usize, Played)> = None;
+        for k in &notes[..n] {
+            let (a, end) = (swung(k.at), swung(k.at + k.len / p.legato as f64));
+            let mut e = ctx.make(t, a, ((end - a) * p.legato as f64).max(0.05), Sound::Note((k.note as i32).clamp(LO, HI) as u8));
+            // Their dynamics: half their measured shaping with the dynamics dial at 0, all of it at 1.
+            e.gain *= 10f32.powf(k.db * (0.5 + 0.5 * ctx.dynamics) / 20.0);
+            if k.last && r.chance(p.falls as f64) {
+                e.fx.fall = -3;
+                e.fx.fall_frames = 10;
+            }
+            // A fast run (16ths, triplets) is slurred: each beat's group attacked once, the rest
+            // carried on the breath and a touch softer.
+            if let Some((i, q)) = prev
+                && !q.last
+                && k.at - q.at <= 0.34 + 1e-6
+                && (k.at - k.at.round()).abs() > 1e-6
+                && i + 1 == self.dst.len()
+            {
+                self.dst[i].end = e.start;
+                e.tie = true;
+                e.fx.legato = true;
+                e.gain *= 0.82;
+            }
+            let i = self.dst.len();
+            push(&mut self.dst, e);
+            prev = Some((i, *k));
+        }
+        self.solo_note = notes[..n].last().map(|k| k.note).or(self.solo_note);
+    }
+}
+
+impl Changes for Ctx<'_> {
+    fn bar_beats(&self) -> f64 {
+        self.bb()
+    }
+
+    fn harm(&self, beat: f64) -> Option<Harm> {
+        if beat < self.bb() - 1e-9 { self.harm_at(beat) } else { self.plain_harm_at(beat) }
     }
 }
 

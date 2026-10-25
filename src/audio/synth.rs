@@ -104,21 +104,32 @@ pub fn render_song(song: &SongFile) -> Result<Rendered, String> {
     render_song_with(song, Filters::default(), 0)
 }
 
+/// [`render_song`] on the grid: no tempo drift, every player on the beat
+/// ([`EngineConfig::on_grid`]; for checking timing against the notes as written).
+pub fn render_song_on_grid(song: &SongFile) -> Result<Rendered, String> {
+    render(song, Filters::default(), None, EngineConfig { seed: 0, ..EngineConfig::on_grid() })
+}
+
 /// Render a song through `filters`; `seed` varies the generated accompaniment. Errors if the
 /// song can't take the harmony (no chord chart).
 pub fn render_song_with(song: &SongFile, filters: Filters, seed: u64) -> Result<Rendered, String> {
-    render(song, filters, seed, None)
+    render(song, filters, None, EngineConfig { seed, ..EngineConfig::default() })
 }
 
 /// Render a song through `filters` in an alternative [`Tuning`] (which replaces
 /// `filters.just_intonation`; [`Tuning::Medley`] is the same retuning).
 pub fn render_song_tuned(song: &SongFile, filters: Filters, tuning: Tuning) -> Result<Rendered, String> {
-    render(song, filters, 0, Some(tuning))
+    render(song, filters, Some(tuning), EngineConfig { seed: 0, ..EngineConfig::default() })
+}
+
+/// Render a song through `filters` with the engine set up as `config` (seed, drift, looseness).
+pub fn render_with(song: &SongFile, filters: Filters, config: EngineConfig) -> Result<Rendered, String> {
+    render(song, filters, None, config)
 }
 
 /// Run the engine offline (see the module docs).
-fn render(song: &SongFile, filters: Filters, seed: u64, tuning: Option<Tuning>) -> Result<Rendered, String> {
-    let mut e = Engine::with_config(song, SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::default() })?;
+fn render(song: &SongFile, filters: Filters, tuning: Option<Tuning>, config: EngineConfig) -> Result<Rendered, String> {
+    let mut e = Engine::with_config(song, SAMPLE_RATE, config)?;
     if !e.can_play(filters.harmony) {
         return Err(format!("song \"{}\" has no chord chart to reharmonize", song.title));
     }
@@ -389,13 +400,13 @@ mod tests {
     #[test]
     fn pulse_c4_is_middle_c() {
         // One 2s whole note at 120bpm; ignore the edges.
-        let r = render_song(&song(120.0, 0.0, true, "c1", "", "")).unwrap();
+        let r = render_song_on_grid(&song(120.0, 0.0, true, "c1", "", "")).unwrap();
         let x = left(&r);
         assert_eq!(x.len(), 2 * SAMPLE_RATE as usize);
         let f = freq(&x[3200..60000]);
         assert!((f - 261.63).abs() < 0.5, "{f}");
         // Triangle too, and an octave up with `>`.
-        let r = render_song(&song(120.0, 0.0, true, "", "o3 a1", "")).unwrap();
+        let r = render_song_on_grid(&song(120.0, 0.0, true, "", "o3 a1", "")).unwrap();
         let f = freq(&left(&r)[3200..60000]);
         assert!((f - 220.0).abs() < 0.5, "{f}");
     }
@@ -403,7 +414,7 @@ mod tests {
     #[test]
     fn vibrato_is_subtle() {
         // Pulse 1 vibrato kicks in late; pitch stays within a few cents on average.
-        let r = render_song(&song(60.0, 0.0, true, "a1", "", "")).unwrap();
+        let r = render_song_on_grid(&song(60.0, 0.0, true, "a1", "", "")).unwrap();
         let f = freq(&left(&r)[0..4 * SAMPLE_RATE as usize - 1000]);
         assert!((f - 440.0).abs() < 2.0, "{f}");
     }
@@ -430,7 +441,7 @@ mod tests {
         assert_eq!(sw.length, t.length);
         // Rendered: "r8 c8 r8 c8" at 60bpm (1 beat = 1s) with triplet swing: each c8 is an
         // off-beat 8th, so it starts at 1/2 + 1/6 of its beat.
-        let r = render_song(&song(60.0, 1.0 / 3.0, true, "r8 c8 r8 c8", "", "")).unwrap();
+        let r = render_song_on_grid(&song(60.0, 1.0 / 3.0, true, "r8 c8 r8 c8", "", "")).unwrap();
         let x = left(&r);
         let sr = SAMPLE_RATE as usize;
         let first = onset(&x, 0);
@@ -443,7 +454,7 @@ mod tests {
     fn ties_have_no_gap_and_separate_notes_do() {
         // Two separate c8s dip to (near) zero between them; a tie doesn't.
         let at = |src: &str| {
-            let r = render_song(&song(60.0, 0.0, true, src, "", "")).unwrap();
+            let r = render_song_on_grid(&song(60.0, 0.0, true, src, "", "")).unwrap();
             let x = left(&r);
             let mid = SAMPLE_RATE as usize / 2;
             x[mid - 40..mid + 40].iter().fold(0.0f32, |m, v| m.max(v.abs()))
@@ -458,10 +469,10 @@ mod tests {
     #[test]
     fn repeats_and_length() {
         // [c8 r8]2 = 2 beats; triangle 3 beats: loop is the longest (3 beats at 120bpm = 1.5s).
-        let r = render_song(&song(120.0, 0.0, true, "[c8 r8]2", "c2.", "")).unwrap();
+        let r = render_song_on_grid(&song(120.0, 0.0, true, "[c8 r8]2", "c2.", "")).unwrap();
         assert_eq!(r.frames.len(), 48_000);
         // Non-looping songs ring out and end at zero.
-        let r = render_song(&song(120.0, 0.0, false, "c4", "", "k4")).unwrap();
+        let r = render_song_on_grid(&song(120.0, 0.0, false, "c4", "", "k4")).unwrap();
         assert!(r.frames.len() > 16_000 && r.frames.len() < 16_000 + (TAIL * SR) as usize + 64);
         let last = r.frames.last().unwrap();
         assert_eq!((last.left, last.right), (0.0, 0.0));
@@ -470,14 +481,14 @@ mod tests {
     #[test]
     fn drums_wrap_around_the_loop() {
         // A kick on the very last 16th rings past the loop end; its tail lands at the start.
-        let r = render_song(&song(120.0, 0.0, true, "", "", "r2. r8. k16")).unwrap();
+        let r = render_song_on_grid(&song(120.0, 0.0, true, "", "", "r2. r8. k16")).unwrap();
         let x = left(&r);
         assert!(x[..1000].iter().any(|v| v.abs() > 0.01));
     }
 
     #[test]
     fn pans_are_light() {
-        let r = render_song(&song(120.0, 0.0, true, "c1", "", "")).unwrap();
+        let r = render_song_on_grid(&song(120.0, 0.0, true, "c1", "", "")).unwrap();
         let (l, rr) = r.frames.iter().fold((0.0f32, 0.0f32), |(a, b), f| (a.max(f.left.abs()), b.max(f.right.abs())));
         assert!(l > rr && rr > 0.5 * l, "{l} {rr}");
     }
@@ -492,7 +503,7 @@ mod tests {
     fn arpeggios_cycle_the_chord_tones() {
         // A C major arpeggio on pulse 2 for 4s; each ARP_STEP window holds one chord tone.
         let s = SongFile::from_mml("test", 60.0, 0.0, true, 0, "", ["", "o4 {c e g}1", "", ""]).unwrap();
-        let x = left(&render_song(&s).unwrap());
+        let x = left(&render_song_on_grid(&s).unwrap());
         let step = (ARP_STEP * SR) as usize;
         let want = [261.63, 329.63, 392.0];
         for j in 1..60 {
@@ -509,7 +520,7 @@ mod tests {
         let s = song(120.0, 0.0, true, "e1", "", "");
         let f = freq(&left(&render_song_tuned(&s, Filters::default(), Tuning::Just).unwrap())[3200..60000]);
         assert!((f - 261.626 * 1.25).abs() < 0.5, "{f}");
-        let f = freq(&left(&render_song(&s).unwrap())[3200..60000]);
+        let f = freq(&left(&render_song_on_grid(&s).unwrap())[3200..60000]);
         assert!((f - 329.63).abs() < 0.5, "{f}");
     }
 

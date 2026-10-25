@@ -17,6 +17,7 @@ use crate::audio::live::chorus::{EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Harm, Orn, Orns, nearest_pc};
+use crate::audio::live::riffs;
 use crate::audio::live::voice::{NoteEvent, Sound};
 
 /// The bass's range (the triangle's lowest octaves).
@@ -353,28 +354,58 @@ impl Bass {
                 Orn::Pumping
             }
             Feel::Funk => {
-                // The vamp, locked to the kick: the one long and hard, short roots on the
-                // kick's other hits, an octave pop, one dead note (a muted blip) leading in.
-                let (vamp, side) = feel::vamp(ctx.seed, ctx.bar.index, ctx.band.feel_since);
-                let kicks = vamp.kick[side];
+                // A riff ([`riffs`]): the section's own, or the next one along that fits the
+                // chord; each note from the chord's root where it lands. Staccato as written (a
+                // lone 16th before a rest a little longer), the ONE hard, the pops a hair up.
+                let side = !feel::first_of_pair(ctx.bar.index, ctx.band.feel_since) as usize;
+                let start = feel::pattern(ctx.seed, ctx.band.feel_since, riffs::funk().len());
+                let riff = riffs::pick(start, harm(0.0).chord.family());
+                let steps = riff.bar(side);
                 let root_at = |b: f64| nearest_pc(harm(b).chord.bass_pc(), 36, LO, LO + 11) as i32;
-                for &k in kicks {
-                    let b = k as f64 * 0.25;
+                let fold = |mut n: i32| {
+                    while n < LO {
+                        n += 12;
+                    }
+                    while n > HI + 4 {
+                        n -= 12;
+                    }
+                    n
+                };
+                // A bar that rings over the line: the push before it held (tied) into its ONE.
+                let ring = riff.ring[side];
+                if ring > 0 {
+                    let n = root_at(0.0);
+                    let mut one = note(0.0, ring as f64 * 0.25 * 0.85, n, vol(1));
+                    one.tie = anticipated == Some(n as u8) && ctx.band.sub_at(0.0).is_none();
+                    push(&mut self.dst, one);
+                }
+                // The push into such a bar: its last note from the next bar's root, held to the line.
+                let next = (side == 0)
+                    .then(|| ctx.plain_harm_at(bb))
+                    .flatten()
+                    .map(|nh| (riffs::pick(start, nh.chord.family()), nh))
+                    .filter(|(r, _)| r.ring[1] > 0)
+                    .map(|(_, nh)| nearest_pc(nh.chord.bass_pc(), 36, LO, LO + 11) as i32);
+                for (i, s) in steps.iter().enumerate() {
+                    let b = s.at as f64 * 0.25;
                     if b >= bb - 1e-9 {
                         continue;
                     }
-                    let (d, dv) = if k == 0 { (0.7, 2) } else { (0.25, 0) };
-                    push(&mut self.dst, note(b, d, root_at(b), vol(dv)));
-                }
-                if let Some(k) = vamp.pop[side] {
-                    let b = k as f64 * 0.25;
-                    if b < bb - 1e-9 {
-                        push(&mut self.dst, note(b, 0.15, root_at(b) + 12, vol(0)));
+                    let push_into = next.filter(|_| s.at + s.len >= 16 && !s.dead);
+                    let n = fold(push_into.unwrap_or_else(|| root_at(b)) + s.deg as i32);
+                    if push_into.is_some() {
+                        push(&mut self.dst, note(b, bb - b, n, vol(1)));
+                        self.anticipated = Some((ctx.bar.index + 1, n as u8));
+                        continue;
                     }
-                }
-                if let Some(&k) = kicks.iter().find(|&&k| k > 1) {
-                    let b = (k - 1) as f64 * 0.25;
-                    push(&mut self.dst, NoteEvent { inst: ctx.extra(Extra::Dead), ..note(b, 0.08, root_at(b), vol(-3)) });
+                    if s.dead {
+                        push(&mut self.dst, NoteEvent { inst: ctx.extra(Extra::Dead), ..note(b, 0.08, n, vol(-3)) });
+                        continue;
+                    }
+                    let gap = steps.get(i + 1).map_or(16, |x| x.at) - s.at;
+                    let d = if s.len == 1 && gap >= 2 { 0.4 } else { s.len as f64 * 0.25 * 0.85 };
+                    let v = if s.at == 0 { vol(2) } else if s.deg >= 12 { vol(1) } else { vol(0) };
+                    push(&mut self.dst, note(b, d.min(bb - b), n, v));
                 }
                 Orn::Slap
             }

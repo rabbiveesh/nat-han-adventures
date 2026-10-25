@@ -41,7 +41,7 @@ fn freedom(f: f32) -> Input {
 /// Play `song` for `bars` bars (`inputs(k)` posted as bar `k` is about to be decided), and
 /// collect every bar as it's committed.
 fn play(song: &SongFile, seed: u64, setup: &[Input], inputs: impl Fn(u64) -> Vec<Input>, bars: u64) -> (Engine, Vec<Bar>) {
-    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::default() }).unwrap();
+    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::on_grid() }).unwrap();
     for i in setup {
         e.post(*i);
     }
@@ -79,7 +79,7 @@ const LOOPING: [Music; 7] = [Music::Title, Music::World(1), Music::World(2), Mus
 fn freedom_zero_is_exactly_as_written() {
     for m in [Music::World(2), Music::World(4)] {
         let render = |inputs: &dyn Fn(u64) -> Vec<Input>| {
-            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig::default()).unwrap();
+            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig::on_grid()).unwrap();
             e.post(freedom(0.0));
             let mut out = vec![Frame::ZERO; 40 * 32_000];
             for (k, c) in out.chunks_mut(32_000).enumerate() {
