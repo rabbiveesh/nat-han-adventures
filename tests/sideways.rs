@@ -8,8 +8,8 @@ use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeU
 use leafwing_input_manager::prelude::*;
 use nat_han_adventures::{
     events::{DeathCause, PlayerDied},
-    game::{Player, Pos, tuning},
-    level::{Level, Levels, TILE, Tile, validate},
+    game::{Body, Player, Pos},
+    level::{CUSHION_FLING, CUSHION_HOLD, CUSHION_LIFT, Level, Levels, TILE, Tile, cushion_shot, validate},
     state::AppState,
 };
 
@@ -149,18 +149,114 @@ const WALL_CUSHION: &str = "name: Wall cushion
 #############################
 ";
 
-#[test]
-fn a_wall_cushion_flings_nat_far_back() {
-    let mut app = game(WALL_CUSHION);
-    step(&mut app, 0.2);
-    let x0 = nat(&mut app).x;
+fn pad(app: &mut App) -> f32 {
+    app.world_mut().query_filtered::<&Body, With<Player>>().single(app.world()).unwrap().pad
+}
+
+/// Run Nat right into the cushion; returns once it has caught him.
+fn run_into_cushion(app: &mut App) {
+    step(app, 0.2);
     RIGHT.press(app.world_mut());
-    step(&mut app, 0.3);
+    for _ in 0..60 {
+        app.update();
+        if pad(app) != 0.0 {
+            return;
+        }
+    }
+    panic!("never caught");
+}
+
+#[test]
+fn a_wall_cushion_catches_nat_holds_him_then_slings_him_back() {
+    let mut app = game(WALL_CUSHION);
+    run_into_cushion(&mut app);
+    assert_eq!(pad(&mut app), -1.0, "the cushion on his right slings him left");
+    // Held still in it (Right still held: aimed into it)...
+    let caught_at = nat(&mut app);
+    let mut held = 0;
+    while pad(&mut app) != 0.0 {
+        assert_eq!(nat(&mut app), caught_at, "sunk in and held still");
+        app.update();
+        held += 1;
+        assert!(held < 30, "and let go");
+    }
+    let secs = held as f32 / 60.0;
+    assert!((CUSHION_HOLD - 0.02..CUSHION_HOLD + 0.04).contains(&secs), "held {secs:.2} s");
     RIGHT.release(app.world_mut());
     let (top, lo, _) = track(&mut app, 0.8);
-    assert!(lo < x0 - 6.0 * TILE, "flung far left: {:.2} tiles", (x0 - lo) / TILE);
-    assert!(top > x0.min(f32::MAX) * 0.0 + tuning::PLAYER_SIZE.1, "and up off the floor a little");
+    assert!(lo < caught_at.x - 2.0 * TILE, "slung back left: {:.2} tiles", (caught_at.x - lo) / TILE);
+    assert!(top > caught_at.y + 2.0 * TILE, "and up");
     assert!(deaths(&app).is_empty());
+}
+
+/// Where the cushion slings Nat for `aim` held as it fires (-1 left, away from this one; +1
+/// right, into it): (top, how far left he gets before he lands back at the cushion's height),
+/// in tiles from where he was caught.
+fn shot(aim: f32) -> (f32, f32) {
+    let mut app = game(WALL_CUSHION);
+    run_into_cushion(&mut app);
+    RIGHT.release(app.world_mut());
+    if aim < 0.0 {
+        LEFT.press(app.world_mut());
+    } else if aim > 0.0 {
+        RIGHT.press(app.world_mut());
+    }
+    let at = nat(&mut app);
+    while pad(&mut app) != 0.0 {
+        app.update();
+    }
+    LEFT.release(app.world_mut());
+    RIGHT.release(app.world_mut());
+    let mut top = at.y;
+    let mut prev = at;
+    for _ in 0..180 {
+        app.update();
+        let p = nat(&mut app);
+        top = top.max(p.y);
+        if p.y <= at.y && prev.y > at.y {
+            break;
+        }
+        prev = p;
+    }
+    assert!(deaths(&app).is_empty());
+    ((top - at.y) / TILE, (at.x - nat(&mut app).x) / TILE)
+}
+
+#[test]
+fn a_wall_cushion_aims_by_what_is_held_as_it_fires() {
+    let plain = shot(0.0);
+    let steep = shot(1.0);
+    let long = shot(-1.0);
+    let (away, up) = cushion_shot(0.0);
+    assert_eq!((away, up), (CUSHION_FLING, CUSHION_LIFT));
+    assert!(steep.0 > plain.0 + 2.0, "held into it: steep, {steep:?} vs plain {plain:?}");
+    assert!(steep.1 < plain.1, "and short, {steep:?} vs plain {plain:?}");
+    assert!(long.0 < plain.0, "held away: low, {long:?} vs plain {plain:?}");
+    assert!(long.1 > plain.1 + 1.0, "and long, {long:?} vs plain {plain:?}");
+}
+
+#[test]
+fn a_jump_fires_a_wall_cushion_early_and_the_toot_comes_back() {
+    let mut app = game(WALL_CUSHION);
+    run_into_cushion(&mut app);
+    RIGHT.release(app.world_mut());
+    let at = nat(&mut app);
+    JUMP.press(app.world_mut());
+    app.update();
+    assert_eq!(pad(&mut app), 0.0, "fired at once");
+    assert!(nat(&mut app).x < at.x, "already on his way");
+    JUMP.release(app.world_mut());
+    step(&mut app, 0.25);
+    // The jump only fired it; the toot is still there.
+    let before = nat(&mut app).y;
+    let vy = |app: &mut App| app.world_mut().query_filtered::<&Body, With<Player>>().single(app.world()).unwrap().vel.y;
+    let falling = vy(&mut app);
+    JUMP.press(app.world_mut());
+    app.update();
+    JUMP.release(app.world_mut());
+    assert!(vy(&mut app) > falling.max(0.0) + 100.0, "tooted ({falling:.0} -> {:.0} px/s)", vy(&mut app));
+    step(&mut app, 0.2);
+    assert!(nat(&mut app).y > before, "up again");
 }
 
 const CEILING_CUSHION: &str = "name: Ceiling cushion
