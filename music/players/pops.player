@@ -1,0 +1,59 @@
+; Louis Armstrong, 1925-28 (8 solos, the Hot Five and Hot Seven years; 7 on cornet): 11-note
+; phrases over 6.6 beats [4.6-8.7], 1.3 beats' rest [1.0-1.8], 30% of them starting on the
+; "and" before the beat; 8ths 34%, triplets 17%, 16ths 13%; 14% repeated notes, 38% steps, 29%
+; thirds, 20% leaps; 68% chord tones on the strong beats, 65% of phrases end on one; few
+; approaches (15%) and enclosures (4%); 45% of 4-note windows pentatonic (the most of anyone);
+; trumpet up to A6; well behind the beat (+18 ms), loud going up, soft at the ends of phrases.
+; Measured on their transcribed solos in the Weimar Jazz Database v2.1: statistics only, never
+; their phrases. The format is documented in `src/audio/live/player_file.rs`.
+
+[player]
+name = Pops
+lay_back = 2.5              ; on-beat notes +18 ms behind (the average soloist: +2.8)
+swing = 1.39                ; long 8th over short (2.0: a full triplet)
+legato = 0.8                ; the most detached of them (sounding 0.78 of the time to the next)
+register = 73 65 86         ; MIDI, the lead's octave: centre, soft floor, soft ceiling
+
+[line]
+phrase = 6.6 4.6 8.7        ; beats: median, lower and upper quartile (log-normal)
+rest = 1.6 1.2 2.2         ; the rest between phrases, likewise
+cells = eighths 17.1, quarter 12.0, triplet 4.5, sixteenths 3.0, dotted 4.6, quarter_triplet 2.7, long 2.3
+intervals = 13.5 19.9 17.9 19.7 9.4 9.4 1.7 4.0 4.3 ; by size: 0 1 2 3 4 5 6 7 8-12 semitones
+step_back = 0.32            ; after a leap (5 or more), a step back the other way
+end_chord_tone = 0.65       ; a phrase's last note on a chord tone
+approach = 0.10             ; a half step into a strong-beat chord tone...
+from_below = 0.61           ; ...from below this share of the time
+enclosure = 0.03            ; one above and one below into a strong-beat chord tone
+pentatonic = 0.2            ; a run of four through the chord's pentatonic
+anticipation = 0.28         ; a phrase starts on the "and" before the bar line
+falls = 0.03                ; a fall off a phrase's last note
+
+[dynamics]
+; Even through the phrase, then the last note much softer (-7 dB as measured, part of it the
+; note dying away); +4.5 dB an octave up; offbeats louder only 37% of the time; spread 7.2 dB.
+arch = -0.82 -0.81 -0.43 -1.50 -5.0 ; dB: first note, early, middle, late, last note
+per_octave = 4.5            ; dB per octave above the register's centre
+ghost = 0.27                ; the offbeat 8th ghosted (-4 dB) this often...
+accent = 0.2                ; ...or else accented this much (dB)
+long = -4.0                 ; notes of 1.2 beats or more (dB)
+scatter = 4.2               ; each note's own spread (dB, a standard deviation)
+
+[motifs]
+; 21% of his ideas are variants of one before; sequences stay put (or drop a 4th).
+motif = 0.15                ; a phrase restates the last one's head, then goes its own way
+sequence = 0.03             ; a 3-4 note cell restated straight after (a sequence)
+moves = 0:4.0 -5:1.0        ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with his shapes (an arpeggio up into repeated notes, bugle-call
+; triads, the 9-1-6 drop, the major pentatonic with its 6th, a chromatic step into the root),
+; mostly off the beat, triplets and 8ths.
+rate = 0.25                 ; a phrase opens with one this often (when one fits the chord)
+dom = o4 e12 g12 b-12 o5 d8 d8 d4
+maj = o4 e8 g8 o5 c8 e8 d4 c4
+maj = o5 d8 c8 o4 a4 g8 a8
+maj = o4 a12 g12 e12 g8 a8 o5 c4
+dom = o4 b-8 b8 o5 c4 c8 c8
+any = o5 c8 c8 c8 c8 o4 a4
+maj = o4 e8 f8 f+8 g4 e8 c4
+min = o4 g8 f8 e-8 c8 e-4

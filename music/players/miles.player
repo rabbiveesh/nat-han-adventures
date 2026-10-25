@@ -39,3 +39,17 @@ scatter = 3.0               ; each note's own spread (dB, a standard deviation)
 motif = 0.15                ; a phrase restates the last one's head, then goes its own way
 sequence = 0.04             ; a 3-4 note cell restated straight after (a sequence)
 moves = 0:7.7 -2:0.8 -3:0.8 -1:0.5 2:0.3 ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with his commonest shapes (statistics in the lick report: scale
+; fragments up from the root and down from the 13th, the chromatic upper-neighbour turn,
+; half steps from below); 5-8 notes, mostly 8ths, with room around them.
+rate = 0.2                  ; a phrase opens with one this often (when one fits the chord)
+maj = o4 e8 f8 g8 a8 g4
+dom = o4 a4 g8 e8 f8 d8 e4
+min = o4 d8 e-8 f8 g8 b-4. a8
+any = o4 g8 a-8 g8 f8 e4
+dom = o4 b-8 a8 a-8 g4
+maj = o4 b8 o5 c8 d8 e4 d8 c8
+min = o4 g8 f8 e-8 d8 c4
+dom = o4 e8 g8 a8 g8 e4 c4

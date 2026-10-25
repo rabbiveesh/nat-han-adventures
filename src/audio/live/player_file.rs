@@ -25,14 +25,21 @@
 //! [motifs]
 //! motif = 0.15              ; and sequence
 //! moves = 0:7.7 -2:0.8      ; up to five transpositions, semitones:weight
+//!
+//! [licks]
+//! rate = 0.2                ; a phrase opens with a lick this often (when one fits)
+//! dom = o4 e8 g8 b-8 o5 d-8 c4   ; MML over a C chord of its family: dom, min, maj, half, any
 //! ```
 //!
 //! Every key of `[player]`, `[line]` and `[dynamics]` is required but `strong_chord_tone`
-//! and `falls` (0); `[motifs]` is optional (none). The field meanings are on [`Profile`].
+//! and `falls` (0); `[motifs]` and `[licks]` are optional (none). A lick is written over C and
+//! played from the chord's root, notes only (2 to 16, any octave: the player moves it to the
+//! line's), exactly as written ([`super::soloist::Licks`]). The field meanings are on [`Profile`].
 
 use std::fmt;
 
-use super::soloist::Profile;
+use super::soloist::{Fits, Profile};
+use crate::audio::mml::{self, Channel, EventKind};
 
 /// A parsed `.player` file.
 #[derive(Debug, Clone)]
@@ -58,7 +65,7 @@ impl fmt::Display for PlayerError {
 
 impl std::error::Error for PlayerError {}
 
-const SECTIONS: [&str; 4] = ["player", "line", "dynamics", "motifs"];
+const SECTIONS: [&str; 5] = ["player", "line", "dynamics", "motifs", "licks"];
 const CELLS: [&str; 7] = ["eighths", "quarter", "triplet", "sixteenths", "dotted", "quarter_triplet", "long"];
 const REQUIRED: [&str; 20] = [
     "name", "lay_back", "swing", "legato", "register", "phrase", "rest", "cells", "intervals", "step_back", "end_chord_tone", "approach", "from_below",
@@ -88,7 +95,7 @@ impl PlayerFile {
                 continue;
             }
             if let Some(s) = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')) {
-                let s = SECTIONS.iter().find(|x| **x == s.trim()).ok_or_else(|| err(n, format!("unknown section `[{s}]` (expected [player] [line] [dynamics] [motifs])")))?;
+                let s = SECTIONS.iter().find(|x| **x == s.trim()).ok_or_else(|| err(n, format!("unknown section `[{s}]` (expected [player] [line] [dynamics] [motifs] [licks])")))?;
                 section = Some(s);
                 continue;
             }
@@ -104,6 +111,23 @@ impl PlayerFile {
                     .map(|[m, a, b]| (m as f64, a as f64, b as f64))
                     .ok_or_else(|| bad("expected median, lower and upper quartile (0 < q1 <= median <= q3)"))
             };
+            if sec == "licks" {
+                if key == "rate" {
+                    p.licks.rate = share()?;
+                    continue;
+                }
+                let fits = Fits::parse(key).ok_or_else(|| err(n, format!("`{key}`: a lick is `dom`, `min`, `maj`, `half` or `any` = its MML (or `rate`)")))?;
+                let track = mml::parse(v, Channel::Melodic).map_err(|e| bad(&format!("MML: {}", e.msg)))?;
+                let mut notes = Vec::new();
+                for e in &track.events {
+                    match e.kind {
+                        EventKind::Note(k) => notes.push((k, e.dur)),
+                        _ => return Err(bad("a lick is notes only (no rests)")),
+                    }
+                }
+                p.licks.add(fits, &notes).map_err(|m| bad(&m))?;
+                continue;
+            }
             let key_sec = match key {
                 "name" | "lay_back" | "swing" | "legato" | "register" => "player",
                 "phrase" | "rest" | "cells" | "intervals" | "step_back" | "end_chord_tone" | "approach" | "from_below" | "enclosure" | "pentatonic"
@@ -190,5 +214,16 @@ mod tests {
         assert!(e.msg.contains("belongs in [player]"), "{e}");
         let e = PlayerFile::parse("[player]\nname = X\n").unwrap_err();
         assert!(e.msg.contains("missing"), "{e}");
+    }
+
+    #[test]
+    fn licks_parse() {
+        let base = include_str!("../../../music/players/miles.player").split("[licks]").next().unwrap();
+        let f = PlayerFile::parse(&format!("{base}\n[licks]\nrate = 0.5\ndom = o4 e8 g8 b-8 o5 d-8 c4\nany = c8 d8\n")).unwrap();
+        assert_eq!((f.profile.licks.len(), f.profile.licks.rate), (2, 0.5));
+        let e = PlayerFile::parse(&format!("{base}\n[licks]\ndom = c8 r8 d8\n")).unwrap_err();
+        assert!(e.msg.contains("notes only"), "{e}");
+        let e = PlayerFile::parse(&format!("{base}\n[licks]\nlydian = c8 d8\n")).unwrap_err();
+        assert!(e.msg.contains("a lick is"), "{e}");
     }
 }

@@ -40,3 +40,16 @@ scatter = 3.2               ; each note's own spread (dB, a standard deviation)
 motif = 0.25                ; a phrase restates the last one's head, then goes its own way
 sequence = 0.05             ; a 3-4 note cell restated straight after (a sequence)
 moves = 0:4.8 -2:1.4 -3:1.0 -1:0.8 5:0.6 ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with his shapes (arpeggios through the b9, neighbour-note figures
+; on the major chord, blues riffs on the root and b7), on the beat, 8ths.
+rate = 0.25                 ; a phrase opens with one this often (when one fits the chord)
+dom = o4 g8 b-8 o5 d-8 o4 b-8 a4
+maj = o4 a8 b8 a8 g8 e4
+dom = o4 g8 f8 e8 c8 d8 e8 g4
+dom = o4 c8 o3 b-8 g8 b-8 o4 c4
+min = o4 f8 e-8 c8 e-8 f8 g4
+maj = o4 e8 g8 a8 o5 c8 o4 a8 g4
+dom = o4 e-8 e8 g8 a8 g8 e8 c4
+maj = o4 g4 g8 a8 g4 e4

@@ -40,3 +40,16 @@ scatter = 3.0               ; each note's own spread (dB, a standard deviation)
 motif = 0.3                 ; a phrase restates the last one's head, then goes its own way
 sequence = 0.06             ; a 3-4 note cell restated straight after (a sequence)
 moves = 0:4.8 -3:1.4 -2:0.9 7:0.8 -5:0.5 ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with his 1960s shapes (pentatonic cells over one modal minor
+; chord, up and back; the 1-2-3-5 cell; dorian rise and fall), in 16ths and triplets.
+rate = 0.25                 ; a phrase opens with one this often (when one fits the chord)
+min = o4 c16 e-16 f16 g16 b-16 g16 f16 e-16
+min = o4 f12 g12 b-12 o5 c12 o4 b-12 g12
+min = o5 d16 c16 o4 b-16 g16 f16 g16 b-16 o5 c16
+min = o4 e-8 f8 g8 a8 g8 f4
+dom = o4 d16 e16 g16 a16 b-16 a16 g16 e16
+maj = o4 e16 g16 a16 o5 c16 d16 e16 d16 c16
+min = o4 g8. f16 d8 c8 o3 b-4
+dom = o4 c16 d16 e16 g16 a8 g8 e8

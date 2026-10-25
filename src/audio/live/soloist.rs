@@ -18,7 +18,13 @@
 //! - [`Soloist::Sonny`]: Sonny Rollins, 1954-72 (13 solos): long 8th-note lines low on the
 //!   tenor, thirds, enclosures, laid way back, and the theme developed phrase to phrase.
 //! - [`Soloist::Wayne`]: Wayne Shorter, 1961-66 (10 solos): whole steps and turns, repeated
-//!   notes, the most pentatonic of all, few approaches, an even tone, and the most variants.
+//!   notes, few approaches, an even tone, and the most variants.
+//! - [`Soloist::Pops`]: Louis Armstrong, 1925-28 (8 solos): short breaths, phrases pushed in
+//!   on the "and", repeated notes and arpeggios, the most pentatonic of all, high and well
+//!   behind the beat.
+//!
+//! Each one's numbers (and their licks: ours, written to rhyme with theirs) are in
+//! `music/players/<slug>.player`.
 //!
 //! The line carries over bar lines (a phrase, then a rest, then the next), so it's a [`Line`]
 //! the lead keeps between bars. Pure, no allocation.
@@ -40,10 +46,11 @@ pub enum Soloist {
     Bird,
     Sonny,
     Wayne,
+    Pops,
 }
 
 impl Soloist {
-    pub const ALL: [Soloist; 6] = [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird, Soloist::Sonny, Soloist::Wayne];
+    pub const ALL: [Soloist; 7] = [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird, Soloist::Sonny, Soloist::Wayne, Soloist::Pops];
 
     pub fn slug(self) -> &'static str {
         match self {
@@ -53,6 +60,7 @@ impl Soloist {
             Soloist::Bird => "bird",
             Soloist::Sonny => "sonny",
             Soloist::Wayne => "wayne",
+            Soloist::Pops => "pops",
         }
     }
 
@@ -88,12 +96,13 @@ impl Soloist {
 // out near theirs (`soloists_play_like_their_numbers`). The steps along the chord-scale already
 // put a chord tone on ~2 strong beats in 3 (as they measured: 52-58%), so none of them needs
 // the extra pull.
-const FILES: [(Soloist, &str); 5] = [
+const FILES: [(Soloist, &str); 6] = [
     (Soloist::Miles, include_str!("../../../music/players/miles.player")),
     (Soloist::Trane, include_str!("../../../music/players/trane.player")),
     (Soloist::Bird, include_str!("../../../music/players/bird.player")),
     (Soloist::Sonny, include_str!("../../../music/players/sonny.player")),
     (Soloist::Wayne, include_str!("../../../music/players/wayne.player")),
+    (Soloist::Pops, include_str!("../../../music/players/pops.player")),
 ];
 
 /// How a player builds lines. Lengths in beats; shares 0..1. Written in `.player` files
@@ -147,6 +156,92 @@ pub struct Profile {
     pub motif: f32,
     pub sequence: f32,
     pub moves: [(i8, f32); 5],
+    /// The licks a phrase can open with.
+    pub licks: Licks,
+}
+
+/// What chord a lick is written over (its family).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Fits {
+    #[default]
+    Any,
+    Major,
+    Dominant,
+    Minor,
+    HalfDim,
+}
+
+impl Fits {
+    pub fn parse(s: &str) -> Option<Fits> {
+        Some(match s {
+            "any" => Fits::Any,
+            "maj" => Fits::Major,
+            "dom" => Fits::Dominant,
+            "min" => Fits::Minor,
+            "half" => Fits::HalfDim,
+            _ => return None,
+        })
+    }
+
+    fn fits(self, f: Family) -> bool {
+        match self {
+            Fits::Any => true,
+            Fits::Major => f == Family::Major,
+            Fits::Dominant => f == Family::Dominant,
+            Fits::Minor => f == Family::Minor,
+            Fits::HalfDim => matches!(f, Family::HalfDim | Family::Dim),
+        }
+    }
+}
+
+/// A player's licks: phrases written over a C chord of their family, played from the chord's
+/// root (the octave nearest the line). A phrase opens with one `rate` of the time when one fits
+/// the chord it starts on; the lick plays exactly as written, then the line goes on its own.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Licks {
+    pub rate: f32,
+    list: [(Fits, Motif); Licks::MAX],
+    n: usize,
+}
+
+impl Licks {
+    pub const MAX: usize = 24;
+    /// The most notes in a lick.
+    pub const NOTES: usize = 16;
+
+    /// Add a lick: its notes (MIDI, length in beats).
+    pub fn add(&mut self, fits: Fits, notes: &[(u8, f64)]) -> Result<(), String> {
+        if self.n == Licks::MAX {
+            return Err(format!("at most {} licks", Licks::MAX));
+        }
+        if !(2..=Licks::NOTES).contains(&notes.len()) {
+            return Err(format!("a lick is 2 to {} notes", Licks::NOTES));
+        }
+        let mut m = Motif::default();
+        let mut prev = None;
+        for &(note, d) in notes {
+            m.push(prev, note, d);
+            prev = Some(note as i32);
+        }
+        self.list[self.n] = (fits, m);
+        self.n += 1;
+        Ok(())
+    }
+
+    pub fn len(&self) -> usize {
+        self.n
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.n == 0
+    }
+
+    /// One that fits `family`, at random.
+    fn pick(&self, family: Family, r: &mut Rng) -> Option<Motif> {
+        let fitting = || self.list[..self.n].iter().filter(|(f, _)| f.fits(family));
+        let count = fitting().count();
+        (count > 0).then(|| fitting().nth(r.below(count)).unwrap().1)
+    }
 }
 
 /// The rhythm cells a line is built from, each starting on a beat.
@@ -240,6 +335,8 @@ struct Replay {
     i: usize,
     until: usize,
     by: i32,
+    /// A lick: as written, never bent to the scale.
+    exact: bool,
 }
 
 /// The line, carried over bar lines.
@@ -312,7 +409,7 @@ impl Line {
         while b < bb - 1e-9 && n < out.len() {
             if self.phrase <= 1e-9 {
                 if self.rest <= 1e-9 {
-                    self.start_phrase(p, r);
+                    self.start_phrase(p, r, ch.harm(b));
                     continue;
                 }
                 let d = self.rest.min(bb - b);
@@ -396,7 +493,7 @@ impl Line {
                 let shaped = ivs.iter().any(|i| i.abs() >= 3) || ivs.windows(2).any(|w| w[0].signum() * w[1].signum() < 0);
                 if shaped && r.chance(p.sequence as f64 * 4.0) {
                     let src = self.now.slice(&self.pitches, from, k);
-                    self.replay = Some(Replay { src, i: 0, until: k, by: pick_move(p, r) });
+                    self.replay = Some(Replay { src, i: 0, until: k, by: pick_move(p, r), exact: false });
                 }
             }
         }
@@ -437,7 +534,7 @@ impl Line {
         p.rest.0 * 0.5
     }
 
-    fn start_phrase(&mut self, p: &Profile, r: &mut Rng) {
+    fn start_phrase(&mut self, p: &Profile, r: &mut Rng, h: Option<Harm>) {
         self.phrase = lognormal(r, p.phrase).clamp(1.0, 24.0);
         self.total = self.phrase;
         self.first = true;
@@ -457,7 +554,24 @@ impl Line {
             let head: f64 = prev.dur[..until].iter().map(|&d| d as f64).sum();
             self.phrase = self.phrase.max(head + if until < prev.n { 1.0 } else { 0.0 });
             self.total = self.phrase;
-            self.replay = Some(Replay { src: prev, i: 0, until, by: pick_move(p, r) });
+            self.replay = Some(Replay { src: prev, i: 0, until, by: pick_move(p, r), exact: false });
+            return;
+        }
+        if let Some(h) = h.filter(|_| !p.licks.is_empty() && r.chance(p.licks.rate as f64))
+            && let Some(mut lick) = p.licks.pick(h.chord.family(), r)
+        {
+            // From the chord's root, in the octave nearest the line.
+            let cur = self.cur.unwrap_or(p.register.0);
+            let pc = (h.chord.root as i32 + lick.first as i32).rem_euclid(12);
+            let mut first = cur - (cur - pc).rem_euclid(12);
+            if cur - first > 6 {
+                first += 12;
+            }
+            lick.first = first.clamp(0, 127) as u8;
+            let len: f64 = lick.dur[..lick.n].iter().map(|&d| d as f64).sum();
+            self.phrase = self.phrase.max(len + 0.5);
+            self.total = self.phrase;
+            self.replay = Some(Replay { src: lick, i: 0, until: lick.n, by: 0, exact: true });
             return;
         }
         // A new phrase starts from somewhere new: up or down, or back towards the middle.
@@ -502,9 +616,13 @@ impl Line {
         if let Some(rp) = self.replay.as_mut() {
             // The motif's shape at the new spot, bent to the chord where it doesn't fit.
             let want = if rp.i == 0 { rp.src.first as i32 + rp.by } else { cur + rp.src.iv[rp.i] as i32 };
-            let n = want.clamp(floor - 6, ceil + 6).clamp(0, 127) as u8;
-            let n = if h.scale.contains(n % 12) || !strong && r.chance(0.5) { n } else { h.scale.snap(n) };
-            let n = if last && r.chance(p.end_chord_tone as f64) { h.nearest_chord_tone(n) } else { n };
+            let n = if rp.exact {
+                want.clamp(0, 127) as u8
+            } else {
+                let n = want.clamp(floor - 6, ceil + 6).clamp(0, 127) as u8;
+                let n = if h.scale.contains(n % 12) || !strong && r.chance(0.5) { n } else { h.scale.snap(n) };
+                if last && r.chance(p.end_chord_tone as f64) { h.nearest_chord_tone(n) } else { n }
+            };
             rp.i += 1;
             if rp.i >= rp.until.min(rp.src.n) {
                 self.replay = None;
@@ -718,6 +836,36 @@ mod tests {
             assert_eq!(s.profile().is_some(), s != Soloist::Band, "{s:?}");
         }
         assert_eq!(Soloist::Miles.player().unwrap().name, "Miles '56");
+        for s in &Soloist::ALL[1..] {
+            assert!(s.profile().unwrap().licks.len() >= 6, "{s:?}");
+        }
+    }
+
+    #[test]
+    fn licks_play_as_written_from_the_root() {
+        // One lick (b9 and all), always: it shows up whole, from each chord's root.
+        let mut p = *prof(Soloist::Bird);
+        p.licks = Licks { rate: 1.0, ..Licks::default() };
+        (p.motif, p.sequence) = (0.0, 0.0);
+        p.licks.add(Fits::Any, &[(64, 0.25), (67, 0.25), (70, 0.25), (73, 0.25), (72, 0.5)]).unwrap();
+        let mut line = Line::default();
+        let mut r = Rng::new(3);
+        let mut found = 0;
+        let mut notes: Vec<(u8, u8)> = Vec::new();
+        for bar in 0..200 {
+            let ch = Turnaround(bar);
+            let mut out = [Played::default(); 24];
+            let n = line.bar(&p, &ch, &mut r, false, &mut out);
+            notes.extend(out[..n].iter().map(|k| (k.note, ch.harm(k.at).unwrap().chord.root)));
+        }
+        for w in notes.windows(5) {
+            let iv: Vec<i32> = w.windows(2).map(|x| x[1].0 as i32 - x[0].0 as i32).collect();
+            if iv == [3, 3, 3, -1] {
+                found += 1;
+                assert_eq!((w[0].0 + 12 - w[0].1) % 12, 4, "starts on the chord's 3rd");
+            }
+        }
+        assert!(found > 40, "{found}");
     }
 
     #[test]
@@ -735,11 +883,13 @@ mod tests {
         assert!(b.first_db - b.last_db > 3.0 && t.first_db - t.last_db < 2.5, "{b:?} {t:?}");
         assert!(m.spread_db > t.spread_db + 0.5, "{m:?} {t:?}");
         // Sonny: long 8th lines, thirds; Wayne: whole steps and pentatonic, fewer leaps than Trane.
-        let (so, w) = (play(prof(Soloist::Sonny), 400), play(prof(Soloist::Wayne), 400));
-        eprintln!("sonny {so:?}\nwayne {w:?}");
+        let (so, w, po) = (play(prof(Soloist::Sonny), 400), play(prof(Soloist::Wayne), 400), play(prof(Soloist::Pops), 400));
+        eprintln!("sonny {so:?}\nwayne {w:?}\npops {po:?}");
+        // Pops: repeated notes, pentatonic, high.
+        assert!(po.repeats > t.repeats && po.pentatonic > m.pentatonic && (4.0..7.5).contains(&po.notes_per_bar), "{po:?}");
         assert!((4.0..7.0).contains(&so.notes_per_bar) && (3.5..6.5).contains(&w.notes_per_bar), "{so:?} {w:?}");
         assert!(w.steps > t.steps && w.pentatonic > m.pentatonic, "{w:?}");
-        for s in [&m, &t, &b, &so, &w] {
+        for s in [&m, &t, &b, &so, &w, &po] {
             assert!((0.45..0.8).contains(&s.strong_chord_tones), "{s:?}");
         }
     }
