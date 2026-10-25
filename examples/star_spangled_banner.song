@@ -1,0 +1,66 @@
+; The Star-Spangled Banner (John Stafford Smith, c. 1773; words Francis Scott Key, 1814)
+; Public domain. Swung in 4/4 for the soloists example (not in the game): each 3/4 bar's
+; first beat is held for two, so the pickups land on beat 4. Each line ends with its bars.
+
+[song]
+title = The Star-Spangled Banner (Smith, c. 1773; Key, 1814)
+bpm = 176
+swing = 0.3
+key = Bb
+loop = yes
+meter = 4/4
+
+[chords]
+| Bb6 | Bb6 | Bb6 C7 | F7 | Bb6 | C7 F7 | Bb6 Eb6 | Bb6 F7 |  ; 1-8
+| Bb6 | Bb6 | Bb6 C7 | F7 | Bb6 | C7 F7 | Bb6 Eb6 | Bb6 D7 |  ; 9-16
+| Gm7 | Gm7 | Cm7 | F7 | Bb6 | C7 F7 | Bb6 C7 | F7 |  ; 17-24
+| Bb6 G7 | Cm7 | F7 | Bb6 F7 | Bb6 | Eb6 | Bb6 F7 | Bb6 F7 |  ; 25-32
+
+[instruments]
+brass   : vol 9 12 14 15 15 14 13 | duty 0 1 2 | pitch -1 -0.5 -0.25 0 | vib delay=14 depth=14 speed=5.5   ; a trumpet: swell, scoop, late vibrato
+thump   : vol 15 11 9 8 7                                                    ; a plucked upright bass
+brushes : kick decay=3 click=0.1 | snare decay=6 period=6 tone=150 body=1 | hat decay=0.6 period=3 ; brushes
+pulse1 = default brass
+triangle = default thump
+noise = default brushes
+
+[pulse1]
+v12 @1 o4 b-2 o5 d4 f4 | o5 b-2. o6 d8 c8 | o5 b-2 d4 e4 | o5 f2. f8 f8 |  ; 1-4
+o6 d2& d8 c8 o5 b-4 | o5 a2. g8 a8 | o5 b-2 b-4 f4 | o5 d2 o4 b-4 o5 f8 d8 |  ; 5-8
+o4 b-2 o5 d4 f4 | o5 b-2. o6 d8 c8 | o5 b-2 d4 e4 | o5 f2. f8 f8 |  ; 9-12
+o6 d2& d8 c8 o5 b-4 | o5 a2. g8 a8 | o5 b-2 b-4 f4 | o5 d2 o4 b-4 o6 d8 d8 |  ; 13-16
+o6 d2 e-4 f4 | o6 f2. e-8 d8 | o6 c2 d4 e-4 | o6 e-2. e-4 |  ; 17-20
+o6 d2& d8 c8 o5 b-4 | o5 a2. g8 a8 | o5 b-2 d4 e4 | o5 f2. f4 |  ; 21-24
+o5 b-2 b-4 a8 g8 | o5 g2 g4 g4 | o6 c2 e-8 d8 c8 o5 b-8 | o5 b-2 a4 f8 f8 |  ; 25-28
+o5 b-2& b-8 o6 c8 d8 e-8 | o6 f2. o5 b-8 o6 c8 | o6 d2& d8 e-8 c4 | o5 b-2. f8 d8 |  ; 29-32
+
+[pulse2]
+v7 @2 o4 d4. o4 d8 r4 o4 g8 r8 | r4 o4 g8 r8 r4 o4 d8 r8 | o4 d4. o4 d8 o4 e4. o4 e8 | r4 o4 e-8 r8 r4 o4 a8 r8 |  ; 1-4
+o4 d4. o4 d8 r4 o4 g8 r8 | o4 e4. o4 e8 o4 a4. o4 a8 | o4 d4. o4 d8 o4 g4. o4 g8 | o4 d4. o4 d8 o4 a4. o4 a8 |  ; 5-8
+o4 d4. o4 d8 r4 o4 g8 r8 | r4 o4 g8 r8 r4 o4 d8 r8 | o4 d4. o4 d8 o4 e4. o4 e8 | r4 o4 e-8 r8 r4 o4 a8 r8 |  ; 9-12
+o4 d4. o4 d8 r4 o4 g8 r8 | o4 e4. o4 e8 o4 a4. o4 a8 | o4 d4. o4 d8 o4 g4. o4 g8 | o4 d4. o4 d8 o4 f+4. o4 f+8 |  ; 13-16
+o4 b-4. o4 b-8 r4 o4 f8 r8 | r4 o4 f8 r8 r4 o4 b-8 r8 | o4 e-4. o4 e-8 r4 o4 b-8 r8 | r4 o4 e-8 r8 r4 o4 a8 r8 |  ; 17-20
+o4 d4. o4 d8 r4 o4 g8 r8 | o4 e4. o4 e8 o4 a4. o4 a8 | o4 d4. o4 d8 o4 e4. o4 e8 | r4 o4 e-8 r8 r4 o4 a8 r8 |  ; 21-24
+o4 d4. o4 d8 o4 b4. o4 b8 | r4 o4 b-8 r8 r4 o4 e-8 r8 | o4 a4. o4 a8 r4 o4 e-8 r8 | o4 d4. o4 d8 o4 a4. o4 a8 |  ; 25-28
+o4 d4. o4 d8 r4 o4 g8 r8 | r4 o4 c8 r8 r4 o4 g8 r8 | o4 d4. o4 d8 o4 a4. o4 a8 | o4 d4. o4 d8 o4 a4. o4 a8 |  ; 29-32
+
+[triangle]
+o2 b-4 o3 d4 o3 f4 o2 a4 | o2 b-4 o3 d4 o3 f4 o2 a4 | o2 b-4 o3 f4 o3 c4 o3 g4 | o2 f4 o2 a4 o3 c4 o2 a4 |  ; 1-4
+o2 b-4 o3 d4 o3 f4 o2 b4 | o3 c4 o3 g4 o2 f4 o3 c4 | o2 b-4 o3 f4 o3 e-4 o3 b-4 | o2 b-4 o3 f4 o2 f4 o3 c4 |  ; 5-8
+o2 b-4 o3 d4 o3 f4 o2 a4 | o2 b-4 o3 d4 o3 f4 o2 a4 | o2 b-4 o3 f4 o3 c4 o3 g4 | o2 f4 o2 a4 o3 c4 o2 a4 |  ; 9-12
+o2 b-4 o3 d4 o3 f4 o2 b4 | o3 c4 o3 g4 o2 f4 o3 c4 | o2 b-4 o3 f4 o3 e-4 o3 b-4 | o2 b-4 o3 f4 o3 d4 o3 a4 |  ; 13-16
+o2 g4 o2 b-4 o3 d4 o2 f+4 | o2 g4 o2 b-4 o3 d4 o2 b4 | o3 c4 o3 e-4 o3 g4 o2 e4 | o2 f4 o2 a4 o3 c4 o2 a4 |  ; 17-20
+o2 b-4 o3 d4 o3 f4 o2 b4 | o3 c4 o3 g4 o2 f4 o3 c4 | o2 b-4 o3 f4 o3 c4 o3 g4 | o2 f4 o2 a4 o3 c4 o2 a4 |  ; 21-24
+o2 b-4 o3 f4 o2 g4 o3 d4 | o3 c4 o3 e-4 o3 g4 o2 e4 | o2 f4 o2 a4 o3 c4 o2 a4 | o2 b-4 o3 f4 o2 f4 o3 c4 |  ; 25-28
+o2 b-4 o3 d4 o3 f4 o3 d4 | o3 e-4 o3 g4 o3 b-4 o2 a4 | o2 b-4 o3 f4 o2 f4 o3 c4 | o2 b-4 o3 f4 o2 f4 o3 c4 |  ; 29-32
+
+[noise]
+v9 H4 h8 s8 k4 h8 s8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 |  ; 1-4
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s8 s8 s8 s16 s16 s8 k8 s8 |  ; 5-8
+H4 h8 s8 k4 h8 s8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 |  ; 9-12
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s8 s8 s8 s16 s16 s8 k8 s8 |  ; 13-16
+H4 h8 s8 k4 h8 s8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 |  ; 17-20
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s8 s8 s8 s16 s16 s8 k8 s8 |  ; 21-24
+H4 h8 s8 k4 h8 s8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 |  ; 25-28
+k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k4 s8 h8 k4 s8 h8 | k8 s8 s8 s8 s16 s16 s8 k8 s8 |  ; 29-32
+

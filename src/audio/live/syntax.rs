@@ -6,13 +6,14 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
     (
         "Song file",
         &[
-            ("[song]", "header: title, bpm, swing, key, loop, meter (one `name = value` a line)"),
+            ("[song]", "header: title, bpm, swing, key, loop, meter, bassist (one `name = value` a line)"),
             ("title = Tiger Rag (1917)", "shown in the credits"),
             ("bpm = 184", "tempo, quarter notes per minute"),
             ("swing = 0.3", "0 straight .. 0.33 triplet swing: off-beat 8ths start late"),
             ("key = F", "home key's tonic (`C`, `Bb`, `F#`, or 0..11): tunings are relative to it"),
             ("loop = yes", "`yes`/`no` (`true`/`false`): loop at the end of the longest track"),
             ("meter = 4/4", "beats per bar / beat unit (default 4/4); every `|` is checked against it"),
+            ("bassist = bryant", "who walks the bass (music/bass/walking.bass; default: the soloist's bassist)"),
             ("[chords]", "the chord chart, bar by bar (needed for the reharmonizing filters)"),
             ("[instruments]", "FamiTracker-style instruments, drum kits and each channel's palette (optional)"),
             ("[pulse1]", "lead melody (pulse wave, slightly left)"),
@@ -99,7 +100,7 @@ pub const CHEAT_SHEET: &[(&str, &[(&str, &str)])] = &[
 ];
 
 /// The `[song]` keys.
-pub const SONG_KEYS: [&str; 6] = ["title", "bpm", "swing", "key", "loop", "meter"];
+pub const SONG_KEYS: [&str; 7] = ["title", "bpm", "swing", "key", "loop", "meter", "bassist"];
 
 /// The section names, in file order.
 pub const SECTIONS: [&str; 7] = ["song", "chords", "instruments", "pulse1", "pulse2", "triangle", "noise"];

@@ -9,6 +9,8 @@
 //! cargo run --release --example ornaments -- out/ all before     # a file-name prefix
 //! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
 //! cargo run --release --example ornaments -- out/ soli           # soli choruses (see `soli`)
+//! cargo run --release --example ornaments -- out/ human          # on the grid vs as played (see `human`)
+//! cargo run --release --example ornaments -- out/ soloists       # a solo chorus by each soloist, and the anthem (see `soloists`)
 //! ```
 //!
 //! Files: `<prefix>_<song>_f035.wav` + `.txt`, and `instruments_<song>.wav` (each song's
@@ -29,6 +31,7 @@ use nat_han_adventures::audio::{
         feel::Feel,
         library,
         musician::Role,
+        soloist::Soloist,
         song::SongFile,
     },
 };
@@ -165,6 +168,22 @@ fn main() {
         soli(dir, &prefix);
         return;
     }
+    if only.as_deref() == Some("human") {
+        human(dir);
+        return;
+    }
+    if only.as_deref() == Some("walkers") {
+        walkers(dir);
+        return;
+    }
+    if only.as_deref() == Some("lineup") {
+        lineup(dir);
+        return;
+    }
+    if only.as_deref() == Some("soloists") {
+        soloists(dir);
+        return;
+    }
     if only.as_deref() == Some("feels") {
         feels(dir);
         return;
@@ -189,7 +208,12 @@ fn main() {
 
 /// Run an engine through a script, logging every committed bar.
 fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool, intro: bool) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
-    let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, self_directed, intro, ..EngineConfig::default() }).expect("engine");
+    run_with(file, EngineConfig { seed: 7, self_directed, intro, ..EngineConfig::default() }, script, bars, note)
+}
+
+/// [`run`] with the engine set up as `config`.
+fn run_with(file: &SongFile, config: EngineConfig, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
+    let mut e = Engine::with_config(file, RATE, config).expect("engine");
     let looping = e.shape().looping;
     let mut out: Vec<Frame> = Vec::new();
     let mut buf = [Frame::ZERO; 256];
@@ -249,6 +273,9 @@ fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(
             }
             if let Some(s) = p.soli {
                 band.push(format!("soli: {}{}{}", s.texture.label(), if s.stretto { " (stretto)" } else { "" }, if s.tenor { "" } else { ", no tenor yet" }));
+            }
+            if b.orns[Role::Lead as usize].names().contains("solo") {
+                band.push(format!("soloist: {}", b.soloist.slug()));
             }
             if !band.is_empty() {
                 let _ = writeln!(log, "    band:  {}", band.join("; "));
@@ -392,6 +419,140 @@ fn soli(dir: &Path, prefix: &str) {
         write_wav(&dir.join(format!("{name}.wav")), &out);
         std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
         println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    }
+}
+
+/// The band on the grid and as played (the tempo drifting, each player where they sit): a few
+/// songs, a pass each at freedom 0.5 with the intro, to `grid_<song>.wav` and `human_<song>.wav`,
+/// with `human_<song>.txt` also listing each bar's tempo.
+fn human(dir: &Path) {
+    for stem in ["sweet_georgia_brown", "tiger_rag", "embraceable_you", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let f = 0.5;
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: 0.5 }] } else { vec![] }
+        };
+        let bars = file_bars(&file) + 4;
+        for (name, config) in [("grid", EngineConfig::on_grid()), ("human", EngineConfig::default())] {
+            let config = EngineConfig { seed: 7, intro: true, ..config };
+            let (out, mut log, _) = run_with(&file, config, script, bars, |_| "");
+            if name == "human" {
+                let e = Engine::with_config(&file, RATE, config).expect("engine");
+                let sh = e.shape();
+                let _ = writeln!(log, "\ntempo by bar (written {} bpm):", sh.bpm);
+                for k in 0..sh.bars {
+                    let _ = writeln!(log, "bar {:>3}  {:.2} bpm", k + 1, sh.bpm_at(k));
+                }
+            }
+            let name = format!("{name}_{stem}");
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+        }
+    }
+}
+
+/// The soloists: a few songs, a blowing chorus each (the lead soloing a whole pass, freedom
+/// 0.5, as played), once per soloist, to `solo_<soloist>_<song>.wav` + `.txt`.
+fn soloists(dir: &Path) {
+    let call = Call { chorus: Chorus::Blowing, key_up: false };
+    for stem in ["sweet_georgia_brown", "i_got_rhythm", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
+        };
+        for soloist in Soloist::SWING {
+            let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
+            let (out, log, _) = run_with(&file, config, script, file_bars(&file), |_| "");
+            let name = format!("solo_{}_{stem}", soloist.slug());
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+        }
+    }
+    // The feels' soloists: a blowing chorus in a funk feel, and in a bossa.
+    let file = SongFile::parse(library::text("sweet_georgia_brown").unwrap()).expect("song parses");
+    for feel in [Feel::Funk, Feel::Bossa] {
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::ForceFeel(Some(feel)), Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
+        };
+        let (out, log, _) = run_with(&file, EngineConfig { seed: 7, ..EngineConfig::default() }, script, file_bars(&file), |_| "");
+        let name = format!("solo_{}_sweet_georgia_brown", feel.slug());
+        write_wav(&dir.join(format!("{name}.wav")), &out);
+        std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+        println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    }
+    // For fun: the head of the anthem (swung, in 4/4), then a chorus of blowing over it.
+    let file = SongFile::parse(include_str!("star_spangled_banner.song")).expect("anthem parses");
+    let bars = file_bars(&file);
+    let script = move |bar: u64| match bar {
+        1 => vec![Input::LevelStart, Input::ForceFeel(Some(Feel::Swing)), Input::ForceChorus(Some(Call { chorus: Chorus::Head, key_up: false })), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }],
+        b if b == bars + 1 => vec![Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))],
+        _ => vec![],
+    };
+    for soloist in Soloist::SWING {
+        let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
+        let (out, log, _) = run_with(&file, config, script, bars * 2, |_| "");
+        let name = format!("solo_{}_star_spangled_banner", soloist.slug());
+        write_wav(&dir.join(format!("{name}.wav")), &out);
+        std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+        println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    }
+}
+
+/// The walkers: a blowing chorus behind each soloist on two tunes, the bass up front (the
+/// rest of the band quieter) to hear how their bassist walks, to `walk_<soloist>_<song>.wav`;
+/// and Sunny Side, whose bassist is its own (Tommy Bryant).
+fn walkers(dir: &Path) {
+    let call = Call { chorus: Chorus::Blowing, key_up: false };
+    for stem in ["i_got_rhythm", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let script = move |bar: u64| {
+            if bar == 1 {
+                vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.6, drums: 0.5, dynamics: 0.5 }, Input::SetMix([0.35, 0.4, 1.0, 0.5])]
+            } else {
+                vec![]
+            }
+        };
+        for soloist in Soloist::SWING {
+            let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
+            let (out, log, _) = run_with(&file, config, script, file_bars(&file), |_| "");
+            let name = format!("walk_{}_{stem}", soloist.slug());
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav ({}): {:.1}s", soloist.bassist().name, out.len() as f64 / RATE as f64);
+        }
+    }
+    // A tune with its own bassist: Tommy Bryant's paired quarters under Sunny Side.
+    let file = SongFile::parse(library::text("sunny_side").unwrap()).expect("song parses");
+    let script = move |bar: u64| {
+        if bar == 1 {
+            vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.6, drums: 0.5, dynamics: 0.5 }, Input::SetMix([0.35, 0.4, 1.0, 0.5])]
+        } else {
+            vec![]
+        }
+    };
+    let (out, log, _) = run_with(&file, EngineConfig { seed: 7, ..EngineConfig::default() }, script, file_bars(&file) * 2, |_| "");
+    write_wav(&dir.join("walk_bryant_sunny_side.wav"), &out);
+    std::fs::write(dir.join("walk_bryant_sunny_side.txt"), log).expect("write log");
+    println!("walk_bryant_sunny_side.wav: {:.1}s", out.len() as f64 / RATE as f64);
+}
+
+/// The lineup: four blowing choruses on each of three tunes, the soloist picked per chorus.
+fn lineup(dir: &Path) {
+    let call = Call { chorus: Chorus::Blowing, key_up: false };
+    for stem in ["sweet_georgia_brown", "i_got_rhythm", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        for f in [0.3f32, 0.8] {
+            let script = move |bar: u64| {
+                if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: f, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
+            };
+            let (out, log, _) = run_with(&file, EngineConfig { seed: 7, ..EngineConfig::default() }, script, file_bars(&file) * 4, |_| "");
+            let name = format!("lineup_{stem}_{}", (f * 10.0) as u32);
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+        }
     }
 }
 

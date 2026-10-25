@@ -1,0 +1,56 @@
+; Wayne Shorter, 1961-66: 10-note phrases over 6.6 beats [4.1-10.2], 2.1 beats' rest
+; [1.4-3.4]; 16ths 19% and faster runs 11%, 8ths 32%, long notes 8%; 59% steps (38% whole
+; steps), 6% repeats, 14% leaps; turns (−2 +2 −2) his commonest cell; 52% chord tones on the
+; strong beats, 56% of phrases end on one; only 15% half-step approaches, 4% enclosures; 34%
+; of 4-note windows pentatonic; tenor.
+; Measured on their transcribed solos in the Weimar Jazz Database v2.1: statistics only, never
+; their phrases. The format is documented in `src/audio/live/player_file.rs`.
+
+[player]
+name = Wayne
+lay_back = 0.4              ; about +1 ms (post-bop +1.5, the 2nd Quintet +0.8)
+swing = 1.42                ; long 8th over short (2.0: a full triplet)
+legato = 0.88               ; sounding length against the time to the next note
+register = 67 57 82         ; MIDI, the lead's octave: centre, soft floor, soft ceiling
+
+[line]
+phrase = 6.6 4.1 10.2       ; beats: median, lower and upper quartile (log-normal)
+rest = 2.4 1.6 3.6          ; the rest between phrases, likewise
+cells = eighths 15.9, quarter 7.5, triplet 3.5, sixteenths 4.0, dotted 3.8, quarter_triplet 1.2, long 5.5
+intervals = 6.2 21.1 37.5 14.7 6.7 7.7 1.4 1.6 2.8 ; by size: 0 1 2 3 4 5 6 7 8-12 semitones
+step_back = 0.20            ; after a leap (5 or more), a step back the other way
+end_chord_tone = 0.56       ; a phrase's last note on a chord tone
+approach = 0.10             ; a half step into a strong-beat chord tone...
+from_below = 0.35           ; ...from below this share of the time
+enclosure = 0.03            ; one above and one below into a strong-beat chord tone
+pentatonic = 0.12           ; a run of four through the chord's pentatonic
+anticipation = 0.14         ; a phrase starts on the "and" before the bar line
+falls = 0.12                ; a fall off a phrase's last note
+
+[dynamics]
+; Even like late Trane: the top note barely louder (+0.3 dB), a soft last note (−1.7).
+arch = 0.12 0.47 0.33 -0.42 -1.70 ; dB: first note, early, middle, late, last note
+per_octave = 0.5            ; dB per octave above the register's centre
+ghost = 0.20                ; the offbeat 8th ghosted (-4 dB) this often...
+accent = 0.3                ; ...or else accented this much (dB)
+long = -1.0                 ; notes of 1.2 beats or more (dB)
+scatter = 3.1               ; each note's own spread (dB, a standard deviation)
+
+[motifs]
+; The motif developer: 32% of his ideas are variants (13% of them transposed), shared cells 2.5x chance, the most theme quotes; sequences mostly stay put.
+motif = 0.28                ; a phrase restates the last one's head, then goes its own way
+sequence = 0.06             ; a 3-4 note cell restated straight after (a sequence)
+moves = 0:5.0 -2:1.2 2:0.8 -3:0.8 -5:0.5 ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with his shapes (up the minor to the 5th or b7, whole-step turns,
+; whole-tone lines over dominants, repeated notes, fourths).
+rate = 0.2                  ; a phrase opens with one this often (when one fits the chord)
+min = o4 e-8 f8 g8 b-8 g4
+min = o4 f8 g8 f8 e-8 c4
+dom = o4 b-8 a-8 g-8 e8 d4
+any = o4 g4 g8 g8 a8 g4
+min = o4 c8 f8 b-8 o5 e-4 d8
+dom = o4 e8 f+8 g+8 b-8 o5 c4
+maj = o4 b8 a8 b8 o5 d8 e4
+min = o4 a8 g8 a8 o5 c8 o4 b-4

@@ -933,6 +933,12 @@ impl Shout {
 }
 
 impl Level {
+    /// Is play here timed to the written beat: Nat alone (the gadget world's routes), beat
+    /// crushers, beat blocks? The music then holds its tempo (`audio::plugin::strict_tempo`).
+    pub fn on_the_beat(&self) -> bool {
+        self.solo || self.crushers.iter().any(|c| c.beat > 0) || self.tiles.iter().any(|t| t.is_beat())
+    }
+
     /// The band (or death) gate mark whose zone holds cell (col, row), if any: there Han's
     /// boost is the weak one.
     pub fn band_zone(&self, cell: (i32, i32)) -> Option<&GateMark> {

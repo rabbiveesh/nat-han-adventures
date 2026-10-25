@@ -1,0 +1,37 @@
+; The funk bass's riffs: ours, written to rhyme with the shapes of real funk lines (about a
+; thousand funk, disco and soul bass parts in the Lakh MIDI Dataset: the ONE held, the "and"
+; of 2 and beat 3 the backbone, a pickup run over beats 3-4, roots, low 5ths and b7ths, octave
+; pops on the "and"s, dead notes, bar 2 keeping bar 1's first half and answering it, a push
+; over the bar line now and then). Statistics and shapes only, never anyone's line.
+;
+; A riff is two bars: `fits = <bar 1> | <bar 2>`, each bar a 16-step rhythm then its notes.
+; Rhythm: `x` a note (the next degree), `-` holds the one before, `d` a dead note (muted, the
+; pitch before), `.` a rest; a bar that starts with `-` lets the last note ring over the line
+; (no new ONE). Degrees from the chord's root at that beat: 1 b2 2 b3 3 4 b5 5 b6 6 b7 7, `'`
+; an octave up (a pop), `,` an octave down. `fits`: dom, min, maj, half or any (the chord at
+; the bar line).
+
+dom = x-..d.x.x..x.xx. 1 1 b7, 1 b3 3 | x-..d.x.x.x.x.x. 1 1 5, 6, b7, 7,
+min = x--..xx.x...x.x. 1 1 b3 1 b7, 5, | x--..xx.x.x.x..x 1 1 b3 4 b3 1 b7,
+dom = x.....x.x.x...x. 1 1' 1 b7, 1' | x.....x.x.x.x.xx 1 1' 1 5, b7, 1 1'
+any = x.x.x.x.x.x.x.x. 1 1' 1 1' 1 1' 5, 1' | x.x.x.x.x.x.x..x 1 1' 1 1' 1 1' 5 6,
+min = x---..x.x.x.x.x. 1 1 b3 4 5 b7 | x---..x.x.x..d.x 1 b7, 5, 4, b7,
+dom = x--.....x--...x. 1 5, b7, | x--.....x--.x.x. 1 5, 6, b7,
+dom = x-...x.x.x....xx 1 1 b7, 1 b7, 7, | x-...x.x.x.x.x.x 1 1 b7, 1 b3 3 7,
+min = x...x.x.x...x.x. 1 1 b3 1 b7, 1 | x...x.x.x.x.x.x. 1 1' b7 5 4 b3 1
+dom = x.x.x.x.x.x.x.x. 1 1' 1 1' 1 1' 1 1' | x.x.x.x.x.x.x.x. 1 1' 1 1' b7, b7 5, 5
+dom = x..x..x.x..x.x.. 1 1 b3 3 5 b7 | x..x..x.x...x.x. 1' b7 5 4 b3 3
+any = x-....x-x-....x. 1 5, 1 6, | x-....x-x-..x.x. 1 5, 1 2 6,
+min = x.dxd.xdx.dxd.x. 1 1 b3 1 b7, 1 | x.dxd.xdx.dxx.x. 1 1 4 b3 1 b7, 5,
+dom = x-....x.x...xxxx 1 1 5, 5, 6, b7, 7, | x-....x.x.x..... 1 1' 1 b7,
+min = x.....xx......x. 1 1 1' b7, | x.....xx....x.x. 1 1 1' 4 b3
+maj = x...x.x.x...x.x. 1 1' 5 6 1' 5 | x...x.x.x.x.x... 1 1' 5 6 7 1'
+maj = x.x.x.x.x.x.x.x. 1 1' 1 1' 5, 5 6, 6 | x.x.x.x.x.x.x.x. 1 1' 1 1' 2 2' 3 3'
+dom = x--...x.x.x...x- 1 1 5, b7, 1 | -...x.x.x...x.x. 1 b7, 1 b3 3
+min = x-...x.x..x...x- 1 b7, 1 b3 1 | -..x..x.x.x.x.x. b7, 1 b3 4 5 b7
+any = x--.......x...x. 1 1' 5 | x--.....x.x...x. 1 5, 1' 1
+dom = x.x...x.x.x.x... 1 b2 1 1' b7 5 | x.x...x.x...x.x. 1 b2 1 5, 6, b7,
+min = x-....x.x..xxxx. 1 1 b7, 1 b3 4 5 | x-....x.x..xxxxx 1 1 b7, b7 5 4 b3 2
+dom = x..x..x..x..x.x. 1 5, b7, 1 5, b7, | x..x..x..x..x..x 1 5, b7, 1 1' 7,
+maj = x.....x.x.x.x.x. 1 1 5 6 5 1' | x.....x.x...x... 1 1 6, 5,
+min = x..x.x..x.x.x.x. 1 1' 1 b7, 1 b3 4 | x..x.x..x...x..x 1 1' 1 b7, 5, 7,

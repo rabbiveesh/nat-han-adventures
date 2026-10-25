@@ -57,14 +57,14 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `[instruments]`: macros, kits, palettes; `@i name` in the MML). The musicians ornament by
   their freedom dial (`musician/`, `ornament.rs`; the bar's shared `band.rs` plan keeps hits,
   reharms, trades, flourishes and the feel in step); at high freedom the band picks feels on
-  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz); each pass is
+  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz; the funk bass plays two-bar riffs of our own, `music/bass/funk.riffs` / `riffs.rs`, shaped on Lakh MIDI funk lines, and the kick follows them); each pass is
   a chorus the band arranges by the dial (`chorus.rs`: two-feel, stop-time, breaks, riffs,
   strolling, soli, shout + key-up; the soli is four-voice counterpoint, `soli.rs`: a texture per
   8-bar section (front line, canon, chorale, answers, line cliché, locked drop-2), the tenor on a
-  third pulse (VRC6-style, channel 4, only the soli plays it)), level tunes open with a pedal/vamp intro, `Input::End`
+  third pulse (VRC6-style, channel 4, only the soli plays it)), the band plays off the grid like players do: the tempo drifts up to 4 bpm either way over a pass (pushing into each 8-bar turn, settling after) (`Shape::drifting`, each bar its own tempo, a pass as long as written; held strict in Side B and levels on the beat, `plugin::strict_tempo`) and each player sits a few ms off the beat (`pocket.rs`, from measured trio and soloist data: drums on it, bass either side, comp behind, the lead laying back on the beat less as the tempo rises; funk/rock/samba drums keep their 16ths' shape from the Groove MIDI Dataset, `groove_ms`; `EngineConfig::on_grid()` for tests that check timing against the written notes); the comp and drums duck under the lead's phrases and the bass sits lower, to levels measured on records (`mix.rs`, off on the grid); the lead can solo like a measured player (`soloist.rs`; profiles in `music/players/*.player`, `player_file.rs`: Miles, Trane, Bird, Sonny, Wayne, Pops from statistics of their transcribed solos in the Weimar Jazz Database, never their phrases (and the funk and Latin feels' soloists, `funk.player` / `latin.player`, in those sections), and our own licks that rhyme with theirs (`[licks]`); `EngineConfig::soloist`: by default a chorus each, passed round like a jam session, `soloist::take_the_solo`; the walking bass walks like the bassist on the soloist's records, `walkers.rs` / `music/bass/walking.bass`, from the Weimar Jazz Database's bass pitches: Chambers behind Miles, Garrison behind Trane, Carter behind Wayne...; a song can name its own, `bassist = bryant` in `[song]`: Sunny Side's paired quarters); level tunes open with a pedal/vamp intro, `Input::End`
   plays an ending (the jingle gets a Basie one);
   `cargo run --release --example ornaments` renders listening WAVs with a log of what fired
-  per bar (`-- <dir> feels`: the feels; `-- <dir> choruses`: the choruses, combos with feels, whole shows; `-- <dir> soli`: soli choruses). Offline renders
+  per bar (`-- <dir> feels`: the feels; `-- <dir> choruses`: the choruses, combos with feels, whole shows; `-- <dir> soli`: soli choruses; `-- <dir> human`: on the grid vs as played; `-- <dir> soloists`: a blowing chorus by each soloist, and the anthem; `-- <dir> lineup`: the solo passed round; `-- <dir> walkers`: each soloist's bassist, the bass up front). Offline renders
   (`synth::render_song_with`, `examples/render_audio`, `examples/live_render`) run the same
   engine. `NATHAN_MUSIC=waltz+ji cargo run` forces the filters.
 - `src/freeplay/` FREE PLAY: room templates per skill (registry in `templates.rs`), generator
@@ -117,7 +117,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `dev`, never in the game binary or the web build): egui on Bevy, the full live engine with
   gameplay simulated by buttons/dials (the same `Input`s and director as the game), tracker /
   piano roll / text views of one `.song` text, hot-swapped into the engine on every parse,
-  Save writes `music/<song>.song`; an Instruments tab edits `[instruments]` (macro graphs,
+  Save writes `music/<song>.song`; SOLOIST chips and OFF THE GRID switches (pocket, duck, drift: `Input::ForceSoloist`, `Input::SetHuman`); an Instruments tab edits `[instruments]` (macro graphs,
   previews, try-outs). `--help` lists the scripting options; screenshots:
   `NATHAN_AUDIO=headless VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json
   xvfb-run -a cargo run --bin editor -- --view piano --play --screenshot out.png`.

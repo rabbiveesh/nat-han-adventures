@@ -1,0 +1,55 @@
+; John Coltrane, 1960-64: 9-note cells over 5.3 beats [3.2-10.3], 2.0 beats' rest
+; [1.5-3.0], 16% before the beat; 8ths 34%, 16ths 16%, triplets 16%; 47% steps, 30% thirds,
+; 19% leaps; 54% chord tones on the strong beats (the 5th first), 57% of phrases end on one;
+; 14% half-step approaches, 6% enclosures; 34% of 4-note windows pentatonic; tenor.
+; Measured on their transcribed solos in the Weimar Jazz Database v2.1: statistics only, never
+; their phrases. The format is documented in `src/audio/live/player_file.rs`.
+
+[player]
+name = Trane '61
+lay_back = 0.3              ; +0.8 ms (the quartet: -0.2)
+swing = 1.51                ; long 8th over short (2.0: a full triplet)
+legato = 0.87               ; sounding length against the time to the next note
+register = 67 58 80         ; MIDI, the lead's octave: centre, soft floor, soft ceiling
+
+[line]
+phrase = 5.3 3.2 10.3       ; beats: median, lower and upper quartile (log-normal)
+rest = 2.0 1.5 3.0          ; the rest between phrases, likewise
+cells = eighths 16.8, quarter 6.5, triplet 5.2, sixteenths 3.5, dotted 5.0, quarter_triplet 1.3, long 4.5
+intervals = 4.4 18.4 28.2 17.4 12.7 8.3 2.5 3.3 4.7 ; by size: 0 1 2 3 4 5 6 7 8-12 semitones
+step_back = 0.18            ; after a leap (5 or more), a step back the other way
+end_chord_tone = 0.57       ; a phrase's last note on a chord tone
+approach = 0.08             ; a half step into a strong-beat chord tone...
+from_below = 0.44           ; ...from below this share of the time
+enclosure = 0.04            ; one above and one below into a strong-beat chord tone
+pentatonic = 0.12           ; a run of four through the chord's pentatonic
+anticipation = 0.16         ; a phrase starts on the "and" before the bar line
+falls = 0.0                 ; a fall off a phrase's last note
+
+[dynamics]
+; Even: the flattest arch, no louder going up (1960 on), an even, sustained tone; 3.5 dB.
+arch = 0.65 0.16 0.0 -0.14 -0.68 ; dB: first note, early, middle, late, last note
+per_octave = 0.0            ; dB per octave above the register's centre
+ghost = 0.17                ; the offbeat 8th ghosted (-4 dB) this often...
+accent = 0.59               ; ...or else accented this much (dB)
+long = -0.74                ; notes of 1.2 beats or more (dB)
+scatter = 3.0               ; each note's own spread (dB, a standard deviation)
+
+[motifs]
+; 42% of his ideas are variants of the one before (the most of anyone); sequences stay put or drop a minor third.
+motif = 0.3                 ; a phrase restates the last one's head, then goes its own way
+sequence = 0.06             ; a 3-4 note cell restated straight after (a sequence)
+moves = 0:4.8 -3:1.4 -2:0.9 7:0.8 -5:0.5 ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with his 1960s shapes (pentatonic cells over one modal minor
+; chord, up and back; the 1-2-3-5 cell; dorian rise and fall), in 16ths and triplets.
+rate = 0.25                 ; a phrase opens with one this often (when one fits the chord)
+min = o4 c16 e-16 f16 g16 b-16 g16 f16 e-16
+min = o4 f12 g12 b-12 o5 c12 o4 b-12 g12
+min = o5 d16 c16 o4 b-16 g16 f16 g16 b-16 o5 c16
+min = o4 e-8 f8 g8 a8 g8 f4
+dom = o4 d16 e16 g16 a16 b-16 a16 g16 e16
+maj = o4 e16 g16 a16 o5 c16 d16 e16 d16 c16
+min = o4 g8. f16 d8 c8 o3 b-4
+dom = o4 c16 d16 e16 g16 a8 g8 e8
