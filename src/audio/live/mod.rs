@@ -93,6 +93,7 @@ pub mod engine;
 pub mod feel;
 pub mod instrument;
 pub mod library;
+pub mod mix;
 pub mod musician;
 pub mod ornament;
 pub mod playback;

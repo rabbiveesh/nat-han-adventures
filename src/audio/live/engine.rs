@@ -59,6 +59,7 @@ use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
 use super::ornament::Orns;
+use super::mix;
 use super::pocket;
 use super::song::SongFile;
 use super::voice::{MAX_SEGMENT, NoteEvent, Sound, VoiceBank};
@@ -129,19 +130,21 @@ pub struct EngineConfig {
     pub loose: f32,
     /// Who the lead solos like ([`super::soloist`]).
     pub soloist: Soloist,
+    /// The comp and drums step back under the lead's phrases ([`super::mix`]).
+    pub duck: bool,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: Soloist::Band }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: Soloist::Band, duck: true }
     }
 }
 
 impl EngineConfig {
-    /// The default with no tempo drift and every player on the beat: the notes exactly as
-    /// written in time (for tests that check timing against the written notes).
+    /// The default with no tempo drift, every player on the beat and no ducking: the notes
+    /// exactly as written (for tests that check timing and levels against the written notes).
     pub fn on_grid() -> Self {
-        EngineConfig { drift_bpm: 0.0, loose: 0.0, ..EngineConfig::default() }
+        EngineConfig { drift_bpm: 0.0, loose: 0.0, duck: false, ..EngineConfig::default() }
     }
 }
 
@@ -763,6 +766,10 @@ impl Engine {
                 e.sound = transpose(e.sound, 1, musician::range(e.ch as usize).1);
                 e.anchor = e.anchor.saturating_add(1);
             }
+        }
+        // The comp and drums step back under a lead phrase (not in a soli: the lead is a section).
+        if self.config.duck && band.soli.is_none() {
+            mix::duck(&mut self.scratch, sr as f64 * 60.0 / shape.bpm as f64);
         }
         for mut e in self.scratch.drain(..) {
             e.seq = self.seq;
