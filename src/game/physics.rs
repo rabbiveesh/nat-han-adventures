@@ -42,7 +42,7 @@ use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, 
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
 use crate::level::{
-    BUMPER_LIFT, BUMPER_SPEED, CUSHION_FLING, CUSHION_LIFT, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
+    BUMPER_LIFT, BUMPER_SPEED, CUSHION_HOLD, cushion_shot, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
     Level, SPRING_SPEED, TILE, Tile, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 
@@ -73,6 +73,15 @@ pub struct Body {
     /// Horizontal speed (px/s) kept from the moving platform jumped or stepped off, on top of
     /// `vel.x` until landing or a wall (see "Platform carry" above).
     pub launch: f32,
+    /// Caught in a wall cushion: the way it will sling the body (+1 right, -1 left; 0 not
+    /// caught). Held still in it until `hold` runs out (in the waltz, until ONE) or `fire`.
+    pub pad: f32,
+    /// How long the cushion still holds (s).
+    pub hold: f32,
+    /// The aim held as the cushion fires (the controller's: -1 left, +1 right, 0 none).
+    pub aim: f32,
+    /// Fire the cushion now (a jump while caught).
+    pub fire: bool,
 }
 
 impl Body {
@@ -83,6 +92,10 @@ impl Body {
             on_ground: false,
             riding: None,
             launch: 0.0,
+            pad: 0.0,
+            hold: 0.0,
+            aim: 0.0,
+            fire: false,
         }
     }
 }
@@ -281,13 +294,15 @@ pub struct Contact {
     /// caller to keep as [`Body::launch`] (Nat does, Han doesn't).
     pub launch: Option<f32>,
     /// Landed on a trampoline and sprang off it ([`SPRING_SPEED`]), or a cushion laid on a
-    /// wall flung it away, or one on a ceiling sprang it back down.
+    /// wall slung it away (out of its catch), or one on a ceiling sprang it back down.
     pub sprung: bool,
     /// Bricks (grid col, row) rising into them smashed this step: the caller breaks them
     /// (the body is already inside them).
     pub bricks: [Option<(i32, i32)>; 4],
     /// Ran or flew into a bumper's face and got batted back ([`BUMPER_SPEED`]).
     pub bumped: bool,
+    /// Ran or flew into a wall cushion's face and sank into it ([`Body::pad`]).
+    pub caught: bool,
 }
 
 impl Contact {
@@ -348,9 +363,29 @@ pub fn step_body(
     solids: &[(Vec2, Vec2)],
     dt: f32,
 ) -> Contact {
+    let mood = fall.tiles;
+    // --- Caught in a wall cushion: held still, then slung (aimed by what's held as it fires).
+    let mut slung = false;
+    if body.pad != 0.0 {
+        body.hold -= dt;
+        let ready = if mood.catch { mood.spring > 1.0 } else { body.hold <= 0.0 };
+        if !ready && !body.fire {
+            body.vel = Vec2::ZERO;
+            body.launch = 0.0;
+            body.on_ground = false;
+            body.riding = None;
+            return Contact { fall_speed: 0.0, ..Contact::default() };
+        }
+        let (away, up) = cushion_shot(body.aim * body.pad);
+        body.launch = body.pad * away * mood.spring;
+        body.vel = Vec2::new(0.0, up * mood.spring);
+        body.pad = 0.0;
+        body.hold = 0.0;
+        body.fire = false;
+        slung = true;
+    }
     // --- Gravity (and a fan's updraft against it, or a ceiling fan's downdraft with it).
     body.vel.y = (body.vel.y - fall.gravity * dt).max(-fall.max_fall);
-    let mood = fall.tiles;
     let wind = level.wind_within(idx(pos.x), row_of(level, idx(pos.y)), mood.reach);
     if wind.1 > 0 && body.vel.y < FAN_RISE {
         body.vel.y = (body.vel.y + FAN_LIFT * dt).min(FAN_RISE);
@@ -390,7 +425,7 @@ pub fn step_body(
                 if tile.bumper() == -dx.signum() {
                     bumped = tile.bumper();
                 }
-                // A wall cushion's face: flung away.
+                // A wall cushion's face: caught in it.
                 if tile.fling() == -dx.signum() {
                     flung = tile.fling();
                 }
@@ -421,10 +456,16 @@ pub fn step_body(
         body.vel.y = body.vel.y.max(BUMPER_LIFT * mood.spring);
         body.on_ground = false;
     }
-    if flung != 0.0 {
-        body.launch = flung * CUSHION_FLING * mood.spring;
-        body.vel.y = body.vel.y.max(CUSHION_LIFT * mood.spring);
+    if flung != 0.0 && !slung {
+        body.pad = flung;
+        body.hold = CUSHION_HOLD;
+        body.aim = 0.0;
+        body.fire = false;
+        body.vel = Vec2::ZERO;
+        body.launch = 0.0;
         body.on_ground = false;
+        body.riding = None;
+        return Contact { was_on_ground, fall_speed, blocked_x, caught: true, ..Contact::default() };
     }
     // A ceiling cushion bumped into: back down.
     let mut bonked = false;
@@ -499,7 +540,7 @@ pub fn step_body(
         body.launch = 0.0;
         body.on_ground = false;
         body.riding = None;
-        return Contact { ground: false, riding: None, was_on_ground, fall_speed, blocked_x, launch: None, sprung, bricks, bumped: false };
+        return Contact { was_on_ground, fall_speed, blocked_x, sprung, bricks, ..Contact::default() };
     }
     // Carriers (one-way).
     if body.vel.y <= 0.0 {
@@ -535,9 +576,10 @@ pub fn step_body(
         fall_speed,
         blocked_x,
         launch,
-        sprung: flung != 0.0 || bonked,
+        sprung: slung || bonked,
         bricks,
         bumped: bumped != 0.0,
+        caught: false,
     }
 }
 
@@ -660,8 +702,18 @@ fn player_step(
         };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
 
+    // --- Caught in a wall cushion: aiming it (Left/Right), and a jump fires it.
+    let caught = body.pad != 0.0;
+    if caught {
+        body.aim = axis;
+        body.fire |= input.just_pressed(&Action::Jump);
+    }
+
     // --- Jumping.
-    if slipping {
+    if caught {
+        ctl.buffer = 0.0;
+        ctl.coyote = 0.0;
+    } else if slipping {
         ctl.coyote = 0.0;
         ctl.has_toot = true;
         ctl.weak_toot = false;
@@ -672,7 +724,7 @@ fn player_step(
     } else {
         ctl.coyote -= dt;
     }
-    let pressed = input.just_pressed(&Action::Jump);
+    let pressed = input.just_pressed(&Action::Jump) && !caught;
     if pressed {
         ctl.buffer = assists.jump_buffer();
     } else {

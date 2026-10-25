@@ -76,7 +76,7 @@
 //! | `(` `)` | bumper (a rubber duck): solid; running or flying into its springy face (`(`: the left face, `)`: the right) bats you back the other way and up ([`BUMPER_SPEED`], [`BUMPER_LIFT`]) |
 //! | `[` `]` | beat block: red (`[`) is solid on even bars of the music and gone on odd ones, blue (`]`) the other way round. One that comes back around someone waits until they're clear |
 //! | `!` `e` `w` | fans laid on a ceiling (`!`, blowing down: a downdraft you can't rise through) or a wall (`e` blowing right, `w` left: a gust that pushes you along at [`WIND_SPEED`]); like `*`, [`FAN_REACH`] empty tiles |
-//! | `b` `d` `m` | cushions laid on a wall (`b`: its spring on its right face, `d`: its left; run or fly into it and it flings you away, [`CUSHION_FLING`]) or a ceiling (`m`: bump your head on it and it springs you back down); the toot comes back |
+//! | `b` `d` `m` | cushions laid on a wall (`b`: its spring on its right face, `d`: its left; run or fly into it and it catches you, holds you [`CUSHION_HOLD`] (in the waltz, until ONE: [`WALTZ_SPRING_BOOST`] harder) and slings you away; hold into it as it fires for a steep shot, away for a long flat one, neither for the plain one ([`cushion_shot`]); a jump fires it early) or a ceiling (`m`: bump your head on it and it springs you back down); the toot comes back |
 //! | `\|` | brushes sticking out of a wall sideways, pointing away from it (there must be a wall on exactly one side); deadly in that half of the tile |
 //! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
@@ -216,11 +216,32 @@ pub const BUMPER_LIFT: f32 = 300.0;
 /// A wall fan (`e` `w`) pushes whoever's in its gust along this fast (px/s, on top of their
 /// own speed, like a belt's): 1.5 tiles a second short of a run against it.
 pub const WIND_SPEED: f32 = 110.0;
-/// A wall cushion (`b` `d`) flings whoever runs or flies into its face away this fast (px/s,
-/// kept until they land or hit a wall, like a bumper's)...
+/// A wall cushion (`b` `d`) catches whoever runs or flies into its face: they sink into it and
+/// it holds them this long (s; in the waltz, until the next ONE), then slings them away (a
+/// jump fires it early)...
+pub const CUSHION_HOLD: f32 = 0.2;
+/// ...this fast (px/s, kept until they land or hit a wall, like a bumper's), with nothing held
+/// as it fires...
 pub const CUSHION_FLING: f32 = 420.0;
-/// ...and this fast up (px/s, at least).
+/// ...and this fast up (px/s).
 pub const CUSHION_LIFT: f32 = 260.0;
+/// Held into the cushion as it fires (pulled back, a slingshot): steep, (away, up) px/s.
+pub const CUSHION_STEEP: (f32, f32) = (180.0, 480.0);
+/// Held away from it: long and flat, (away, up) px/s.
+pub const CUSHION_LONG: (f32, f32) = (540.0, 140.0);
+
+/// A wall cushion's shot (away from its face, up; px/s) for the aim held as it fires: `aim`
+/// > 0 away from the cushion ([`CUSHION_LONG`]), < 0 into it ([`CUSHION_STEEP`]), 0 neither
+/// ([`CUSHION_FLING`], [`CUSHION_LIFT`]).
+pub fn cushion_shot(aim: f32) -> (f32, f32) {
+    if aim > 0.0 {
+        CUSHION_LONG
+    } else if aim < 0.0 {
+        CUSHION_STEEP
+    } else {
+        (CUSHION_FLING, CUSHION_LIFT)
+    }
+}
 
 /// The farthest (tiles) a crusher slams, with nothing in its way.
 pub const CRUSH_MAX_TRAVEL: i32 = 10;
