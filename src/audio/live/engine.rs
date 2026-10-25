@@ -99,6 +99,13 @@ pub enum Input {
     /// Override the chorus ([`super::chorus`]; `None`: the band arranges): every pass plays it,
     /// from the next bar committed. A dev override (the editor's chips).
     ForceChorus(Option<chorus::Call>),
+    /// Override who the lead solos like ([`EngineConfig::soloist`]; `None`: passed round), from
+    /// the next bar committed. A dev override (the editor's chips).
+    ForceSoloist(Option<Soloist>),
+    /// How loose the players sit and whether the band ducks under the lead
+    /// ([`EngineConfig::loose`], [`EngineConfig::duck`]), from the next bar committed. The
+    /// editor's off-the-grid switches (the tempo drift is the shape's: set at the start).
+    SetHuman { loose: f32, duck: bool },
     /// End the song: the band plays an ending ([`chorus::EndKind`], picked by the dials) from
     /// the next bar committed, and the engine is [`Engine::finished`] after it.
     End,
@@ -946,6 +953,14 @@ impl Engine {
             }
             Input::ForceChorus(c) => {
                 self.forced_chorus = c;
+                None
+            }
+            Input::ForceSoloist(s) => {
+                self.config.soloist = s;
+                None
+            }
+            Input::SetHuman { loose, duck } => {
+                (self.config.loose, self.config.duck) = (loose.clamp(0.0, 1.0), duck);
                 None
             }
             Input::End | Input::EndWith(_) => {

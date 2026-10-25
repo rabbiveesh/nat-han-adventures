@@ -102,6 +102,7 @@ pub mod soli;
 pub mod player_file;
 pub mod riffs;
 pub mod soloist;
+pub mod walkers;
 pub mod song;
 pub mod syntax;
 pub mod voice;

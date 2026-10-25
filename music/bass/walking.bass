@@ -1,0 +1,37 @@
+; The walking bass's players: how the bassist behind each soloist walks, measured in the Weimar
+; Jazz Database v2.1 (the bass's pitch on each beat under its swing solos, 4/4; mostly
+; automatic estimates, so the rows are read against the whole database's, not as absolutes).
+; Statistics only: the walker makes its own lines from them (`src/audio/live/walkers.rs`).
+;
+; `slug = Name | steps .. | lands .. | approach .. | inside .. | pedal ..`, in % of beats:
+;   steps     beat to beat: the same note, a half step, a whole step, a 3rd, a 4th or 5th, wider
+;   lands     on a chord change: the root, the 3rd, the 5th, another note
+;   approach  the beat before a change, against the next chord: a half step below its root, a
+;             half step above, a whole step, its 5th, the same note again, another note
+;   inside    within a chord: chord tones, scale tones, chromatic notes
+;   pedal     beats in a pedal point (four or more on one pitch class)
+;   push      the beat before a change already on the new root (an anticipation)
+;   hold      the change's beat still on the note before (a suspension)
+;   two       bars in two (half notes)
+
+; The whole database (99567 beats under 346 solos): the band's own line walks like this.
+all = The whole database | steps 20.3 22.2 13.5 14.1 18.4 11.5 | lands 41 11 11 37 | approach 14 14 17 15 7 34 | inside 51 19 30 | pedal 7.6 | push 6.6 | hold 12.1 | two 9.1
+; Miles' 50s quintet, Coltrane's and Rollins' 50s dates: smooth and chromatic, hardly repeats.
+chambers = Paul Chambers | steps 11.1 28.9 17.2 12.8 17.0 12.9 | lands 37 12 15 36 | approach 16 13 18 12 4 37 | inside 51 21 28 | pedal 1.6 | push 3.8 | hold 10.5 | two 3.9
+; Coltrane's quartet: pedal points and repeated notes, few leaps.
+garrison = Jimmy Garrison | steps 30.7 16.3 15.8 15.3 9.8 12.0 | lands 30 19 8 43 | approach 15 10 19 9 10 37 | inside 29 37 34 | pedal 16.9 | push 10.2 | hold 18.3 | two 11.2
+; Miles' 60s quintet (Shorter's tunes): elastic, open, repeats and leaps, chromatic colour.
+carter = Ron Carter | steps 27.1 19.0 10.2 11.9 19.5 12.4 | lands 37 10 11 42 | approach 12 9 15 15 10 40 | inside 48 20 32 | pedal 14.6 | push 9.7 | hold 17.4 | two 10.9
+; Parker, Getz, Webster, Gillespie: the balanced one, into a change from its 5th.
+brown = Ray Brown | steps 18.7 20.9 14.6 15.0 18.1 12.7 | lands 37 11 13 39 | approach 12 10 19 18 5 36 | inside 53 20 27 | pedal 5.6 | push 4.7 | hold 11.0 | two 7.7
+; The MJQ: inside, roots on the changes, half steps.
+heath = Percy Heath | steps 13.4 25.0 16.2 17.6 18.7 9.2 | lands 54 9 7 30 | approach 16 14 15 16 6 33 | inside 63 16 22 | pedal 1.6 | push 6.4 | hold 6.5 | two 8.8
+; Rollins, Mobley, Dorham: springy, 4ths and 5ths, roots, into them from above.
+watkins = Doug Watkins | steps 7.4 24.3 16.5 16.6 22.7 12.5 | lands 53 7 11 29 | approach 18 19 20 12 5 27 | inside 48 21 30 | pedal 0.7 | push 4.7 | hold 4.1 | two 1.9
+; Parker's 40s quintet: bebop leaps, into a change from the 5th (a small sample: 530 beats).
+potter = Tommy Potter | steps 12.9 15.0 10.8 15.0 31.0 15.2 | lands 50 8 8 34 | approach 4 20 16 23 3 34 | inside 62 13 24 | pedal 2.3 | push 3.3 | hold 4.4 | two 7.8
+; Parker's dates: repeats, off the root on a change.
+russell = Curly Russell | steps 20.9 17.7 19.3 16.0 13.4 12.7 | lands 21 12 13 53 | approach 9 10 20 14 8 40 | inside 52 19 29 | pedal 8.3 | push 7.2 | hold 13.7 | two 12.2
+; Armstrong's Hot Fives and Sevens had a tuba or banjo, no walking bass, and the database
+; has no bass under them: ours, not measured. Two-beat roots and 5ths, inside, leaps.
+foster = Pops Foster (ours) | steps 15 12 10 18 35 10 | lands 75 5 15 5 | approach 10 8 14 40 8 20 | inside 75 18 7 | pedal 3 | push 4 | hold 3 | two 45

@@ -441,3 +441,37 @@ fn musicians_switch_instruments_and_back() {
     }
     assert!(switched >= 5, "only {switched} switches");
 }
+
+/// The walking bass walks like the bassist behind the soloist (`walkers`): Garrison (behind
+/// Trane) repeats notes and sits on pedals, Chambers (behind Miles) hardly repeats and walks
+/// half steps, Watkins (behind Sonny) leaps.
+#[test]
+fn each_soloist_gets_their_bassist() {
+    use nat_han_adventures::audio::live::{chorus::{Call, Chorus}, soloist::Soloist};
+    let stats = |s: Soloist| {
+        let (mut moves, mut repeats, mut halves, mut leaps) = (0, 0, 0, 0);
+        for seed in 1..4 {
+            let setup = [freedom(0.6), Input::ForceSoloist(Some(s)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
+            let (_, bars) = play(song(Music::World(1)), seed, &setup, |_| vec![], 96);
+            for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
+                let line: Vec<&NoteEvent> = b.ch(2).collect();
+                for w in line.windows(2) {
+                    let d = (notes_of(w[1])[0] as i32 - notes_of(w[0])[0] as i32).abs();
+                    moves += 1;
+                    repeats += (d == 0) as usize;
+                    halves += (d == 1) as usize;
+                    leaps += (5..=7).contains(&d) as usize;
+                }
+            }
+        }
+        assert!(moves > 100, "{s:?}: {moves} walking moves");
+        let f = |x: usize| x as f32 / moves as f32;
+        let out = (f(repeats), f(halves), f(leaps));
+        eprintln!("{s:?}: repeats {:.2}, half steps {:.2}, 4ths-5ths {:.2}", out.0, out.1, out.2);
+        out
+    };
+    let (pc, jg, dw) = (stats(Soloist::Miles), stats(Soloist::Trane), stats(Soloist::Sonny));
+    assert!(jg.0 > 2.0 * pc.0, "Garrison repeats ({:.2}), Chambers doesn't ({:.2})", jg.0, pc.0);
+    assert!(pc.1 > jg.1, "Chambers' half steps ({:.2}) against Garrison's ({:.2})", pc.1, jg.1);
+    assert!(dw.2 > pc.2 && dw.0 < pc.0 + 0.05, "Watkins leaps ({:.2}) more than Chambers ({:.2})", dw.2, pc.2);
+}

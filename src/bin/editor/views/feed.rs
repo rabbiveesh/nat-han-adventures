@@ -4,6 +4,7 @@
 use bevy_egui::egui::{self, Rect, Sense, Stroke, pos2, vec2};
 use nat_han_adventures::audio::live::chorus::{Call as ChorusCall, Chorus};
 use nat_han_adventures::audio::live::feel::Feel;
+use nat_han_adventures::audio::live::soloist::Soloist;
 use nat_han_adventures::audio::tuning::Tuning;
 use nat_han_adventures::audio::{Filters, Harmony};
 use nat_han_adventures::game::Groove;
@@ -228,6 +229,40 @@ fn forces(ed: &mut Editor, ui: &mut egui::Ui) {
             (Some(c), _) => format!("forced: {} from the next bar", c.chorus.slug()),
         };
         ui.label(egui::RichText::new(note).color(TEXT_FAINT).size(11.0));
+        ui.add_space(4.0);
+        caption(ui, "SOLOIST");
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+            ui.spacing_mut().button_padding = vec2(7.0, 2.0);
+            let mut chips: Vec<(Option<Soloist>, &str)> = vec![(None, "passed round")];
+            chips.extend(Soloist::ALL.map(|s| (Some(s), s.slug())));
+            for (s, label) in chips {
+                if chip(ui, ed.dials.soloist == s, true, label).clicked() {
+                    ed.set_soloist(s);
+                }
+            }
+        });
+        let note = match ed.dials.soloist {
+            None => "a chorus each, as a jam session passes it round (feels get their own)".to_string(),
+            Some(s) => format!("{} all through, from the next bar", s.slug()),
+        };
+        ui.label(egui::RichText::new(note).color(TEXT_FAINT).size(11.0));
+        ui.add_space(4.0);
+        caption(ui, "OFF THE GRID");
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing = vec2(4.0, 4.0);
+            ui.spacing_mut().button_padding = vec2(7.0, 2.0);
+            let (p, d, t) = (ed.dials.pocket, ed.dials.duck, ed.dials.drift);
+            if chip(ui, p, true, "pocket").on_hover_text("each player a few ms off the beat, as measured").clicked() {
+                ed.set_human(!p, d, t);
+            }
+            if chip(ui, d, true, "duck").on_hover_text("the comp and drums step back under the lead's phrases").clicked() {
+                ed.set_human(p, !d, t);
+            }
+            if chip(ui, t, true, "drift").on_hover_text("the tempo drifts up to 4 bpm over a pass (from the next play)").clicked() {
+                ed.set_human(p, d, !t);
+            }
+        });
         ui.add_space(4.0);
         caption(ui, "FORCE TUNING");
         ui.horizontal_wrapped(|ui| {
