@@ -817,7 +817,7 @@ impl Lead {
     /// A soloist's bar ([`soloist::Line`]): their phrases and rests, rhythms and intervals,
     /// swung their way.
     fn improvise(&mut self, ctx: &Ctx, p: &soloist::Profile, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
-        let mut notes = [Played { at: 0.0, len: 0.0, note: 0, last: false }; 24];
+        let mut notes = [Played::default(); 24];
         let n = self.line.bar(p, ctx, r, phrase_last, &mut notes);
         // Their swing on the offbeat 8ths (straight in a feel), the band's own if it's straighter.
         let s = if ctx.feel() == Feel::Swing && ctx.arrangement.swing > 0.0 {
@@ -830,6 +830,8 @@ impl Lead {
         for k in &notes[..n] {
             let (a, end) = (swung(k.at), swung(k.at + k.len / p.legato as f64));
             let mut e = ctx.make(t, a, ((end - a) * p.legato as f64).max(0.05), Sound::Note((k.note as i32).clamp(LO, HI) as u8));
+            // Their dynamics: half their measured shaping with the dynamics dial at 0, all of it at 1.
+            e.gain *= 10f32.powf(k.db * (0.5 + 0.5 * ctx.dynamics) / 20.0);
             if k.last && r.chance(p.falls as f64) {
                 e.fx.fall = -3;
                 e.fx.fall_frames = 10;

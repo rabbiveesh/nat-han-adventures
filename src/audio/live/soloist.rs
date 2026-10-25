@@ -105,6 +105,22 @@ pub struct Profile {
     pub swing: f32,
     /// A fall off a phrase's last note.
     pub falls: f32,
+    /// Dynamics, dB against the solo's median: the phrase's arch (first note, early, middle,
+    /// late, last note), louder going up (dB per octave above the register's centre), the
+    /// offbeat 8th ghosted (−4 dB) this often or else accented this much, long notes (≥ 1.2
+    /// beats), and each note's own scatter (a standard deviation).
+    pub arch: [f32; 5],
+    pub per_octave: f32,
+    pub ghost: f32,
+    pub accent: f32,
+    pub long: f32,
+    pub scatter: f32,
+    /// Motifs: how often a phrase restates the last one's head (and then goes its own way), and
+    /// how often a cell of 3-4 notes is restated straight after inside a phrase (a sequence),
+    /// with the sequences' transpositions (semitones, by weight).
+    pub motif: f32,
+    pub sequence: f32,
+    pub moves: [(i8, f32); 5],
 }
 
 /// The rhythm cells a line is built from, each starting on a beat.
@@ -174,9 +190,21 @@ pub const MILES: Profile = Profile {
     pentatonic: 0.05,
     anticipation: 0.10,
     register: (72, 64, 82),
-    legato: 0.78,
+    legato: 0.88,
     swing: 1.36,
     falls: 0.25,
+    // Shapes the most: a soft first note, louder early, fading out; the top note +4.4 dB;
+    // the "and" louder than its beat 55% of the time (19% ghosted); spread 5.0 dB.
+    arch: [-1.46, 1.06, 0.58, -0.83, -1.31],
+    per_octave: 4.5,
+    ghost: 0.19,
+    accent: 1.66,
+    long: -1.0,
+    scatter: 3.0,
+    motif: 0.15,
+    sequence: 0.04,
+    // His sequences mostly stay put (77%), else step down.
+    moves: [(0, 7.7), (-2, 0.8), (-3, 0.8), (-1, 0.5), (2, 0.3)],
 };
 
 /// John Coltrane, 1960-64: 9-note cells over 5.3 beats [3.2-10.3], 2.0 beats' rest
@@ -197,9 +225,21 @@ pub const TRANE: Profile = Profile {
     pentatonic: 0.12,
     anticipation: 0.16,
     register: (67, 58, 80),
-    legato: 0.8,
+    legato: 0.87,
     swing: 1.51,
     falls: 0.0,
+    // Even: the flattest arch, no louder going up (1960 on), an even, sustained tone; 3.5 dB.
+    arch: [0.65, 0.16, 0.0, -0.14, -0.68],
+    per_octave: 0.0,
+    ghost: 0.17,
+    accent: 0.59,
+    long: -0.74,
+    scatter: 3.0,
+    // 42% of his ideas are variants of the one before (the most of anyone); sequences stay
+    // put or drop a minor third.
+    motif: 0.3,
+    sequence: 0.06,
+    moves: [(0, 4.8), (-3, 1.4), (-2, 0.9), (7, 0.8), (-5, 0.5)],
 };
 
 /// Charlie Parker, 1945-51: 16-note lines over 6.6 beats [3.7-10.0], 1.6 beats' rest
@@ -220,19 +260,73 @@ pub const BIRD: Profile = Profile {
     pentatonic: 0.05,
     anticipation: 0.16,
     register: (70, 62, 82),
-    legato: 0.8,
+    legato: 0.92,
     swing: 1.60,
     falls: 0.05,
+    // Decaying lines: loud in, falling all the way to a soft last note (−3.7 dB); offbeats
+    // ghosted 31% of the time; long notes much softer; 5.3 dB.
+    arch: [1.28, 1.12, 0.07, -0.70, -3.68],
+    per_octave: 4.5,
+    ghost: 0.31,
+    accent: 0.27,
+    long: -4.0,
+    scatter: 3.8,
+    // The least motivic (a vocabulary, not development); his sequences step down.
+    motif: 0.05,
+    sequence: 0.03,
+    moves: [(-2, 3.6), (0, 1.4), (-3, 1.4), (-5, 0.7), (-7, 0.7)],
 };
 
-/// A note the line plays: where in the bar (beats), how long it sounds, the pitch, and
-/// whether it ends a phrase (for a fall).
-#[derive(Debug, Clone, Copy, PartialEq)]
+/// A note the line plays: where in the bar (beats), how long it sounds, the pitch, whether
+/// it ends a phrase (for a fall), and how loud (dB against the solo's median).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Played {
     pub at: f64,
     pub len: f64,
     pub note: u8,
     pub last: bool,
+    pub db: f32,
+}
+
+/// A phrase as played, for restating: its first note, then each note's interval from the one
+/// before and its length (beats).
+#[derive(Debug, Clone, Copy, Default)]
+struct Motif {
+    first: u8,
+    iv: [i8; 32],
+    dur: [f32; 32],
+    n: usize,
+}
+
+impl Motif {
+    fn push(&mut self, prev: Option<i32>, note: u8, d: f64) {
+        if self.n == 0 {
+            self.first = note;
+        }
+        if self.n < 32 {
+            self.iv[self.n] = prev.map_or(0, |c| (note as i32 - c).clamp(-24, 24) as i8);
+            self.dur[self.n] = d as f32;
+            self.n += 1;
+        }
+    }
+
+    /// Notes `from..from+len` as a motif of their own.
+    fn slice(&self, notes: &[u8; 32], from: usize, len: usize) -> Motif {
+        let mut m = Motif { first: notes[from], n: len, ..Motif::default() };
+        m.iv[..len].copy_from_slice(&self.iv[from..from + len]);
+        m.dur[..len].copy_from_slice(&self.dur[from..from + len]);
+        m.iv[0] = 0;
+        m
+    }
+}
+
+/// A motif being restated: from note `i`, until note `until`, moved `by` semitones.
+#[derive(Debug, Clone, Copy, Default)]
+struct Replay {
+    src: Motif,
+    i: usize,
+    until: usize,
+    by: i32,
 }
 
 /// The line, carried over bar lines.
@@ -256,6 +350,16 @@ pub struct Line {
     /// A chromatic passing note must carry on by half step in its direction.
     passing: bool,
     started: bool,
+    /// The phrase's length (beats), whether its first note is still to come, and the rest
+    /// before it (for the dynamics).
+    total: f64,
+    first: bool,
+    breath: f64,
+    /// This phrase so far (and its pitches), the last phrase, and a restatement under way.
+    now: Motif,
+    pitches: [u8; 32],
+    last_phrase: Motif,
+    replay: Option<Replay>,
 }
 
 /// What the line needs from the bar: its length, and the harmony at a beat (past the bar
@@ -309,7 +413,13 @@ impl Line {
             }
             // Off the beat (after an anticipation or an odd rest): one 8th to the next beat.
             let off = b - b.floor();
-            let (durs, k) = if off > 1e-6 {
+            let replaying = self.replay.is_some();
+            let (durs, k) = if let Some(rp) = self.replay {
+                // A restatement keeps the motif's rhythm.
+                let mut d = [0.0; 4];
+                d[0] = rp.src.dur[rp.i] as f64;
+                (d, 1)
+            } else if off > 1e-6 {
                 let mut d = [0.0; 4];
                 d[0] = 1.0 - off;
                 (d, 1)
@@ -327,7 +437,7 @@ impl Line {
             };
             let cell_end = b + durs[..k].iter().sum::<f64>();
             // Into a strong beat at the cell's end: maybe an enclosure or an approach.
-            if self.queued == 0 && self.penta == 0 && ch.strong(cell_end) && cell_end <= bb + 1e-9 && self.phrase > cell_end - b + 0.1 {
+            if !replaying && self.queued == 0 && self.penta == 0 && ch.strong(cell_end) && cell_end <= bb + 1e-9 && self.phrase > cell_end - b + 0.1 {
                 if let Some(h) = ch.harm(cell_end) {
                     let cur = self.cur.unwrap_or(p.register.0);
                     let target = h.nearest_chord_tone((cur + 2 * self.dir).clamp(0, 127) as u8);
@@ -346,10 +456,16 @@ impl Line {
                 }
                 let d = d.min(bb - b);
                 let last = self.phrase <= d + 1e-6;
+                let before = self.cur;
                 let note = self.next(p, ch, r, b, last);
                 if let Some(note) = note {
+                    if self.now.n < 32 {
+                        self.pitches[self.now.n] = note;
+                    }
+                    self.now.push(before.filter(|_| self.now.n > 0), note, d);
                     let hold = if last { (d + self.rest_hint(p).min(1.0)).min(bb - b) } else { d };
-                    out[n] = Played { at: b, len: (hold * p.legato as f64).max(0.05), note, last };
+                    let db = self.loudness(p, r, b, d, note, last);
+                    out[n] = Played { at: b, len: (hold * p.legato as f64).max(0.05), note, last, db };
                     n += 1;
                 }
                 b += d;
@@ -359,8 +475,42 @@ impl Line {
                     break;
                 }
             }
+            // A free cell of 3-4 notes with a turn or a leap in it, maybe restated straight
+            // after: a sequence.
+            if !replaying && self.replay.is_none() && self.phrase > 1.0 && (3..=4).contains(&k) && self.now.n >= k {
+                let from = self.now.n - k;
+                let ivs = &self.now.iv[from + 1..self.now.n];
+                let shaped = ivs.iter().any(|i| i.abs() >= 3) || ivs.windows(2).any(|w| w[0].signum() * w[1].signum() < 0);
+                if shaped && r.chance(p.sequence as f64 * 4.0) {
+                    let src = self.now.slice(&self.pitches, from, k);
+                    self.replay = Some(Replay { src, i: 0, until: k, by: pick_move(p, r) });
+                }
+            }
         }
         n
+    }
+
+    /// How loud a note at beat `b` (length `d`) is, dB against the solo's median.
+    fn loudness(&mut self, p: &Profile, r: &mut Rng, b: f64, d: f64, note: u8, last: bool) -> f32 {
+        let done = 1.0 - self.phrase / self.total.max(1e-6);
+        let pos = if std::mem::take(&mut self.first) {
+            0
+        } else if last {
+            4
+        } else {
+            1 + (done * 3.0).clamp(0.0, 2.0) as usize
+        };
+        let mut db = p.arch[pos] + p.per_octave * (note as f32 - p.register.0 as f32) / 12.0;
+        if ((b - b.floor()) - 0.5).abs() < 1e-6 {
+            db += if r.chance(p.ghost as f64) { -4.0 } else { p.accent };
+        }
+        if d >= 1.2 {
+            db += p.long;
+        }
+        // Louder after a longer breath (−0.9 dB after under half a beat, −0.3 after 4).
+        db += 0.17 * (self.breath.min(4.0) as f32 - 2.0);
+        db += p.scatter * normal(r) as f32;
+        db.clamp(-9.0, 9.0)
     }
 
     fn load(&mut self, notes: &[u8], skip: usize) {
@@ -376,10 +526,27 @@ impl Line {
 
     fn start_phrase(&mut self, p: &Profile, r: &mut Rng) {
         self.phrase = lognormal(r, p.phrase).clamp(1.0, 24.0);
+        self.total = self.phrase;
+        self.first = true;
         self.queued = 0;
         self.skip = 0;
         self.penta = 0;
         self.passing = false;
+        self.now = Motif::default();
+        self.replay = None;
+        let prev = self.last_phrase;
+        if prev.n >= 5 && r.chance(p.motif as f64) {
+            // The last idea again: its head, then a new ending (most break off at note 5 or 6;
+            // a fifth carry it whole, and stop or go on).
+            let x = r.f();
+            let until = if x < 0.41 { 4 } else if x < 0.61 { 5 } else if x < 0.8 { 6 + r.below(3) } else { prev.n };
+            let until = until.min(prev.n);
+            let head: f64 = prev.dur[..until].iter().map(|&d| d as f64).sum();
+            self.phrase = self.phrase.max(head + if until < prev.n { 1.0 } else { 0.0 });
+            self.total = self.phrase;
+            self.replay = Some(Replay { src: prev, i: 0, until, by: pick_move(p, r) });
+            return;
+        }
         // A new phrase starts from somewhere new: up or down, or back towards the middle.
         let cur = self.cur.unwrap_or(p.register.0);
         self.dir = if cur > p.register.0 + 4 { -1 } else if cur < p.register.0 - 4 { 1 } else if r.chance(0.5) { 1 } else { -1 };
@@ -390,11 +557,16 @@ impl Line {
 
     fn end_phrase(&mut self, p: &Profile, r: &mut Rng) {
         self.phrase = 0.0;
+        self.replay = None;
+        if self.now.n >= 4 {
+            self.last_phrase = self.now;
+        }
         self.queued = 0;
         self.skip = 0;
         self.penta = 0;
         // Whole 8ths of rest, so the next phrase starts on the 8th grid.
         self.rest = (lognormal(r, p.rest).clamp(0.5, 10.0) * 2.0).round() / 2.0;
+        self.breath = self.rest;
     }
 
     /// The next note (none when there's no harmony to play on).
@@ -414,6 +586,24 @@ impl Line {
             return Some(note);
         }
         let strong = ch.strong(b);
+        if let Some(rp) = self.replay.as_mut() {
+            // The motif's shape at the new spot, bent to the chord where it doesn't fit.
+            let want = if rp.i == 0 { rp.src.first as i32 + rp.by } else { cur + rp.src.iv[rp.i] as i32 };
+            let n = want.clamp(floor - 6, ceil + 6).clamp(0, 127) as u8;
+            let n = if h.scale.contains(n % 12) || !strong && r.chance(0.5) { n } else { h.scale.snap(n) };
+            let n = if last && r.chance(p.end_chord_tone as f64) { h.nearest_chord_tone(n) } else { n };
+            rp.i += 1;
+            if rp.i >= rp.until.min(rp.src.n) {
+                self.replay = None;
+            }
+            if n as i32 != cur {
+                self.dir = (n as i32 - cur).signum();
+            }
+            self.leapt = (n as i32 - cur).abs() >= 5;
+            self.passing = false;
+            self.cur = Some(n as i32);
+            return Some(n);
+        }
         if self.passing {
             // A chromatic passing note goes on through by half step.
             self.passing = false;
@@ -489,6 +679,12 @@ fn pentatonic(h: &Harm) -> [u8; 5] {
     semis.map(|s| (h.chord.root + s) % 12)
 }
 
+/// A sequence's (or a restatement's) transposition.
+fn pick_move(p: &Profile, r: &mut Rng) -> i32 {
+    let w: [f32; 5] = p.moves.map(|m| m.1);
+    p.moves[pick(&w, r)].0 as i32
+}
+
 fn pick_cell(p: &Profile, r: &mut Rng) -> Cell {
     CELLS[pick(&p.cells, r)]
 }
@@ -509,9 +705,13 @@ fn pick(w: &[f32], r: &mut Rng) -> usize {
 /// A log-normal draw with `median` and interquartile range `q1..q3`.
 fn lognormal(r: &mut Rng, (median, q1, q3): (f64, f64, f64)) -> f64 {
     let sigma = (q3 / q1).ln() / 1.349;
+    median * (sigma * normal(r)).exp()
+}
+
+/// A standard normal draw.
+fn normal(r: &mut Rng) -> f64 {
     let (u, v) = (r.f().max(1e-9), r.f());
-    let z = (-2.0 * u.ln()).sqrt() * (std::f64::consts::TAU * v).cos();
-    median * (sigma * z).exp()
+    (-2.0 * u.ln()).sqrt() * (std::f64::consts::TAU * v).cos()
 }
 
 #[cfg(test)]
@@ -543,6 +743,11 @@ mod tests {
         leaps: f64,
         strong_chord_tones: f64,
         pentatonic: f64,
+        /// Pitch-loudness correlation, the first and last notes' mean dB, the spread.
+        pitch_db: f64,
+        first_db: f64,
+        last_db: f64,
+        spread_db: f64,
     }
 
     fn play(p: &Profile, bars: u64) -> Stats {
@@ -551,7 +756,7 @@ mod tests {
         let mut all: Vec<(f64, Played, Harm)> = Vec::new();
         for bar in 0..bars {
             let ch = Turnaround(bar);
-            let mut out = [Played { at: 0.0, len: 0.0, note: 0, last: false }; 24];
+            let mut out = [Played::default(); 24];
             let n = line.bar(p, &ch, &mut r, bar % 8 == 7, &mut out);
             all.extend(out[..n].iter().map(|k| (bar as f64 * 4.0 + k.at, *k, ch.harm(k.at).unwrap())));
         }
@@ -567,7 +772,19 @@ mod tests {
             let fits = (0..12u8).any(|root| [[0, 2, 4, 7, 9], [0, 3, 5, 7, 10]].iter().any(|s| pcs.iter().all(|pc| s.contains(&((pc + 12 - root) % 12)))));
             penta += fits as u32;
         }
+        let db: Vec<f64> = all.iter().map(|x| x.1.db as f64).collect();
+        let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len().max(1) as f64;
+        let pitch: Vec<f64> = all.iter().map(|x| x.1.note as f64).collect();
+        let (mp, md) = (mean(&pitch), mean(&db));
+        let cov: f64 = pitch.iter().zip(&db).map(|(a, b)| (a - mp) * (b - md)).sum();
+        let sd = |v: &[f64], m: f64| v.iter().map(|x| (x - m).powi(2)).sum::<f64>().sqrt();
+        let lasts: Vec<f64> = all.iter().filter(|x| x.1.last).map(|x| x.1.db as f64).collect();
+        let firsts: Vec<f64> = all.windows(2).filter(|w| w[0].1.last).map(|w| w[1].1.db as f64).collect();
         Stats {
+            pitch_db: cov / (sd(&pitch, mp) * sd(&db, md)),
+            first_db: mean(&firsts),
+            last_db: mean(&lasts),
+            spread_db: sd(&db, md) / (db.len() as f64).sqrt(),
             notes_per_bar: all.len() as f64 / bars as f64,
             silent: 1.0 - sounding / (bars as f64 * 4.0),
             repeats: share(&|i| i == 0),
@@ -588,6 +805,10 @@ mod tests {
         assert!(b.notes_per_bar > m.notes_per_bar + 1.0, "{b:?}");
         assert!(m.steps > t.steps + 0.08 && m.repeats > t.repeats && t.leaps > m.leaps + 0.04, "{m:?} {t:?}");
         assert!(t.pentatonic > m.pentatonic + 0.05, "{m:?} {t:?}");
+        // Dynamics: Miles louder going up and arching, Trane even, Bird fading to the end.
+        assert!(m.pitch_db > 0.3 && t.pitch_db.abs() < 0.15, "{m:?} {t:?}");
+        assert!(b.first_db - b.last_db > 3.0 && t.first_db - t.last_db < 2.5, "{b:?} {t:?}");
+        assert!(m.spread_db > t.spread_db + 0.5, "{m:?} {t:?}");
         for s in [&m, &t, &b] {
             assert!((0.45..0.8).contains(&s.strong_chord_tones), "{s:?}");
         }
