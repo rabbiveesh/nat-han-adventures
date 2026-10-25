@@ -25,6 +25,7 @@ use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
+use crate::audio::live::soloist::{self, Changes, Line, Played};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Arp;
 
@@ -43,11 +44,13 @@ pub struct Lead {
     end: u64,
     /// Where an improvised line left off.
     solo_note: Option<u8>,
+    /// A soloist's line, carried over bar lines ([`soloist`]).
+    line: Line,
 }
 
 impl Lead {
     pub(super) fn new(p: Player) -> Self {
-        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None }
+        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default() }
     }
 }
 
@@ -168,7 +171,10 @@ impl Musician for Lead {
             Input::Toot => self.p.cue(next_bar, super::BarIntent { answer: true, ..Default::default() }),
             // The comic wah-wah.
             Input::Death | Input::Slip => self.p.cue(next_bar, super::BarIntent { wah: true, ..Default::default() }),
-            Input::LevelStart | Input::Restart => self.solo_note = None,
+            Input::LevelStart | Input::Restart => {
+                self.solo_note = None;
+                self.line.reset();
+            }
             _ => {}
         }
     }
@@ -726,6 +732,9 @@ impl Lead {
     /// An improvised bar (a solo chorus, the lead's four): an 8th-note line on the changes,
     /// chord tones on the beats, scale steps and skips between.
     fn solo(&mut self, ctx: &Ctx, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
+        if let Some(p) = ctx.soloist.profile() {
+            return self.improvise(ctx, p, t, r, phrase_last);
+        }
         let bb = ctx.bb();
         let mut cur = self.solo_note.unwrap_or(72).clamp(62, 86) as i32;
         let mut dir = if cur > 76 { -1 } else { 1 };
@@ -789,6 +798,42 @@ impl Lead {
             cur = next;
         }
         self.solo_note = Some(cur as u8);
+    }
+}
+
+impl Lead {
+    /// A soloist's bar ([`soloist::Line`]): their phrases and rests, rhythms and intervals,
+    /// swung their way.
+    fn improvise(&mut self, ctx: &Ctx, p: &soloist::Profile, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
+        let mut notes = [Played { at: 0.0, len: 0.0, note: 0, last: false }; 24];
+        let n = self.line.bar(p, ctx, r, phrase_last, &mut notes);
+        // Their swing on the offbeat 8ths (straight in a feel), the band's own if it's straighter.
+        let s = if ctx.feel() == Feel::Swing && ctx.arrangement.swing > 0.0 {
+            (((p.swing - 1.0) / (p.swing + 1.0)) as f64).min(ctx.arrangement.swing as f64)
+        } else {
+            0.0
+        };
+        let swung = |b: f64| if ((b * 2.0).round() - b * 2.0).abs() < 1e-6 && (b * 2.0).round() as i64 % 2 == 1 { b + s * 0.5 } else { b };
+        for k in &notes[..n] {
+            let (a, end) = (swung(k.at), swung(k.at + k.len / p.legato as f64));
+            let mut e = ctx.make(t, a, ((end - a) * p.legato as f64).max(0.05), Sound::Note((k.note as i32).clamp(LO, HI) as u8));
+            if k.last && r.chance(p.falls as f64) {
+                e.fx.fall = -3;
+                e.fx.fall_frames = 10;
+            }
+            push(&mut self.dst, e);
+        }
+        self.solo_note = notes[..n].last().map(|k| k.note).or(self.solo_note);
+    }
+}
+
+impl Changes for Ctx<'_> {
+    fn bar_beats(&self) -> f64 {
+        self.bb()
+    }
+
+    fn harm(&self, beat: f64) -> Option<Harm> {
+        if beat < self.bb() - 1e-9 { self.harm_at(beat) } else { self.plain_harm_at(beat) }
     }
 }
 

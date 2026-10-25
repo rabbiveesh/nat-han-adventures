@@ -98,6 +98,7 @@ pub mod ornament;
 pub mod playback;
 pub mod pocket;
 pub mod soli;
+pub mod soloist;
 pub mod song;
 pub mod syntax;
 pub mod voice;

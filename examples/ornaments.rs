@@ -10,6 +10,7 @@
 //! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
 //! cargo run --release --example ornaments -- out/ soli           # soli choruses (see `soli`)
 //! cargo run --release --example ornaments -- out/ human          # on the grid vs as played (see `human`)
+//! cargo run --release --example ornaments -- out/ soloists       # a solo chorus by each soloist (see `soloists`)
 //! ```
 //!
 //! Files: `<prefix>_<song>_f035.wav` + `.txt`, and `instruments_<song>.wav` (each song's
@@ -30,6 +31,7 @@ use nat_han_adventures::audio::{
         feel::Feel,
         library,
         musician::Role,
+        soloist::Soloist,
         song::SongFile,
     },
 };
@@ -168,6 +170,10 @@ fn main() {
     }
     if only.as_deref() == Some("human") {
         human(dir);
+        return;
+    }
+    if only.as_deref() == Some("soloists") {
+        soloists(dir);
         return;
     }
     if only.as_deref() == Some("feels") {
@@ -428,6 +434,26 @@ fn human(dir: &Path) {
                 }
             }
             let name = format!("{name}_{stem}");
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+        }
+    }
+}
+
+/// The soloists: a few songs, a blowing chorus each (the lead soloing a whole pass, freedom
+/// 0.5, as played), once per soloist, to `solo_<soloist>_<song>.wav` + `.txt`.
+fn soloists(dir: &Path) {
+    let call = Call { chorus: Chorus::Blowing, key_up: false };
+    for stem in ["sweet_georgia_brown", "i_got_rhythm", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
+        };
+        for soloist in Soloist::ALL {
+            let config = EngineConfig { seed: 7, soloist, ..EngineConfig::default() };
+            let (out, log, _) = run_with(&file, config, script, file_bars(&file), |_| "");
+            let name = format!("solo_{}_{stem}", soloist.slug());
             write_wav(&dir.join(format!("{name}.wav")), &out);
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
             println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);

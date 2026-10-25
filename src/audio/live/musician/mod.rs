@@ -80,6 +80,7 @@ use super::engine::Input;
 use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::ornament::{Harm, Orn, Orns};
+use super::soloist::Soloist;
 use super::voice::{Fx, NoteEvent, Sound};
 
 /// Who plays what.
@@ -135,6 +136,8 @@ pub struct Ctx<'a> {
     pub freedom: [f32; 4],
     /// The song's instruments (palettes).
     pub instruments: &'a Instruments,
+    /// Who the lead solos like.
+    pub soloist: Soloist,
 }
 
 impl Ctx<'_> {

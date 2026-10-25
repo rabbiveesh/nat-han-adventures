@@ -63,6 +63,9 @@ pub struct Player {
     pub seed: u64,
     /// The tune's tempo (the lead lays back less, and everyone scatters less, as it rises).
     pub bpm: f32,
+    /// The lead's lay-back against the average soloist's (1: as measured across them all; the
+    /// soloist's own, [`super::soloist::Soloist::lay_back`]).
+    pub lay: f32,
     /// 0..1: scales it all (0: on the grid).
     pub loose: f32,
     pub feel: Feel,
@@ -107,7 +110,7 @@ impl Player {
             let on_beat = (beat - beat.round()).abs() < 0.05;
             let bpm = self.bpm as f64;
             if k == 0 && on_beat {
-                ms += LAY_BACK * ((LAY_BACK_GONE - bpm) / (LAY_BACK_GONE - LAY_BACK_FULL)).clamp(0.0, 1.0);
+                ms += LAY_BACK * self.lay as f64 * ((LAY_BACK_GONE - bpm) / (LAY_BACK_GONE - LAY_BACK_FULL)).clamp(0.0, 1.0);
             }
             // Triangular, about `jitter` ms to a standard deviation.
             let h = tuning::salt(self.seed ^ 0x717, k, (t / 8) as usize, 1);
@@ -143,7 +146,7 @@ mod tests {
     const SR: u32 = 32_000;
 
     fn player(ch: u8) -> Player {
-        Player { ch, sr: SR, seed: 3, bpm: 160.0, loose: 1.0, feel: Feel::Swing, soli: false }
+        Player { ch, sr: SR, seed: 3, bpm: 160.0, lay: 1.0, loose: 1.0, feel: Feel::Swing, soli: false }
     }
 
     /// Mean and standard deviation of a channel's attacks against the grid, ms (`beat`: the

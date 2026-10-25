@@ -54,6 +54,7 @@ use crate::audio::{Filters, Harmony};
 use super::arrange::{Arrangement, Shape};
 use super::band::{BandInput, BandPlan};
 use super::chorus;
+use super::soloist::Soloist;
 use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
@@ -126,11 +127,13 @@ pub struct EngineConfig {
     /// How loose the players sit against the beat, 0..1 ([`super::pocket`]: 0 locks every
     /// note to the grid).
     pub loose: f32,
+    /// Who the lead solos like ([`super::soloist`]).
+    pub soloist: Soloist,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0 }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: Soloist::Band }
     }
 }
 
@@ -697,6 +700,7 @@ impl Engine {
             band: &self.prev_band,
             freedom,
             instruments: &self.instruments,
+            soloist: self.config.soloist,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
@@ -744,10 +748,10 @@ impl Engine {
         let events = self.scratch.len() as u32;
         // The arrangement on top: louder or softer, a half step up; and each player where they
         // sit against the beat (the bar's notes as written in time: [`pocket`]).
-        let (sr, pocket_seed, loose) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose);
+        let (sr, pocket_seed, loose, lay_back) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose, self.config.soloist.lay_back());
         for e in &mut self.scratch {
             // (Never before the pass it's in starts: the voices count from there.)
-            let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, loose, feel: band.feel, soli: band.soli.is_some() };
+            let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, lay: lay_back, loose, feel: band.feel, soli: band.soli.is_some() };
             let start = p.start(e.start, e.beat, e.tie).max(e.loop_start);
             (e.start, e.end) = (start, p.end(e.end).max(start + 1));
             if band.swell != 0.0 {
