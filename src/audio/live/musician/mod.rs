@@ -138,6 +138,8 @@ pub struct Ctx<'a> {
     pub instruments: &'a Instruments,
     /// Who the lead solos like.
     pub soloist: Soloist,
+    /// The tune's own bassist, if it names one (else the soloist's: [`Soloist::bassist`]).
+    pub bassist: Option<&'static super::walkers::Walker>,
 }
 
 impl Ctx<'_> {

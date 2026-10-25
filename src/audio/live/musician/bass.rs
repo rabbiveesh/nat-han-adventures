@@ -11,13 +11,14 @@
 
 use super::{Ctx, Musician, PhrasePlan, Player, Role, clear_span, cut_at, fold, musician_common, push, tidy, work};
 use crate::audio::accomp::Rng;
-use crate::audio::chart::Family;
+use crate::audio::chart::{Chord, Family};
 use crate::audio::live::band::{HitKind, Trade};
 use crate::audio::live::chorus::{EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::{self, Extra, Feel};
 use crate::audio::live::ornament::{Harm, Orn, Orns, nearest_pc};
 use crate::audio::live::riffs;
+use crate::audio::live::walkers::Walker;
 use crate::audio::live::voice::{NoteEvent, Sound};
 
 /// The bass's range (the triangle's lowest octaves).
@@ -34,11 +35,13 @@ pub struct Bass {
     last_note: Option<u8>,
     /// A bossa bar ended anticipating this note (the next bar ties over it).
     anticipated: Option<(u64, u8)>,
+    /// The chord the walk ended the last bar on (a change on the next bar line).
+    walked: Option<Chord>,
 }
 
 impl Bass {
     pub(super) fn new(p: Player) -> Self {
-        Bass { p, src: work(), dst: work(), last: None, last_note: None, anticipated: None }
+        Bass { p, src: work(), dst: work(), last: None, last_note: None, anticipated: None, walked: None }
     }
 }
 
@@ -420,41 +423,116 @@ impl Bass {
         }
     }
 
-    /// Walking quarters: the chord's root on its first beat, an approach on its last, scale
-    /// and chord tones heading there between; the odd swung octave skip.
+    /// Walking quarters, the way the bassist behind the soloist walks ([`walkers`]): on a
+    /// chord change mostly the root (else its 3rd or 5th), the beat before it an approach (a
+    /// half step either side, a whole step, the next chord's 5th, the same note), notes in
+    /// between by their steps and leaps, chord, scale and chromatic notes heading for the next
+    /// root; a pedal through a bar of one chord now and then; skip notes (an octave, or the note
+    /// again muted), ghosted notes and the rare rake, by how the bassist plays them.
     fn walk(&mut self, ctx: &Ctx, t: &NoteEvent, prev: i32, slip: bool, r: &mut Rng) {
+        let w = ctx.bassist.unwrap_or_else(|| ctx.soloist.bassist());
         let bb = ctx.bb();
         let beats = bb.round() as usize;
         let mut p = prev;
-        for k in 0..beats {
+        let h0 = ctx.harm_at(0.0).expect("a chart");
+        let pedal = (beats >= 3 && (1..beats).all(|k| ctx.harm_at(k as f64).is_some_and(|x| x.chord == h0.chord)) && r.chance(w.pedal as f64))
+            .then(|| nearest_pc(h0.chord.bass_pc(), p, LO, HI - 5) as i32);
+        // A bar in two: half notes on 1 and 3 (a 4/4 bar whose chords change only there).
+        let two = pedal.is_none()
+            && beats == 4
+            && [1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord))
+            && r.chance(w.two as f64);
+        let step_beats = if two { 2 } else { 1 };
+        // Paired quarters (a two-feel struck in four): beat 2 the note of 1 (and 4 of 3, the
+        // second pair the same note or its 4th or 5th), short and even.
+        let paired = if two || pedal.is_some() || beats != 4 || ![1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord)) {
+            0
+        } else {
+            match pick(r, &[w.pair[0], w.pair[1], 1.0 - w.pair[0] - w.pair[1]]) {
+                0 => 2,
+                1 => 1,
+                _ => 0,
+            }
+        };
+        for k in (0..beats).step_by(step_beats) {
             let b = k as f64;
             let h = ctx.harm_at(b).expect("a chart");
-            let next = if k + 1 < beats { ctx.harm_at(b + 1.0) } else { ctx.plain_harm_at(bb) }.unwrap_or(h);
-            let first = k == 0 || ctx.harm_at(b - 1.0).is_some_and(|x| x.chord != h.chord);
-            let last = next.chord != h.chord || k + 1 == beats;
-            let mut n = if first {
-                nearest_pc(h.chord.bass_pc(), p, LO, HI) as i32
+            let ahead = (k + step_beats) as f64;
+            let next = if k + step_beats < beats { ctx.harm_at(ahead) } else { ctx.plain_harm_at(bb) }.unwrap_or(h);
+            let change = k > 0 && ctx.harm_at(b - 1.0).is_some_and(|x| x.chord != h.chord) || k == 0 && self.walked.is_some_and(|c| c != h.chord);
+            // A bar line inside one chord is walked through, not landed on.
+            let first = change || k == 0 && (self.walked.is_none() || two);
+            let last = next.chord != h.chord;
+            let held = change && !two && h.scale.contains(p.rem_euclid(12) as u8) && r.chance(w.hold as f64);
+            let pushed = last && !first && !two && next.chord != h.chord && r.chance(w.push as f64);
+            let pairs_here = paired == 2 || paired == 1 && k < 2;
+            let mut n = if let Some(n) = pedal {
+                n
+            } else if pairs_here && k % 2 == 1 {
+                p
+            } else if paired == 2 && k == 2 {
+                if r.chance(0.55) { p } else { nearest_pc((h.chord.root + if r.chance(0.5) { 5 } else { 7 }) % 12, p, LO, HI) as i32 }
+            } else if held {
+                // The note before, held over the change (a suspension).
+                p
+            } else if pushed {
+                // The next chord's root, a beat early.
+                nearest_pc(next.chord.bass_pc(), p, LO, HI) as i32
+            } else if first {
+                let pc = match pick(r, &[w.root_share(), w.lands[1], w.lands[2], w.lands[3] * 0.4]) {
+                    1 => tone(&h, &[3, 4]),
+                    2 => tone(&h, &[7, 6, 8]),
+                    3 => tone(&h, &[10, 11, 9]),
+                    _ => None,
+                };
+                nearest_pc(pc.unwrap_or(h.chord.bass_pc()), p, LO, HI) as i32
             } else if last {
-                let target = nearest_pc(next.chord.bass_pc(), p, LO + 1, HI - 1) as i32;
-                if r.chance(0.2) && target + 7 <= HI { target + 7 } else if r.chance(0.5) { target + 1 } else { target - 1 }
+                let target = nearest_pc(next.chord.bass_pc(), p, LO + 2, HI - 2) as i32;
+                match pick(r, &w.approach) {
+                    0 => target - 1,
+                    1 => target + 1,
+                    2 if p < target => target - 2,
+                    2 => target + 2,
+                    3 if target + 7 <= HI => target + 7,
+                    3 => target - 5,
+                    4 => p,
+                    _ => passing(p, target, &h, r),
+                }
             } else {
                 let target = nearest_pc(next.chord.bass_pc(), p, LO, HI) as i32;
-                passing(p, target, &h, r)
+                step(p, target, &h, w, r)
             };
             if slip && (k == 1 || k == 2) {
                 n += 1;
             }
             let n = n.clamp(LO, HI);
-            if !first && !last && r.chance(0.12) {
-                let skip = if n + 12 <= HI { n + 12 } else { n - 12 };
-                push(&mut self.dst, ctx.make(t, b, 0.5, Sound::Note(n as u8)));
-                let s = ctx.swing8(b + 0.5);
-                push(&mut self.dst, ctx.make(t, s, b + 1.0 - s, Sound::Note(skip as u8)));
+            // The skip notes: fewer the faster the tune, a little more into a change (the
+            // beat before it); swung where the bassist swings them (else the tune's 8ths).
+            let fast = ((ctx.shape.bpm - 190.0) / 70.0).clamp(0.0, 1.0);
+            let skip = w.skip as f64 * (1.0 - 0.65 * fast as f64) * if last { 1.1 } else { 0.9 };
+            let ghost = |e: NoteEvent, r: &mut Rng| if r.chance(w.ghost as f64) { NoteEvent { volume: e.volume.saturating_sub(4).max(1), ..e } } else { e };
+            if two {
+                push(&mut self.dst, ctx.make(t, b, 2.0, Sound::Note(n as u8)));
+            } else if pedal.is_none() && r.chance(w.rake as f64) {
+                // A rake: the beat in triplets, the last two muted, into the next beat.
+                for j in 0..3 {
+                    let e = ctx.make(t, b + j as f64 / 3.0, 0.3, Sound::Note(n as u8));
+                    push(&mut self.dst, if j == 0 { e } else { NoteEvent { volume: e.volume.saturating_sub(5).max(1), ..e } });
+                }
+            } else if pedal.is_none() && r.chance(skip) {
+                let at = w.skip_at.map_or_else(|| ctx.swing8(b + 0.5), |x| b + x as f64);
+                let octave = w.ghost == 0.0 || r.chance(0.5);
+                let (skip, soft) = if !octave { (n, 4) } else if n + 12 <= HI { (n + 12, 0) } else { (n - 12, 0) };
+                push(&mut self.dst, ghost(ctx.make(t, b, at - b, Sound::Note(n as u8)), r));
+                let e = ctx.make(t, at, b + 1.0 - at, Sound::Note(skip as u8));
+                push(&mut self.dst, NoteEvent { volume: e.volume.saturating_sub(soft).max(1), ..e });
             } else {
-                push(&mut self.dst, ctx.make(t, b, 1.0, Sound::Note(n as u8)));
+                let e = ctx.make(t, b, if pairs_here { 0.7 } else { 1.0 }, Sound::Note(n as u8));
+                push(&mut self.dst, if first { e } else { ghost(e, r) });
             }
             p = n;
         }
+        self.walked = ctx.harm_at(bb - 0.5).map(|h| h.chord);
     }
 
     /// An ostinato: root, fifth, octave, fifth in swung 8ths, chord by chord (a b7 for
@@ -478,6 +556,65 @@ impl Bass {
             b += 2.0;
         }
     }
+}
+
+/// An index drawn by its weight.
+fn pick(r: &mut Rng, w: &[f32]) -> usize {
+    let mut x = r.f() as f32 * w.iter().sum::<f32>();
+    for (i, &v) in w.iter().enumerate() {
+        if x < v {
+            return i;
+        }
+        x -= v;
+    }
+    0
+}
+
+/// The chord's tone that many semitones above its root (the first of `above` it has).
+fn tone(h: &Harm, above: &[u8]) -> Option<u8> {
+    above.iter().map(|a| (h.chord.root + a) % 12).find(|pc| h.chord.pitch_classes().any(|x| x == *pc))
+}
+
+/// A walking note inside a chord, the way `w` walks: each note within an octave of `p` drawn by
+/// its step's measured share (spread over the notes that step can reach) and its kind (a chord
+/// tone, a scale tone, chromatic; a repeat as an average one), half again as likely heading for
+/// `target`.
+fn step(p: i32, target: i32, h: &Harm, w: &Walker, r: &mut Rng) -> i32 {
+    let class = |d: i32| match d.unsigned_abs() {
+        0 => 0,
+        1 => 1,
+        2 => 2,
+        3 | 4 => 3,
+        5..=7 => 4,
+        _ => 5,
+    };
+    // How many notes each step can reach (0: one; 1, 2: two; 3-4: four; 5-7: six; 8-12: ten).
+    const REACH: [f32; 6] = [1.0, 2.0, 2.0, 4.0, 6.0, 10.0];
+    let dir = (target - p).signum();
+    let mut cands = [(0i32, 0f32); 25];
+    for (i, d) in (-12..=12).enumerate() {
+        let n = p + d;
+        if !(LO..=HI).contains(&n) {
+            continue;
+        }
+        let pc = n.rem_euclid(12) as u8;
+        let kind = if h.chord.pitch_classes().any(|x| x == pc) {
+            0
+        } else if h.scale.contains(pc) {
+            1
+        } else {
+            2
+        };
+        let toward = if d != 0 && d.signum() == dir { 1.5 } else { 1.0 };
+        // (The same note again is a step of its own, whatever its kind.)
+        let kind = if d == 0 { 1.0 / 3.0 } else { w.inside[kind] };
+        cands[i] = (n, w.steps[class(d)] / REACH[class(d)] * kind * toward);
+    }
+    let weights = cands.map(|c| c.1);
+    if weights.iter().sum::<f32>() <= 0.0 {
+        return passing(p, target, h, r);
+    }
+    cands[pick(r, &weights)].0
 }
 
 /// A passing note 1..=5 semitones from `p`, in the chord's scale, heading for `target`.

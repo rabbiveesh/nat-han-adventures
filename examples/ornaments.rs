@@ -172,6 +172,10 @@ fn main() {
         human(dir);
         return;
     }
+    if only.as_deref() == Some("walkers") {
+        walkers(dir);
+        return;
+    }
     if only.as_deref() == Some("lineup") {
         lineup(dir);
         return;
@@ -494,6 +498,44 @@ fn soloists(dir: &Path) {
         std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
         println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
     }
+}
+
+/// The walkers: a blowing chorus behind each soloist on two tunes, the bass up front (the
+/// rest of the band quieter) to hear how their bassist walks, to `walk_<soloist>_<song>.wav`;
+/// and Sunny Side, whose bassist is its own (Tommy Bryant).
+fn walkers(dir: &Path) {
+    let call = Call { chorus: Chorus::Blowing, key_up: false };
+    for stem in ["i_got_rhythm", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let script = move |bar: u64| {
+            if bar == 1 {
+                vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.6, drums: 0.5, dynamics: 0.5 }, Input::SetMix([0.35, 0.4, 1.0, 0.5])]
+            } else {
+                vec![]
+            }
+        };
+        for soloist in Soloist::SWING {
+            let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
+            let (out, log, _) = run_with(&file, config, script, file_bars(&file), |_| "");
+            let name = format!("walk_{}_{stem}", soloist.slug());
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav ({}): {:.1}s", soloist.bassist().name, out.len() as f64 / RATE as f64);
+        }
+    }
+    // A tune with its own bassist: Tommy Bryant's paired quarters under Sunny Side.
+    let file = SongFile::parse(library::text("sunny_side").unwrap()).expect("song parses");
+    let script = move |bar: u64| {
+        if bar == 1 {
+            vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.6, drums: 0.5, dynamics: 0.5 }, Input::SetMix([0.35, 0.4, 1.0, 0.5])]
+        } else {
+            vec![]
+        }
+    };
+    let (out, log, _) = run_with(&file, EngineConfig { seed: 7, ..EngineConfig::default() }, script, file_bars(&file) * 2, |_| "");
+    write_wav(&dir.join("walk_bryant_sunny_side.wav"), &out);
+    std::fs::write(dir.join("walk_bryant_sunny_side.txt"), log).expect("write log");
+    println!("walk_bryant_sunny_side.wav: {:.1}s", out.len() as f64 / RATE as f64);
 }
 
 /// The lineup: four blowing choruses on each of three tunes, the soloist picked per chorus.

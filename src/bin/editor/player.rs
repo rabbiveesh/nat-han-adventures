@@ -11,6 +11,8 @@ use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend};
 use nat_han_adventures::audio::live::chorus;
 use nat_han_adventures::audio::live::playback::{ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData, Published};
 use nat_han_adventures::audio::live::feel::Feel;
+use nat_han_adventures::audio::live::engine::DRIFT_BPM;
+use nat_han_adventures::audio::live::soloist::Soloist;
 use nat_han_adventures::audio::live::{BeatClock, Engine, EngineConfig, Input, SongFile};
 use nat_han_adventures::audio::tuning::Tuning;
 use nat_han_adventures::audio::{AudioOutput, Filters, Harmony, Sfx, sfx, synth, waltz};
@@ -31,11 +33,18 @@ pub struct Dials {
     pub freedom: [f32; 5],
     /// Per channel level after mute / solo / volume.
     pub mix: [f32; 4],
+    /// Who the lead solos like (`None`: passed round, a chorus each).
+    pub soloist: Option<Soloist>,
+    /// Off the grid: the players' pocket, the band ducking under the lead, the tempo drift (the
+    /// drift from the next play: it's the song's shape).
+    pub pocket: bool,
+    pub duck: bool,
+    pub drift: bool,
 }
 
 impl Default for Dials {
     fn default() -> Self {
-        Dials { force_harmony: None, force_tuning: None, force_feel: None, force_chorus: None, freedom: [0.0; 5], mix: [1.0; 4] }
+        Dials { force_harmony: None, force_tuning: None, force_feel: None, force_chorus: None, freedom: [0.0; 5], mix: [1.0; 4], soloist: None, pocket: true, duck: true, drift: true }
     }
 }
 
@@ -45,8 +54,21 @@ impl Dials {
         Input::SetFreedom { lead, comp, bass, drums, dynamics }
     }
 
-    pub fn inputs(&self) -> [Input; 6] {
-        [Input::ForceHarmony(self.force_harmony), Input::ForceTuning(self.force_tuning), Input::ForceFeel(self.force_feel), Input::ForceChorus(self.force_chorus), self.freedom_input(), Input::SetMix(self.mix)]
+    pub fn human_input(&self) -> Input {
+        Input::SetHuman { loose: if self.pocket { 1.0 } else { 0.0 }, duck: self.duck }
+    }
+
+    pub fn inputs(&self) -> [Input; 8] {
+        [
+            Input::ForceHarmony(self.force_harmony),
+            Input::ForceTuning(self.force_tuning),
+            Input::ForceFeel(self.force_feel),
+            Input::ForceChorus(self.force_chorus),
+            self.freedom_input(),
+            Input::SetMix(self.mix),
+            Input::ForceSoloist(self.soloist),
+            self.human_input(),
+        ]
     }
 }
 
@@ -144,7 +166,7 @@ impl Player {
     }
 
     fn engine(&mut self, song: &SongFile, beat: f64, dials: &Dials, ctx: &Context) -> Result<Engine, String> {
-        let mut e = Engine::with_config(song, ENGINE_RATE, EngineConfig::default())?;
+        let mut e = Engine::with_config(song, ENGINE_RATE, EngineConfig { drift_bpm: if dials.drift { DRIFT_BPM } else { 0.0 }, ..EngineConfig::default() })?;
         e.start_at(e.shape().at(beat.max(0.0)));
         e.post(Input::SetStats(ctx.stats));
         e.post(Input::SetFilters(ctx.filters));
