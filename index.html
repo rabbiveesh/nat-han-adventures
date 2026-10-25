@@ -72,11 +72,13 @@
         border: 2px dashed rgba(255, 199, 46, 0.4); transition: opacity 1.2s; }
       #stick-zone .hint { left: 18px; } #jump-zone .hint { right: 18px; }
       /* Side B (the game marks <body class="sideb">): no stick, no jump; each third of the
-         screen calls the set list cell drawn along the bottom over it. */
+         screen's bottom picks (again: calls) the set list cell drawn along the bottom over it,
+         and the rest of the screen above them is the hit. */
       #calls { display: none; }
       body.sideb #stick-zone, body.sideb #jump-zone, body.sideb #call-zone { display: none; }
       body.sideb #calls { display: block; }
-      #calls .zone { top: 96px; bottom: 0; width: 33.34%; }
+      #calls .zone { top: 60%; bottom: 0; width: 33.34%; }
+      #hit-zone { left: 0; right: 0; top: 96px; bottom: 40%; }
       #call-1 { left: 0; } #call-2 { left: 33.33%; } #call-3 { right: 0; }
       #calls .hint { left: 50%; transform: translateX(-50%); bottom: 64px; white-space: nowrap; }
       body.played .hint { opacity: 0; }
@@ -116,9 +118,10 @@
       <div class="zone" id="jump-zone" data-key="Space"><span class="hint">tap: JUMP &middot; again: TOOT</span></div>
       <div class="zone" id="call-zone" data-key="ArrowDown"></div>
       <div id="calls">
-        <div class="zone" id="call-1" data-key="Digit1"><span class="hint">tap: CALL</span></div>
-        <div class="zone" id="call-2" data-key="Digit2"><span class="hint">tap: CALL</span></div>
-        <div class="zone" id="call-3" data-key="Digit3"><span class="hint">tap: CALL</span></div>
+        <div class="zone" id="hit-zone" data-key="Space"><span class="hint">tap: HIT</span></div>
+        <div class="zone" id="call-1" data-key="Digit1"><span class="hint">tap: PICK &middot; again: CALL</span></div>
+        <div class="zone" id="call-2" data-key="Digit2"><span class="hint">tap: PICK &middot; again: CALL</span></div>
+        <div class="zone" id="call-3" data-key="Digit3"><span class="hint">tap: PICK &middot; again: CALL</span></div>
       </div>
       <div class="btn" id="up" data-key="ArrowUp">&#9650;</div>
       <div class="btn" id="down" data-key="ArrowDown">&#9660;</div>

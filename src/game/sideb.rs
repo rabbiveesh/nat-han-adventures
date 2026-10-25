@@ -14,6 +14,10 @@
 //! - **Han can die**: spikes, sewage, the pit, and knocking himself out on a wall he can't
 //!   climb. A death rewinds to the last checkpoint Han passed (the mouth of a passage: `C`),
 //!   with the set list as it was there, or to the top of the level ([`Mouth`]).
+//! - **The hit** (Jump, Up; on a phone, a tap above the set list): a drum stab the player
+//!   plays any time, free, landing on the next beat ([`land_hits`]). Beat blocks answer it on
+//!   Side B instead of the bars (each hit swaps red and blue), and trapdoors (crumbling
+//!   platforms) near Han drop at once. Calls pick how Han moves; hits work the level.
 //! - **Melting** (`melt` on the set list): the laughing band, held on its melting phrase. Han
 //!   shrinks to [`MELT_SIZE`] and ducks under ceiling spikes he'd otherwise lose his cap to,
 //!   but if it wears off while he's under them, he grows back into them.
@@ -252,6 +256,12 @@ pub struct SideB {
     pub mouth: Option<Mouth>,
     /// The rewind under way goes back to [`SideB::mouth`] (a death's), not to the top (R).
     pub to_mouth: bool,
+    /// Hits landed (their parity is the beat blocks': [`crushers::beat_blocks`]), and the beat
+    /// a hit was played on, landing on the next one.
+    ///
+    /// [`crushers::beat_blocks`]: super::crushers
+    pub hits: u32,
+    pub hit_on: Option<(u32, u8)>,
 }
 
 /// A checkpoint Han's passed (the mouth of a passage): where a rewind puts him, and the set
@@ -263,6 +273,7 @@ pub struct Mouth {
     pub left: Vec<u32>,
     pub selected: usize,
     pub dir: Option<f32>,
+    pub hits: u32,
 }
 
 /// A free play Side B room in the course (cells and columns of the loaded level): Nat waits in
@@ -307,6 +318,8 @@ impl SideB {
             bonks: 0,
             mouth: None,
             to_mouth: false,
+            hits: 0,
+            hit_on: None,
         }
     }
 
@@ -338,6 +351,7 @@ impl SideB {
             left: m.left.clone(),
             selected: m.selected,
             dir: m.dir,
+            hits: m.hits,
             mouth: Some(m),
             // (Until Han's back in play: the level's own restart reads it too.)
             to_mouth: true,
@@ -449,7 +463,7 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             FixedUpdate,
             (
-                (beacon, melt).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
+                (beacon, melt, land_hits).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
                 (han_fate, han_grabs_nuggets, han_passes_checkpoints).chain().in_set(GameSet::Interact),
             )
                 .run_if(resource_exists::<SideB>),
@@ -458,6 +472,35 @@ pub(super) fn plugin(app: &mut App) {
         app.add_systems(OnEnter(s), leave);
     }
     app.add_systems(Startup, dev_start);
+}
+
+/// How far from Han (columns) a hit drops trapdoors.
+pub const HIT_REACH: f32 = 12.0;
+
+/// A hit lands on the beat after the one it was played on: the beat blocks swap (by the hits'
+/// parity: `crushers::beat_blocks`) and the trapdoors near Han drop.
+fn land_hits(
+    mut side: ResMut<SideB>,
+    groove: Res<Groove>,
+    han: Query<&Pos, With<Han>>,
+    mut doors: Query<(&super::LevelTile, &mut super::crushers::Crumble)>,
+    active: Res<ActiveLevel>,
+    mut sfx: MessageWriter<crate::events::PlaySfx>,
+) {
+    let Some(on) = side.hit_on else { return };
+    if on == (groove.clock.bar, groove.clock.beat) {
+        return;
+    }
+    side.hit_on = None;
+    side.hits += 1;
+    sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Hit));
+    let Ok(han) = han.single() else { return };
+    for (t, mut door) in &mut doors {
+        let c = active.level.tile_center(t.col, t.row);
+        if *door == super::crushers::Crumble::Whole && (c.x - han.0.x).abs() < HIT_REACH * TILE {
+            *door = super::crushers::Crumble::Cracking(crate::level::CRUMBLE_DELAY);
+        }
+    }
 }
 
 /// Han passing a checkpoint (the mouth of a passage): a death comes back here, with the set
@@ -479,7 +522,7 @@ fn han_passes_checkpoints(
             continue;
         }
         cp.active = true;
-        side.mouth = Some(Mouth { at: floor, left: side.left.clone(), selected: side.selected, dir: side.dir });
+        side.mouth = Some(Mouth { at: floor, left: side.left.clone(), selected: side.selected, dir: side.dir, hits: side.hits });
         reached.write(crate::events::CheckpointReached { index: cp.index, pos: floor });
     }
 }
@@ -512,14 +555,15 @@ fn leave(mut commands: Commands, side: Option<Res<SideB>>, mut mode: ResMut<supe
     }
 }
 
-/// Left/Right picks a call on the set list, Down or Jump plays it (Han jumps by himself, and
-/// on a phone the jump zone is the big button). 1/2/3 pick and play a call in one go (on a
-/// phone, a tap on its third of the screen); an empty one is just picked, for the nuggets.
+/// Left/Right picks a call on the set list, Down plays it; 1/2/3 pick a call, and again plays
+/// it (on a phone, a tap on its third of the set list). Jump or Up is the hit (on a phone, a
+/// tap above the set list): it lands on the next beat ([`land_hits`]).
 fn choose_and_call(
     input: Single<&ActionState<Action>>,
     mut side: ResMut<SideB>,
     mut calls: MessageWriter<CallMode>,
     encore: Option<Res<super::encore::Encore>>,
+    groove: Res<Groove>,
 ) {
     let n = side.setlist.len();
     // (The encore's calls are free: `encore`.)
@@ -539,7 +583,10 @@ fn choose_and_call(
     if let Some(k) = direct {
         side.selected = k;
     }
-    let call = again || input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
+    if (input.just_pressed(&Action::Jump) || input.just_pressed(&Action::Up)) && side.phase == Phase::Playing {
+        side.hit_on = Some((groove.clock.bar, groove.clock.beat));
+    }
+    let call = again || input.just_pressed(&Action::Down);
     if call && side.phase == Phase::Playing {
         let k = side.selected;
         if side.left[k] > 0 {

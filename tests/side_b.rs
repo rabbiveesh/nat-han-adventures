@@ -316,13 +316,16 @@ fn hans_closing_stretch_starts_the_shout() {
 }
 
 #[test]
-fn jump_calls_the_band_too() {
+fn jump_is_the_hit_on_the_next_beat() {
     let mut app = app(0);
     until(&mut app, 5.0, |a| col(a) >= 7.0).unwrap();
     assert_eq!(side(&app).left, vec![2, 0, 0], "the runway's two nuggets");
     tap(&mut app, KeyCode::Space);
-    assert_eq!(side(&app).calls, 1);
-    assert_eq!(side(&app).left, vec![1, 0, 0]);
+    assert_eq!((side(&app).calls, side(&app).left.clone()), (0, vec![2, 0, 0]), "not a call");
+    assert_eq!(side(&app).hits, 0, "not till the next beat");
+    let beat = app.world().resource::<Groove>().clock.beat_secs;
+    until(&mut app, beat + 0.1, |a| side(a).hits > 0).expect("the hit lands");
+    assert_eq!(side(&app).hits, 1);
 }
 
 #[test]
@@ -526,6 +529,8 @@ fn pick(app: &mut App, k: usize) {
 
 /// In a plan, `(col, PICK + k)` only picks call `k` ([`pick`]).
 const PICK: usize = 10;
+/// In a plan, `(col, HIT)` (`col/20`) plays the hit (Jump).
+const HIT: usize = 20;
 
 /// Play Side B level `level`, calling set-list call `k` once Han's past column `col`, for each
 /// `(col, k)` in turn: cleared, or how Han met his end (and where).
@@ -550,7 +555,9 @@ fn play_in_app(app: &mut App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>
             let t = app.world().resource::<nat_han_adventures::game::LevelRun>().time;
             eprintln!("call {k} at t={t:.2} col={:.1} left={:?}", col(app), side(app).left);
         }
-        if k >= PICK {
+        if k == HIT {
+            tap(app, KeyCode::Space);
+        } else if k >= PICK {
             pick(app, k - PICK);
         } else {
             call(app, k);
