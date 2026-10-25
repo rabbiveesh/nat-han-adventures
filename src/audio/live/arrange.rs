@@ -85,7 +85,11 @@ impl Shape {
         let bars = ((beats - 1e-9) / bar_beats).ceil().max(1.0) as usize;
         let width = |k: usize| if k + 1 == bars { beats - k as f64 * bar_beats } else { bar_beats };
         let mut bar_spb: Vec<f64> = match drift {
-            Some((seed, amount)) => self::drift(bars, seed, amount).into_iter().map(|d| rate / (bpm + d) as f64).collect(),
+            // (A section is 8 of the song's bars: 16 of the waltz's.)
+            Some((seed, amount)) => {
+                let section = if is_waltz { 16 } else { 8 };
+                self::drift(bars, section, seed, amount).into_iter().map(|d| rate / (bpm + d) as f64).collect()
+            }
             None => vec![spb; bars],
         };
         // The band breathes inside the song: a pass takes as long as written.
@@ -174,21 +178,39 @@ impl Shape {
 }
 
 /// A band's tempo drift over `bars` bars: each bar's offset from the written tempo, in bpm, at
-/// most `amount` either way. A slow curve (a wave or two across the song, a smaller one on
-/// top), periodic over the loop so the next pass joins on. Seeded.
-pub fn drift(bars: usize, seed: u64, amount: f32) -> Vec<f32> {
+/// most `amount` either way. Mostly a slow wander (a wave or two across the song, a smaller one
+/// on top: hand-annotated jazz trio recordings wander about 0.85% of the tempo over 4-bar
+/// windows), and a little lean into each section's turn: the last two bars rush into the fill
+/// (`section` bars to a section) and the time settles as the next one starts, some sections
+/// more than others (in the recordings the 2 bars into an 8-bar line are only ~0.2% faster
+/// than the 2 after, so it stays small). Periodic over the loop so the next pass joins on,
+/// around the written tempo. Seeded.
+pub fn drift(bars: usize, section: usize, seed: u64, amount: f32) -> Vec<f32> {
     let mut rng = accomp::Rng::new(seed ^ 0xD71F_7ED0);
     let waves: [(f64, f64, f64); 3] = std::array::from_fn(|i| {
         let cycles = [1.0, 2.0, 3.0 + rng.below(2) as f64][i];
         let size = [1.0, 0.6, 0.3][i] * (0.6 + 0.4 * rng.f());
         (cycles, size, rng.f() * std::f64::consts::TAU)
     });
-    let raw: Vec<f64> = (0..bars)
+    let wander: Vec<f64> = (0..bars)
         .map(|k| {
             let x = std::f64::consts::TAU * k as f64 / bars.max(1) as f64;
             waves.iter().map(|&(c, a, p)| a * (c * x + p).sin()).sum::<f64>()
         })
         .collect();
+    let peak = wander.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    let mut raw: Vec<f64> = wander.iter().map(|v| if peak > 0.0 { 0.5 * v / peak } else { 0.0 }).collect();
+    // Into each turn (the loop's end turns into its top): +, ++, then back below, settling.
+    let section = section.max(2);
+    if bars >= 2 * section {
+        for turn in (section..=bars).step_by(section) {
+            let lean = 0.35 + 0.65 * rng.f();
+            for (d, push) in [(-2i64, 0.12), (-1, 0.22), (0, -0.04), (1, -0.08), (2, -0.06), (3, -0.02)] {
+                let k = (turn as i64 + d).rem_euclid(bars as i64) as usize;
+                raw[k] += lean * push;
+            }
+        }
+    }
     // Around the written tempo (the pass keeps its length: [`Shape::drifting`]).
     let mean = raw.iter().sum::<f64>() / bars.max(1) as f64;
     let raw: Vec<f64> = raw.iter().map(|v| v - mean).collect();

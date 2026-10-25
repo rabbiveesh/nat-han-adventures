@@ -740,9 +740,9 @@ fn the_mixer_mutes_channels() {
     assert_eq!(render(&mut engine(m, &[Input::SetMix([1.0; 4])]), 64_000, 512), full, "unity is as written");
 }
 
-/// The band as the game plays it drifts a little around the written tempo (each pass as long as
-/// written) and each player sits where players do: the lead behind the beat, the bass on top,
-/// the drums on it.
+/// The band as the game plays it drifts around the written tempo, rushing into each turn, (each pass as long as
+/// written) and each player sits where players do (`live::pocket`): the drums on the beat,
+/// the comp and the lead behind it, the bass somewhere around it.
 #[test]
 fn the_band_drifts_and_sits_off_the_grid() {
     for m in [Music::Title, Music::World(2), Music::SideB(1)] {
@@ -750,10 +750,16 @@ fn the_band_drifts_and_sits_off_the_grid() {
         let (g, h) = (grid.shape().clone(), played.shape().clone());
         assert!(h.len.abs_diff(g.len) <= 1, "{m:?}: a pass is {} samples, written {}", h.len, g.len);
         let off = (0..h.bars).map(|k| (h.bpm_at(k) - h.bpm).abs()).fold(0.0f32, f32::max);
-        assert!(off > 0.5 && off <= 2.1, "{m:?}: drifts {off} bpm");
-        // Tempo moves slowly: neighbouring bars a fraction of a bpm apart.
+        let most = nat_han_adventures::audio::live::engine::DRIFT_BPM;
+        assert!(off > 1.0 && off <= most + 0.2, "{m:?}: drifts {off} bpm");
+        // It leans into each section's turn a little: the bar into an 8-bar line is faster than
+        // the bar it starts, more often than not.
+        let turns: Vec<usize> = (8..h.bars).step_by(8).collect();
+        let rushed = turns.iter().filter(|&&t| h.bpm_at(t - 1) > h.bpm_at(t)).count();
+        assert!(rushed * 2 >= turns.len(), "{m:?}: rushes into {rushed} of {} turns", turns.len());
+        // And moves on from bar to bar by a step at most, never a jump.
         for k in 1..h.bars {
-            assert!((h.bpm_at(k) - h.bpm_at(k - 1)).abs() < 0.8, "{m:?} bar {k}: {} → {}", h.bpm_at(k - 1), h.bpm_at(k));
+            assert!((h.bpm_at(k) - h.bpm_at(k - 1)).abs() < 0.7 * most, "{m:?} bar {k}: {} → {}", h.bpm_at(k - 1), h.bpm_at(k));
         }
         // Each note against where the drifting grid puts it, in ms, per channel.
         let mut e = played;
@@ -769,8 +775,9 @@ fn the_band_drifts_and_sits_off_the_grid() {
             }
         }
         let mean = |ch: usize| sums[ch].0 / sums[ch].1.max(1) as f64;
-        assert!(mean(0) > 4.0 && mean(0) < 18.0, "{m:?}: the lead sits {:.1} ms late", mean(0));
-        assert!(mean(2) < -1.0 && mean(2) > -9.0, "{m:?}: the bass sits {:.1} ms", mean(2));
-        assert!(mean(3).abs() < 2.0, "{m:?}: the drums sit {:.1} ms", mean(3));
+        assert!(mean(0) > 0.5 && mean(0) < 12.0, "{m:?}: the lead sits {:.1} ms late", mean(0));
+        assert!(mean(1) > 3.0 && mean(1) < 16.0, "{m:?}: the comp sits {:.1} ms late", mean(1));
+        assert!(mean(2).abs() < 14.0, "{m:?}: the bass sits {:.1} ms", mean(2));
+        assert!(mean(3).abs() < 2.5, "{m:?}: the drums sit {:.1} ms", mean(3));
     }
 }

@@ -142,8 +142,10 @@ impl EngineConfig {
     }
 }
 
-/// A band's tempo drift, either way over a pass (real players wander about this much).
-pub const DRIFT_BPM: f32 = 2.0;
+/// A band's tempo drift, either way over a pass ([`super::arrange::drift`]): a 1975 studio
+/// rhythm section measured for the "gridification" essay wanders with a 2.8 bpm standard
+/// deviation; this keeps inside about that.
+pub const DRIFT_BPM: f32 = 4.0;
 
 /// The freedom dials.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -745,8 +747,9 @@ impl Engine {
         let (sr, pocket_seed, loose) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose);
         for e in &mut self.scratch {
             // (Never before the pass it's in starts: the voices count from there.)
-            let at = |t: u64| pocket::shift(t, pocket::offset(e.ch, t, sr, pocket_seed, loose, band.feel, band.soli.is_some())).max(e.loop_start);
-            (e.start, e.end) = (at(e.start), at(e.end));
+            let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, loose, feel: band.feel, soli: band.soli.is_some() };
+            let start = p.start(e.start, e.beat, e.tie).max(e.loop_start);
+            (e.start, e.end) = (start, p.end(e.end).max(start + 1));
             if band.swell != 0.0 {
                 e.gain *= 1.0 + band.swell;
             }
