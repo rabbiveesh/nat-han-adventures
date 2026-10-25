@@ -455,7 +455,7 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             Update,
             (
-                choose_and_call.run_if(in_state(PlayState::Running)),
+                (choose_and_call, autoplay).chain().run_if(in_state(PlayState::Running)),
                 refill_on_restart.run_if(in_state(AppState::Playing)),
             )
                 .run_if(resource_exists::<SideB>),
@@ -474,8 +474,8 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, dev_start);
 }
 
-/// How far from Han (columns) a hit drops trapdoors.
-pub const HIT_REACH: f32 = 12.0;
+/// How far from Han (columns) a hit drops a trapdoor: the one under him.
+pub const HIT_REACH: f32 = 3.0;
 
 /// A hit lands on the beat after the one it was played on: the beat blocks swap (by the hits'
 /// parity: `crushers::beat_blocks`) and the trapdoors near Han drop.
@@ -529,10 +529,75 @@ fn han_passes_checkpoints(
 
 /// Hidden ways in (Side B is a prototype): `NATHAN_SIDE_B=1 cargo run`, or `?sideb=1` on the
 /// web, start straight in Side B's level 1 (and the title's Up Up Down Down: `ui::title`).
+/// `NATHAN_SIDE_B_PLAN="4/11 10/1 27/20"` (native, for recordings): the game plays a route
+/// itself, as `tests/side_b.rs` writes them: at each column Han passes, pick (`1k`), call (`k`)
+/// or hit (`20`). Going by where Han is, it plays the same however the music's clock runs.
+struct AutoPlan(Vec<(f32, usize)>, usize);
+
+fn autoplay(
+    mut plan: Local<Option<AutoPlan>>,
+    mut side: ResMut<SideB>,
+    han: Query<&Pos, With<Han>>,
+    groove: Res<Groove>,
+    mut calls: MessageWriter<CallMode>,
+) {
+    let plan = plan.get_or_insert_with(|| AutoPlan(plan_from_env(), 0));
+    // (A rewind goes back to the top of the plan: it's for clean runs.)
+    if plan.1 >= plan.0.len() || side.phase != Phase::Playing {
+        return;
+    }
+    let Ok(at) = han.single() else { return };
+    let (col, k) = plan.0[plan.1];
+    if at.0.x / TILE < col {
+        return;
+    }
+    plan.1 += 1;
+    match k {
+        20 => side.hit_on = Some((groove.clock.bar, groove.clock.beat)),
+        10.. => side.selected = (k - 10).min(side.setlist.len().saturating_sub(1)),
+        k if k < side.left.len() && side.left[k] > 0 => {
+            side.selected = k;
+            side.left[k] -= 1;
+            side.calls += 1;
+            calls.write(CallMode(side.setlist[k].0));
+        }
+        _ => {}
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn plan_from_env() -> Vec<(f32, usize)> {
+    let text = std::env::var("NATHAN_SIDE_B_PLAN").unwrap_or_default();
+    text.split_whitespace().filter_map(|w| w.split_once('/')).filter_map(|(c, k)| Some((c.parse().ok()?, k.parse().ok()?))).collect()
+}
+
+#[cfg(target_arch = "wasm32")]
+fn plan_from_env() -> Vec<(f32, usize)> {
+    Vec::new()
+}
+
+/// `NATHAN_SIDE_B_FILE=<path>` (native) plays that file as the level asked for (to try a level
+/// being drawn without a rebuild).
 fn dev_start(mut commands: Commands) {
     if let Some(n) = asked_for() {
-        start(&mut commands, n.saturating_sub(1).min(SIDE_B_SOURCES.len() - 1));
+        let n = n.saturating_sub(1).min(SIDE_B_SOURCES.len() - 1);
+        match level_file() {
+            Some(b) => start_level(&mut commands, n, b),
+            None => start(&mut commands, n),
+        }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn level_file() -> Option<SideBLevel> {
+    let path = std::env::var("NATHAN_SIDE_B_FILE").ok()?;
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("NATHAN_SIDE_B_FILE {path}: {e}"));
+    Some(SideBLevel::parse(&text).unwrap_or_else(|e| panic!("NATHAN_SIDE_B_FILE {path}: {e}")))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn level_file() -> Option<SideBLevel> {
+    None
 }
 
 #[cfg(not(target_arch = "wasm32"))]
