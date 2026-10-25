@@ -226,9 +226,9 @@ pub const CUSHION_FLING: f32 = 420.0;
 /// ...and this fast up (px/s).
 pub const CUSHION_LIFT: f32 = 260.0;
 /// Held into the cushion as it fires (pulled back, a slingshot): steep, (away, up) px/s.
-pub const CUSHION_STEEP: (f32, f32) = (180.0, 480.0);
+pub const CUSHION_STEEP: (f32, f32) = (150.0, 520.0);
 /// Held away from it: long and flat, (away, up) px/s.
-pub const CUSHION_LONG: (f32, f32) = (540.0, 140.0);
+pub const CUSHION_LONG: (f32, f32) = (600.0, 220.0);
 
 /// A wall cushion's shot (away from its face, up; px/s) for the aim held as it fires: `aim`
 /// > 0 away from the cushion ([`CUSHION_LONG`]), < 0 into it ([`CUSHION_STEEP`]), 0 neither
