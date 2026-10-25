@@ -25,7 +25,7 @@ use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
-use crate::audio::live::soloist::{self, Changes, Line, Played};
+use crate::audio::live::soloist::{self, Changes, Line, Played, Soloist};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Arp;
 
@@ -46,8 +46,9 @@ pub struct Lead {
     solo_note: Option<u8>,
     /// A soloist's line, carried over bar lines ([`soloist`]).
     line: Line,
-    /// The instrument a soloist keeps all through their solo (a persona doesn't switch).
-    persona_inst: Option<u8>,
+    /// The instrument a soloist keeps all through their solo (a persona doesn't switch), and
+    /// whose it is: the next soloist steps up on another.
+    persona_inst: Option<(Soloist, u8)>,
 }
 
 impl Lead {
@@ -147,8 +148,17 @@ impl Musician for Lead {
             self.persona_inst = None;
         }
         if persona {
-            // A soloist plays their solo on one instrument, whatever the feel or the fills.
-            let k = *self.persona_inst.get_or_insert(tmpl.inst);
+            // A soloist plays their solo on one instrument, whatever the feel or the fills; the
+            // next one takes another (when the song has one) and starts their own phrase.
+            let k = match self.persona_inst {
+                Some((who, k)) if who == ctx.soloist => k,
+                Some((_, k)) => {
+                    self.line = Line::default();
+                    ctx.alternate(0, ctx.bar.index, k).unwrap_or(k)
+                }
+                None => tmpl.inst,
+            };
+            self.persona_inst = Some((ctx.soloist, k));
             for e in &mut self.dst {
                 e.inst = k;
             }

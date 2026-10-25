@@ -86,6 +86,72 @@ impl Soloist {
     pub fn lay_back(self) -> f32 {
         self.player().map_or(1.0, |p| p.lay_back)
     }
+
+    /// The tempos the player's measured numbers hold at (bpm): about the range of their
+    /// transcribed solos. The band's own line fits anything.
+    fn tempos(self) -> (f32, f32) {
+        match self {
+            Soloist::Band => (0.0, f32::INFINITY),
+            Soloist::Pops => (80.0, 230.0),
+            Soloist::Miles => (70.0, 270.0),
+            Soloist::Bird => (140.0, 330.0),
+            Soloist::Sonny => (90.0, 300.0),
+            Soloist::Trane => (110.0, 340.0),
+            Soloist::Wayne => (100.0, 290.0),
+        }
+    }
+
+    /// Plays at `bpm` (and in three: the waltz is no place for 1920s two-beat or bebop).
+    pub fn fits(self, bpm: f32, waltz: bool) -> bool {
+        let (lo, hi) = self.tempos();
+        (lo..=hi).contains(&bpm) && !(waltz && matches!(self, Soloist::Pops | Soloist::Bird))
+    }
+
+    /// Calm (space, few notes: they suit a night the band plays it safe) or busy.
+    fn calm(self) -> bool {
+        matches!(self, Soloist::Pops | Soloist::Miles | Soloist::Wayne)
+    }
+
+    /// Where the player sits in the story of the music, so a handover can go to a neighbour.
+    fn era(self) -> Option<i32> {
+        [Soloist::Pops, Soloist::Bird, Soloist::Miles, Soloist::Sonny, Soloist::Trane, Soloist::Wayne].iter().position(|s| *s == self).map(|i| i as i32)
+    }
+}
+
+/// Who takes the solo in loop pass `pass` (a chorus each, as a band passes the solo round):
+/// one of those who [`Soloist::fits`] the tune, never the one before (`prev`), a neighbour in
+/// the music's story more likely than a jump across it, and the calm players more likely when
+/// the band's `freedom` is low, the busy ones when it's high. The tunes are from the 1920s, so
+/// Pops takes the first chorus when he fits. Seeded, the same every time.
+pub fn take_the_solo(seed: u64, pass: u64, prev: Option<Soloist>, bpm: f32, waltz: bool, freedom: f32) -> Soloist {
+    if prev.is_none() && Soloist::Pops.fits(bpm, waltz) {
+        return Soloist::Pops;
+    }
+    let f = freedom.clamp(0.0, 1.0);
+    let weight = |s: Soloist| -> f32 {
+        if Some(s) == prev || !s.fits(bpm, waltz) {
+            return 0.0;
+        }
+        let mood = if s == Soloist::Band { 0.6 } else if s.calm() { 1.4 - f } else { 0.4 + f };
+        let near = match (prev.and_then(Soloist::era), s.era()) {
+            (Some(a), Some(b)) => [1.0, 1.0, 0.6, 0.35][((a - b).abs() as usize).min(3)],
+            _ => 0.8,
+        };
+        mood * near
+    };
+    let total: f32 = Soloist::ALL.iter().map(|&s| weight(s)).sum();
+    if total <= 0.0 {
+        return Soloist::Band;
+    }
+    let mut r = Rng::new(seed ^ pass.wrapping_mul(0x50_10_15_75));
+    let mut x = r.f() as f32 * total;
+    for s in Soloist::ALL {
+        x -= weight(s);
+        if x < 0.0 && weight(s) > 0.0 {
+            return s;
+        }
+    }
+    Soloist::Band
 }
 
 // The profiles, one file each. In them, the cell weights come from each player's inter-onset
@@ -748,6 +814,30 @@ fn normal(r: &mut Rng) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_solo_goes_round_a_chorus_each() {
+        for (bpm, waltz) in [(100.0, false), (184.0, false), (300.0, false), (184.0, true)] {
+            let mut prev = None;
+            let mut seen = Vec::new();
+            for pass in 0..40 {
+                let s = take_the_solo(9, pass, prev, bpm, waltz, (pass % 5) as f32 / 4.0);
+                assert_eq!(s, take_the_solo(9, pass, prev, bpm, waltz, (pass % 5) as f32 / 4.0), "seeded");
+                assert!(s.fits(bpm, waltz), "{s:?} at {bpm} bpm, waltz {waltz}");
+                assert_ne!(Some(s), prev, "never the same twice running");
+                if pass == 0 {
+                    assert_eq!(s == Soloist::Pops, Soloist::Pops.fits(bpm, waltz), "Pops opens when he fits");
+                }
+                if !seen.contains(&s) {
+                    seen.push(s);
+                }
+                prev = Some(s);
+            }
+            assert!(seen.len() >= 4, "{bpm} bpm: the solo goes round: {seen:?}");
+        }
+        assert!(!Soloist::Pops.fits(184.0, true) && !Soloist::Bird.fits(300.0, true), "no two-beat or bebop in three");
+        assert!(!Soloist::Bird.fits(100.0, false) && Soloist::Miles.fits(100.0, false));
+    }
     use crate::audio::chart::{Chord, Quality};
 
     /// ii-V-I-I in C, two beats a chord.

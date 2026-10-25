@@ -172,6 +172,10 @@ fn main() {
         human(dir);
         return;
     }
+    if only.as_deref() == Some("lineup") {
+        lineup(dir);
+        return;
+    }
     if only.as_deref() == Some("soloists") {
         soloists(dir);
         return;
@@ -265,6 +269,9 @@ fn run_with(file: &SongFile, config: EngineConfig, script: impl Fn(u64) -> Vec<I
             }
             if let Some(s) = p.soli {
                 band.push(format!("soli: {}{}{}", s.texture.label(), if s.stretto { " (stretto)" } else { "" }, if s.tenor { "" } else { ", no tenor yet" }));
+            }
+            if b.orns[Role::Lead as usize].names().contains("solo") {
+                band.push(format!("soloist: {}", b.soloist.slug()));
             }
             if !band.is_empty() {
                 let _ = writeln!(log, "    band:  {}", band.join("; "));
@@ -451,7 +458,7 @@ fn soloists(dir: &Path) {
             if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
         };
         for soloist in Soloist::ALL {
-            let config = EngineConfig { seed: 7, soloist, ..EngineConfig::default() };
+            let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
             let (out, log, _) = run_with(&file, config, script, file_bars(&file), |_| "");
             let name = format!("solo_{}_{stem}", soloist.slug());
             write_wav(&dir.join(format!("{name}.wav")), &out);
@@ -468,12 +475,30 @@ fn soloists(dir: &Path) {
         _ => vec![],
     };
     for soloist in Soloist::ALL {
-        let config = EngineConfig { seed: 7, soloist, ..EngineConfig::default() };
+        let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
         let (out, log, _) = run_with(&file, config, script, bars * 2, |_| "");
         let name = format!("solo_{}_star_spangled_banner", soloist.slug());
         write_wav(&dir.join(format!("{name}.wav")), &out);
         std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
         println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    }
+}
+
+/// The lineup: four blowing choruses on each of three tunes, the soloist picked per chorus.
+fn lineup(dir: &Path) {
+    let call = Call { chorus: Chorus::Blowing, key_up: false };
+    for stem in ["sweet_georgia_brown", "i_got_rhythm", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        for f in [0.3f32, 0.8] {
+            let script = move |bar: u64| {
+                if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: f, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
+            };
+            let (out, log, _) = run_with(&file, EngineConfig { seed: 7, ..EngineConfig::default() }, script, file_bars(&file) * 4, |_| "");
+            let name = format!("lineup_{stem}_{}", (f * 10.0) as u32);
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+        }
     }
 }
 

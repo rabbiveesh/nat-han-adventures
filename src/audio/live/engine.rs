@@ -54,7 +54,7 @@ use crate::audio::{Filters, Harmony};
 use super::arrange::{Arrangement, Shape};
 use super::band::{BandInput, BandPlan};
 use super::chorus;
-use super::soloist::Soloist;
+use super::soloist::{self, Soloist};
 use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
@@ -128,15 +128,16 @@ pub struct EngineConfig {
     /// How loose the players sit against the beat, 0..1 ([`super::pocket`]: 0 locks every
     /// note to the grid).
     pub loose: f32,
-    /// Who the lead solos like ([`super::soloist`]).
-    pub soloist: Soloist,
+    /// Who the lead solos like ([`super::soloist`]): `None`, a chorus each, as a band passes
+    /// the solo round ([`super::soloist::take_the_solo`]); one player all through.
+    pub soloist: Option<Soloist>,
     /// The comp and drums step back under the lead's phrases, the bass sits lower ([`super::mix`]).
     pub duck: bool,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: Soloist::Band, duck: true }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true }
     }
 }
 
@@ -240,6 +241,8 @@ pub struct CommittedBar {
     pub orns: [Orns; 4],
     /// The band's shared plan for it.
     pub band: BandPlan,
+    /// Who the lead solos like in it (when it solos).
+    pub soloist: Soloist,
 }
 
 /// One musician, for UIs.
@@ -405,6 +408,8 @@ pub struct Engine {
     /// harmony switch is a summon's flourish).
     prev_band: BandPlan,
     prev_harmony: Option<Harmony>,
+    /// Who's soloing, and in which loop pass ([`EngineConfig::soloist`]).
+    soloing: Option<(u64, Soloist)>,
 }
 
 impl Engine {
@@ -416,8 +421,8 @@ impl Engine {
         if !(8_000..=192_000).contains(&sample_rate) {
             return Err(format!("sample rate {sample_rate} out of range"));
         }
-        // Parse the soloist's file here, not on the audio thread.
-        let _ = config.soloist.player();
+        // Parse the players' files here, not on the audio thread.
+        let _ = Soloist::Miles.player();
         let drift = |waltz| Shape::drifting(song, sample_rate, waltz, config.seed ^ tuning::hash_str(&song.title), config.drift_bpm);
         let shape = drift(false);
         if shape.len == 0 {
@@ -474,6 +479,7 @@ impl Engine {
             instruments,
             prev_band: BandPlan::default(),
             prev_harmony: None,
+            soloing: None,
         })
     }
 
@@ -686,6 +692,11 @@ impl Engine {
         }
         let intensity = (0.5 + self.energy).clamp(0.0, 1.0);
         self.energy *= ENERGY_DECAY;
+        let bpm = match (&self.waltz, waltz) {
+            (Some(w), true) => w.bpm,
+            _ => self.shape.bpm,
+        };
+        let soloist = self.soloist(slot.pass, bpm, waltz);
         let shape = match (&self.waltz, waltz) {
             (Some(w), true) => w,
             _ => &self.shape,
@@ -705,7 +716,7 @@ impl Engine {
             band: &self.prev_band,
             freedom,
             instruments: &self.instruments,
-            soloist: self.config.soloist,
+            soloist,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
@@ -745,6 +756,9 @@ impl Engine {
             ending,
         });
         ctx.band = &band;
+        // The players were measured swinging: a bossa or a funk section gets the band's own line.
+        let soloist = if band.feel == Feel::Swing { soloist } else { Soloist::Band };
+        ctx.soloist = soloist;
         self.scratch.clear();
         let mut orns = [Orns::default(); 4];
         for (m, o) in self.musicians.iter_mut().zip(&mut orns) {
@@ -753,7 +767,7 @@ impl Engine {
         let events = self.scratch.len() as u32;
         // The arrangement on top: louder or softer, a half step up; and each player where they
         // sit against the beat (the bar's notes as written in time: [`pocket`]).
-        let (sr, pocket_seed, loose, lay_back) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose, self.config.soloist.lay_back());
+        let (sr, pocket_seed, loose, lay_back) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose, soloist.lay_back());
         for e in &mut self.scratch {
             // (Never before the pass it's in starts: the voices count from there.)
             let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, lay: lay_back, loose, feel: band.feel, soli: band.soli.is_some() };
@@ -779,7 +793,7 @@ impl Engine {
         if self.committed.len() == self.committed.capacity() {
             self.committed.pop_front();
         }
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
@@ -792,6 +806,22 @@ impl Engine {
         }
         if self.ending.is_some_and(|e| self.next_bar == e.end()) {
             self.spans.back_mut().expect("a span").end = slot.end;
+        }
+    }
+
+    /// Who solos in loop pass `pass` ([`EngineConfig::soloist`]): picked as the pass starts (and
+    /// again should the tune go into the waltz under someone who doesn't play in three).
+    fn soloist(&mut self, pass: u64, bpm: f32, waltz: bool) -> Soloist {
+        if let Some(s) = self.config.soloist {
+            return s;
+        }
+        match self.soloing {
+            Some((p, s)) if p == pass && s.fits(bpm, waltz) => s,
+            prev => {
+                let s = soloist::take_the_solo(self.config.seed ^ self.shape.song_hash, pass, prev.map(|(_, s)| s), bpm, waltz, self.freedom.lead);
+                self.soloing = Some((pass, s));
+                s
+            }
         }
     }
 
