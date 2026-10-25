@@ -482,3 +482,23 @@ fn each_soloist_gets_their_bassist() {
     assert!(dw.2 > pc.2 && dw.0 < pc.0 + 0.05, "Watkins leaps ({:.2}) more than Chambers ({:.2})", dw.2, pc.2);
     assert!(pc.3 > 0.05 && pc.3 > 3.0 * jg.3, "Chambers' skips on the triplet ({:.2}), the others' on the 8th ({:.2})", pc.3, jg.3);
 }
+
+/// A tune can name its own bassist: Tommy Bryant walks Sunny Side in paired quarters (beat 2
+/// the note of 1, 4 of 3) a third of the bars, whoever solos.
+#[test]
+fn sunny_side_gets_bryants_paired_quarters() {
+    use nat_han_adventures::audio::live::chorus::{Call, Chorus};
+    let file = SongFile::parse(library::text("sunny_side").unwrap()).unwrap();
+    assert_eq!(file.bassist.as_deref(), Some("bryant"));
+    let setup = [freedom(0.6), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
+    let (_, bars) = play(&file, 3, &setup, |_| vec![], 96);
+    let (mut walking, mut paired) = (0, 0);
+    for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
+        let beat = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
+        let on: Vec<u8> = b.ch(2).filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05).map(|e| notes_of(e)[0]).collect();
+        walking += 1;
+        paired += (on.len() == 4 && on[0] == on[1] && on[2] == on[3]) as usize;
+    }
+    let share = paired as f32 / walking as f32;
+    assert!(walking > 20 && (0.12..0.5).contains(&share), "{paired} of {walking} walking bars paired");
+}

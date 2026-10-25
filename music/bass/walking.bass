@@ -18,6 +18,7 @@
 ;             beat it falls (0.66: on the triplet); unmeasured, 12% on the tune's swung 8th
 ;   rake      beats raked in triplets
 ;   ghost     notes ghosted (muted)
+;   pair      bars of paired quarters (a two-feel struck in four: 1=2, 3=4), bars paired half
 
 ; The whole database (99567 beats under 346 solos): the band's own line walks like this.
 all = The whole database | steps 20.3 22.2 13.5 14.1 18.4 11.5 | lands 41 11 11 37 | approach 14 14 17 15 7 34 | inside 51 19 30 | pedal 7.6 | push 6.6 | hold 12.1 | two 9.1
@@ -42,3 +43,9 @@ russell = Curly Russell | steps 20.9 17.7 19.3 16.0 13.4 12.7 | lands 21 12 13 5
 ; Armstrong's Hot Fives and Sevens had a tuba or banjo, no walking bass, and the database
 ; has no bass under them: ours, not measured. Two-beat roots and 5ths, inside, leaps.
 foster = Pops Foster (ours) | steps 15 12 10 18 35 10 | lands 75 5 15 5 | approach 10 8 14 40 8 20 | inside 75 18 7 | pedal 3 | push 4 | hold 3 | two 45
+; Dizzy's Sonny Side Up (1957), "On the Sunny Side of the Street": a note-level pass on his
+; separated bass (a YouTube rip, Veesh's study copy; 120 bpm). A two-feel struck in four: paired
+; quarters in a third of the bars (most in the bridges), all four even and detached, one note a
+; bar or root to 4th/5th; out of it by a swung skip late in 4; hardly anticipates. The rest walks
+; (pitch steps not measured: the database's), on Sunny Side (`bassist = bryant`).
+bryant = Tommy Bryant | steps 20.3 22.2 13.5 14.1 18.4 11.5 | lands 54 9 11 26 | approach 14 14 17 15 7 34 | inside 55 19 26 | pedal 4 | push 1 | hold 8 | two 0 | skip 22 0.68 | rake 0.5 | ghost 6 | pair 18 15

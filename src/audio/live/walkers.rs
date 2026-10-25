@@ -39,6 +39,9 @@ pub struct Walker {
     pub skip_at: Option<f32>,
     pub rake: f32,
     pub ghost: f32,
+    /// Bars of paired quarters (a two-feel struck in four: beat 2 the note of 1, 4 of 3), and
+    /// bars paired in their first half only.
+    pub pair: [f32; 2],
 }
 
 impl Walker {
@@ -55,7 +58,7 @@ impl Walker {
         let (slug, v) = line.split_once('=').ok_or("expected `slug = Name | steps .. | lands .. | approach .. | inside .. | pedal ..`")?;
         let mut parts = v.split('|').map(str::trim);
         let name = parts.next().filter(|n| !n.is_empty()).ok_or("a name first")?;
-        let mut w = Walker { slug: slug.trim().into(), name: name.into(), steps: [0.0; 6], lands: [0.0; 4], approach: [0.0; 6], inside: [0.0; 3], pedal: -1.0, push: -1.0, hold: -1.0, two: -1.0, skip: 0.12, skip_at: None, rake: 0.0, ghost: 0.0 };
+        let mut w = Walker { slug: slug.trim().into(), name: name.into(), steps: [0.0; 6], lands: [0.0; 4], approach: [0.0; 6], inside: [0.0; 3], pedal: -1.0, push: -1.0, hold: -1.0, two: -1.0, skip: 0.12, skip_at: None, rake: 0.0, ghost: 0.0, pair: [0.0; 2] };
         for part in parts {
             let (key, nums) = part.split_once(' ').ok_or_else(|| format!("`{part}`: a field and its numbers"))?;
             let nums: Vec<f32> = nums.split_whitespace().map(|x| x.parse::<f32>().map_err(|_| format!("`{x}`: not a number"))).collect::<Result<_, _>>()?;
@@ -94,7 +97,9 @@ impl Walker {
                 "skip" => return Err("`skip`: a percentage, then where in the beat (0.5..1)".into()),
                 "rake" | "ghost" if nums.len() == 1 && nums[0] <= 100.0 => *(if key == "rake" { &mut w.rake } else { &mut w.ghost }) = nums[0] / 100.0,
                 "rake" | "ghost" => return Err(format!("`{key}`: one percentage")),
-                _ => return Err(format!("`{key}`: steps, lands, approach, inside, pedal, push, hold, two, skip, rake or ghost")),
+                "pair" if nums.len() == 2 && nums[0] + nums[1] <= 100.0 => w.pair = [nums[0] / 100.0, nums[1] / 100.0],
+                "pair" => return Err("`pair`: bars paired, then bars half paired (%)".into()),
+                _ => return Err(format!("`{key}`: steps, lands, approach, inside, pedal, push, hold, two, skip, rake, ghost or pair")),
             }
         }
         if w.steps[1] + w.steps[2] == 0.0 || w.lands[0] == 0.0 || w.inside[0] == 0.0 || [w.pedal, w.push, w.hold, w.two].iter().any(|x| *x < 0.0) {
@@ -160,6 +165,7 @@ mod tests {
         assert!(by("heath").unwrap().root_share() > pc.root_share());
         assert!(jg.push > 2.0 * pc.push && jg.hold > 4.0 * dw.hold, "Garrison blurs the bar line, the hard-boppers land on it");
         assert!(by("foster").unwrap().two > 4.0 * pc.two, "Pops' bass in two");
+        assert!(by("bryant").unwrap().pair[0] > 0.1 && pc.pair == [0.0; 2], "Bryant pairs his quarters");
         assert!(pc.skip_at.is_some_and(|x| (0.6..0.7).contains(&x)) && pc.ghost > 0.0, "Chambers' triplet skips, measured");
     }
 

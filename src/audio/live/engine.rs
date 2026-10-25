@@ -415,6 +415,8 @@ pub struct Engine {
     scratch: Vec<NoteEvent>,
     seq: u64,
     instruments: Instruments,
+    /// The tune's own bassist ([`SongFile::bassist`]), if it names one.
+    bassist: Option<&'static super::walkers::Walker>,
     /// The last bar committed: its band plan and harmony (fills crash into the next bar; a
     /// harmony switch is a summon's flourish).
     prev_band: BandPlan,
@@ -488,6 +490,7 @@ impl Engine {
             scratch: Vec::with_capacity(4096),
             seq: 0,
             instruments,
+            bassist: song.bassist.as_deref().and_then(super::walkers::by),
             prev_band: BandPlan::default(),
             prev_harmony: None,
             soloing: None,
@@ -728,6 +731,7 @@ impl Engine {
             freedom,
             instruments: &self.instruments,
             soloist,
+            bassist: self.bassist,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {

@@ -430,7 +430,7 @@ impl Bass {
     /// root; a pedal through a bar of one chord now and then; skip notes (an octave, or the note
     /// again muted), ghosted notes and the rare rake, by how the bassist plays them.
     fn walk(&mut self, ctx: &Ctx, t: &NoteEvent, prev: i32, slip: bool, r: &mut Rng) {
-        let w = ctx.soloist.bassist();
+        let w = ctx.bassist.unwrap_or_else(|| ctx.soloist.bassist());
         let bb = ctx.bb();
         let beats = bb.round() as usize;
         let mut p = prev;
@@ -443,6 +443,17 @@ impl Bass {
             && [1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord))
             && r.chance(w.two as f64);
         let step_beats = if two { 2 } else { 1 };
+        // Paired quarters (a two-feel struck in four): beat 2 the note of 1 (and 4 of 3, the
+        // second pair the same note or its 4th or 5th), short and even.
+        let paired = if two || pedal.is_some() || beats != 4 || ![1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord)) {
+            0
+        } else {
+            match pick(r, &[w.pair[0], w.pair[1], 1.0 - w.pair[0] - w.pair[1]]) {
+                0 => 2,
+                1 => 1,
+                _ => 0,
+            }
+        };
         for k in (0..beats).step_by(step_beats) {
             let b = k as f64;
             let h = ctx.harm_at(b).expect("a chart");
@@ -454,8 +465,13 @@ impl Bass {
             let last = next.chord != h.chord;
             let held = change && !two && h.scale.contains(p.rem_euclid(12) as u8) && r.chance(w.hold as f64);
             let pushed = last && !first && !two && next.chord != h.chord && r.chance(w.push as f64);
+            let pairs_here = paired == 2 || paired == 1 && k < 2;
             let mut n = if let Some(n) = pedal {
                 n
+            } else if pairs_here && k % 2 == 1 {
+                p
+            } else if paired == 2 && k == 2 {
+                if r.chance(0.55) { p } else { nearest_pc((h.chord.root + if r.chance(0.5) { 5 } else { 7 }) % 12, p, LO, HI) as i32 }
             } else if held {
                 // The note before, held over the change (a suspension).
                 p
@@ -511,7 +527,7 @@ impl Bass {
                 let e = ctx.make(t, at, b + 1.0 - at, Sound::Note(skip as u8));
                 push(&mut self.dst, NoteEvent { volume: e.volume.saturating_sub(soft).max(1), ..e });
             } else {
-                let e = ctx.make(t, b, 1.0, Sound::Note(n as u8));
+                let e = ctx.make(t, b, if pairs_here { 0.7 } else { 1.0 }, Sound::Note(n as u8));
                 push(&mut self.dst, if first { e } else { ghost(e, r) });
             }
             p = n;
