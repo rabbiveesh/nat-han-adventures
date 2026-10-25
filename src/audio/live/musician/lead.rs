@@ -46,11 +46,13 @@ pub struct Lead {
     solo_note: Option<u8>,
     /// A soloist's line, carried over bar lines ([`soloist`]).
     line: Line,
+    /// The instrument a soloist keeps all through their solo (a persona doesn't switch).
+    persona_inst: Option<u8>,
 }
 
 impl Lead {
     pub(super) fn new(p: Player) -> Self {
-        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default() }
+        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default(), persona_inst: None }
     }
 }
 
@@ -140,7 +142,17 @@ impl Musician for Lead {
         }
         // An instrument for the phrase (or a solo / a fill on a loose night).
         let fill_bar = fired.has(Orn::Solo) || fired.has(Orn::RunFill);
-        if let Some(k) = ctx.feel_inst(0, intent.switch) {
+        let persona = fired.has(Orn::Solo) && ctx.soloist.profile().is_some();
+        if !persona {
+            self.persona_inst = None;
+        }
+        if persona {
+            // A soloist plays their solo on one instrument, whatever the feel or the fills.
+            let k = *self.persona_inst.get_or_insert(tmpl.inst);
+            for e in &mut self.dst {
+                e.inst = k;
+            }
+        } else if let Some(k) = ctx.feel_inst(0, intent.switch) {
             for e in &mut self.dst {
                 e.inst = k;
             }
