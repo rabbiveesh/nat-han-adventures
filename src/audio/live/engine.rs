@@ -130,7 +130,7 @@ pub struct EngineConfig {
     pub loose: f32,
     /// Who the lead solos like ([`super::soloist`]).
     pub soloist: Soloist,
-    /// The comp and drums step back under the lead's phrases ([`super::mix`]).
+    /// The comp and drums step back under the lead's phrases, the bass sits lower ([`super::mix`]).
     pub duck: bool,
 }
 
@@ -767,9 +767,9 @@ impl Engine {
                 e.anchor = e.anchor.saturating_add(1);
             }
         }
-        // The comp and drums step back under a lead phrase (not in a soli: the lead is a section).
-        if self.config.duck && band.soli.is_none() {
-            mix::duck(&mut self.scratch, sr as f64 * 60.0 / shape.bpm as f64);
+        // The mix: the comp and drums step back under a lead phrase, the bass lower.
+        if self.config.duck {
+            mix::duck(&mut self.scratch, sr as f64 * 60.0 / shape.bpm as f64, band.soli.is_some());
         }
         for mut e in self.scratch.drain(..) {
             e.seq = self.seq;
