@@ -561,12 +561,13 @@ pub fn step_body(
         body.vel.y = 0.0;
         body.launch = 0.0;
     }
-    let launch = (!ground && !blocked_x)
+    // (Slung by a cushion: its launch, not the belt's or the platform's.)
+    let launch = (!ground && !blocked_x && !slung)
         .then_some(carrier)
         .flatten()
         .filter(|c| c.launches)
         .map(|c| c.carry.x / dt)
-        .or((!ground && !blocked_x && belt != 0.0).then_some(belt));
+        .or((!ground && !blocked_x && !slung && belt != 0.0).then_some(belt));
     body.on_ground = ground;
     body.riding = riding;
     Contact {

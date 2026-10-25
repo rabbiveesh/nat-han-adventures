@@ -25,7 +25,8 @@
 //! music in lockstep driving the beat blocks and beat crushers).
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
-//! bar lines, his toots, nuggets, band calls and secrets found, the harmony, and the crushers near him;
+//! bar lines, his toots, nuggets, band calls and secrets found, a wall cushion catching and slinging
+//! him, the harmony, and the crushers near him;
 //! `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play another level / timeline in
 //! `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`: trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
@@ -168,6 +169,7 @@ fn play(level: &str, tour: &str) -> Run {
     let mut goal = None;
     let mut last_bar = None;
     let mut han = false;
+    let mut caught = false;
     for frame in 0..timeline.frames {
         app.world_mut().resource_mut::<Frame>().0 = frame;
         app.update();
@@ -185,7 +187,12 @@ fn play(level: &str, tour: &str) -> Run {
             last_bar = Some(bar);
         }
         let Some(p) = app.world_mut().query_filtered::<&Pos, With<Player>>().iter(app.world()).next().map(|p| p.0) else { continue };
-        let happened = std::mem::take(&mut app.world_mut().resource_mut::<Happened>().0);
+        let mut happened = std::mem::take(&mut app.world_mut().resource_mut::<Happened>().0);
+        let pad = app.world_mut().query_filtered::<&Body, With<Player>>().iter(app.world()).next().map_or(0.0, |b| b.pad);
+        if (pad != 0.0) != caught {
+            caught = pad != 0.0;
+            happened.push(if caught { "caught" } else { "slung" });
+        }
         if !happened.is_empty() {
             eprintln!("t={:5.2}   {}", secs(frame), happened.join(" "));
         }
