@@ -256,6 +256,8 @@ pub const FUNK_VAMPS: [Vamp; 3] = [
 ];
 /// The funk snare's backbeat (16ths 4 and 12).
 pub const FUNK_BACKBEAT: [u8; 2] = [4, 12];
+/// The funk drummer's ghost snares (16ths of each bar of a pair), on the "e"s and "a"s.
+pub const FUNK_GHOSTS: [&[u8]; 2] = [&[3, 7, 9, 15], &[5, 7, 11, 13]];
 
 /// The funk vamp for a feel that started at bar `since`, and which of its two bars `bar` is.
 pub fn vamp(seed: u64, bar: u64, since: u64) -> (&'static Vamp, usize) {

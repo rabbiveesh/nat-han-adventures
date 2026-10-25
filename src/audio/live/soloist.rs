@@ -262,7 +262,7 @@ impl Fits {
         })
     }
 
-    fn fits(self, f: Family) -> bool {
+    pub fn fits(self, f: Family) -> bool {
         match self {
             Fits::Any => true,
             Fits::Major => f == Family::Major,

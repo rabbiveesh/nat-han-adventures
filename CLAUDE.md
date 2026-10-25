@@ -57,7 +57,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `[instruments]`: macros, kits, palettes; `@i name` in the MML). The musicians ornament by
   their freedom dial (`musician/`, `ornament.rs`; the bar's shared `band.rs` plan keeps hits,
   reharms, trades, flourishes and the feel in step); at high freedom the band picks feels on
-  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz); each pass is
+  its own (`feel.rs`: bossa, samba, rock, funk sections; music only, never in the waltz; the funk bass plays two-bar riffs of our own, `music/bass/funk.riffs` / `riffs.rs`, shaped on Lakh MIDI funk lines, and the kick follows them); each pass is
   a chorus the band arranges by the dial (`chorus.rs`: two-feel, stop-time, breaks, riffs,
   strolling, soli, shout + key-up; the soli is four-voice counterpoint, `soli.rs`: a texture per
   8-bar section (front line, canon, chorale, answers, line cliché, locked drop-2), the tenor on a

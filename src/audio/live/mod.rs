@@ -100,6 +100,7 @@ pub mod playback;
 pub mod pocket;
 pub mod soli;
 pub mod player_file;
+pub mod riffs;
 pub mod soloist;
 pub mod song;
 pub mod syntax;
