@@ -10,7 +10,7 @@
 //! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
 //! cargo run --release --example ornaments -- out/ soli           # soli choruses (see `soli`)
 //! cargo run --release --example ornaments -- out/ human          # on the grid vs as played (see `human`)
-//! cargo run --release --example ornaments -- out/ soloists       # a solo chorus by each soloist (see `soloists`)
+//! cargo run --release --example ornaments -- out/ soloists       # a solo chorus by each soloist, and the anthem (see `soloists`)
 //! ```
 //!
 //! Files: `<prefix>_<song>_f035.wav` + `.txt`, and `instruments_<song>.wav` (each song's
@@ -458,6 +458,22 @@ fn soloists(dir: &Path) {
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
             println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
         }
+    }
+    // For fun: the head of the anthem (swung, in 4/4), then a chorus of blowing over it.
+    let file = SongFile::parse(include_str!("star_spangled_banner.song")).expect("anthem parses");
+    let bars = file_bars(&file);
+    let script = move |bar: u64| match bar {
+        1 => vec![Input::LevelStart, Input::ForceFeel(Some(Feel::Swing)), Input::ForceChorus(Some(Call { chorus: Chorus::Head, key_up: false })), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }],
+        b if b == bars + 1 => vec![Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))],
+        _ => vec![],
+    };
+    for soloist in Soloist::ALL {
+        let config = EngineConfig { seed: 7, soloist, ..EngineConfig::default() };
+        let (out, log, _) = run_with(&file, config, script, bars * 2, |_| "");
+        let name = format!("solo_{}_star_spangled_banner", soloist.slug());
+        write_wav(&dir.join(format!("{name}.wav")), &out);
+        std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+        println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
     }
 }
 

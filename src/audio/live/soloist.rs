@@ -15,6 +15,10 @@
 //!   the line pentatonic, on the beat.
 //! - [`Soloist::Bird`]: Charlie Parker, 1945-51 (17 solos): long bebop lines, short rests,
 //!   chromatic approaches from above, enclosures, swung hard (1.60).
+//! - [`Soloist::Sonny`]: Sonny Rollins, 1954-72 (13 solos): long 8th-note lines low on the
+//!   tenor, thirds, enclosures, laid way back, and the theme developed phrase to phrase.
+//! - [`Soloist::Wayne`]: Wayne Shorter, 1961-66 (10 solos): whole steps and turns, repeated
+//!   notes, the most pentatonic of all, few approaches, an even tone, and the most variants.
 //!
 //! The line carries over bar lines (a phrase, then a rest, then the next), so it's a [`Line`]
 //! the lead keeps between bars. Pure, no allocation.
@@ -31,10 +35,12 @@ pub enum Soloist {
     Miles,
     Trane,
     Bird,
+    Sonny,
+    Wayne,
 }
 
 impl Soloist {
-    pub const ALL: [Soloist; 4] = [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird];
+    pub const ALL: [Soloist; 6] = [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird, Soloist::Sonny, Soloist::Wayne];
 
     pub fn slug(self) -> &'static str {
         match self {
@@ -42,6 +48,8 @@ impl Soloist {
             Soloist::Miles => "miles",
             Soloist::Trane => "trane",
             Soloist::Bird => "bird",
+            Soloist::Sonny => "sonny",
+            Soloist::Wayne => "wayne",
         }
     }
 
@@ -56,6 +64,8 @@ impl Soloist {
             Soloist::Miles => Some(&MILES),
             Soloist::Trane => Some(&TRANE),
             Soloist::Bird => Some(&BIRD),
+            Soloist::Sonny => Some(&SONNY),
+            Soloist::Wayne => Some(&WAYNE),
         }
     }
 
@@ -63,10 +73,13 @@ impl Soloist {
     pub fn lay_back(self) -> f32 {
         match self {
             Soloist::Band => 1.0,
-            // On-beat notes +4.6 ms (Miles), +0.8 (Trane, quartet −0.2), +2.4 (Bird), against +2.8.
+            // On-beat notes +4.6 ms (Miles), +0.8 (Trane, quartet −0.2), +2.4 (Bird), +6.2
+            // (Sonny), about +1 (Wayne: post-bop +1.5, the 2nd Quintet +0.8), against +2.8.
             Soloist::Miles => 1.6,
             Soloist::Trane => 0.3,
             Soloist::Bird => 0.9,
+            Soloist::Sonny => 2.2,
+            Soloist::Wayne => 0.4,
         }
     }
 }
@@ -275,6 +288,77 @@ pub const BIRD: Profile = Profile {
     motif: 0.05,
     sequence: 0.03,
     moves: [(-2, 3.6), (0, 1.4), (-3, 1.4), (-5, 0.7), (-7, 0.7)],
+};
+
+/// Sonny Rollins, 1954-72: 11.5-note lines over 6.6 beats [3.9-13.3], 2.4 beats' rest
+/// [1.5-3.4]; 8ths 46% (the longest 8th runs of anyone, 10 notes at p90), 16ths 14%;
+/// 50% steps, 31% thirds, 15% leaps; 56% chord tones on the strong beats, 62% of phrases end
+/// on one; 28% half-step approaches (either side), 14% enclosures; low on the tenor.
+pub const SONNY: Profile = Profile {
+    phrase: (6.6, 3.9, 13.3),
+    rest: (2.4, 1.5, 3.4),
+    cells: [22.8, 7.8, 3.4, 3.0, 4.8, 1.4, 2.0],
+    intervals: [3.8, 23.3, 26.1, 21.0, 10.3, 7.9, 1.8, 2.8, 2.6],
+    step_back: 0.19,
+    strong_chord_tone: 0.0,
+    end_chord_tone: 0.62,
+    approach: 0.18,
+    from_below: 0.51,
+    enclosure: 0.11,
+    pentatonic: 0.08,
+    anticipation: 0.11,
+    register: (64, 55, 77),
+    legato: 0.88,
+    swing: 1.50,
+    falls: 0.1,
+    // A mild arch with a soft last note (−1.7), the top note +1.5 dB, offbeats ghosted 21%.
+    arch: [0.36, 0.39, -0.03, -0.10, -1.66],
+    per_octave: 2.0,
+    ghost: 0.21,
+    accent: 0.45,
+    long: -1.1,
+    scatter: 3.2,
+    // A motif developer: cells shared phrase to phrase at 1.9x chance, short-phrase relations
+    // 17% (1-5% by chance).
+    motif: 0.25,
+    sequence: 0.05,
+    moves: [(0, 4.8), (-2, 1.4), (-3, 1.0), (-1, 0.8), (5, 0.6)],
+};
+
+/// Wayne Shorter, 1961-66: 10-note phrases over 6.6 beats [4.1-10.2], 2.1 beats' rest
+/// [1.4-3.4]; 16ths 19% and faster runs 11%, 8ths 32%, long notes 8%; 59% steps (38% whole
+/// steps), 6% repeats, 14% leaps; turns (−2 +2 −2) his commonest cell; 52% chord tones on the
+/// strong beats, 56% of phrases end on one; only 15% half-step approaches, 4% enclosures; 34%
+/// of 4-note windows pentatonic; tenor.
+pub const WAYNE: Profile = Profile {
+    phrase: (6.6, 4.1, 10.2),
+    rest: (2.4, 1.6, 3.6),
+    cells: [15.9, 7.5, 3.5, 4.0, 3.8, 1.2, 5.5],
+    intervals: [6.2, 21.1, 37.5, 14.7, 6.7, 7.7, 1.4, 1.6, 2.8],
+    step_back: 0.20,
+    strong_chord_tone: 0.0,
+    end_chord_tone: 0.56,
+    approach: 0.10,
+    from_below: 0.35,
+    enclosure: 0.03,
+    pentatonic: 0.12,
+    anticipation: 0.14,
+    register: (67, 57, 82),
+    legato: 0.88,
+    swing: 1.42,
+    falls: 0.12,
+    // Even like late Trane: the top note barely louder (+0.3 dB), a soft last note (−1.7).
+    arch: [0.12, 0.47, 0.33, -0.42, -1.70],
+    per_octave: 0.5,
+    ghost: 0.20,
+    accent: 0.3,
+    long: -1.0,
+    scatter: 3.1,
+    // The motif developer: 32% of his ideas are variants (13% of them transposed), shared cells
+    // 2.5x chance, the most theme quotes; sequences mostly stay put.
+    motif: 0.28,
+    sequence: 0.06,
+    moves: [(0, 5.0), (-2, 1.2), (2, 0.8), (-3, 0.8), (-5, 0.5)],
 };
 
 /// A note the line plays: where in the bar (beats), how long it sounds, the pitch, whether
@@ -809,7 +893,12 @@ mod tests {
         assert!(m.pitch_db > 0.3 && t.pitch_db.abs() < 0.15, "{m:?} {t:?}");
         assert!(b.first_db - b.last_db > 3.0 && t.first_db - t.last_db < 2.5, "{b:?} {t:?}");
         assert!(m.spread_db > t.spread_db + 0.5, "{m:?} {t:?}");
-        for s in [&m, &t, &b] {
+        // Sonny: long 8th lines, thirds; Wayne: whole steps and pentatonic, fewer leaps than Trane.
+        let (so, w) = (play(&SONNY, 400), play(&WAYNE, 400));
+        eprintln!("sonny {so:?}\nwayne {w:?}");
+        assert!((4.0..7.0).contains(&so.notes_per_bar) && (3.5..6.5).contains(&w.notes_per_bar), "{so:?} {w:?}");
+        assert!(w.steps > t.steps && w.pentatonic > m.pentatonic, "{w:?}");
+        for s in [&m, &t, &b, &so, &w] {
             assert!((0.45..0.8).contains(&s.strong_chord_tones), "{s:?}");
         }
     }
