@@ -20,11 +20,23 @@ use super::ornament::{Harm, Scale};
 use super::song::SongFile;
 
 /// A song's timing, at one sample rate.
+///
+/// The tempo drifts the way a band's does ([`Shape::drifting`]): each bar has its own tempo, a
+/// slow curve a couple of bpm either side of the song's, the same every loop pass (so a pass is
+/// always the same length and starts back at the written tempo). Beats map to samples through
+/// it ([`Shape::at`]); without drift every bar is at [`Shape::bpm`]. A pass takes as long as
+/// written either way (the band pushes and lays back around the written tempo).
 #[derive(Debug, Clone)]
 pub struct Shape {
     pub sample_rate: u32,
+    /// The written tempo (each bar's own: [`Shape::bpm_at`]).
     pub bpm: f32,
+    /// At the written tempo (each bar's own: [`Shape::spb`]).
     pub samples_per_beat: f64,
+    /// Samples per beat in each bar (`bars` of them).
+    pub bar_spb: Vec<f64>,
+    /// Each bar line, unrounded (`bars` of them; empty when the tempo is steady).
+    bar_t: Vec<f64>,
     /// Beats (quarter notes) per bar.
     pub bar_beats: f64,
     /// Loop length in beats (the longest track).
@@ -45,26 +57,60 @@ pub struct Shape {
 
 impl Shape {
     pub fn new(song: &SongFile, sample_rate: u32) -> Self {
-        Self::build(song, sample_rate, song.bpm, song.beats(), song.bar_beats(), false)
+        Self::build(song, sample_rate, song.bpm, song.beats(), song.bar_beats(), false, None)
     }
 
     /// The song re-cut into 3/4 ([`waltz`]): [`waltz::WALTZ_BPM`], 1.5x the beats, twice the
     /// bars. Every bar line of [`Shape::new`] is a bar line here (bar `k` is waltz bar `2k`).
     pub fn waltz(song: &SongFile, sample_rate: u32) -> Self {
         let beats = waltz::warp(song.beats());
-        Self::build(song, sample_rate, waltz::WALTZ_BPM, beats, waltz::WALTZ_METER as f64, true)
+        Self::build(song, sample_rate, waltz::WALTZ_BPM, beats, waltz::WALTZ_METER as f64, true, None)
     }
 
-    fn build(song: &SongFile, sample_rate: u32, bpm: f32, beats: f64, bar_beats: f64, is_waltz: bool) -> Self {
-        let spb = sample_rate as f32 as f64 * 60.0 / bpm as f64;
+    /// [`Shape::new`] (or [`Shape::waltz`]) with the tempo drifting up to `bpm` either way
+    /// ([`drift`], from `seed`).
+    pub fn drifting(song: &SongFile, sample_rate: u32, waltz: bool, seed: u64, bpm: f32) -> Self {
+        let d = (bpm > 0.0).then_some((seed, bpm));
+        if waltz {
+            Self::build(song, sample_rate, waltz::WALTZ_BPM, waltz::warp(song.beats()), waltz::WALTZ_METER as f64, true, d)
+        } else {
+            Self::build(song, sample_rate, song.bpm, song.beats(), song.bar_beats(), false, d)
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn build(song: &SongFile, sample_rate: u32, bpm: f32, beats: f64, bar_beats: f64, is_waltz: bool, drift: Option<(u64, f32)>) -> Self {
+        let rate = sample_rate as f32 as f64 * 60.0;
+        let spb = rate / bpm as f64;
         let bars = ((beats - 1e-9) / bar_beats).ceil().max(1.0) as usize;
-        let at = |b: f64| (b * spb).round() as u64;
-        let len = at(beats);
-        let bar_starts = (0..=bars).map(|k| if k == bars { len } else { at(k as f64 * bar_beats) }).collect();
+        let width = |k: usize| if k + 1 == bars { beats - k as f64 * bar_beats } else { bar_beats };
+        let mut bar_spb: Vec<f64> = match drift {
+            Some((seed, amount)) => self::drift(bars, seed, amount).into_iter().map(|d| rate / (bpm + d) as f64).collect(),
+            None => vec![spb; bars],
+        };
+        // The band breathes inside the song: a pass takes as long as written.
+        let total: f64 = bar_spb.iter().enumerate().map(|(k, s)| s * width(k)).sum();
+        if drift.is_some() && total > 0.0 {
+            let fit = beats * spb / total;
+            bar_spb.iter_mut().for_each(|s| *s *= fit);
+        }
+        // Bar lines where the beats add up (rounded once, from the exact sum; steady, exactly
+        // where `beats · samples_per_beat` puts them).
+        let mut t = 0.0f64;
+        let mut bar_t: Vec<f64> = Vec::with_capacity(bars);
+        for (k, &s) in bar_spb.iter().enumerate() {
+            bar_t.push(if drift.is_some() { t } else { k as f64 * bar_beats * spb });
+            t += s * width(k);
+        }
+        let len = if drift.is_some() { t.round() as u64 } else { (beats * spb).round() as u64 };
+        let mut bar_starts: Vec<u64> = bar_t.iter().map(|t| t.round() as u64).collect();
+        bar_starts.push(len);
         Shape {
             sample_rate,
             bpm,
             samples_per_beat: spb,
+            bar_spb,
+            bar_t: if drift.is_some() { bar_t } else { Vec::new() },
             bar_beats,
             beats,
             bars,
@@ -84,10 +130,27 @@ impl Shape {
         if self.waltz { waltz::unwarp(b) } else { b }
     }
 
-    /// Sample (within the loop) of a beat time, rounded like the offline renderer.
+    /// Sample (within the loop) of a beat time, rounded like the offline renderer: from the
+    /// bar line, at that bar's tempo (past the loop's ends, the first or last bar's).
     #[inline]
     pub fn at(&self, beats: f64) -> u64 {
-        (beats * self.samples_per_beat).round() as u64
+        if self.bar_t.is_empty() {
+            return (beats * self.samples_per_beat).round() as u64;
+        }
+        let k = ((beats / self.bar_beats + 1e-9).floor().max(0.0) as usize).min(self.bars - 1);
+        (self.bar_t[k] + (beats - k as f64 * self.bar_beats) * self.bar_spb[k]).round() as u64
+    }
+
+    /// Samples per beat in bar `bar` (within the loop).
+    #[inline]
+    pub fn spb(&self, bar: usize) -> f64 {
+        self.bar_spb[bar.min(self.bars - 1)]
+    }
+
+    /// The tempo in bar `bar` (within the loop).
+    #[inline]
+    pub fn bpm_at(&self, bar: usize) -> f32 {
+        (self.sample_rate as f32 as f64 * 60.0 / self.spb(bar)) as f32
     }
 
     /// Absolute bar `index` → (loop pass, bar within the song).
@@ -108,6 +171,29 @@ impl Shape {
     pub fn bar_at(&self, s: u64) -> usize {
         self.bar_starts[..self.bars].partition_point(|&b| b <= s).saturating_sub(1)
     }
+}
+
+/// A band's tempo drift over `bars` bars: each bar's offset from the written tempo, in bpm, at
+/// most `amount` either way. A slow curve (a wave or two across the song, a smaller one on
+/// top), periodic over the loop so the next pass joins on. Seeded.
+pub fn drift(bars: usize, seed: u64, amount: f32) -> Vec<f32> {
+    let mut rng = accomp::Rng::new(seed ^ 0xD71F_7ED0);
+    let waves: [(f64, f64, f64); 3] = std::array::from_fn(|i| {
+        let cycles = [1.0, 2.0, 3.0 + rng.below(2) as f64][i];
+        let size = [1.0, 0.6, 0.3][i] * (0.6 + 0.4 * rng.f());
+        (cycles, size, rng.f() * std::f64::consts::TAU)
+    });
+    let raw: Vec<f64> = (0..bars)
+        .map(|k| {
+            let x = std::f64::consts::TAU * k as f64 / bars.max(1) as f64;
+            waves.iter().map(|&(c, a, p)| a * (c * x + p).sin()).sum::<f64>()
+        })
+        .collect();
+    // Around the written tempo (the pass keeps its length: [`Shape::drifting`]).
+    let mean = raw.iter().sum::<f64>() / bars.max(1) as f64;
+    let raw: Vec<f64> = raw.iter().map(|v| v - mean).collect();
+    let peak = raw.iter().fold(0.0f64, |m, v| m.max(v.abs()));
+    raw.iter().map(|v| if peak > 0.0 { (v / peak) as f32 * amount } else { 0.0 }).collect()
 }
 
 /// Give each event of a generated `track` the instrument the `written` one plays at its time

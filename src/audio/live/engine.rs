@@ -5,7 +5,8 @@
 //! # Time
 //! The playhead is an absolute sample count. Bars are numbered from 0 since the engine
 //! started and keep counting through loop passes and meter changes. Bar lines fall where the
-//! offline renderer puts them (`round(beats · samples_per_beat)` within each pass).
+//! offline renderer puts them (each bar at its own tempo as the band's drifts: [`Shape::drifting`]).
+//! Each player's notes then sit a few ms off the grid, as players do ([`super::pocket`]).
 //!
 //! # The waltz: two shapes
 //! The waltz ([`Harmony::Waltz`]) is the song re-cut into 3/4 at its own tempo, on its own
@@ -47,7 +48,7 @@ use kira::Frame;
 use crate::audio::chart::Chart;
 use crate::audio::director::{self, PlayStats};
 use crate::audio::synth::soft_clip;
-use crate::audio::tuning::{Medley, Tuning};
+use crate::audio::tuning::{self, Medley, Tuning};
 use crate::audio::{Filters, Harmony};
 
 use super::arrange::{Arrangement, Shape};
@@ -57,6 +58,7 @@ use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
 use super::ornament::Orns;
+use super::pocket;
 use super::song::SongFile;
 use super::voice::{MAX_SEGMENT, NoteEvent, Sound, VoiceBank};
 
@@ -119,13 +121,29 @@ pub struct EngineConfig {
     /// Start with an intro ([`chorus`]: a four-bar vamp or pedal before the head) when the band
     /// is loose enough at the first bar and the tune starts from the top (the game's levels).
     pub intro: bool,
+    /// How far the tempo drifts either way over a pass, in bpm ([`Shape::drifting`]; 0: none).
+    pub drift_bpm: f32,
+    /// How loose the players sit against the beat, 0..1 ([`super::pocket`]: 0 locks every
+    /// note to the grid).
+    pub loose: f32,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0 }
     }
 }
+
+impl EngineConfig {
+    /// The default with no tempo drift and every player on the beat: the notes exactly as
+    /// written in time (for tests that check timing against the written notes).
+    pub fn on_grid() -> Self {
+        EngineConfig { drift_bpm: 0.0, loose: 0.0, ..EngineConfig::default() }
+    }
+}
+
+/// A band's tempo drift, either way over a pass (real players wander about this much).
+pub const DRIFT_BPM: f32 = 2.0;
 
 /// The freedom dials.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -155,7 +173,10 @@ pub struct Position {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct BeatClock {
     pub position: Position,
+    /// The tempo at the playhead (it drifts: [`Shape::drifting`]).
     pub bpm: f32,
+    /// The written tempo (the shape's: steady while the tempo drifts).
+    pub written_bpm: f32,
     pub beats_per_bar: f64,
     /// Loop length in beats (0 for a one-shot).
     pub loop_beats: f64,
@@ -387,12 +408,13 @@ impl Engine {
         if !(8_000..=192_000).contains(&sample_rate) {
             return Err(format!("sample rate {sample_rate} out of range"));
         }
-        let shape = Shape::new(song, sample_rate);
+        let drift = |waltz| Shape::drifting(song, sample_rate, waltz, config.seed ^ tuning::hash_str(&song.title), config.drift_bpm);
+        let shape = drift(false);
         if shape.len == 0 {
             return Err(format!("\"{}\" is empty", song.title));
         }
         let chart = song.chart.clone();
-        let wshape = Shape::waltz(song, sample_rate);
+        let wshape = drift(true);
         let arrangements = Harmony::ALL.map(|h| {
             let on = if h == Harmony::Waltz { &wshape } else { &shape };
             Arrangement::new(song, chart.as_ref(), h, config.seed, on).ok()
@@ -596,7 +618,7 @@ impl Engine {
     fn commit_point(&self) -> Option<u64> {
         let s = self.next_slot()?;
         let sh = self.shape_of(self.spans.back().expect("a span").waltz);
-        let lead = (self.config.commit_lead_beats * sh.samples_per_beat).round() as u64;
+        let lead = (self.config.commit_lead_beats * sh.spb(s.song_bar)).round() as u64;
         Some(s.start.saturating_sub(lead))
     }
 
@@ -718,8 +740,13 @@ impl Engine {
             *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
         let events = self.scratch.len() as u32;
-        // The arrangement on top: louder or softer, a half step up.
+        // The arrangement on top: louder or softer, a half step up; and each player where they
+        // sit against the beat (the bar's notes as written in time: [`pocket`]).
+        let (sr, pocket_seed, loose) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose);
         for e in &mut self.scratch {
+            // (Never before the pass it's in starts: the voices count from there.)
+            let at = |t: u64| pocket::shift(t, pocket::offset(e.ch, t, sr, pocket_seed, loose, band.feel, band.soli.is_some())).max(e.loop_start);
+            (e.start, e.end) = (at(e.start), at(e.end));
             if band.swell != 0.0 {
                 e.gain *= 1.0 + band.swell;
             }
@@ -908,7 +935,7 @@ impl Engine {
         let entry = sh.bar_starts[sp.entry];
         let s = (self.t.saturating_sub(sp.start) + entry).min(sh.len.saturating_sub(1));
         let song_bar = sh.bar_at(s).max(sp.entry);
-        let beat = s.saturating_sub(sh.bar_starts[song_bar]) as f64 / sh.samples_per_beat;
+        let beat = s.saturating_sub(sh.bar_starts[song_bar]) as f64 / sh.spb(song_bar);
         Position {
             sample: self.t,
             pass: sp.pass,
@@ -925,7 +952,8 @@ impl Engine {
         let sh = self.playing_shape();
         BeatClock {
             position: p,
-            bpm: sh.bpm,
+            bpm: sh.bpm_at(p.song_bar),
+            written_bpm: sh.bpm,
             beats_per_bar: sh.bar_beats,
             loop_beats: if sh.looping { sh.beats } else { 0.0 },
             beat_index: p.beat.floor() as u32,

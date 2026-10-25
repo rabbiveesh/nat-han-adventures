@@ -371,7 +371,7 @@ impl Lead {
         // Grace notes, mordents and turns: quick (about `secs` a note, never slower than `max`
         // beats), light, and slurred into the note as one breath, so they decorate it rather
         // than chop it up.
-        let beats_per_sec = ctx.shape.sample_rate as f64 / ctx.shape.samples_per_beat;
+        let beats_per_sec = ctx.shape.sample_rate as f64 / ctx.spb();
         let quick = |max: f64, secs: f64| (secs * beats_per_sec).min(max);
         let light = |v: u8| (v as u32 * 3 / 4).max(1) as u8;
         let slurred = |e: NoteEvent| NoteEvent { tie: true, fx: crate::audio::live::voice::Fx { legato: true, ..e.fx }, ..e };
@@ -552,7 +552,7 @@ impl Lead {
                 let d = ctx.len(e);
                 if d > 0.75 {
                     let keep = (d * 0.7).max(0.5);
-                    e.end = e.start + (keep * ctx.shape.samples_per_beat) as u64;
+                    e.end = e.start + (keep * ctx.spb()) as u64;
                 }
                 e.volume = (e.volume + 1).min(15);
             }
@@ -592,7 +592,7 @@ impl Lead {
                         let d = ctx.len(e);
                         if d > 0.5 {
                             let keep = (d * 0.6).max(0.4);
-                            e.end = e.start + (keep * ctx.shape.samples_per_beat) as u64;
+                            e.end = e.start + (keep * ctx.spb()) as u64;
                         }
                     }
                 }
@@ -688,7 +688,7 @@ impl Lead {
 
     /// Answer a toot: a slide into the bar's first real note, and an echo of it.
     fn answer(&mut self, ctx: &Ctx, tmpl: &NoteEvent, fired: &mut Orns) {
-        if let Some(e) = self.dst.iter_mut().find(|e| matches!(e.sound, Sound::Note(_)) && (e.end - e.start) as f64 >= ctx.shape.samples_per_beat * 0.45) {
+        if let Some(e) = self.dst.iter_mut().find(|e| matches!(e.sound, Sound::Note(_)) && (e.end - e.start) as f64 >= ctx.spb() * 0.45) {
             e.fx.slide = -3;
             e.fx.slide_frames = 5;
             fired.add(Orn::Slide);

@@ -85,9 +85,20 @@ use nat_han_adventures::audio::{
 
 const SEED: u64 = 7;
 
+/// On the grid (no drift, every player on the beat), so samples line up with the notes as
+/// written; [`human`] is the band as the game plays it.
 fn engine(m: Music, inputs: &[Input]) -> Engine {
+    engine_with(m, inputs, EngineConfig::on_grid())
+}
+
+/// The game's band: the tempo drifting, the players off the grid.
+fn human(m: Music, inputs: &[Input]) -> Engine {
+    engine_with(m, inputs, EngineConfig::default())
+}
+
+fn engine_with(m: Music, inputs: &[Input], config: EngineConfig) -> Engine {
     let file = library::load(library::stem(m)).unwrap();
-    let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, EngineConfig { seed: SEED, ..EngineConfig::default() }).unwrap();
+    let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, EngineConfig { seed: SEED, ..config }).unwrap();
     for i in inputs {
         e.post(*i);
     }
@@ -216,7 +227,7 @@ fn renders_match_the_old_engine() {
     for (m, harmony, just_intonation, frames, l, r) in OLD_RENDERS {
         let (_, song) = library::song(m).unwrap();
         let f = Filters { harmony, just_intonation };
-        let out = synth::render_song_with(song, f, SEED).unwrap();
+        let out = synth::render_with(song, f, EngineConfig { seed: SEED, ..EngineConfig::on_grid() }).unwrap();
         let n = out.frames.len() as f64;
         let rms = |x: fn(&Frame) -> f32| (out.frames.iter().map(|f| (x(f) as f64).powi(2)).sum::<f64>() / n).sqrt();
         assert_eq!(out.frames.len(), frames, "{m:?} {f:?}: length");
@@ -420,8 +431,8 @@ fn inputs_apply_in_order() {
 /// The beat clock is the song position the offline renderer would be at, sample for sample.
 #[test]
 fn the_beat_clock_is_accurate() {
-    for m in [Music::Title, Music::World(4), Music::LevelClear] {
-        let mut e = engine(m, &[]);
+    for (m, make) in [Music::Title, Music::World(4), Music::LevelClear].into_iter().flat_map(|m| [(m, engine as fn(Music, &[Input]) -> Engine), (m, human)]) {
+        let mut e = make(m, &[]);
         let sh = e.shape().clone();
         let passes = if sh.looping { 2 } else { 1 };
         let mut t = 0u64;
@@ -438,20 +449,21 @@ fn the_beat_clock_is_accurate() {
                     let c = e.beat_clock();
                     let p = c.position;
                     assert_eq!((p.sample, p.pass, p.song_bar, p.bar), (s, pass, k, pass * sh.bars as u64 + k as u64), "{m:?}");
-                    let want = (s - pass * sh.len - sh.bar_starts[k]) as f64 / sh.samples_per_beat;
+                    let want = (s - pass * sh.len - sh.bar_starts[k]) as f64 / sh.spb(k);
                     assert!((p.beat - want).abs() < 1e-9, "{m:?} bar {k}: beat {} vs {want}", p.beat);
                     if frac == 0.0 {
                         assert_eq!((p.beat, c.beat_index, c.phase), (0.0, 0, 0.0));
                     }
                     // Song beats match the sample within the bar-line rounding (half a sample).
                     let in_loop = (s - pass * sh.len) as f64;
-                    assert!((p.song_beat * sh.samples_per_beat - in_loop).abs() <= 0.5 + 1e-6, "{m:?}");
+                    let from_line = (p.song_beat - k as f64 * sh.bar_beats) * sh.spb(k) + sh.bar_starts[k] as f64;
+                    assert!((from_line - in_loop).abs() <= 0.5 + 1e-6, "{m:?}");
                     assert_eq!(c.beat_index, p.beat.floor() as u32);
                     assert!((0.0..1.0).contains(&c.phase));
                     // Extrapolating a quarter second matches rendering it (within the rounding).
                     if sh.looping && k % 4 == 1 {
                         let ahead = c.advanced(0.25);
-                        let mut probe = engine(m, &[]);
+                        let mut probe = make(m, &[]);
                         render_to(&mut probe, s + (0.25 * sh.sample_rate as f64) as u64);
                         let real = probe.beat_clock().position;
                         assert_eq!(ahead.position.bar, real.bar, "{m:?}");
@@ -681,12 +693,19 @@ fn a_self_directed_engine_waltzes_on_a_jump_in_threes() {
 /// the next bar line.
 #[test]
 fn an_engine_can_start_mid_song() {
+    for make in [engine as fn(Music, &[Input]) -> Engine, human] {
+        start_mid_song(make);
+    }
+}
+
+fn start_mid_song(make: fn(Music, &[Input]) -> Engine) {
     let m = Music::Title;
-    let mut whole = engine(m, &[]);
+    let mut whole = make(m, &[]);
     let shape = whole.shape().clone();
     let b = |k: usize| shape.bar_starts[k];
-    render_to(&mut whole, b(4) - 10);
-    let mut late = engine(m, &[]);
+    // (Before the bass, which sits a little ahead of the bar line.)
+    render_to(&mut whole, b(4) - 1000);
+    let mut late = make(m, &[]);
     late.start_at(b(4));
     assert_eq!((late.position().song_bar, late.position().bar), (4, 4));
     late.fill(&mut []);
@@ -694,11 +713,13 @@ fn an_engine_can_start_mid_song() {
     assert!(!bar4(&late).is_empty());
     assert_eq!(bar4(&late), bar4(&whole));
     // Mid-bar: silence, then the band comes in on the bar line.
-    let mut mid = engine(m, &[]);
+    let mut mid = make(m, &[]);
     mid.start_at((b(4) + b(5)) / 2);
     let out = render_to(&mut mid, b(6));
     let quiet = (b(5) - (b(4) + b(5)) / 2) as usize;
-    assert!(out[..quiet].iter().all(|f| *f == Frame::ZERO));
+    // (The bass, on top of the beat, may come in a few ms early.)
+    let early = shape.sample_rate as usize / 50;
+    assert!(out[..quiet - early].iter().all(|f| *f == Frame::ZERO));
     assert!(out[quiet..].iter().any(|f| f.left.abs() > 1e-3));
     // Only before the first fill.
     let pos = mid.position();
@@ -717,4 +738,39 @@ fn the_mixer_mutes_channels() {
     let energy = |v: &[Frame]| v.iter().map(|f| (f.left * f.left) as f64).sum::<f64>();
     assert!(energy(&drums) > 0.0 && energy(&drums) < energy(&full));
     assert_eq!(render(&mut engine(m, &[Input::SetMix([1.0; 4])]), 64_000, 512), full, "unity is as written");
+}
+
+/// The band as the game plays it drifts a little around the written tempo (each pass as long as
+/// written) and each player sits where players do: the lead behind the beat, the bass on top,
+/// the drums on it.
+#[test]
+fn the_band_drifts_and_sits_off_the_grid() {
+    for m in [Music::Title, Music::World(2), Music::SideB(1)] {
+        let (grid, played) = (engine(m, &[]), human(m, &[]));
+        let (g, h) = (grid.shape().clone(), played.shape().clone());
+        assert!(h.len.abs_diff(g.len) <= 1, "{m:?}: a pass is {} samples, written {}", h.len, g.len);
+        let off = (0..h.bars).map(|k| (h.bpm_at(k) - h.bpm).abs()).fold(0.0f32, f32::max);
+        assert!(off > 0.5 && off <= 2.1, "{m:?}: drifts {off} bpm");
+        // Tempo moves slowly: neighbouring bars a fraction of a bpm apart.
+        for k in 1..h.bars {
+            assert!((h.bpm_at(k) - h.bpm_at(k - 1)).abs() < 0.8, "{m:?} bar {k}: {} → {}", h.bpm_at(k - 1), h.bpm_at(k));
+        }
+        // Each note against where the drifting grid puts it, in ms, per channel.
+        let mut e = played;
+        let mut sums = [(0.0f64, 0usize); 5];
+        let sr = h.sample_rate as f64;
+        for bar in 1..12 {
+            render_to(&mut e, h.bar_starts[bar]);
+            for ev in e.pending_events().filter(|ev| ev.bar == bar as u64 && ev.start > ev.loop_start) {
+                let want = ev.loop_start + h.at(ev.beat);
+                let s = &mut sums[ev.ch as usize];
+                s.0 += (ev.start as f64 - want as f64) / sr * 1000.0;
+                s.1 += 1;
+            }
+        }
+        let mean = |ch: usize| sums[ch].0 / sums[ch].1.max(1) as f64;
+        assert!(mean(0) > 4.0 && mean(0) < 18.0, "{m:?}: the lead sits {:.1} ms late", mean(0));
+        assert!(mean(2) < -1.0 && mean(2) > -9.0, "{m:?}: the bass sits {:.1} ms", mean(2));
+        assert!(mean(3).abs() < 2.0, "{m:?}: the drums sit {:.1} ms", mean(3));
+    }
 }

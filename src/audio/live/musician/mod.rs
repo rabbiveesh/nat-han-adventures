@@ -195,9 +195,15 @@ impl Ctx<'_> {
         }
     }
 
+    /// Samples per beat in this bar (the tempo drifts: [`Shape::drifting`]).
+    #[inline]
+    pub fn spb(&self) -> f64 {
+        self.shape.spb(self.bar.song_bar)
+    }
+
     /// Beat within the bar of an absolute sample.
     pub fn beat_of(&self, sample: u64) -> f64 {
-        (sample - self.bar.start) as f64 / self.shape.samples_per_beat
+        (sample - self.bar.start) as f64 / self.spb()
     }
 
     /// A deterministic coin in [0, 1) for decision `what` about this bar.
@@ -233,7 +239,7 @@ impl Ctx<'_> {
 
     /// An event's length in beats.
     pub fn len(&self, e: &NoteEvent) -> f64 {
-        (e.end - e.start) as f64 / self.shape.samples_per_beat
+        (e.end - e.start) as f64 / self.spb()
     }
 
     /// The harmony at beat `b` of the bar (from the bar line, may run into the next bar): the

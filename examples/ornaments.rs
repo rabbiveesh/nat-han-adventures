@@ -9,6 +9,7 @@
 //! cargo run --release --example ornaments -- out/ all before     # a file-name prefix
 //! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
 //! cargo run --release --example ornaments -- out/ soli           # soli choruses (see `soli`)
+//! cargo run --release --example ornaments -- out/ human          # on the grid vs as played (see `human`)
 //! ```
 //!
 //! Files: `<prefix>_<song>_f035.wav` + `.txt`, and `instruments_<song>.wav` (each song's
@@ -165,6 +166,10 @@ fn main() {
         soli(dir, &prefix);
         return;
     }
+    if only.as_deref() == Some("human") {
+        human(dir);
+        return;
+    }
     if only.as_deref() == Some("feels") {
         feels(dir);
         return;
@@ -189,7 +194,12 @@ fn main() {
 
 /// Run an engine through a script, logging every committed bar.
 fn run(file: &SongFile, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str, self_directed: bool, intro: bool) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
-    let mut e = Engine::with_config(file, RATE, EngineConfig { seed: 7, self_directed, intro, ..EngineConfig::default() }).expect("engine");
+    run_with(file, EngineConfig { seed: 7, self_directed, intro, ..EngineConfig::default() }, script, bars, note)
+}
+
+/// [`run`] with the engine set up as `config`.
+fn run_with(file: &SongFile, config: EngineConfig, script: impl Fn(u64) -> Vec<Input>, bars: u64, note: fn(u64) -> &'static str) -> (Vec<Frame>, String, Vec<(u64, f64, Feel)>) {
+    let mut e = Engine::with_config(file, RATE, config).expect("engine");
     let looping = e.shape().looping;
     let mut out: Vec<Frame> = Vec::new();
     let mut buf = [Frame::ZERO; 256];
@@ -392,6 +402,36 @@ fn soli(dir: &Path, prefix: &str) {
         write_wav(&dir.join(format!("{name}.wav")), &out);
         std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
         println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+    }
+}
+
+/// The band on the grid and as played (the tempo drifting, each player where they sit): a few
+/// songs, a pass each at freedom 0.5 with the intro, to `grid_<song>.wav` and `human_<song>.wav`,
+/// with `human_<song>.txt` also listing each bar's tempo.
+fn human(dir: &Path) {
+    for stem in ["sweet_georgia_brown", "tiger_rag", "embraceable_you", "st_louis_blues"] {
+        let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
+        let f = 0.5;
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: 0.5 }] } else { vec![] }
+        };
+        let bars = file_bars(&file) + 4;
+        for (name, config) in [("grid", EngineConfig::on_grid()), ("human", EngineConfig::default())] {
+            let config = EngineConfig { seed: 7, intro: true, ..config };
+            let (out, mut log, _) = run_with(&file, config, script, bars, |_| "");
+            if name == "human" {
+                let e = Engine::with_config(&file, RATE, config).expect("engine");
+                let sh = e.shape();
+                let _ = writeln!(log, "\ntempo by bar (written {} bpm):", sh.bpm);
+                for k in 0..sh.bars {
+                    let _ = writeln!(log, "bar {:>3}  {:.2} bpm", k + 1, sh.bpm_at(k));
+                }
+            }
+            let name = format!("{name}_{stem}");
+            write_wav(&dir.join(format!("{name}.wav")), &out);
+            std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+            println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
+        }
     }
 }
 

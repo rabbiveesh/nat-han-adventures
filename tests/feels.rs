@@ -48,7 +48,7 @@ fn freedom(f: f32) -> Input {
 }
 
 fn play(song: &SongFile, seed: u64, setup: &[Input], bars: u64) -> (Engine, Vec<Bar>) {
-    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::default() }).unwrap();
+    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::on_grid() }).unwrap();
     for i in setup {
         e.post(*i);
     }
@@ -339,7 +339,7 @@ fn feels_render_far_under_real_time() {
     let block = 512;
     for f in Feel::OTHERS {
         for m in [Music::Title, Music::World(4), Music::World(5)] {
-            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig { seed: 7, ..EngineConfig::default() }).unwrap();
+            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig { seed: 7, ..EngineConfig::on_grid() }).unwrap();
             e.post(Input::ForceFeel(Some(f)));
             e.post(Input::SetFilters(Filters { harmony: Harmony::Coltrane, just_intonation: true }));
             e.post(Input::SetFreedom { lead: 1.0, comp: 1.0, bass: 1.0, drums: 1.0, dynamics: 0.7 });

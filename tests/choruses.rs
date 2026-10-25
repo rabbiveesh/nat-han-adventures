@@ -76,7 +76,7 @@ fn play_with(song: &SongFile, config: EngineConfig, setup: &[Input], at: impl Fn
 }
 
 fn play(song: &SongFile, seed: u64, setup: &[Input], bars: u64) -> Vec<Bar> {
-    play_with(song, EngineConfig { seed, ..EngineConfig::default() }, setup, |_| vec![], bars).1
+    play_with(song, EngineConfig { seed, ..EngineConfig::on_grid() }, setup, |_| vec![], bars).1
 }
 
 fn song(m: Music) -> &'static SongFile {
@@ -308,7 +308,7 @@ fn riffs_are_chord_tones() {
 /// 0, none without the game's setting.
 #[test]
 fn levels_start_with_an_intro() {
-    let config = |seed| EngineConfig { seed, intro: true, ..EngineConfig::default() };
+    let config = |seed| EngineConfig { seed, intro: true, ..EngineConfig::on_grid() };
     let mut kinds = std::collections::HashSet::new();
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
@@ -345,7 +345,7 @@ fn songs_end_with_an_ending() {
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
         for (seed, f) in [(k as u64, 0.0), (k as u64, 0.5), (10 + k as u64, 0.5), (20 + k as u64, 0.5)] {
-            let cfg = EngineConfig { seed, ..EngineConfig::default() };
+            let cfg = EngineConfig { seed, ..EngineConfig::on_grid() };
             let (e, bars) = play_with(s, cfg, &[freedom(f)], |k| if k == 6 { vec![Input::End] } else { vec![] }, 40);
             assert!(e.finished(), "{m:?}: didn't finish");
             let ending: Vec<_> = bars.iter().filter_map(|b| b.c.band.ending).collect();
