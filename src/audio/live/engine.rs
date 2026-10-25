@@ -413,6 +413,8 @@ impl Engine {
         if !(8_000..=192_000).contains(&sample_rate) {
             return Err(format!("sample rate {sample_rate} out of range"));
         }
+        // Parse the soloist's file here, not on the audio thread.
+        let _ = config.soloist.player();
         let drift = |waltz| Shape::drifting(song, sample_rate, waltz, config.seed ^ tuning::hash_str(&song.title), config.drift_bpm);
         let shape = drift(false);
         if shape.len == 0 {

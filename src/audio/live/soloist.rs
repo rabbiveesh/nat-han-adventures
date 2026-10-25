@@ -25,7 +25,10 @@
 
 use crate::audio::accomp::Rng;
 use crate::audio::chart::Family;
+use std::sync::OnceLock;
+
 use crate::audio::live::ornament::{Harm, next_in};
+use crate::audio::live::player_file::PlayerFile;
 
 /// Who the lead solos like.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -57,35 +60,45 @@ impl Soloist {
         Soloist::ALL.into_iter().find(|p| p.slug() == s)
     }
 
+    /// The player's file, parsed once (none for the band's own lines).
+    pub fn player(self) -> Option<&'static PlayerFile> {
+        static PLAYERS: OnceLock<Vec<(Soloist, PlayerFile)>> = OnceLock::new();
+        let all = PLAYERS.get_or_init(|| {
+            FILES.iter().map(|(s, text)| (*s, PlayerFile::parse(text).unwrap_or_else(|e| panic!("music/players/{}.player: {e}", s.slug())))).collect()
+        });
+        all.iter().find(|(s, _)| *s == self).map(|(_, p)| p)
+    }
+
     /// The measured profile (none for the band's own lines).
     pub fn profile(self) -> Option<&'static Profile> {
-        match self {
-            Soloist::Band => None,
-            Soloist::Miles => Some(&MILES),
-            Soloist::Trane => Some(&TRANE),
-            Soloist::Bird => Some(&BIRD),
-            Soloist::Sonny => Some(&SONNY),
-            Soloist::Wayne => Some(&WAYNE),
-        }
+        self.player().map(|p| &p.profile)
     }
 
     /// The lead's lay-back on the beat against the band's average soloist ([`super::pocket`]).
     pub fn lay_back(self) -> f32 {
-        match self {
-            Soloist::Band => 1.0,
-            // On-beat notes +4.6 ms (Miles), +0.8 (Trane, quartet −0.2), +2.4 (Bird), +6.2
-            // (Sonny), about +1 (Wayne: post-bop +1.5, the 2nd Quintet +0.8), against +2.8.
-            Soloist::Miles => 1.6,
-            Soloist::Trane => 0.3,
-            Soloist::Bird => 0.9,
-            Soloist::Sonny => 2.2,
-            Soloist::Wayne => 0.4,
-        }
+        self.player().map_or(1.0, |p| p.lay_back)
     }
 }
 
-/// How a player builds lines. Lengths in beats; shares 0..1.
-#[derive(Debug, Clone, Copy)]
+// The profiles, one file each. In them, the cell weights come from each player's inter-onset
+// intervals (share of 8ths, quarters, triplets, 16ths, dotted 8ths, quarter triplets, longer)
+// divided by the notes in a cell; the intervals from their interval histograms; the rest as
+// measured (phrases, rests, chord-tone shares, approaches, enclosures, pentatonic 4-note
+// windows, anticipations, swing, dynamics, motifs), tuned so the line's own statistics come
+// out near theirs (`soloists_play_like_their_numbers`). The steps along the chord-scale already
+// put a chord tone on ~2 strong beats in 3 (as they measured: 52-58%), so none of them needs
+// the extra pull.
+const FILES: [(Soloist, &str); 5] = [
+    (Soloist::Miles, include_str!("../../../music/players/miles.player")),
+    (Soloist::Trane, include_str!("../../../music/players/trane.player")),
+    (Soloist::Bird, include_str!("../../../music/players/bird.player")),
+    (Soloist::Sonny, include_str!("../../../music/players/sonny.player")),
+    (Soloist::Wayne, include_str!("../../../music/players/wayne.player")),
+];
+
+/// How a player builds lines. Lengths in beats; shares 0..1. Written in `.player` files
+/// ([`super::player_file`]).
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Profile {
     /// Phrase length: median and interquartile range (log-normal).
     pub phrase: (f64, f64, f64),
@@ -176,190 +189,6 @@ impl Cell {
         d[..n].iter().sum()
     }
 }
-
-// The cell weights come from each player's inter-onset intervals (share of 8ths, quarters,
-// triplets, 16ths, dotted 8ths, quarter triplets, longer) divided by the notes in a cell; the
-// intervals from their interval histograms; the rest as measured (phrases, rests, chord-tone
-// shares, approaches, enclosures, pentatonic 4-note windows, anticipations, swing), tuned so
-// the line's own statistics come out near theirs (`soloists_play_like_their_numbers`). The
-// steps along the chord-scale already put a chord tone on ~2 strong beats in 3 (as they
-// measured: 52-58%), so none of them needs the extra pull.
-
-/// Miles Davis, 1951-59: 8.5-note phrases over 6.1 beats [3.9-10.2], 3.3 beats' rest
-/// [2.0-4.9]; 8ths 40%, quarters 11%, longer 12%; 9% repeats, 62% steps, 7.6% leaps; 58%
-/// chord tones on the strong beats, 70% of phrases end on one; 34% half-step approaches (2 in
-/// 3 from below), 12% enclosures; trumpet around concert A4-Bb4.
-pub const MILES: Profile = Profile {
-    phrase: (6.1, 3.9, 10.2),
-    rest: (3.3, 2.0, 4.9),
-    cells: [19.8, 11.2, 2.7, 2.0, 5.7, 1.9, 5.9],
-    intervals: [9.4, 28.0, 33.5, 13.1, 8.4, 3.8, 0.7, 1.8, 1.3],
-    step_back: 0.24,
-    strong_chord_tone: 0.0,
-    end_chord_tone: 0.70,
-    approach: 0.24,
-    from_below: 0.69,
-    enclosure: 0.10,
-    pentatonic: 0.05,
-    anticipation: 0.10,
-    register: (72, 64, 82),
-    legato: 0.88,
-    swing: 1.36,
-    falls: 0.25,
-    // Shapes the most: a soft first note, louder early, fading out; the top note +4.4 dB;
-    // the "and" louder than its beat 55% of the time (19% ghosted); spread 5.0 dB.
-    arch: [-1.46, 1.06, 0.58, -0.83, -1.31],
-    per_octave: 4.5,
-    ghost: 0.19,
-    accent: 1.66,
-    long: -1.0,
-    scatter: 3.0,
-    motif: 0.15,
-    sequence: 0.04,
-    // His sequences mostly stay put (77%), else step down.
-    moves: [(0, 7.7), (-2, 0.8), (-3, 0.8), (-1, 0.5), (2, 0.3)],
-};
-
-/// John Coltrane, 1960-64: 9-note cells over 5.3 beats [3.2-10.3], 2.0 beats' rest
-/// [1.5-3.0], 16% before the beat; 8ths 34%, 16ths 16%, triplets 16%; 47% steps, 30% thirds,
-/// 19% leaps; 54% chord tones on the strong beats (the 5th first), 57% of phrases end on one;
-/// 14% half-step approaches, 6% enclosures; 34% of 4-note windows pentatonic; tenor.
-pub const TRANE: Profile = Profile {
-    phrase: (5.3, 3.2, 10.3),
-    rest: (2.0, 1.5, 3.0),
-    cells: [16.8, 6.5, 5.2, 3.5, 5.0, 1.3, 4.5],
-    intervals: [4.4, 18.4, 28.2, 17.4, 12.7, 8.3, 2.5, 3.3, 4.7],
-    step_back: 0.18,
-    strong_chord_tone: 0.0,
-    end_chord_tone: 0.57,
-    approach: 0.08,
-    from_below: 0.44,
-    enclosure: 0.04,
-    pentatonic: 0.12,
-    anticipation: 0.16,
-    register: (67, 58, 80),
-    legato: 0.87,
-    swing: 1.51,
-    falls: 0.0,
-    // Even: the flattest arch, no louder going up (1960 on), an even, sustained tone; 3.5 dB.
-    arch: [0.65, 0.16, 0.0, -0.14, -0.68],
-    per_octave: 0.0,
-    ghost: 0.17,
-    accent: 0.59,
-    long: -0.74,
-    scatter: 3.0,
-    // 42% of his ideas are variants of the one before (the most of anyone); sequences stay
-    // put or drop a minor third.
-    motif: 0.3,
-    sequence: 0.06,
-    moves: [(0, 4.8), (-3, 1.4), (-2, 0.9), (7, 0.8), (-5, 0.5)],
-};
-
-/// Charlie Parker, 1945-51: 16-note lines over 6.6 beats [3.7-10.0], 1.6 beats' rest
-/// [1.0-2.7], 16% before the beat; 16ths 21% (and double time), 8ths 26%, triplets 10%; 59%
-/// steps, 27% thirds; 52% chord tones on the strong beats, 69% of phrases end on one; 36%
-/// half-step approaches (most from above), 15% enclosures; alto.
-pub const BIRD: Profile = Profile {
-    phrase: (6.6, 3.7, 10.0),
-    rest: (1.6, 1.0, 2.7),
-    cells: [12.9, 2.2, 3.5, 7.0, 3.6, 1.3, 0.9],
-    intervals: [2.3, 30.3, 28.8, 19.0, 8.1, 4.9, 1.0, 2.0, 3.6],
-    step_back: 0.34,
-    strong_chord_tone: 0.0,
-    end_chord_tone: 0.69,
-    approach: 0.22,
-    from_below: 0.40,
-    enclosure: 0.13,
-    pentatonic: 0.05,
-    anticipation: 0.16,
-    register: (70, 62, 82),
-    legato: 0.92,
-    swing: 1.60,
-    falls: 0.05,
-    // Decaying lines: loud in, falling all the way to a soft last note (−3.7 dB); offbeats
-    // ghosted 31% of the time; long notes much softer; 5.3 dB.
-    arch: [1.28, 1.12, 0.07, -0.70, -3.68],
-    per_octave: 4.5,
-    ghost: 0.31,
-    accent: 0.27,
-    long: -4.0,
-    scatter: 3.8,
-    // The least motivic (a vocabulary, not development); his sequences step down.
-    motif: 0.05,
-    sequence: 0.03,
-    moves: [(-2, 3.6), (0, 1.4), (-3, 1.4), (-5, 0.7), (-7, 0.7)],
-};
-
-/// Sonny Rollins, 1954-72: 11.5-note lines over 6.6 beats [3.9-13.3], 2.4 beats' rest
-/// [1.5-3.4]; 8ths 46% (the longest 8th runs of anyone, 10 notes at p90), 16ths 14%;
-/// 50% steps, 31% thirds, 15% leaps; 56% chord tones on the strong beats, 62% of phrases end
-/// on one; 28% half-step approaches (either side), 14% enclosures; low on the tenor.
-pub const SONNY: Profile = Profile {
-    phrase: (6.6, 3.9, 13.3),
-    rest: (2.4, 1.5, 3.4),
-    cells: [22.8, 7.8, 3.4, 3.0, 4.8, 1.4, 2.0],
-    intervals: [3.8, 23.3, 26.1, 21.0, 10.3, 7.9, 1.8, 2.8, 2.6],
-    step_back: 0.19,
-    strong_chord_tone: 0.0,
-    end_chord_tone: 0.62,
-    approach: 0.18,
-    from_below: 0.51,
-    enclosure: 0.11,
-    pentatonic: 0.08,
-    anticipation: 0.11,
-    register: (64, 55, 77),
-    legato: 0.88,
-    swing: 1.50,
-    falls: 0.1,
-    // A mild arch with a soft last note (−1.7), the top note +1.5 dB, offbeats ghosted 21%.
-    arch: [0.36, 0.39, -0.03, -0.10, -1.66],
-    per_octave: 2.0,
-    ghost: 0.21,
-    accent: 0.45,
-    long: -1.1,
-    scatter: 3.2,
-    // A motif developer: cells shared phrase to phrase at 1.9x chance, short-phrase relations
-    // 17% (1-5% by chance).
-    motif: 0.25,
-    sequence: 0.05,
-    moves: [(0, 4.8), (-2, 1.4), (-3, 1.0), (-1, 0.8), (5, 0.6)],
-};
-
-/// Wayne Shorter, 1961-66: 10-note phrases over 6.6 beats [4.1-10.2], 2.1 beats' rest
-/// [1.4-3.4]; 16ths 19% and faster runs 11%, 8ths 32%, long notes 8%; 59% steps (38% whole
-/// steps), 6% repeats, 14% leaps; turns (−2 +2 −2) his commonest cell; 52% chord tones on the
-/// strong beats, 56% of phrases end on one; only 15% half-step approaches, 4% enclosures; 34%
-/// of 4-note windows pentatonic; tenor.
-pub const WAYNE: Profile = Profile {
-    phrase: (6.6, 4.1, 10.2),
-    rest: (2.4, 1.6, 3.6),
-    cells: [15.9, 7.5, 3.5, 4.0, 3.8, 1.2, 5.5],
-    intervals: [6.2, 21.1, 37.5, 14.7, 6.7, 7.7, 1.4, 1.6, 2.8],
-    step_back: 0.20,
-    strong_chord_tone: 0.0,
-    end_chord_tone: 0.56,
-    approach: 0.10,
-    from_below: 0.35,
-    enclosure: 0.03,
-    pentatonic: 0.12,
-    anticipation: 0.14,
-    register: (67, 57, 82),
-    legato: 0.88,
-    swing: 1.42,
-    falls: 0.12,
-    // Even like late Trane: the top note barely louder (+0.3 dB), a soft last note (−1.7).
-    arch: [0.12, 0.47, 0.33, -0.42, -1.70],
-    per_octave: 0.5,
-    ghost: 0.20,
-    accent: 0.3,
-    long: -1.0,
-    scatter: 3.1,
-    // The motif developer: 32% of his ideas are variants (13% of them transposed), shared cells
-    // 2.5x chance, the most theme quotes; sequences mostly stay put.
-    motif: 0.28,
-    sequence: 0.06,
-    moves: [(0, 5.0), (-2, 1.2), (2, 0.8), (-3, 0.8), (-5, 0.5)],
-};
 
 /// A note the line plays: where in the bar (beats), how long it sounds, the pitch, whether
 /// it ends a phrase (for a fall), and how loud (dB against the solo's median).
@@ -879,9 +708,21 @@ mod tests {
         }
     }
 
+    fn prof(s: Soloist) -> &'static Profile {
+        s.profile().unwrap()
+    }
+
+    #[test]
+    fn every_player_file_parses() {
+        for s in Soloist::ALL {
+            assert_eq!(s.profile().is_some(), s != Soloist::Band, "{s:?}");
+        }
+        assert_eq!(Soloist::Miles.player().unwrap().name, "Miles '56");
+    }
+
     #[test]
     fn soloists_play_like_their_numbers() {
-        let (m, t, b) = (play(&MILES, 400), play(&TRANE, 400), play(&BIRD, 400));
+        let (m, t, b) = (play(prof(Soloist::Miles), 400), play(prof(Soloist::Trane), 400), play(prof(Soloist::Bird), 400));
         eprintln!("miles {m:?}\ntrane {t:?}\nbird {b:?}");
         // Miles: space and steps; Trane: dense, thirds and leaps, pentatonic; Bird: densest.
         assert!(m.silent > t.silent + 0.05 && m.notes_per_bar < t.notes_per_bar - 1.0, "{m:?} {t:?}");
@@ -894,7 +735,7 @@ mod tests {
         assert!(b.first_db - b.last_db > 3.0 && t.first_db - t.last_db < 2.5, "{b:?} {t:?}");
         assert!(m.spread_db > t.spread_db + 0.5, "{m:?} {t:?}");
         // Sonny: long 8th lines, thirds; Wayne: whole steps and pentatonic, fewer leaps than Trane.
-        let (so, w) = (play(&SONNY, 400), play(&WAYNE, 400));
+        let (so, w) = (play(prof(Soloist::Sonny), 400), play(prof(Soloist::Wayne), 400));
         eprintln!("sonny {so:?}\nwayne {w:?}");
         assert!((4.0..7.0).contains(&so.notes_per_bar) && (3.5..6.5).contains(&w.notes_per_bar), "{so:?} {w:?}");
         assert!(w.steps > t.steps && w.pentatonic > m.pentatonic, "{w:?}");
