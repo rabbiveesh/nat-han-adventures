@@ -359,19 +359,44 @@ impl Bass {
                 // lone 16th before a rest a little longer), the ONE hard, the pops a hair up.
                 let side = !feel::first_of_pair(ctx.bar.index, ctx.band.feel_since) as usize;
                 let start = feel::pattern(ctx.seed, ctx.band.feel_since, riffs::funk().len());
-                let steps = riffs::pick(start, harm(0.0).chord.family()).bar(side);
+                let riff = riffs::pick(start, harm(0.0).chord.family());
+                let steps = riff.bar(side);
                 let root_at = |b: f64| nearest_pc(harm(b).chord.bass_pc(), 36, LO, LO + 11) as i32;
-                for (i, s) in steps.iter().enumerate() {
-                    let b = s.at as f64 * 0.25;
-                    if b >= bb - 1e-9 {
-                        continue;
-                    }
-                    let mut n = root_at(b) + s.deg as i32;
+                let fold = |mut n: i32| {
                     while n < LO {
                         n += 12;
                     }
                     while n > HI + 4 {
                         n -= 12;
+                    }
+                    n
+                };
+                // A bar that rings over the line: the push before it held (tied) into its ONE.
+                let ring = riff.ring[side];
+                if ring > 0 {
+                    let n = root_at(0.0);
+                    let mut one = note(0.0, ring as f64 * 0.25 * 0.85, n, vol(1));
+                    one.tie = anticipated == Some(n as u8) && ctx.band.sub_at(0.0).is_none();
+                    push(&mut self.dst, one);
+                }
+                // The push into such a bar: its last note from the next bar's root, held to the line.
+                let next = (side == 0)
+                    .then(|| ctx.plain_harm_at(bb))
+                    .flatten()
+                    .map(|nh| (riffs::pick(start, nh.chord.family()), nh))
+                    .filter(|(r, _)| r.ring[1] > 0)
+                    .map(|(_, nh)| nearest_pc(nh.chord.bass_pc(), 36, LO, LO + 11) as i32);
+                for (i, s) in steps.iter().enumerate() {
+                    let b = s.at as f64 * 0.25;
+                    if b >= bb - 1e-9 {
+                        continue;
+                    }
+                    let push_into = next.filter(|_| s.at + s.len >= 16 && !s.dead);
+                    let n = fold(push_into.unwrap_or_else(|| root_at(b)) + s.deg as i32);
+                    if push_into.is_some() {
+                        push(&mut self.dst, note(b, bb - b, n, vol(1)));
+                        self.anticipated = Some((ctx.bar.index + 1, n as u8));
+                        continue;
                     }
                     if s.dead {
                         push(&mut self.dst, NoteEvent { inst: ctx.extra(Extra::Dead), ..note(b, 0.08, n, vol(-3)) });

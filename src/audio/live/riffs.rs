@@ -29,6 +29,8 @@ pub struct Riff {
     pub fits: Fits,
     steps: [[Step; 16]; 2],
     n: [u8; 2],
+    /// How many 16ths each bar's start holds the note before over the bar line (no new ONE).
+    pub ring: [u8; 2],
 }
 
 impl Riff {
@@ -50,13 +52,14 @@ impl Riff {
         if bars.len() != 2 {
             return Err("two bars, split by `|`".into());
         }
-        let mut riff = Riff { fits, steps: [[Step::default(); 16]; 2], n: [0; 2] };
+        let mut riff = Riff { fits, steps: [[Step::default(); 16]; 2], n: [0; 2], ring: [0; 2] };
         for (side, bar) in bars.iter().enumerate() {
             let mut words = bar.split_whitespace();
             let rhythm = words.next().ok_or("a bar is a rhythm, then its notes")?;
             if rhythm.len() != 16 || !rhythm.chars().all(|c| "x-d.".contains(c)) {
                 return Err(format!("`{rhythm}`: 16 steps of x - d ."));
             }
+            riff.ring[side] = rhythm.bytes().take_while(|&b| b == b'-').count() as u8;
             let mut prev: Option<i8> = None;
             for (k, c) in rhythm.bytes().enumerate() {
                 let len = 1 + rhythm.as_bytes()[k + 1..].iter().take_while(|&&b| b == b'-').count() as u8;

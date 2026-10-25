@@ -214,30 +214,32 @@ fn rock_has_a_backbeat() {
     }
 }
 
-/// Funk: a two-bar vamp on the 16th grid, the same all through the feel; the bass locked to
-/// the kick, the one hard; one ghost note; space.
+/// Funk: a two-bar riff on the 16th grid; 16th hats; the kick doubling the bass, every kick
+/// with a bass note on it, the one hard (unless the riff rings over the line, tied in); the
+/// backbeat and a few soft ghosts; space in the clav.
 #[test]
 fn funk_vamps_on_16ths_and_the_bass_locks_to_the_kick() {
     for m in [Music::Title, Music::World(1), Music::World(3)] {
         let bars = forced(m, Feel::Funk, &[freedom(0.5)], 24);
-        let mut kicks = [None, None];
         for b in plain(&bars) {
             let hats: Vec<f64> = b.ch(3).filter(|e| matches!(e.sound, Sound::Drum(Drum::ClosedHat | Drum::OpenHat))).map(|e| b.rel(e)).collect();
-            assert_eq!(hats, (0..8).map(|k| k as f64 * 0.5).collect::<Vec<_>>(), "{m:?} bar {}", b.c.slot.index);
-            // A vamp: each side of the pair plays the same kick all along.
-            let side = (b.c.slot.index - b.c.band.feel_since) as usize % 2;
+            assert_eq!(hats, (0..16).map(|k| k as f64 * 0.25).collect::<Vec<_>>(), "{m:?} bar {}", b.c.slot.index);
             let k = b.drums(Drum::Kick);
-            assert_eq!(*kicks[side].get_or_insert_with(|| k.clone()), k, "{m:?}: the vamp changed");
             assert!(k.contains(&0.0), "{m:?}: no one");
-            // Every kick has a bass note on it; the one is the longest and loudest.
             for x in &k {
                 assert!(b.ch(2).any(|e| (b.rel(e) - x).abs() < 1e-6), "{m:?} bar {}: kick at {x} alone", b.c.slot.index);
             }
             let one = b.ch(2).find(|e| b.rel(e) == 0.0).unwrap();
-            assert!(b.ch(2).all(|e| e.end - e.start <= one.end - one.start && e.volume <= one.volume), "{m:?}: the one");
-            // Space: the backbeat and at most one ghost.
+            if !one.tie {
+                assert!(b.ch(2).all(|e| e.volume <= one.volume), "{m:?}: the one");
+            }
+            // Busy enough to groove, not a run.
+            let notes = b.ch(2).count();
+            assert!((2..=12).contains(&notes), "{m:?}: {notes} bass notes");
             let snares: Vec<&NoteEvent> = b.ch(3).filter(|e| e.sound == Sound::Drum(Drum::Snare)).collect();
-            assert!(snares.len() <= 3 && snares.iter().filter(|e| e.volume <= 4).count() <= 1, "{m:?}: snares");
+            let back: Vec<&&NoteEvent> = snares.iter().filter(|e| e.volume > 4).collect();
+            assert_eq!(back.iter().map(|e| b.rel(e)).collect::<Vec<_>>(), [1.0, 3.0], "{m:?}: the backbeat");
+            assert!(snares.len() <= 6, "{m:?}: snares");
             assert!(b.ch(1).count() <= 3, "{m:?}: a busy clav");
             // The rhythm section on the 16th grid (straight).
             for e in b.ev.iter().filter(|e| e.ch > 0) {
