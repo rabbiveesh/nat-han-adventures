@@ -826,6 +826,7 @@ impl Lead {
             0.0
         };
         let swung = |b: f64| if ((b * 2.0).round() - b * 2.0).abs() < 1e-6 && (b * 2.0).round() as i64 % 2 == 1 { b + s * 0.5 } else { b };
+        let mut prev: Option<(usize, Played)> = None;
         for k in &notes[..n] {
             let (a, end) = (swung(k.at), swung(k.at + k.len / p.legato as f64));
             let mut e = ctx.make(t, a, ((end - a) * p.legato as f64).max(0.05), Sound::Note((k.note as i32).clamp(LO, HI) as u8));
@@ -833,7 +834,22 @@ impl Lead {
                 e.fx.fall = -3;
                 e.fx.fall_frames = 10;
             }
+            // A fast run (16ths, triplets) is slurred: each beat's group attacked once, the rest
+            // carried on the breath and a touch softer.
+            if let Some((i, q)) = prev
+                && !q.last
+                && k.at - q.at <= 0.34 + 1e-6
+                && (k.at - k.at.round()).abs() > 1e-6
+                && i + 1 == self.dst.len()
+            {
+                self.dst[i].end = e.start;
+                e.tie = true;
+                e.fx.legato = true;
+                e.gain *= 0.82;
+            }
+            let i = self.dst.len();
             push(&mut self.dst, e);
+            prev = Some((i, *k));
         }
         self.solo_note = notes[..n].last().map(|k| k.note).or(self.solo_note);
     }
