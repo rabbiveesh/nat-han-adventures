@@ -13,11 +13,18 @@
 ;   push      the beat before a change already on the new root (an anticipation)
 ;   hold      the change's beat still on the note before (a suspension)
 ;   two       bars in two (half notes)
+; and, where a note-level pass on the bassist's records measured them (optional):
+;   skip      beats with a skip note at a medium tempo (fewer when fast), then where in the
+;             beat it falls (0.66: on the triplet); unmeasured, 12% on the tune's swung 8th
+;   rake      beats raked in triplets
+;   ghost     notes ghosted (muted)
 
 ; The whole database (99567 beats under 346 solos): the band's own line walks like this.
 all = The whole database | steps 20.3 22.2 13.5 14.1 18.4 11.5 | lands 41 11 11 37 | approach 14 14 17 15 7 34 | inside 51 19 30 | pedal 7.6 | push 6.6 | hold 12.1 | two 9.1
 ; Miles' 50s quintet, Coltrane's and Rollins' 50s dates: smooth and chromatic, hardly repeats.
-chambers = Paul Chambers | steps 11.1 28.9 17.2 12.8 17.0 12.9 | lands 37 12 15 36 | approach 16 13 18 12 4 37 | inside 51 21 28 | pedal 1.6 | push 3.8 | hold 10.5 | two 3.9
+; His rhythm from his separated bass on Relaxin' and Red Garland's Piano (12685 beats): a skip
+; on the triplet every bar and a half, mostly before a change; ghosts (up to 18%, with bleed).
+chambers = Paul Chambers | steps 11.1 28.9 17.2 12.8 17.0 12.9 | lands 37 12 15 36 | approach 16 13 18 12 4 37 | inside 51 21 28 | pedal 1.6 | push 3.8 | hold 10.5 | two 3.9 | skip 17.8 0.66 | rake 1.1 | ghost 12
 ; Coltrane's quartet: pedal points and repeated notes, few leaps.
 garrison = Jimmy Garrison | steps 30.7 16.3 15.8 15.3 9.8 12.0 | lands 30 19 8 43 | approach 15 10 19 9 10 37 | inside 29 37 34 | pedal 16.9 | push 10.2 | hold 18.3 | two 11.2
 ; Miles' 60s quintet (Shorter's tunes): elastic, open, repeats and leaps, chromatic colour.

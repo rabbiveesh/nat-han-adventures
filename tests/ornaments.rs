@@ -444,18 +444,24 @@ fn musicians_switch_instruments_and_back() {
 
 /// The walking bass walks like the bassist behind the soloist (`walkers`): Garrison (behind
 /// Trane) repeats notes and sits on pedals, Chambers (behind Miles) hardly repeats and walks
-/// half steps, Watkins (behind Sonny) leaps.
+/// half steps and skips on the triplet (his rhythm measured), Watkins (behind Sonny) leaps.
 #[test]
 fn each_soloist_gets_their_bassist() {
     use nat_han_adventures::audio::live::{chorus::{Call, Chorus}, soloist::Soloist};
     let stats = |s: Soloist| {
-        let (mut moves, mut repeats, mut halves, mut leaps) = (0, 0, 0, 0);
+        let (mut moves, mut repeats, mut halves, mut leaps, mut beats, mut triplets) = (0, 0, 0, 0, 0, 0);
         for seed in 1..4 {
             let setup = [freedom(0.6), Input::ForceSoloist(Some(s)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
             let (_, bars) = play(song(Music::World(1)), seed, &setup, |_| vec![], 96);
             for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
                 let line: Vec<&NoteEvent> = b.ch(2).collect();
-                for w in line.windows(2) {
+                // Skips: notes off the beat, and those on its last triplet.
+                let beat = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
+                beats += 4;
+                triplets += line.iter().filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() > 0.6 && ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.72).count();
+                // Beat to beat, as the database measured them (one note a beat).
+                let on: Vec<&&NoteEvent> = line.iter().filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05).collect();
+                for w in on.windows(2) {
                     let d = (notes_of(w[1])[0] as i32 - notes_of(w[0])[0] as i32).abs();
                     moves += 1;
                     repeats += (d == 0) as usize;
@@ -466,12 +472,13 @@ fn each_soloist_gets_their_bassist() {
         }
         assert!(moves > 100, "{s:?}: {moves} walking moves");
         let f = |x: usize| x as f32 / moves as f32;
-        let out = (f(repeats), f(halves), f(leaps));
-        eprintln!("{s:?}: repeats {:.2}, half steps {:.2}, 4ths-5ths {:.2}", out.0, out.1, out.2);
+        let out = (f(repeats), f(halves), f(leaps), triplets as f32 / beats as f32);
+        eprintln!("{s:?}: repeats {:.2}, half steps {:.2}, 4ths-5ths {:.2}, triplet skips {:.2}", out.0, out.1, out.2, out.3);
         out
     };
     let (pc, jg, dw) = (stats(Soloist::Miles), stats(Soloist::Trane), stats(Soloist::Sonny));
     assert!(jg.0 > 2.0 * pc.0, "Garrison repeats ({:.2}), Chambers doesn't ({:.2})", jg.0, pc.0);
     assert!(pc.1 > jg.1, "Chambers' half steps ({:.2}) against Garrison's ({:.2})", pc.1, jg.1);
     assert!(dw.2 > pc.2 && dw.0 < pc.0 + 0.05, "Watkins leaps ({:.2}) more than Chambers ({:.2})", dw.2, pc.2);
+    assert!(pc.3 > 0.05 && pc.3 > 3.0 * jg.3, "Chambers' skips on the triplet ({:.2}), the others' on the 8th ({:.2})", pc.3, jg.3);
 }

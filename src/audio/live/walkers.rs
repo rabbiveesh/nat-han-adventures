@@ -32,6 +32,13 @@ pub struct Walker {
     pub push: f32,
     pub hold: f32,
     pub two: f32,
+    /// Rhythm (from a note-level pass on the bassist's records, where measured): beats with a
+    /// skip note at a medium tempo (fewer when fast), and where in the beat it falls (`None`:
+    /// on the tune's swung 8th); beats raked in triplets; notes ghosted.
+    pub skip: f32,
+    pub skip_at: Option<f32>,
+    pub rake: f32,
+    pub ghost: f32,
 }
 
 impl Walker {
@@ -48,7 +55,7 @@ impl Walker {
         let (slug, v) = line.split_once('=').ok_or("expected `slug = Name | steps .. | lands .. | approach .. | inside .. | pedal ..`")?;
         let mut parts = v.split('|').map(str::trim);
         let name = parts.next().filter(|n| !n.is_empty()).ok_or("a name first")?;
-        let mut w = Walker { slug: slug.trim().into(), name: name.into(), steps: [0.0; 6], lands: [0.0; 4], approach: [0.0; 6], inside: [0.0; 3], pedal: -1.0, push: -1.0, hold: -1.0, two: -1.0 };
+        let mut w = Walker { slug: slug.trim().into(), name: name.into(), steps: [0.0; 6], lands: [0.0; 4], approach: [0.0; 6], inside: [0.0; 3], pedal: -1.0, push: -1.0, hold: -1.0, two: -1.0, skip: 0.12, skip_at: None, rake: 0.0, ghost: 0.0 };
         for part in parts {
             let (key, nums) = part.split_once(' ').ok_or_else(|| format!("`{part}`: a field and its numbers"))?;
             let nums: Vec<f32> = nums.split_whitespace().map(|x| x.parse::<f32>().map_err(|_| format!("`{x}`: not a number"))).collect::<Result<_, _>>()?;
@@ -83,7 +90,11 @@ impl Walker {
                     } = x;
                 }
                 "pedal" | "push" | "hold" | "two" => return Err(format!("`{key}`: one percentage")),
-                _ => return Err(format!("`{key}`: steps, lands, approach, inside, pedal, push, hold or two")),
+                "skip" if nums.len() == 2 && nums[0] <= 100.0 && (0.5..1.0).contains(&nums[1]) => (w.skip, w.skip_at) = (nums[0] / 100.0, Some(nums[1])),
+                "skip" => return Err("`skip`: a percentage, then where in the beat (0.5..1)".into()),
+                "rake" | "ghost" if nums.len() == 1 && nums[0] <= 100.0 => *(if key == "rake" { &mut w.rake } else { &mut w.ghost }) = nums[0] / 100.0,
+                "rake" | "ghost" => return Err(format!("`{key}`: one percentage")),
+                _ => return Err(format!("`{key}`: steps, lands, approach, inside, pedal, push, hold, two, skip, rake or ghost")),
             }
         }
         if w.steps[1] + w.steps[2] == 0.0 || w.lands[0] == 0.0 || w.inside[0] == 0.0 || [w.pedal, w.push, w.hold, w.two].iter().any(|x| *x < 0.0) {
@@ -149,6 +160,7 @@ mod tests {
         assert!(by("heath").unwrap().root_share() > pc.root_share());
         assert!(jg.push > 2.0 * pc.push && jg.hold > 4.0 * dw.hold, "Garrison blurs the bar line, the hard-boppers land on it");
         assert!(by("foster").unwrap().two > 4.0 * pc.two, "Pops' bass in two");
+        assert!(pc.skip_at.is_some_and(|x| (0.6..0.7).contains(&x)) && pc.ghost > 0.0, "Chambers' triplet skips, measured");
     }
 
     #[test]

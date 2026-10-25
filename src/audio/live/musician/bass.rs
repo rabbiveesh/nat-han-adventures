@@ -427,7 +427,8 @@ impl Bass {
     /// chord change mostly the root (else its 3rd or 5th), the beat before it an approach (a
     /// half step either side, a whole step, the next chord's 5th, the same note), notes in
     /// between by their steps and leaps, chord, scale and chromatic notes heading for the next
-    /// root; a pedal through a bar of one chord now and then; the odd swung octave skip.
+    /// root; a pedal through a bar of one chord now and then; skip notes (an octave, or the note
+    /// again muted), ghosted notes and the rare rake, by how the bassist plays them.
     fn walk(&mut self, ctx: &Ctx, t: &NoteEvent, prev: i32, slip: bool, r: &mut Rng) {
         let w = ctx.soloist.bassist();
         let bb = ctx.bb();
@@ -489,15 +490,29 @@ impl Bass {
                 n += 1;
             }
             let n = n.clamp(LO, HI);
+            // The skip notes: fewer the faster the tune, a little more into a change (the
+            // beat before it); swung where the bassist swings them (else the tune's 8ths).
+            let fast = ((ctx.shape.bpm - 190.0) / 70.0).clamp(0.0, 1.0);
+            let skip = w.skip as f64 * (1.0 - 0.65 * fast as f64) * if last { 1.1 } else { 0.9 };
+            let ghost = |e: NoteEvent, r: &mut Rng| if r.chance(w.ghost as f64) { NoteEvent { volume: e.volume.saturating_sub(4).max(1), ..e } } else { e };
             if two {
                 push(&mut self.dst, ctx.make(t, b, 2.0, Sound::Note(n as u8)));
-            } else if !first && !last && r.chance(0.12) {
-                let skip = if n + 12 <= HI { n + 12 } else { n - 12 };
-                push(&mut self.dst, ctx.make(t, b, 0.5, Sound::Note(n as u8)));
-                let s = ctx.swing8(b + 0.5);
-                push(&mut self.dst, ctx.make(t, s, b + 1.0 - s, Sound::Note(skip as u8)));
+            } else if pedal.is_none() && r.chance(w.rake as f64) {
+                // A rake: the beat in triplets, the last two muted, into the next beat.
+                for j in 0..3 {
+                    let e = ctx.make(t, b + j as f64 / 3.0, 0.3, Sound::Note(n as u8));
+                    push(&mut self.dst, if j == 0 { e } else { NoteEvent { volume: e.volume.saturating_sub(5).max(1), ..e } });
+                }
+            } else if pedal.is_none() && r.chance(skip) {
+                let at = w.skip_at.map_or_else(|| ctx.swing8(b + 0.5), |x| b + x as f64);
+                let octave = w.ghost == 0.0 || r.chance(0.5);
+                let (skip, soft) = if !octave { (n, 4) } else if n + 12 <= HI { (n + 12, 0) } else { (n - 12, 0) };
+                push(&mut self.dst, ghost(ctx.make(t, b, at - b, Sound::Note(n as u8)), r));
+                let e = ctx.make(t, at, b + 1.0 - at, Sound::Note(skip as u8));
+                push(&mut self.dst, NoteEvent { volume: e.volume.saturating_sub(soft).max(1), ..e });
             } else {
-                push(&mut self.dst, ctx.make(t, b, 1.0, Sound::Note(n as u8)));
+                let e = ctx.make(t, b, 1.0, Sound::Note(n as u8));
+                push(&mut self.dst, if first { e } else { ghost(e, r) });
             }
             p = n;
         }
