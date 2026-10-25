@@ -47,10 +47,17 @@ pub enum Soloist {
     Sonny,
     Wayne,
     Pops,
+    /// The funk feel's soloists (not one player: what they share), in the band's funk sections.
+    Funk,
+    /// The Latin feel's, in its bossa and samba sections.
+    Latin,
 }
 
 impl Soloist {
-    pub const ALL: [Soloist; 7] = [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird, Soloist::Sonny, Soloist::Wayne, Soloist::Pops];
+    pub const ALL: [Soloist; 9] =
+        [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird, Soloist::Sonny, Soloist::Wayne, Soloist::Pops, Soloist::Funk, Soloist::Latin];
+    /// Those who solo over swing (the solo goes round them: [`take_the_solo`]).
+    pub const SWING: [Soloist; 7] = [Soloist::Band, Soloist::Miles, Soloist::Trane, Soloist::Bird, Soloist::Sonny, Soloist::Wayne, Soloist::Pops];
 
     pub fn slug(self) -> &'static str {
         match self {
@@ -61,6 +68,8 @@ impl Soloist {
             Soloist::Sonny => "sonny",
             Soloist::Wayne => "wayne",
             Soloist::Pops => "pops",
+            Soloist::Funk => "funk",
+            Soloist::Latin => "latin",
         }
     }
 
@@ -98,6 +107,8 @@ impl Soloist {
             Soloist::Sonny => (90.0, 300.0),
             Soloist::Trane => (110.0, 340.0),
             Soloist::Wayne => (100.0, 290.0),
+            // Picked by the feel, not passed the solo.
+            Soloist::Funk | Soloist::Latin => (f32::INFINITY, 0.0),
         }
     }
 
@@ -139,13 +150,13 @@ pub fn take_the_solo(seed: u64, pass: u64, prev: Option<Soloist>, bpm: f32, walt
         };
         mood * near
     };
-    let total: f32 = Soloist::ALL.iter().map(|&s| weight(s)).sum();
+    let total: f32 = Soloist::SWING.iter().map(|&s| weight(s)).sum();
     if total <= 0.0 {
         return Soloist::Band;
     }
     let mut r = Rng::new(seed ^ pass.wrapping_mul(0x50_10_15_75));
     let mut x = r.f() as f32 * total;
-    for s in Soloist::ALL {
+    for s in Soloist::SWING {
         x -= weight(s);
         if x < 0.0 && weight(s) > 0.0 {
             return s;
@@ -162,13 +173,15 @@ pub fn take_the_solo(seed: u64, pass: u64, prev: Option<Soloist>, bpm: f32, walt
 // out near theirs (`soloists_play_like_their_numbers`). The steps along the chord-scale already
 // put a chord tone on ~2 strong beats in 3 (as they measured: 52-58%), so none of them needs
 // the extra pull.
-const FILES: [(Soloist, &str); 6] = [
+const FILES: [(Soloist, &str); 8] = [
     (Soloist::Miles, include_str!("../../../music/players/miles.player")),
     (Soloist::Trane, include_str!("../../../music/players/trane.player")),
     (Soloist::Bird, include_str!("../../../music/players/bird.player")),
     (Soloist::Sonny, include_str!("../../../music/players/sonny.player")),
     (Soloist::Wayne, include_str!("../../../music/players/wayne.player")),
     (Soloist::Pops, include_str!("../../../music/players/pops.player")),
+    (Soloist::Funk, include_str!("../../../music/players/funk.player")),
+    (Soloist::Latin, include_str!("../../../music/players/latin.player")),
 ];
 
 /// How a player builds lines. Lengths in beats; shares 0..1. Written in `.player` files

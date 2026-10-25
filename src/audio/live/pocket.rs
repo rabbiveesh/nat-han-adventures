@@ -17,9 +17,14 @@
 //!
 //! A note's end moves only with the spot, and so does a tied note's start, so ties and slurs
 //! stay joined. In a soli the section sits with the lead (it breathes together). Straight feels
-//! (bossa, samba, rock, funk) sit tighter than swing. Pure, no allocation.
+//! (bossa, samba, rock, funk) sit tighter than swing, but their drums keep each groove's own
+//! shape on the 16ths ([`groove_ms`], measured on Magenta's Groove MIDI Dataset: 13.6 hours of
+//! ten drummers): funk's ghost snares lag on the "e" and the "a" while the kick pushes the
+//! one and the "and", rock's hats drag the "e", samba's snare pushes the "and" and the "a".
+//! Pure, no allocation.
 
 use super::feel::Feel;
+use crate::audio::mml::Drum;
 use crate::audio::tuning;
 
 /// Per channel, in ms (positive: behind the beat): the spot's mean and how far it drifts to
@@ -71,6 +76,8 @@ pub struct Player {
     pub feel: Feel,
     /// In a soli: the section sits with the lead.
     pub soli: bool,
+    /// The drum it is, and whether it's a ghost note (a soft snare).
+    pub drum: Option<(Drum, bool)>,
 }
 
 impl Player {
@@ -117,6 +124,10 @@ impl Player {
             let (a, b) = (unit(h), unit(h.rotate_left(32).wrapping_mul(0x9E37_79B9_7F4A_7C15)));
             let width = seat.jitter * jitter_scale(bpm) * 6f64.sqrt() / 2.0;
             ms += ((a + b - 1.0) * width).clamp(-MAX_JITTER, MAX_JITTER);
+            if let Some((d, ghost)) = self.drum {
+                // (At its full measure: [`Player::scale`] halves straight feels' scatter only.)
+                ms += groove_ms(self.feel, d, ghost, beat) / if self.feel == Feel::Swing { 1.0 } else { 0.5 };
+            }
         }
         self.shift(t, ms * self.scale())
     }
@@ -135,6 +146,36 @@ impl Player {
     }
 }
 
+/// Where a groove puts a drum on each 16th of the beat (the one, "e", "and", "a"), ms against
+/// its closed hat (the time it keeps; plus: late). From the Groove MIDI Dataset's grooves (not
+/// fills) in 4/4, each voice's mean offset from the click, less the hat's (the drummers sit
+/// 5-20 ms ahead of the click all through), at three quarters of the measure (a chip kit's
+/// attacks are sharper than a real one's). Swing and bossa: none (their 8ths' swing is the
+/// groove; the bossa had too few grooves to say).
+pub fn groove_ms(feel: Feel, drum: Drum, ghost: bool, beat: f64) -> f64 {
+    let x = beat.rem_euclid(1.0) * 4.0;
+    if (x - x.round()).abs() > 0.1 {
+        return 0.0;
+    }
+    let k = (x.round() as usize) % 4;
+    let row: [f64; 4] = match (feel, drum, ghost) {
+        // Funk: the kick pushes the one and the "and", the ghosts lag the "e" and the "a".
+        (Feel::Funk, Drum::Kick, _) => [-5.0, 6.0, -7.0, 13.0],
+        (Feel::Funk, Drum::Snare, true) => [-22.0, 18.0, -17.0, 18.0],
+        (Feel::Funk, Drum::Snare, false) => [-1.0, 8.0, -3.0, 5.0],
+        (Feel::Funk, Drum::OpenHat, _) => [0.0, -1.0, -5.0, -12.0],
+        // Rock: the hats' "e" drags, their "a" pushes (a 1.29 16th swing).
+        (Feel::Rock, Drum::ClosedHat, _) => [0.0, 15.0, 2.0, -12.0],
+        (Feel::Rock, Drum::Kick, _) => [2.0, 13.0, 3.0, 0.0],
+        (Feel::Rock, Drum::Snare, _) => [4.0, 6.0, 9.0, -2.0],
+        // Samba: the snare pushes the "and" and the "a"; the kick's "a" leads into the one.
+        (Feel::Samba, Drum::Snare, _) => [1.0, 5.0, -11.0, -14.0],
+        (Feel::Samba, Drum::Kick, _) => [9.0, 0.0, 0.0, -16.0],
+        _ => return 0.0,
+    };
+    row[k] * 0.75
+}
+
 fn unit(h: u64) -> f64 {
     (h >> 11) as f64 / (1u64 << 53) as f64
 }
@@ -146,7 +187,7 @@ mod tests {
     const SR: u32 = 32_000;
 
     fn player(ch: u8) -> Player {
-        Player { ch, sr: SR, seed: 3, bpm: 160.0, lay: 1.0, loose: 1.0, feel: Feel::Swing, soli: false }
+        Player { ch, sr: SR, seed: 3, bpm: 160.0, lay: 1.0, loose: 1.0, feel: Feel::Swing, soli: false, drum: None }
     }
 
     /// Mean and standard deviation of a channel's attacks against the grid, ms (`beat`: the
@@ -183,6 +224,19 @@ mod tests {
         assert!(slow.0 > mid.0 + 2.0 && mid.0 > fast.0 + 1.0, "{slow:?} {mid:?} {fast:?}");
         assert!(fast.0.abs() < 1.5, "on the beat when it burns: {fast:?}");
         assert!(slow.1 > fast.1 * 1.15, "wider on ballads: {slow:?} {fast:?}");
+    }
+
+    #[test]
+    fn funk_ghosts_lag_and_its_kick_pushes() {
+        let at = |drum: Drum, ghost: bool, beat: f64| {
+            let p = Player { ch: 3, feel: Feel::Funk, drum: Some((drum, ghost)), ..player(3) };
+            let d: Vec<f64> = (0..2000u64).map(|k| k * 7919).map(|t| (p.start(t, beat, false) as f64 - t as f64) / 32.0).collect();
+            d.iter().sum::<f64>() / d.len() as f64
+        };
+        assert!(at(Drum::Snare, true, 0.25) > at(Drum::ClosedHat, false, 0.25) + 8.0, "a ghost on the e lags");
+        assert!(at(Drum::Kick, false, 0.5) < at(Drum::ClosedHat, false, 0.5) - 3.0, "the kick pushes the and");
+        assert_eq!(groove_ms(Feel::Swing, Drum::Snare, true, 0.25), 0.0);
+        assert_eq!(groove_ms(Feel::Funk, Drum::Snare, true, 0.4), 0.0, "off the 16ths: as it is");
     }
 
     #[test]

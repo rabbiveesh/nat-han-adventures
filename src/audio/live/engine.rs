@@ -63,6 +63,7 @@ use super::mix;
 use super::pocket;
 use super::song::SongFile;
 use super::voice::{MAX_SEGMENT, NoteEvent, Sound, VoiceBank};
+use crate::audio::mml::Drum;
 
 /// Something that happened, or a dial that moved.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -311,6 +312,9 @@ impl Default for EngineState {
 }
 
 /// Gameplay energy per event (dynamics), and its decay per bar.
+/// A snare this soft (MML volume) is a ghost note ([`pocket::groove_ms`]).
+const GHOST_VOLUME: u8 = 6;
+
 const ENERGY_TOOT: f32 = 0.06;
 const ENERGY_NUGGET: f32 = 0.05;
 const ENERGY_CHECKPOINT: f32 = 0.1;
@@ -756,8 +760,14 @@ impl Engine {
             ending,
         });
         ctx.band = &band;
-        // The players were measured swinging: a bossa or a funk section gets the band's own line.
-        let soloist = if band.feel == Feel::Swing { soloist } else { Soloist::Band };
+        // A feel section gets the feel's own soloists (measured over funk and Latin grooves);
+        // rock, the band's own line.
+        let soloist = match band.feel {
+            Feel::Swing => soloist,
+            Feel::Funk => Soloist::Funk,
+            Feel::Bossa | Feel::Samba => Soloist::Latin,
+            Feel::Rock => Soloist::Band,
+        };
         ctx.soloist = soloist;
         self.scratch.clear();
         let mut orns = [Orns::default(); 4];
@@ -770,7 +780,11 @@ impl Engine {
         let (sr, pocket_seed, loose, lay_back) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose, soloist.lay_back());
         for e in &mut self.scratch {
             // (Never before the pass it's in starts: the voices count from there.)
-            let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, lay: lay_back, loose, feel: band.feel, soli: band.soli.is_some() };
+            let drum = match e.sound {
+                Sound::Drum(d) => Some((d, d == Drum::Snare && e.volume <= GHOST_VOLUME)),
+                _ => None,
+            };
+            let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, lay: lay_back, loose, feel: band.feel, soli: band.soli.is_some(), drum };
             let start = p.start(e.start, e.beat, e.tie).max(e.loop_start);
             (e.start, e.end) = (start, p.end(e.end).max(start + 1));
             if band.swell != 0.0 {

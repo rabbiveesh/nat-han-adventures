@@ -457,7 +457,7 @@ fn soloists(dir: &Path) {
         let script = move |bar: u64| {
             if bar == 1 { vec![Input::LevelStart, Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
         };
-        for soloist in Soloist::ALL {
+        for soloist in Soloist::SWING {
             let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
             let (out, log, _) = run_with(&file, config, script, file_bars(&file), |_| "");
             let name = format!("solo_{}_{stem}", soloist.slug());
@@ -465,6 +465,18 @@ fn soloists(dir: &Path) {
             std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
             println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
         }
+    }
+    // The feels' soloists: a blowing chorus in a funk feel, and in a bossa.
+    let file = SongFile::parse(library::text("sweet_georgia_brown").unwrap()).expect("song parses");
+    for feel in [Feel::Funk, Feel::Bossa] {
+        let script = move |bar: u64| {
+            if bar == 1 { vec![Input::LevelStart, Input::ForceFeel(Some(feel)), Input::ForceChorus(Some(call)), Input::SetFreedom { lead: 0.5, comp: 0.5, bass: 0.5, drums: 0.5, dynamics: 0.5 }] } else { vec![] }
+        };
+        let (out, log, _) = run_with(&file, EngineConfig { seed: 7, ..EngineConfig::default() }, script, file_bars(&file), |_| "");
+        let name = format!("solo_{}_sweet_georgia_brown", feel.slug());
+        write_wav(&dir.join(format!("{name}.wav")), &out);
+        std::fs::write(dir.join(format!("{name}.txt")), log).expect("write log");
+        println!("{name}.wav: {:.1}s", out.len() as f64 / RATE as f64);
     }
     // For fun: the head of the anthem (swung, in 4/4), then a chorus of blowing over it.
     let file = SongFile::parse(include_str!("star_spangled_banner.song")).expect("anthem parses");
@@ -474,7 +486,7 @@ fn soloists(dir: &Path) {
         b if b == bars + 1 => vec![Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))],
         _ => vec![],
     };
-    for soloist in Soloist::ALL {
+    for soloist in Soloist::SWING {
         let config = EngineConfig { seed: 7, soloist: Some(soloist), ..EngineConfig::default() };
         let (out, log, _) = run_with(&file, config, script, bars * 2, |_| "");
         let name = format!("solo_{}_star_spangled_banner", soloist.slug());

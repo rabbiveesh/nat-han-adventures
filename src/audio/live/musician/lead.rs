@@ -143,7 +143,8 @@ impl Musician for Lead {
         }
         // An instrument for the phrase (or a solo / a fill on a loose night).
         let fill_bar = fired.has(Orn::Solo) || fired.has(Orn::RunFill);
-        let persona = fired.has(Orn::Solo) && ctx.soloist.profile().is_some();
+        // (A feel's soloists play on the feel's instruments.)
+        let persona = fired.has(Orn::Solo) && ctx.soloist.profile().is_some() && ctx.band.feel == Feel::Swing;
         if !persona {
             self.persona_inst = None;
         }

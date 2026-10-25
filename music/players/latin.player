@@ -1,0 +1,57 @@
+; Latin: the soloists over a Latin feel in the Weimar Jazz Database (27 solos: Getz and
+; Desmond bossas, Art Pepper's "Desafinado", "St. Thomas", "Sidewinder", "Juju", Dave
+; Liebman, Bob Berg; 60-273 bpm). Longer phrases than funk (7 beats), nearly straight 8ths,
+; 42% of phrases starting on an "and", chromatic runs down from the 13th, scale runs up from
+; the root, enclosures; a little behind the beat (+8 ms). Not one player: what the Latin
+; feel's players share. Played in the band's bossa and samba sections.
+; Measured on their transcribed solos: statistics only, never their phrases. The format is
+; documented in `src/audio/live/player_file.rs`.
+
+[player]
+name = Latin
+lay_back = 1.3              ; +8 ms on the beat (+19 on a slow bossa, +4 when it burns)
+swing = 1.24                ; nearly straight 8ths
+legato = 0.86               ; sounding length against the time to the next note
+register = 66 57 77         ; MIDI, the lead's octave: centre, soft floor, soft ceiling
+
+[line]
+phrase = 7.2 4.1 12.2       ; beats: median, lower and upper quartile (log-normal)
+rest = 1.85 1.27 2.76       ; the rest between phrases, likewise
+cells = eighths 15.5, quarter 6.0, triplet 3.5, sixteenths 10.3, dotted 2.7, quarter_triplet 0.9, long 3.4
+intervals = 5.4 23.6 29.4 16.7 9.6 7.8 2.0 2.6 3.0 ; by size: 0 1 2 3 4 5 6 7 8-12 semitones
+step_back = 0.24            ; after a leap (5 or more), a step back the other way
+end_chord_tone = 0.67       ; a phrase's last note on a chord tone
+approach = 0.27             ; a half step into a strong-beat chord tone...
+from_below = 0.5            ; ...from below this share of the time
+enclosure = 0.11            ; one above and one below into a strong-beat chord tone
+pentatonic = 0.33           ; a run of four through the chord's pentatonic
+anticipation = 0.42         ; a phrase starts on the "and" before the bar line
+falls = 0.02                ; a fall off a phrase's last note
+
+[dynamics]
+; Loud in, fading all the way to a soft last note; louder going up.
+arch = 0.35 0.16 -0.42 -0.79 -3.18 ; dB: first note, early, middle, late, last note
+per_octave = 1.7            ; dB per octave above the register's centre
+ghost = 0.2                 ; the offbeat 8th ghosted (-4 dB) this often...
+accent = 0.6                ; ...or else accented this much (dB)
+long = -3.0                 ; notes of 1.2 beats or more (dB)
+scatter = 3.0               ; each note's own spread (dB, a standard deviation)
+
+[motifs]
+motif = 0.1                 ; a phrase restates the last one's head, then goes its own way
+sequence = 0.07             ; a 3-4 note cell restated straight after (a sequence)
+moves = -7:10 -5:7 -4:7 -3:4 1:3 ; the sequences' transpositions (semitones:weight)
+
+[licks]
+; Ours, written to rhyme with the shapes the Latin solos share (the 13th down chromatically
+; to the 11th, scale runs up from the root, the 9-1-6-5 turn, the 1-9-3-5 arpeggio, the 7th
+; under the root, the altered fall), mostly in 8ths.
+rate = 0.25                 ; a phrase opens with one this often (when one fits the chord)
+dom = o4 a8 a-8 g8 g-8 f4
+min = o4 c8 d8 e-8 f8 g4
+any = o5 d16 c16 o4 a16 g16 e8 c8
+maj = o4 c8 d8 e8 g8 a4
+dom = o4 d16 o3 b16 o4 c16 d16 e8 g8
+dom = o4 g8 a-8 g8 f8 e4
+dom = o4 b-8 g8 f8 e-8 d4
+min = o4 e-16 f16 g16 e-16 d8 c8
