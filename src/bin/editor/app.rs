@@ -437,6 +437,17 @@ impl Editor {
         self.player.post(Input::ForceChorus(c));
     }
 
+    pub fn set_soloist(&mut self, s: Option<nat_han_adventures::audio::live::soloist::Soloist>) {
+        self.dials.soloist = s;
+        self.player.post(Input::ForceSoloist(s));
+    }
+
+    /// The off-the-grid switches: the pocket and the ducking at once, the drift from the next play.
+    pub fn set_human(&mut self, pocket: bool, duck: bool, drift: bool) {
+        (self.dials.pocket, self.dials.duck, self.dials.drift) = (pocket, duck, drift);
+        self.player.post(self.dials.human_input());
+    }
+
     /// Tell the band to end the song (an ending from the next bar, then it stops).
     pub fn end_song(&mut self) {
         self.player.post(Input::End);

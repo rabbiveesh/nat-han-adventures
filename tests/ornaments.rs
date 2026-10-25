@@ -41,7 +41,7 @@ fn freedom(f: f32) -> Input {
 /// Play `song` for `bars` bars (`inputs(k)` posted as bar `k` is about to be decided), and
 /// collect every bar as it's committed.
 fn play(song: &SongFile, seed: u64, setup: &[Input], inputs: impl Fn(u64) -> Vec<Input>, bars: u64) -> (Engine, Vec<Bar>) {
-    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::default() }).unwrap();
+    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::on_grid() }).unwrap();
     for i in setup {
         e.post(*i);
     }
@@ -79,7 +79,7 @@ const LOOPING: [Music; 7] = [Music::Title, Music::World(1), Music::World(2), Mus
 fn freedom_zero_is_exactly_as_written() {
     for m in [Music::World(2), Music::World(4)] {
         let render = |inputs: &dyn Fn(u64) -> Vec<Input>| {
-            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig::default()).unwrap();
+            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig::on_grid()).unwrap();
             e.post(freedom(0.0));
             let mut out = vec![Frame::ZERO; 40 * 32_000];
             for (k, c) in out.chunks_mut(32_000).enumerate() {
@@ -288,7 +288,8 @@ fn the_reharm_keeps_bass_and_comp_together() {
                         assert_eq!(bass.sound.notes()[0] % 12, s.chord.root, "{m:?} bar {}: the bass missed the sub's root", b.c.slot.index);
                     }
                     for e in b.ch(1).filter(in_sub) {
-                        if b.c.band.hits != 0 {
+                        // (A soli's lines pass through other notes: `tests/choruses.rs`.)
+                        if b.c.band.hits != 0 || b.c.band.soli.is_some() {
                             continue;
                         }
                         assert!(e.sound.notes().iter().all(|&n| h.is_chord_tone(n) || b.c.orns[1].has(Orn::Polychord)), "{m:?} bar {}: comp {:?} over {}", b.c.slot.index, e.sound, s.chord);
@@ -427,7 +428,7 @@ fn musicians_switch_instruments_and_back() {
                     }
                 }
                 if b.c.orns[ch as usize].has(Orn::Switch) {
-                    assert!(b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)));
+                    assert!(b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)), "{m:?} bar {} {r:?}: {:?}", b.c.slot.index, b.ch(ch).map(|e| (e.inst, e.beat)).collect::<Vec<_>>());
                     switched += 1;
                 }
             }
@@ -439,4 +440,65 @@ fn musicians_switch_instruments_and_back() {
         }
     }
     assert!(switched >= 5, "only {switched} switches");
+}
+
+/// The walking bass walks like the bassist behind the soloist (`walkers`): Garrison (behind
+/// Trane) repeats notes and sits on pedals, Chambers (behind Miles) hardly repeats and walks
+/// half steps and skips on the triplet (his rhythm measured), Watkins (behind Sonny) leaps.
+#[test]
+fn each_soloist_gets_their_bassist() {
+    use nat_han_adventures::audio::live::{chorus::{Call, Chorus}, soloist::Soloist};
+    let stats = |s: Soloist| {
+        let (mut moves, mut repeats, mut halves, mut leaps, mut beats, mut triplets) = (0, 0, 0, 0, 0, 0);
+        for seed in 1..4 {
+            let setup = [freedom(0.6), Input::ForceSoloist(Some(s)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
+            let (_, bars) = play(song(Music::World(1)), seed, &setup, |_| vec![], 96);
+            for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
+                let line: Vec<&NoteEvent> = b.ch(2).collect();
+                // Skips: notes off the beat, and those on its last triplet.
+                let beat = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
+                beats += 4;
+                triplets += line.iter().filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() > 0.6 && ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.72).count();
+                // Beat to beat, as the database measured them (one note a beat).
+                let on: Vec<&&NoteEvent> = line.iter().filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05).collect();
+                for w in on.windows(2) {
+                    let d = (notes_of(w[1])[0] as i32 - notes_of(w[0])[0] as i32).abs();
+                    moves += 1;
+                    repeats += (d == 0) as usize;
+                    halves += (d == 1) as usize;
+                    leaps += (5..=7).contains(&d) as usize;
+                }
+            }
+        }
+        assert!(moves > 100, "{s:?}: {moves} walking moves");
+        let f = |x: usize| x as f32 / moves as f32;
+        let out = (f(repeats), f(halves), f(leaps), triplets as f32 / beats as f32);
+        eprintln!("{s:?}: repeats {:.2}, half steps {:.2}, 4ths-5ths {:.2}, triplet skips {:.2}", out.0, out.1, out.2, out.3);
+        out
+    };
+    let (pc, jg, dw) = (stats(Soloist::Miles), stats(Soloist::Trane), stats(Soloist::Sonny));
+    assert!(jg.0 > 2.0 * pc.0, "Garrison repeats ({:.2}), Chambers doesn't ({:.2})", jg.0, pc.0);
+    assert!(pc.1 > jg.1, "Chambers' half steps ({:.2}) against Garrison's ({:.2})", pc.1, jg.1);
+    assert!(dw.2 > pc.2 && dw.0 < pc.0 + 0.05, "Watkins leaps ({:.2}) more than Chambers ({:.2})", dw.2, pc.2);
+    assert!(pc.3 > 0.05 && pc.3 > 3.0 * jg.3, "Chambers' skips on the triplet ({:.2}), the others' on the 8th ({:.2})", pc.3, jg.3);
+}
+
+/// A tune can name its own bassist: Tommy Bryant walks Sunny Side in paired quarters (beat 2
+/// the note of 1, 4 of 3) a third of the bars, whoever solos.
+#[test]
+fn sunny_side_gets_bryants_paired_quarters() {
+    use nat_han_adventures::audio::live::chorus::{Call, Chorus};
+    let file = SongFile::parse(library::text("sunny_side").unwrap()).unwrap();
+    assert_eq!(file.bassist.as_deref(), Some("bryant"));
+    let setup = [freedom(0.6), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
+    let (_, bars) = play(&file, 3, &setup, |_| vec![], 96);
+    let (mut walking, mut paired) = (0, 0);
+    for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
+        let beat = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
+        let on: Vec<u8> = b.ch(2).filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05).map(|e| notes_of(e)[0]).collect();
+        walking += 1;
+        paired += (on.len() == 4 && on[0] == on[1] && on[2] == on[3]) as usize;
+    }
+    let share = paired as f32 / walking as f32;
+    assert!(walking > 20 && (0.12..0.5).contains(&share), "{paired} of {walking} walking bars paired");
 }

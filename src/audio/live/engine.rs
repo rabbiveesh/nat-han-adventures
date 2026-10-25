@@ -5,7 +5,8 @@
 //! # Time
 //! The playhead is an absolute sample count. Bars are numbered from 0 since the engine
 //! started and keep counting through loop passes and meter changes. Bar lines fall where the
-//! offline renderer puts them (`round(beats · samples_per_beat)` within each pass).
+//! offline renderer puts them (each bar at its own tempo as the band's drifts: [`Shape::drifting`]).
+//! Each player's notes then sit a few ms off the grid, as players do ([`super::pocket`]).
 //!
 //! # The waltz: two shapes
 //! The waltz ([`Harmony::Waltz`]) is the song re-cut into 3/4 at its own tempo, on its own
@@ -47,18 +48,22 @@ use kira::Frame;
 use crate::audio::chart::Chart;
 use crate::audio::director::{self, PlayStats};
 use crate::audio::synth::soft_clip;
-use crate::audio::tuning::{Medley, Tuning};
+use crate::audio::tuning::{self, Medley, Tuning};
 use crate::audio::{Filters, Harmony};
 
 use super::arrange::{Arrangement, Shape};
 use super::band::{BandInput, BandPlan};
 use super::chorus;
+use super::soloist::{self, Soloist};
 use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::musician::{self, BarSlot, Ctx, Musician, PhrasePlan, Role};
 use super::ornament::Orns;
+use super::mix;
+use super::pocket;
 use super::song::SongFile;
 use super::voice::{MAX_SEGMENT, NoteEvent, Sound, VoiceBank};
+use crate::audio::mml::Drum;
 
 /// Something that happened, or a dial that moved.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -94,6 +99,13 @@ pub enum Input {
     /// Override the chorus ([`super::chorus`]; `None`: the band arranges): every pass plays it,
     /// from the next bar committed. A dev override (the editor's chips).
     ForceChorus(Option<chorus::Call>),
+    /// Override who the lead solos like ([`EngineConfig::soloist`]; `None`: passed round), from
+    /// the next bar committed. A dev override (the editor's chips).
+    ForceSoloist(Option<Soloist>),
+    /// How loose the players sit and whether the band ducks under the lead
+    /// ([`EngineConfig::loose`], [`EngineConfig::duck`]), from the next bar committed. The
+    /// editor's off-the-grid switches (the tempo drift is the shape's: set at the start).
+    SetHuman { loose: f32, duck: bool },
     /// End the song: the band plays an ending ([`chorus::EndKind`], picked by the dials) from
     /// the next bar committed, and the engine is [`Engine::finished`] after it.
     End,
@@ -119,13 +131,36 @@ pub struct EngineConfig {
     /// Start with an intro ([`chorus`]: a four-bar vamp or pedal before the head) when the band
     /// is loose enough at the first bar and the tune starts from the top (the game's levels).
     pub intro: bool,
+    /// How far the tempo drifts either way over a pass, in bpm ([`Shape::drifting`]; 0: none).
+    pub drift_bpm: f32,
+    /// How loose the players sit against the beat, 0..1 ([`super::pocket`]: 0 locks every
+    /// note to the grid).
+    pub loose: f32,
+    /// Who the lead solos like ([`super::soloist`]): `None`, a chorus each, as a band passes
+    /// the solo round ([`super::soloist::take_the_solo`]); one player all through.
+    pub soloist: Option<Soloist>,
+    /// The comp and drums step back under the lead's phrases, the bass sits lower ([`super::mix`]).
+    pub duck: bool,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true }
     }
 }
+
+impl EngineConfig {
+    /// The default with no tempo drift, every player on the beat and no ducking: the notes
+    /// exactly as written (for tests that check timing and levels against the written notes).
+    pub fn on_grid() -> Self {
+        EngineConfig { drift_bpm: 0.0, loose: 0.0, duck: false, ..EngineConfig::default() }
+    }
+}
+
+/// A band's tempo drift, either way over a pass ([`super::arrange::drift`]): a 1975 studio
+/// rhythm section measured for the "gridification" essay wanders with a 2.8 bpm standard
+/// deviation; this keeps inside about that.
+pub const DRIFT_BPM: f32 = 4.0;
 
 /// The freedom dials.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
@@ -155,7 +190,10 @@ pub struct Position {
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct BeatClock {
     pub position: Position,
+    /// The tempo at the playhead (it drifts: [`Shape::drifting`]).
     pub bpm: f32,
+    /// The written tempo (the shape's: steady while the tempo drifts).
+    pub written_bpm: f32,
     pub beats_per_bar: f64,
     /// Loop length in beats (0 for a one-shot).
     pub loop_beats: f64,
@@ -211,6 +249,8 @@ pub struct CommittedBar {
     pub orns: [Orns; 4],
     /// The band's shared plan for it.
     pub band: BandPlan,
+    /// Who the lead solos like in it (when it solos).
+    pub soloist: Soloist,
 }
 
 /// One musician, for UIs.
@@ -279,6 +319,9 @@ impl Default for EngineState {
 }
 
 /// Gameplay energy per event (dynamics), and its decay per bar.
+/// A snare this soft (MML volume) is a ghost note ([`pocket::groove_ms`]).
+const GHOST_VOLUME: u8 = 6;
+
 const ENERGY_TOOT: f32 = 0.06;
 const ENERGY_NUGGET: f32 = 0.05;
 const ENERGY_CHECKPOINT: f32 = 0.1;
@@ -372,10 +415,14 @@ pub struct Engine {
     scratch: Vec<NoteEvent>,
     seq: u64,
     instruments: Instruments,
+    /// The tune's own bassist ([`SongFile::bassist`]), if it names one.
+    bassist: Option<&'static super::walkers::Walker>,
     /// The last bar committed: its band plan and harmony (fills crash into the next bar; a
     /// harmony switch is a summon's flourish).
     prev_band: BandPlan,
     prev_harmony: Option<Harmony>,
+    /// Who's soloing, and in which loop pass ([`EngineConfig::soloist`]).
+    soloing: Option<(u64, Soloist)>,
 }
 
 impl Engine {
@@ -387,12 +434,15 @@ impl Engine {
         if !(8_000..=192_000).contains(&sample_rate) {
             return Err(format!("sample rate {sample_rate} out of range"));
         }
-        let shape = Shape::new(song, sample_rate);
+        // Parse the players' files here, not on the audio thread.
+        let _ = Soloist::Miles.player();
+        let drift = |waltz| Shape::drifting(song, sample_rate, waltz, config.seed ^ tuning::hash_str(&song.title), config.drift_bpm);
+        let shape = drift(false);
         if shape.len == 0 {
             return Err(format!("\"{}\" is empty", song.title));
         }
         let chart = song.chart.clone();
-        let wshape = Shape::waltz(song, sample_rate);
+        let wshape = drift(true);
         let arrangements = Harmony::ALL.map(|h| {
             let on = if h == Harmony::Waltz { &wshape } else { &shape };
             Arrangement::new(song, chart.as_ref(), h, config.seed, on).ok()
@@ -440,8 +490,10 @@ impl Engine {
             scratch: Vec::with_capacity(4096),
             seq: 0,
             instruments,
+            bassist: song.bassist.as_deref().and_then(super::walkers::by),
             prev_band: BandPlan::default(),
             prev_harmony: None,
+            soloing: None,
         })
     }
 
@@ -596,7 +648,7 @@ impl Engine {
     fn commit_point(&self) -> Option<u64> {
         let s = self.next_slot()?;
         let sh = self.shape_of(self.spans.back().expect("a span").waltz);
-        let lead = (self.config.commit_lead_beats * sh.samples_per_beat).round() as u64;
+        let lead = (self.config.commit_lead_beats * sh.spb(s.song_bar)).round() as u64;
         Some(s.start.saturating_sub(lead))
     }
 
@@ -654,6 +706,11 @@ impl Engine {
         }
         let intensity = (0.5 + self.energy).clamp(0.0, 1.0);
         self.energy *= ENERGY_DECAY;
+        let bpm = match (&self.waltz, waltz) {
+            (Some(w), true) => w.bpm,
+            _ => self.shape.bpm,
+        };
+        let soloist = self.soloist(slot.pass, bpm, waltz);
         let shape = match (&self.waltz, waltz) {
             (Some(w), true) => w,
             _ => &self.shape,
@@ -673,6 +730,8 @@ impl Engine {
             band: &self.prev_band,
             freedom,
             instruments: &self.instruments,
+            soloist,
+            bassist: self.bassist,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
@@ -712,21 +771,44 @@ impl Engine {
             ending,
         });
         ctx.band = &band;
+        // A feel section gets the feel's own soloists (measured over funk and Latin grooves);
+        // rock, the band's own line.
+        let soloist = match band.feel {
+            Feel::Swing => soloist,
+            Feel::Funk => Soloist::Funk,
+            Feel::Bossa | Feel::Samba => Soloist::Latin,
+            Feel::Rock => Soloist::Band,
+        };
+        ctx.soloist = soloist;
         self.scratch.clear();
         let mut orns = [Orns::default(); 4];
         for (m, o) in self.musicians.iter_mut().zip(&mut orns) {
             *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
         let events = self.scratch.len() as u32;
-        // The arrangement on top: louder or softer, a half step up.
+        // The arrangement on top: louder or softer, a half step up; and each player where they
+        // sit against the beat (the bar's notes as written in time: [`pocket`]).
+        let (sr, pocket_seed, loose, lay_back) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose, soloist.lay_back());
         for e in &mut self.scratch {
+            // (Never before the pass it's in starts: the voices count from there.)
+            let drum = match e.sound {
+                Sound::Drum(d) => Some((d, d == Drum::Snare && e.volume <= GHOST_VOLUME)),
+                _ => None,
+            };
+            let p = pocket::Player { ch: e.ch, sr, seed: pocket_seed, bpm: shape.bpm, lay: lay_back, loose, feel: band.feel, soli: band.soli.is_some(), drum };
+            let start = p.start(e.start, e.beat, e.tie).max(e.loop_start);
+            (e.start, e.end) = (start, p.end(e.end).max(start + 1));
             if band.swell != 0.0 {
                 e.gain *= 1.0 + band.swell;
             }
-            if band.key_up && e.ch < 3 {
+            if band.key_up && e.ch != 3 {
                 e.sound = transpose(e.sound, 1, musician::range(e.ch as usize).1);
                 e.anchor = e.anchor.saturating_add(1);
             }
+        }
+        // The mix: the comp and drums step back under a lead phrase, the bass lower.
+        if self.config.duck {
+            mix::duck(&mut self.scratch, sr as f64 * 60.0 / shape.bpm as f64, band.soli.is_some());
         }
         for mut e in self.scratch.drain(..) {
             e.seq = self.seq;
@@ -736,7 +818,7 @@ impl Engine {
         if self.committed.len() == self.committed.capacity() {
             self.committed.pop_front();
         }
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
@@ -749,6 +831,22 @@ impl Engine {
         }
         if self.ending.is_some_and(|e| self.next_bar == e.end()) {
             self.spans.back_mut().expect("a span").end = slot.end;
+        }
+    }
+
+    /// Who solos in loop pass `pass` ([`EngineConfig::soloist`]): picked as the pass starts (and
+    /// again should the tune go into the waltz under someone who doesn't play in three).
+    fn soloist(&mut self, pass: u64, bpm: f32, waltz: bool) -> Soloist {
+        if let Some(s) = self.config.soloist {
+            return s;
+        }
+        match self.soloing {
+            Some((p, s)) if p == pass && s.fits(bpm, waltz) => s,
+            prev => {
+                let s = soloist::take_the_solo(self.config.seed ^ self.shape.song_hash, pass, prev.map(|(_, s)| s), bpm, waltz, self.freedom.lead);
+                self.soloing = Some((pass, s));
+                s
+            }
         }
     }
 
@@ -861,6 +959,14 @@ impl Engine {
                 self.forced_chorus = c;
                 None
             }
+            Input::ForceSoloist(s) => {
+                self.config.soloist = s;
+                None
+            }
+            Input::SetHuman { loose, duck } => {
+                (self.config.loose, self.config.duck) = (loose.clamp(0.0, 1.0), duck);
+                None
+            }
             Input::End | Input::EndWith(_) => {
                 if self.ending.is_none() && self.next_slot().is_some() {
                     let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
@@ -908,7 +1014,7 @@ impl Engine {
         let entry = sh.bar_starts[sp.entry];
         let s = (self.t.saturating_sub(sp.start) + entry).min(sh.len.saturating_sub(1));
         let song_bar = sh.bar_at(s).max(sp.entry);
-        let beat = s.saturating_sub(sh.bar_starts[song_bar]) as f64 / sh.samples_per_beat;
+        let beat = s.saturating_sub(sh.bar_starts[song_bar]) as f64 / sh.spb(song_bar);
         Position {
             sample: self.t,
             pass: sp.pass,
@@ -925,7 +1031,8 @@ impl Engine {
         let sh = self.playing_shape();
         BeatClock {
             position: p,
-            bpm: sh.bpm,
+            bpm: sh.bpm_at(p.song_bar),
+            written_bpm: sh.bpm,
             beats_per_bar: sh.bar_beats,
             loop_beats: if sh.looping { sh.beats } else { 0.0 },
             beat_index: p.beat.floor() as u32,

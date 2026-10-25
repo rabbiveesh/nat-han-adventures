@@ -113,7 +113,7 @@ fn the_default_instruments_play_exactly_what_songs_played_before() {
     for (m, harmony, just_intonation, want) in BEFORE_INSTRUMENTS {
         let (_, song) = library::song(m).unwrap();
         let f = Filters { harmony, just_intonation };
-        let got = fingerprint(&synth::render_song_with(song, f, 7).unwrap().frames);
+        let got = fingerprint(&synth::render_with(song, f, EngineConfig { seed: 7, ..EngineConfig::on_grid() }).unwrap().frames);
         assert_eq!(got, want, "{m:?} {f:?}: 0x{got:016x}");
     }
 }
@@ -124,11 +124,11 @@ fn default_is_the_built_in_instrument() {
     for stem in ["sweet_georgia_brown", "shave_and_a_haircut"] {
         let text = library::text(stem).unwrap();
         let song = SongFile::parse(text).unwrap();
-        let want = fingerprint(&synth::render_song(&song).unwrap().frames);
+        let want = fingerprint(&synth::render_song_on_grid(&song).unwrap().frames);
         let mut bare = song.clone();
         bare.instruments = Default::default();
         bare.instruments_src.clear();
-        assert_eq!(fingerprint(&synth::render_song(&bare).unwrap().frames), want, "{stem}: without [instruments]");
+        assert_eq!(fingerprint(&synth::render_song_on_grid(&bare).unwrap().frames), want, "{stem}: without [instruments]");
         let mut explicit = song.clone();
         for t in &mut explicit.sources {
             if !t.trim().is_empty() {
@@ -136,7 +136,7 @@ fn default_is_the_built_in_instrument() {
             }
         }
         let explicit = SongFile::parse(&explicit.to_text()).unwrap();
-        assert_eq!(fingerprint(&synth::render_song(&explicit).unwrap().frames), want, "{stem}: @i default");
+        assert_eq!(fingerprint(&synth::render_song_on_grid(&explicit).unwrap().frames), want, "{stem}: @i default");
     }
 }
 
@@ -148,7 +148,7 @@ fn song(instruments: &str, p1: &str, p2: &str, noise: &str) -> SongFile {
 }
 
 fn render(s: &SongFile, frames: usize, block: usize) -> Vec<Frame> {
-    let mut e = Engine::with_config(s, synth::SAMPLE_RATE, EngineConfig::default()).unwrap();
+    let mut e = Engine::with_config(s, synth::SAMPLE_RATE, EngineConfig::on_grid()).unwrap();
     let mut out = vec![Frame::ZERO; frames];
     for c in out.chunks_mut(block) {
         e.fill(c);
@@ -343,7 +343,7 @@ fn macros_dont_depend_on_the_block_size() {
 fn songs_with_instruments_dont_depend_on_the_block_size() {
     let file = library::load("tiger_rag").unwrap();
     let run = |block: usize| {
-        let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, EngineConfig { seed: 3, ..EngineConfig::default() }).unwrap();
+        let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, EngineConfig { seed: 3, ..EngineConfig::on_grid() }).unwrap();
         e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
         let mut out = vec![Frame::ZERO; 40 * SR];
         for c in out.chunks_mut(block) {

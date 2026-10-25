@@ -13,7 +13,8 @@
 //! `--song <stem>`, `--view tracker|piano|text`, `--play`, `--from-bar <n>`, `--toots <n>`
 //! (press TOOT n times at the start, then CALL), `--force <harmony>`, `--feel swing|bossa|samba|rock|funk`
 //! (force the band's feel), `--chorus head|two-feel|blowing|stop-time|breaks|riffs|strolling|soli|shout`
-//! (force the chorus), `--auto <chaos 0..1>`,
+//! (force the chorus), `--soloist band|miles|trane|bird|sonny|wayne|pops|funk|latin` (one soloist all
+//! through), `--on-grid` (no pocket, ducking or drift), `--auto <chaos 0..1>`,
 //! `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
 //! `--check` (no window: load and reformat every song, then quit). `NATHAN_AUDIO=headless`
 //! renders without a sound card.
@@ -34,6 +35,7 @@ use bevy::window::WindowResolution;
 use bevy_egui::{EguiContexts, EguiPlugin, EguiPrimaryContextPass};
 use nat_han_adventures::audio::live::chorus::{Call as ChorusCall, Chorus};
 use nat_han_adventures::audio::live::feel::Feel;
+use nat_han_adventures::audio::live::soloist::Soloist;
 use nat_han_adventures::audio::{AudioOutput, Filters};
 
 use app::{Editor, View, repo_root};
@@ -48,6 +50,8 @@ struct Args {
     force: Option<Filters>,
     feel: Option<Feel>,
     chorus: Option<Chorus>,
+    soloist: Option<Soloist>,
+    grid: bool,
     auto: Option<f32>,
     rec: bool,
     as_played: bool,
@@ -73,6 +77,8 @@ fn args() -> Result<Args, String> {
             "--force" => a.force = Some(Filters::parse(&val()?).ok_or("--force coltrane|quartal|melodic|waltz|original[+ji]")?),
             "--feel" => a.feel = Some(Feel::parse(&val()?).ok_or("--feel swing|bossa|samba|rock|funk")?),
             "--chorus" => a.chorus = Some(Chorus::parse(&val()?).ok_or("--chorus head|two-feel|blowing|stop-time|breaks|riffs|strolling|soli|shout")?),
+            "--soloist" => a.soloist = Some(Soloist::parse(&val()?).ok_or("--soloist band|miles|trane|bird|sonny|wayne|pops|funk|latin")?),
+            "--on-grid" => a.grid = true,
             "--auto" => a.auto = Some(val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
             "--rec" => a.rec = true,
             "--as-played" => a.as_played = true,
@@ -145,6 +151,10 @@ fn main() {
         }
     }
     ed.dials.force_feel = a.feel;
+    ed.dials.soloist = a.soloist;
+    if a.grid {
+        (ed.dials.pocket, ed.dials.duck, ed.dials.drift) = (false, false, false);
+    }
     ed.dials.force_chorus = a.chorus.map(|chorus| ChorusCall {
         chorus,
         key_up: false,

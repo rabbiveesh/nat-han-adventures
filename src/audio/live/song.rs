@@ -84,6 +84,9 @@ pub struct SongFile {
     pub sources: [String; 4],
     /// Parsed (unswung) tracks.
     pub tracks: [Track; 4],
+    /// Who walks the bass on this tune (`bassist = <slug>` of `music/bass/walking.bass`; `None`:
+    /// the bassist behind each soloist, [`super::walkers`]).
+    pub bassist: Option<String>,
     /// The `[instruments]` section, parsed.
     pub instruments: Instruments,
     /// Its text as written (comments included); "" if none.
@@ -209,7 +212,7 @@ impl SongFile {
             return Err(err(1, "missing `[song]` section"));
         };
 
-        let (mut title, mut bpm, mut swing, mut key, mut looping, mut meter) = (None, None, 0.0f32, 0u8, true, Meter::default());
+        let (mut title, mut bpm, mut swing, mut key, mut looping, mut meter, mut bassist) = (None, None, 0.0f32, 0u8, true, Meter::default(), None);
         for (k, raw) in header.lines().enumerate() {
             let line_no = song_line + 1 + k;
             let line = uncomment(raw).trim();
@@ -228,6 +231,10 @@ impl SongFile {
                 "key" => key = parse_key(value).ok_or_else(|| bad("key is a note name like `F`, `Bb`, `F#` or 0..11"))?,
                 "loop" => looping = parse_bool(value).ok_or_else(|| bad("loop is `yes` or `no`"))?,
                 "meter" => meter = parse_meter(value).ok_or_else(|| bad("meter is like `4/4` or `3/4`"))?,
+                "bassist" => {
+                    let names = || super::walkers::all().iter().map(|w| w.slug.as_str()).collect::<Vec<_>>().join(", ");
+                    bassist = Some(super::walkers::by(value).ok_or_else(|| bad(&format!("a bassist in music/bass/walking.bass: {}", names())))?.slug.clone());
+                }
                 _ => return Err(err(line_no, format!("unknown key `{name}` (expected one of {})", SONG_KEYS.join(", ")))),
             }
         }
@@ -289,7 +296,7 @@ impl SongFile {
                 }
             }
         };
-        Ok(SongFile { title, bpm, swing, key, looping, meter, chords, chart, sources, tracks, instruments, instruments_src })
+        Ok(SongFile { title, bpm, swing, key, looping, meter, bassist, chords, chart, sources, tracks, instruments, instruments_src })
     }
 
     /// A 4/4 song straight from MML (pulse 1, pulse 2, triangle, noise) and a chart (`""` for
@@ -324,6 +331,7 @@ impl SongFile {
             key,
             looping,
             meter: Meter::default(),
+            bassist: None,
             chords: if chart.is_some() { join_chart(chords) } else { String::new() },
             chart,
             sources: parts.map(str::to_string),
@@ -343,6 +351,9 @@ impl SongFile {
         s += &format!("key = {}\n", chart::pc_name(self.key));
         s += &format!("loop = {}\n", if self.looping { "yes" } else { "no" });
         s += &format!("meter = {}\n", self.meter);
+        if let Some(b) = &self.bassist {
+            s += &format!("bassist = {b}\n");
+        }
         if !self.chords.is_empty() {
             s += "\n[chords]\n";
             s += &chart_lines(&self.chords, 8);

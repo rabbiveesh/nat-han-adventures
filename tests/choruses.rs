@@ -1,6 +1,6 @@
 //! Arranging (`audio::live::chorus`): each chorus has its parts (stop-time hits on ONE, breaks
-//! with the band out, the comp out for strolling, the bass in two, the soli a third under the
-//! tune, the shout's stabs with the lead, a key-up a half step up), the band arranges passes
+//! with the band out, the comp out for strolling, the bass in two, the soli in four voices
+//! (counterpoint, `audio::live::soli`), the shout's stabs with the lead, a key-up a half step up), the band arranges passes
 //! itself above the game's calm end, a level's tune starts with an intro, and a song ends with
 //! an ending (the jingle with a Basie ending).
 
@@ -76,7 +76,7 @@ fn play_with(song: &SongFile, config: EngineConfig, setup: &[Input], at: impl Fn
 }
 
 fn play(song: &SongFile, seed: u64, setup: &[Input], bars: u64) -> Vec<Bar> {
-    play_with(song, EngineConfig { seed, ..EngineConfig::default() }, setup, |_| vec![], bars).1
+    play_with(song, EngineConfig { seed, ..EngineConfig::on_grid() }, setup, |_| vec![], bars).1
 }
 
 fn song(m: Music) -> &'static SongFile {
@@ -185,27 +185,72 @@ fn strolling_and_two_feel() {
     }
 }
 
-/// Soli: the comp plays the lead's line, note for note, a third to a sixth below.
+/// Soli: four voices (the lead's tune, the comp's alto, the third pulse's tenor from the
+/// second section, the bass in most textures) that move on their own: rarely a shadow of
+/// the tune, hardly a parallel fifth or octave, and the alto attacking between the tune's
+/// notes in a front line.
 #[test]
-fn soli_harmonizes_the_tune() {
+fn soli_is_four_independent_voices() {
+    use nat_han_adventures::audio::live::soli::Texture;
     for m in [Music::World(1), Music::World(3), Music::World(4)] {
-        let bars = play(song(m), 4, &[freedom(0.5), force(Chorus::Soli)], 16);
-        let (mut paired, mut total) = (0, 0);
+        let bars = play(song(m), 4, &[freedom(0.5), force(Chorus::Soli)], 40);
+        let (mut shadowed, mut lead_notes, mut tenor_notes) = (0, 0, 0);
+        let (mut parallels, mut moves) = (0, 0);
+        let (mut off, mut alto_attacks) = (0, 0);
+        let mut textures = std::collections::HashSet::new();
         for b in &bars {
-            let lead: Vec<&NoteEvent> = b.ch(0).filter(|e| matches!(e.sound, Sound::Note(_))).collect();
-            for l in &lead {
-                let Sound::Note(n) = l.sound else { continue };
-                total += 1;
-                if let Some(c) = b.ch(1).find(|c| c.start == l.start) {
-                    let Sound::Note(x) = c.sound else { panic!("{m:?}: a soli chord") };
-                    let iv = (n as i32 - x as i32).rem_euclid(12);
-                    assert!((3..=9).contains(&iv) || iv == 0, "{m:?}: interval {iv}");
-                    paired += 1;
+            let Some(s) = b.c.band.soli else { continue };
+            textures.insert(s.texture);
+            let spb = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
+            let at = |ch: u8, x: f64| {
+                let t = b.c.slot.start + (x * spb) as u64;
+                b.ch(ch).filter(|e| e.start <= t && t < e.end).find_map(|e| match e.sound {
+                    Sound::Note(n) => Some(n as i32),
+                    _ => None,
+                })
+            };
+            let tenor = b.ch(4).count();
+            assert!(s.tenor || tenor == 0, "{m:?}: the tenor waits for the second section");
+            tenor_notes += tenor;
+            if s.texture != Texture::Locked {
+                for l in b.ch(0) {
+                    let Sound::Note(n) = l.sound else { continue };
+                    lead_notes += 1;
+                    shadowed += b.ch(1).any(|c| c.start == l.start && matches!(c.sound, Sound::Note(x) if (3..=9).contains(&(n as i32 - x as i32)))) as usize;
                 }
             }
-            assert!(b.c.orns[1].has(Orn::Soli) || b.c.band.trade != Default::default() || b.ch(0).next().is_none());
+            if s.texture == Texture::FrontLine {
+                for c in b.ch(1) {
+                    alto_attacks += 1;
+                    off += !b.ch(0).any(|l| l.start == c.start) as usize;
+                }
+            }
+            let mut pairs = vec![(0u8, 1u8), (0, 4), (1, 4)];
+            if s.texture.writes_bass() {
+                pairs.extend([(0, 2), (1, 2), (4, 2)]);
+            }
+            for (p, q) in pairs {
+                for k in 0..7 {
+                    let (x, y) = (k as f64 * 0.5, k as f64 * 0.5 + 0.5);
+                    let (Some(a0), Some(b0), Some(a1), Some(b1)) = (at(p, x), at(q, x), at(p, y), at(q, y)) else { continue };
+                    let (da, db) = (a1 - a0, b1 - b0);
+                    if da == 0 || db == 0 {
+                        continue;
+                    }
+                    moves += 1;
+                    let (i0, i1) = ((a0 - b0).rem_euclid(12), (a1 - b1).rem_euclid(12));
+                    parallels += (da.signum() == db.signum() && i0 == i1 && (i0 == 0 || i0 == 7)) as usize;
+                }
+            }
         }
-        assert!(paired * 10 >= total * 8, "{m:?}: only {paired}/{total} lead notes harmonized");
+        eprintln!("{m:?}: shadowed {shadowed}/{lead_notes}, parallels {parallels}/{moves}, clarinet off {off}/{alto_attacks}, tenor {tenor_notes}");
+        assert!(textures.len() >= 3, "{m:?}: textures {textures:?}");
+        assert!(tenor_notes > 0, "{m:?}: the tenor plays");
+        assert!(shadowed * 10 < lead_notes * 5, "{m:?}: {shadowed}/{lead_notes} tune notes shadowed a third to a sixth below");
+        assert!(parallels * 100 <= moves * 6, "{m:?}: {parallels} parallel fifths or octaves in {moves} moves");
+        if alto_attacks > 0 {
+            assert!(off * 10 >= alto_attacks * 4, "{m:?}: the clarinet attacks between the tune's notes ({off}/{alto_attacks})");
+        }
     }
 }
 
@@ -263,7 +308,7 @@ fn riffs_are_chord_tones() {
 /// 0, none without the game's setting.
 #[test]
 fn levels_start_with_an_intro() {
-    let config = |seed| EngineConfig { seed, intro: true, ..EngineConfig::default() };
+    let config = |seed| EngineConfig { seed, intro: true, ..EngineConfig::on_grid() };
     let mut kinds = std::collections::HashSet::new();
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
@@ -300,7 +345,7 @@ fn songs_end_with_an_ending() {
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
         for (seed, f) in [(k as u64, 0.0), (k as u64, 0.5), (10 + k as u64, 0.5), (20 + k as u64, 0.5)] {
-            let cfg = EngineConfig { seed, ..EngineConfig::default() };
+            let cfg = EngineConfig { seed, ..EngineConfig::on_grid() };
             let (e, bars) = play_with(s, cfg, &[freedom(f)], |k| if k == 6 { vec![Input::End] } else { vec![] }, 40);
             assert!(e.finished(), "{m:?}: didn't finish");
             let ending: Vec<_> = bars.iter().filter_map(|b| b.c.band.ending).collect();

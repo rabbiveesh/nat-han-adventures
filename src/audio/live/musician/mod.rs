@@ -43,7 +43,8 @@
 //! (the table in [`super::chorus`]): [`arranged`] turns the rolled ornaments into what the
 //! chorus asks (the bass walks or plays in two, the comp Charlestons, the drums play lighter,
 //! the lead keeps to the tune for a soli), and each commit plays the chorus's own parts: the
-//! lead's solos, breaks and shout line, the comp's riffs, soli line and shout stabs, the
+//! lead's solos, breaks and shout line, the comp's riffs, soli lines (alto, tenor on pulse 3,
+//! and the bass's line, [`super::soli`]) and shout stabs, the
 //! band's stop-time hits and breaks. Intros and endings are the same: their changes are the
 //! band's substitutions, and each player has its part (the lead lays out and picks up into the
 //! head; the plinks are the comp's; everyone plays the last chord). These are arrangements the
@@ -79,6 +80,7 @@ use super::engine::Input;
 use super::feel::{self, Feel};
 use super::instrument::Instruments;
 use super::ornament::{Harm, Orn, Orns};
+use super::soloist::Soloist;
 use super::voice::{Fx, NoteEvent, Sound};
 
 /// Who plays what.
@@ -134,6 +136,10 @@ pub struct Ctx<'a> {
     pub freedom: [f32; 4],
     /// The song's instruments (palettes).
     pub instruments: &'a Instruments,
+    /// Who the lead solos like.
+    pub soloist: Soloist,
+    /// The tune's own bassist, if it names one (else the soloist's: [`Soloist::bassist`]).
+    pub bassist: Option<&'static super::walkers::Walker>,
 }
 
 impl Ctx<'_> {
@@ -194,9 +200,15 @@ impl Ctx<'_> {
         }
     }
 
+    /// Samples per beat in this bar (the tempo drifts: [`Shape::drifting`]).
+    #[inline]
+    pub fn spb(&self) -> f64 {
+        self.shape.spb(self.bar.song_bar)
+    }
+
     /// Beat within the bar of an absolute sample.
     pub fn beat_of(&self, sample: u64) -> f64 {
-        (sample - self.bar.start) as f64 / self.shape.samples_per_beat
+        (sample - self.bar.start) as f64 / self.spb()
     }
 
     /// A deterministic coin in [0, 1) for decision `what` about this bar.
@@ -232,7 +244,7 @@ impl Ctx<'_> {
 
     /// An event's length in beats.
     pub fn len(&self, e: &NoteEvent) -> f64 {
-        (e.end - e.start) as f64 / self.shape.samples_per_beat
+        (e.end - e.start) as f64 / self.spb()
     }
 
     /// The harmony at beat `b` of the bar (from the bar line, may run into the next bar): the
@@ -460,7 +472,7 @@ pub fn arranged(role: Role, band: &BandPlan, orns: Orns) -> Orns {
             }
         }
         Role::Drums => {
-            if matches!(chorus, Chorus::TwoFeel | Chorus::Strolling) || band.intro.is_some() {
+            if matches!(chorus, Chorus::TwoFeel | Chorus::Strolling | Chorus::Soli) || band.intro.is_some() {
                 drop(&mut o, &[Orn::Ghost, Orn::OpenHat, Orn::BrokenTime]);
             }
             if chorus == Chorus::Shout || band.ending.is_some() {
@@ -827,7 +839,7 @@ use musician_common;
 pub fn range(ch: usize) -> (i32, i32) {
     match ch {
         0 => (lead::LO, lead::HI),
-        1 => (comp::LO, comp::HI),
+        1 | 4 => (comp::LO, comp::HI),
         _ => (bass::LO - 4, bass::HI + 4),
     }
 }

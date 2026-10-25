@@ -1,4 +1,5 @@
-//! The NES voices, streaming: two pulses, the 4-bit triangle and the noise drums, rendering
+//! The NES voices, streaming: two pulses, the 4-bit triangle and the noise drums (and a third
+//! pulse, as on Konami's VRC6 expansion chip, that only the soli's tenor plays), rendering
 //! committed [`NoteEvent`]s block by block.
 //!
 //! The building blocks (oscillators, the LFSR, the drum synthesis, levels) are
@@ -28,7 +29,7 @@ use kira::Frame;
 use super::instrument::{Instruments, Kit, MAX_HIT_SECS, Tone, Wave};
 use crate::audio::mml::{Arp, Drum};
 use crate::audio::synth::{
-    ARP_STEP, ATTACK, DUTIES, Lfsr, NOISE_GAIN, PULSE_GAIN, PULSE1_PAN, PULSE2_PAN, RELEASE, TRIANGLE_GAIN, advance, drum_kit,
+    ARP_STEP, ATTACK, DUTIES, Lfsr, NOISE_GAIN, PULSE_GAIN, PULSE1_PAN, PULSE2_PAN, PULSE3_PAN, RELEASE, TRIANGLE_GAIN, advance, drum_kit,
     kit_drum_len, pan, pulse, triangle, triangle_lfo,
 };
 use crate::audio::tuning::{Medley, Tuning, Wobble};
@@ -91,7 +92,7 @@ impl Fx {
 /// One committed note or drum hit, in absolute samples.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct NoteEvent {
-    /// 0 pulse1, 1 pulse2, 2 triangle, 3 noise.
+    /// 0 pulse1, 1 pulse2, 2 triangle, 3 noise, 4 pulse3 (the soli's tenor).
     pub ch: u8,
     /// Absolute bar it was committed in.
     pub bar: u64,
@@ -620,7 +621,7 @@ impl Drums {
 /// All the voices.
 pub struct VoiceBank {
     sr: f32,
-    tones: [ToneVoice; 3],
+    tones: [ToneVoice; 4],
     drums: Drums,
     /// The medley for each shape: the straight one's, and the waltz's (the same phrases; the
     /// wobble fitted to its loop).
@@ -641,6 +642,7 @@ impl VoiceBank {
                 ToneVoice::new(0, pan(PULSE1_PAN, PULSE_GAIN), instruments),
                 ToneVoice::new(1, pan(PULSE2_PAN, PULSE_GAIN), instruments),
                 ToneVoice::new(2, pan(0.0, TRIANGLE_GAIN), instruments),
+                ToneVoice::new(4, pan(PULSE3_PAN, PULSE_GAIN), instruments),
             ],
             drums: Drums::new(sr, instruments),
             medleys,
@@ -652,6 +654,7 @@ impl VoiceBank {
     pub fn push(&mut self, ev: NoteEvent) {
         match ev.ch {
             0..=2 => self.tones[ev.ch as usize].push(ev),
+            4 => self.tones[3].push(ev),
             _ => self.drums.push(ev),
         }
     }
@@ -668,6 +671,11 @@ impl VoiceBank {
         match ch {
             0..=2 => self.tones[ch].gain = (l * g, r * g),
             _ => self.drums.gain = (l * g, r * g),
+        }
+        // The third pulse is the comp's: it follows pulse 2.
+        if ch == 1 {
+            let (l, r) = pan(PULSE3_PAN, PULSE_GAIN);
+            self.tones[3].gain = (l * g, r * g);
         }
     }
 
