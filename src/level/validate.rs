@@ -78,8 +78,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
 use super::{
-    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_FLING, CUSHION_LIFT, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_FAN_REACH,
-    GateMark, Granted, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
+    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_HOLD, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
+    GateMark, Granted, cushion_shot, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
@@ -338,8 +338,9 @@ pub struct Env {
 /// The band's bend on the gadget tiles in a mode (the game's `TileMood`): belts' and wall
 /// fans' speed multipliers (fired up), fans blowing [`GIANT_FAN_REACH`] far (Giant Steps), a
 /// trampoline's spring multiplier (the waltz: it holds you till ONE, then springs
-/// [`WALTZ_SPRING_BOOST`] faster) and a cushion's or a bumper's (the waltz, on ONE: ideal
-/// flights only, a human doesn't count on the timing).
+/// [`WALTZ_SPRING_BOOST`] faster), a cushion's or a bumper's (the waltz, on ONE: ideal
+/// flights only, a human doesn't count on the timing) and a ceiling cushion's bat down
+/// ([`GIANT_CUSHION_BAT`]: Giant Steps).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tiles {
     pub belt: f32,
@@ -347,15 +348,16 @@ pub struct Tiles {
     pub far: bool,
     pub spring: f32,
     pub fling: f32,
+    pub bat: f32,
 }
 
 impl Tiles {
-    pub const NORMAL: Tiles = Tiles { belt: 1.0, gust: 1.0, far: false, spring: 1.0, fling: 1.0 };
+    pub const NORMAL: Tiles = Tiles { belt: 1.0, gust: 1.0, far: false, spring: 1.0, fling: 1.0, bat: 1.0 };
 
     pub fn of(mode: Mode, ideal: bool) -> Tiles {
         match mode {
             Mode::FiredUp => Tiles { belt: FIRED_UP_TILES, gust: FIRED_UP_TILES, ..Tiles::NORMAL },
-            Mode::GiantSteps => Tiles { far: true, ..Tiles::NORMAL },
+            Mode::GiantSteps => Tiles { far: true, bat: GIANT_CUSHION_BAT, ..Tiles::NORMAL },
             Mode::Waltz => Tiles {
                 spring: WALTZ_SPRING_BOOST,
                 fling: if ideal { WALTZ_SPRING_BOOST } else { 1.0 },
@@ -1549,7 +1551,7 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
     if map.deadly(f.x0, f.y0) || map.overlaps_solid(f.x0, f.y0) {
         return (Outcome::Nothing, 0.0);
     }
-    let mut b = Body { x: f.x0, y: f.y0, vx: f.vx0, vy: f.vy0, carry: f.carry, cut: f.cut };
+    let mut b = Body { x: f.x0, y: f.y0, vx: f.vx0, vy: f.vy0, carry: f.carry, cut: f.cut, ..Body::default() };
     let mut tooted = [false; 3];
     let mut toots = f.toots;
     let mut smashed: Vec<Cell> = Vec::new();
@@ -1557,7 +1559,12 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
     while t < MAX_T {
         t += DT;
         let g = Flight { toots, ..*f };
-        air_controls(env, &g, t, &mut b.vx, &mut b.vy, &mut b.cut, &mut tooted);
+        if b.pad != 0.0 {
+            // Caught in a wall cushion: the key held aims it.
+            b.aim = if t < f.release { f.dir } else { 0.0 };
+        } else {
+            air_controls(env, &g, t, &mut b.vx, &mut b.vy, &mut b.cut, &mut tooted);
+        }
         let moved = move_body(map, env, &mut b, &mut smashed, touched);
         if moved.refilled && env.spring_toot {
             // A bumper or trampoline gives the toot back: the planned toots again from now.
@@ -1577,8 +1584,10 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
 
 /// A body in the air ([`fly`], [`pinball`]): its box center (px, y down), its speed (px/s),
 /// the horizontal speed carried (a platform's, a bumper's, until a wall) and whether its
-/// jump's rise is cut already.
-#[derive(Clone, Copy, Debug)]
+/// jump's rise is cut already. Caught in a wall cushion (the game's `Body::pad`): the way it
+/// slings (`pad`, 0: not caught), the frames it still holds, the key held (`aim`), a jump
+/// firing it early (`fire`).
+#[derive(Clone, Copy, Debug, Default)]
 struct Body {
     x: f32,
     y: f32,
@@ -1586,7 +1595,14 @@ struct Body {
     vy: f32,
     carry: f32,
     cut: bool,
+    pad: f32,
+    hold: u32,
+    aim: f32,
+    fire: bool,
 }
+
+/// Frames a wall cushion holds ([`CUSHION_HOLD`]).
+const CUSHION_FRAMES: u32 = (CUSHION_HOLD / DT + 0.5) as u32;
 
 /// What one frame of [`move_body`] came to.
 struct Moved {
@@ -1603,9 +1619,25 @@ struct Moved {
 fn move_body(map: &Map, env: &Env, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec<Cell>) -> Moved {
     let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
     let mut refilled = false;
+    let tiles = env.tiles;
+    // Caught in a wall cushion: held still, then slung by the key held (the game's
+    // `step_body`), the toot back.
+    let slung = b.pad != 0.0;
+    if slung {
+        if b.hold > 1 && !b.fire {
+            b.hold -= 1;
+            return Moved { refilled, end: None };
+        }
+        let (away, up) = cushion_shot(b.aim * b.pad);
+        b.carry = b.pad * away * tiles.fling;
+        b.vx = 0.0;
+        b.vy = -up * tiles.fling;
+        b.cut = true;
+        refilled = true;
+        (b.pad, b.hold, b.aim, b.fire) = (0.0, 0, 0.0, false);
+    }
     // A fan's updraft or a ceiling fan's downdraft, and a wall fan's gust (the game's
     // `step_body`).
-    let tiles = env.tiles;
     let wind = map.wind(b.x, b.y, tiles.far);
     if wind.1 > 0 && b.vy > -FAN_RISE {
         b.vy = (b.vy - FAN_LIFT * DT).max(-FAN_RISE);
@@ -1649,12 +1681,16 @@ fn move_body(map: &Map, env: &Env, b: &mut Body, smashed: &mut Vec<Cell>, touche
         b.cut = true;
         refilled = true;
     }
-    if flung != 0.0 {
-        // A wall cushion's face: flung away, the toot back.
-        b.carry = flung * CUSHION_FLING * tiles.fling;
-        b.vy = b.vy.min(-CUSHION_LIFT * tiles.fling);
-        b.cut = true;
-        refilled = true;
+    if flung != 0.0 && !slung {
+        // A wall cushion's face: caught in it.
+        (b.pad, b.hold, b.aim, b.fire) = (flung, CUSHION_FRAMES, 0.0, false);
+        (b.vx, b.vy, b.carry) = (0.0, 0.0, 0.0);
+        for col in cells(b.x - HALF_W, b.x + HALF_W) {
+            for row in cells(b.y - HALF_H, b.y + HALF_H) {
+                touched.push((col, row));
+            }
+        }
+        return Moved { refilled, end: None };
     }
 
     // Vertical move.
@@ -1723,7 +1759,7 @@ fn move_body(map: &Map, env: &Env, b: &mut Body, smashed: &mut Vec<Cell>, touche
         }
         if bonk {
             // A ceiling cushion: sprung back down, the toot back.
-            b.vy = SPRING_SPEED * tiles.fling;
+            b.vy = SPRING_SPEED * tiles.fling * tiles.bat;
             b.cut = true;
             refilled = true;
         } else if hit {
@@ -1818,7 +1854,7 @@ struct PinMemo {
     flags: Vec<u32>,
     toots: bool,
     /// The physics it was walked in (gravity, the tiles' bend).
-    env: Option<(u32, u32, u32, bool, u32, u32)>,
+    env: Option<(u32, u32, u32, bool, u32, u32, u32)>,
     ids: HashMap<u64, u32>,
     nodes: Vec<PinNode>,
     walks: u32,
@@ -1834,7 +1870,9 @@ impl PinMemo {
             | q(ball.b.vy, PIN_SPEED) << 30
             | q(ball.b.carry, PIN_CARRY) << 40
             | (ball.toot as u64) << 50
-            | (ball.b.cut as u64) << 51;
+            | (ball.b.cut as u64) << 51
+            | ((ball.b.pad + 1.0) as u64) << 52
+            | (ball.b.hold.min(63) as u64) << 54;
         *self.ids.entry(key).or_insert_with(|| {
             self.nodes.push(PinNode { ball, next: None, preds: Vec::new(), good: false, seen: 0 });
             (self.nodes.len() - 1) as u32
@@ -1930,7 +1968,7 @@ impl PinMemo {
 /// into `g`.
 fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin {
     let mut memo = std::mem::take(&mut g.pin);
-    let key = (env.gravity.to_bits(), env.tiles.belt.to_bits(), env.tiles.gust.to_bits(), env.tiles.far, env.tiles.spring.to_bits(), env.tiles.fling.to_bits());
+    let key = (env.gravity.to_bits(), env.tiles.belt.to_bits(), env.tiles.gust.to_bits(), env.tiles.far, env.tiles.spring.to_bits(), env.tiles.fling.to_bits(), env.tiles.bat.to_bits());
     if memo.flags != map.flags || memo.toots != toots || memo.env != Some(key) {
         memo = PinMemo { flags: map.flags.clone(), toots, env: Some(key), ..PinMemo::default() };
     }
@@ -1944,13 +1982,13 @@ fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin 
     let mut starts = Vec::new();
     for dir in [-1.0, 0.0, 1.0] {
         if env.grip || !map.greasy(from) {
-            starts.push(Body { x, y, vx: dir * env.vx, vy: -JUMP_SPEED * env.boost, carry: belt, cut: false });
+            starts.push(Body { x, y, vx: dir * env.vx, vy: -JUMP_SPEED * env.boost, carry: belt, cut: false, ..Body::default() });
         }
         // Stepping off the ledge.
         let n = (c + dir as i32, r);
         if dir != 0.0 && !map.is_solid(n.0, n.1) && !map.standable(n) {
             let x = x + dir * (8.0 + env.overhang - HALF_W);
-            starts.push(Body { x, y, vx: dir * env.vx, vy: 0.0, carry: belt, cut: true });
+            starts.push(Body { x, y, vx: dir * env.vx, vy: 0.0, carry: belt, cut: true, ..Body::default() });
         }
     }
     let mut queue: Vec<u32> = Vec::new();
@@ -2007,6 +2045,20 @@ fn pin_stretch(map: &Map, env: &Env, ball: &mut Ball, keys: Keys, touched: &mut 
     let mut frame = Vec::new();
     for k in 0..PIN_FRAMES {
         let b = &mut ball.b;
+        if b.pad != 0.0 {
+            // Caught in a wall cushion: the key held aims it, a jump fires it.
+            b.aim = keys.dir as f32;
+            b.fire |= k == 0 && keys.toot;
+            let moved = move_body(map, env, b, &mut ball.smashed, &mut frame);
+            touched.append(&mut frame);
+            if moved.refilled && env.spring_toot {
+                ball.toot = true;
+            }
+            if moved.end.is_some() {
+                return moved.end;
+            }
+            continue;
+        }
         // The controls ([`air_controls`]): the key's way, the jump let go, a toot, gravity.
         let target = keys.dir as f32 * env.vx;
         let dv = env.air_accel * DT;

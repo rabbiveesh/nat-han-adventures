@@ -25,7 +25,8 @@
 //! music in lockstep driving the beat blocks and beat crushers).
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
-//! bar lines, his toots, nuggets, band calls and secrets found, the harmony, and the crushers near him;
+//! bar lines, his toots, nuggets, band calls and secrets found, a wall cushion catching and slinging
+//! him, the harmony, and the crushers near him;
 //! `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play another level / timeline in
 //! `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`: trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
@@ -39,7 +40,7 @@ use nat_han_adventures::{
         timeline::{Script, TimelinePlayer, play_timeline},
     },
     events::{BandFreedom, CallBand, Jumped, NuggetCollected, PlayerDied},
-    game::{Groove, Han, Player, Pos, crushers::CrusherBlock, secret::SecretFound},
+    game::{Body, Groove, Han, Player, Pos, crushers::CrusherBlock, secret::SecretFound},
     level::{Level, Levels, TILE, Topic, validate},
     state::AppState,
 };
@@ -68,7 +69,18 @@ struct Run {
     secrets: usize,
     /// The freest the adaptive engine set the band's lead (a secret sets it loose).
     hottest: f32,
+    /// When something happened (s): a key went down or up, a nugget, or a gadget kicked Nat (the
+    /// density report's actions, see [`density`]).
+    actions: Vec<f32>,
 }
+
+/// Actions for the density report: frames where a key went down or up, a nugget was taken, a
+/// gadget kicked Nat (his speed jumped by more than [`KICK`] px/s in a frame he didn't jump in
+/// and didn't land on: a duck, a spring, a cushion) or he blew into a fan's gust.
+#[derive(Resource, Default)]
+struct Actions(Vec<u64>, Option<Vec2>, (i32, i32));
+
+const KICK: f32 = 120.0;
 
 #[derive(Resource, Default)]
 struct Secrets(usize);
@@ -93,6 +105,37 @@ fn play(level: &str, tour: &str) -> Run {
         .init_resource::<Happened>()
         .init_resource::<Secrets>()
         .init_resource::<Hottest>()
+        .init_resource::<Actions>()
+        .add_systems(
+            Last,
+            |mut a: ResMut<Actions>,
+             f: Res<Frame>,
+             keys: Res<ButtonInput<KeyCode>>,
+             mut n: MessageReader<NuggetCollected>,
+             mut j: MessageReader<Jumped>,
+             levels: Res<Levels>,
+             nat: Query<(&Body, &Pos), With<Player>>| {
+                let jumped = j.read().count() > 0;
+                let mut act = keys.get_just_pressed().next().is_some() || keys.get_just_released().next().is_some();
+                act |= n.read().count() > 0;
+                if let Ok((b, p)) = nat.single() {
+                    let level = &levels.0[0];
+                    let cell = ((p.0.x / TILE).floor() as i32, (level.height as f32 - p.0.y / TILE).floor() as i32);
+                    let wind = level.wind(cell.0, cell.1);
+                    act |= wind != (0, 0) && wind != a.2;
+                    a.2 = wind;
+                    if let Some(was) = a.1 {
+                        let up = b.vel.y - was.y;
+                        let side = b.vel.x.abs() - was.x.abs();
+                        act |= !jumped && !b.on_ground && (up > KICK || side > KICK);
+                    }
+                    a.1 = Some(b.vel);
+                }
+                if act {
+                    a.0.push(f.0);
+                }
+            },
+        )
         .add_systems(Last, |mut h: ResMut<Hottest>, mut r: MessageReader<BandFreedom>| {
             h.0 = r.read().fold(h.0, |hot, f| hot.max(f.lead))
         })
@@ -126,6 +169,7 @@ fn play(level: &str, tour: &str) -> Run {
     let mut goal = None;
     let mut last_bar = None;
     let mut han = false;
+    let mut caught = false;
     for frame in 0..timeline.frames {
         app.world_mut().resource_mut::<Frame>().0 = frame;
         app.update();
@@ -143,7 +187,12 @@ fn play(level: &str, tour: &str) -> Run {
             last_bar = Some(bar);
         }
         let Some(p) = app.world_mut().query_filtered::<&Pos, With<Player>>().iter(app.world()).next().map(|p| p.0) else { continue };
-        let happened = std::mem::take(&mut app.world_mut().resource_mut::<Happened>().0);
+        let mut happened = std::mem::take(&mut app.world_mut().resource_mut::<Happened>().0);
+        let pad = app.world_mut().query_filtered::<&Body, With<Player>>().iter(app.world()).next().map_or(0.0, |b| b.pad);
+        if (pad != 0.0) != caught {
+            caught = pad != 0.0;
+            happened.push(if caught { "caught" } else { "slung" });
+        }
         if !happened.is_empty() {
             eprintln!("t={:5.2}   {}", secs(frame), happened.join(" "));
         }
@@ -168,7 +217,8 @@ fn play(level: &str, tour: &str) -> Run {
     let deaths = app.world().resource::<Deaths>().0.iter().map(|(f, p)| (secs(*f), p.x / TILE, rows - p.y / TILE)).collect();
     let secrets = app.world().resource::<Secrets>().0;
     let hottest = app.world().resource::<Hottest>().0;
-    Run { deaths, goal, end: secs(timeline.frames), han, secrets, hottest }
+    let actions = app.world().resource::<Actions>().0.iter().map(|f| secs(*f)).collect();
+    Run { deaths, goal, end: secs(timeline.frames), han, secrets, hottest, actions }
 }
 
 #[test]
@@ -475,4 +525,82 @@ fn check_a_level_file() {
     }
     eprintln!("gates: {:?}\nsegments: {:?}\nlessons: {:?}", report.gates, report.segments, report.lessons);
     eprintln!("{:#?}", report.errs);
+}
+
+/// How busy a run is: its quiet stretches (more than 1 s between actions: a key down or up, a
+/// nugget, a gadget's kick) up to the goal. `quiet` is the share of the run spent past the first
+/// second of each quiet stretch (0: something every second); `worst` the longest stretch.
+struct Density {
+    quiet: f32,
+    worst: (f32, f32),
+    over2: usize,
+}
+
+fn density(run: &Run) -> Density {
+    let goal = run.goal.unwrap_or(run.end);
+    let mut t: Vec<f32> = run.actions.iter().copied().filter(|t| *t <= goal).collect();
+    t.insert(0, 0.0);
+    t.push(goal);
+    let gaps: Vec<(f32, f32)> = t.windows(2).map(|w| (w[1] - w[0], w[0])).collect();
+    let quiet = gaps.iter().map(|(g, _)| (g - 1.0).max(0.0)).sum::<f32>() / goal.max(1.0);
+    let worst = gaps.iter().copied().fold((0.0, 0.0), |a, b| if b.0 > a.0 { b } else { a });
+    Density { quiet, worst, over2: gaps.iter().filter(|(g, _)| *g > 2.0).count() }
+}
+
+/// The NAT ALONE tours, for the density report.
+const TOURS: [(&str, &str, &str); 31] = [
+    ("breezy", include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy.timeline")),
+    ("breezy-alt", include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy-alt.timeline")),
+    ("breezy-tunnel", include_str!("../levels/solo/breezy.txt"), include_str!("../scripts/tours/breezy-tunnel.timeline")),
+    ("bouncy", include_str!("../levels/solo/bouncy.txt"), include_str!("../scripts/tours/bouncy.timeline")),
+    ("bouncy-alt", include_str!("../levels/solo/bouncy.txt"), include_str!("../scripts/tours/bouncy-alt.timeline")),
+    ("bouncy-dungeon", include_str!("../levels/solo/bouncy.txt"), include_str!("../scripts/tours/bouncy-dungeon.timeline")),
+    ("spout", include_str!("../levels/solo/spout.txt"), include_str!("../scripts/tours/spout.timeline")),
+    ("spout-alt", include_str!("../levels/solo/spout.txt"), include_str!("../scripts/tours/spout-alt.timeline")),
+    ("spout-stair", include_str!("../levels/solo/spout.txt"), include_str!("../scripts/tours/spout-stair.timeline")),
+    ("brush", include_str!("../levels/solo/brush.txt"), include_str!("../scripts/tours/brush.timeline")),
+    ("brush-alt", include_str!("../levels/solo/brush.txt"), include_str!("../scripts/tours/brush-alt.timeline")),
+    ("brush-underpass", include_str!("../levels/solo/brush.txt"), include_str!("../scripts/tours/brush-underpass.timeline")),
+    ("tilt", include_str!("../levels/solo/tilt.txt"), include_str!("../scripts/tours/tilt.timeline")),
+    ("tilt-alt", include_str!("../levels/solo/tilt.txt"), include_str!("../scripts/tours/tilt-alt.timeline")),
+    ("tilt-outlane", include_str!("../levels/solo/tilt.txt"), include_str!("../scripts/tours/tilt-outlane.timeline")),
+    ("wind", include_str!("../levels/solo/wind.txt"), include_str!("../scripts/tours/wind.timeline")),
+    ("wind-alt", include_str!("../levels/solo/wind.txt"), include_str!("../scripts/tours/wind-alt.timeline")),
+    ("wind-sewer", include_str!("../levels/solo/wind.txt"), include_str!("../scripts/tours/wind-sewer.timeline")),
+    ("disco", include_str!("../levels/solo/disco.txt"), include_str!("../scripts/tours/disco.timeline")),
+    ("disco-alt", include_str!("../levels/solo/disco.txt"), include_str!("../scripts/tours/disco-alt.timeline")),
+    ("disco-cellar", include_str!("../levels/solo/disco.txt"), include_str!("../scripts/tours/disco-cellar.timeline")),
+    ("spin", include_str!("../levels/solo/spin.txt"), include_str!("../scripts/tours/spin.timeline")),
+    ("spin-alt", include_str!("../levels/solo/spin.txt"), include_str!("../scripts/tours/spin-alt.timeline")),
+    ("spin-sump", include_str!("../levels/solo/spin.txt"), include_str!("../scripts/tours/spin-sump.timeline")),
+    ("pingpong", include_str!("../levels/solo/pingpong.txt"), include_str!("../scripts/tours/pingpong.timeline")),
+    ("pingpong-fired", include_str!("../levels/solo/pingpong.txt"), include_str!("../scripts/tours/pingpong-fired.timeline")),
+    ("pingpong-cellar", include_str!("../levels/solo/pingpong.txt"), include_str!("../scripts/tours/pingpong-cellar.timeline")),
+    ("flush", include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush.timeline")),
+    ("flush-waltz", include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush-waltz.timeline")),
+    ("flush-fired", include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush-fired.timeline")),
+    ("flush-sump", include_str!("../levels/solo/flush.txt"), include_str!("../scripts/tours/flush-sump.timeline")),
+];
+
+/// The density report (`scripts/density`): every NAT ALONE tour's quiet share, its longest quiet
+/// stretch and how many run over 2 s (docs/level-design.md, section 4). `DENSITY_ONLY=<name>`
+/// plays only the tours whose names start with it; `DENSITY_GAPS=1` lists each stretch over 1 s.
+#[test]
+#[ignore]
+fn density_report() {
+    let only = std::env::var("DENSITY_ONLY").unwrap_or_default();
+    println!("| tour | goal (s) | quiet | longest (s, from) | over 2 s |\n|---|---|---|---|---|");
+    for (name, level, tour) in TOURS.iter().filter(|(n, _, _)| n.starts_with(&only)) {
+        let run = play(level, tour);
+        let d = density(&run);
+        let goal = run.goal.unwrap_or(run.end);
+        println!("| {name} | {goal:.1} | {:.0}% | {:.1} (t={:.1}) | {} |", d.quiet * 100.0, d.worst.0, d.worst.1, d.over2);
+        if std::env::var("DENSITY_GAPS").is_ok() {
+            let mut t: Vec<f32> = run.actions.iter().copied().filter(|t| *t <= goal).collect();
+            t.insert(0, 0.0);
+            t.push(goal);
+            let gaps: Vec<String> = t.windows(2).filter(|w| w[1] - w[0] > 1.0).map(|w| format!("{:.1}-{:.1}", w[0], w[1])).collect();
+            println!("|  gaps | {} | | | |", gaps.join(" "));
+        }
+    }
 }

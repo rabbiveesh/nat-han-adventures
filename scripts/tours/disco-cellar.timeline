@@ -4,6 +4,7 @@
 # crusher's ride to the high lane, and the shout.
 # Format: src/capture/timeline.rs.
 t=0.78 press Right
+t=1.82 tap Space 150ms
 t=2.95 tap Space 150ms
 t=4.25 tap Space 150ms
 t=5.05 tap Space 150ms

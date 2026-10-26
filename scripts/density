@@ -1,0 +1,5 @@
+#!/bin/sh
+# NAT ALONE density report: every tour's quiet share, longest quiet stretch and stretches over 2 s
+# (`density_report` in tests/showcase.rs; docs/level-design.md, section 4).
+# usage: scripts/density [tour-prefix]   (DENSITY_GAPS=1 lists every stretch over 1 s)
+DENSITY_ONLY="$1" exec nice -n 15 cargo test --features capture --test showcase density_report -- --ignored --nocapture --test-threads 1

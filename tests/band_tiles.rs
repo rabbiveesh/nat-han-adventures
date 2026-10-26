@@ -10,7 +10,7 @@ use leafwing_input_manager::prelude::*;
 use nat_han_adventures::{
     audio::{Harmony, waltz::WALTZ_BPM},
     events::{DeathCause, PlayerDied},
-    game::{BeatClock, Groove, Player, Pos},
+    game::{BeatClock, Body, Groove, Player, Pos},
     level::{
         BELT_SPEED, FAN_REACH, FIRED_UP_TILES, GIANT_FAN_REACH, Level, Levels, TILE,
         validate::{Gate, Options, Physics, Report, check_with},
@@ -213,6 +213,72 @@ fn a_waltz_trampoline_holds_nat_till_one_then_springs_him_higher() {
     let high = high / TILE;
     assert!(high > plain * 1.6, "sprung on ONE: {high:.2} tiles vs {plain:.2}");
     assert!(deaths(&app).is_empty());
+}
+
+const WALL_CUSHION: &str = "name: Wall cushion
+---
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+..............................
+.G......................P..d..
+##############################
+";
+
+#[test]
+fn a_waltz_wall_cushion_holds_nat_till_one_then_slings_him_harder() {
+    // (top, how far back) of a cushion shot, run into at `beats` beats into the waltz (or not).
+    let sling = |harmony: Harmony, beats: f64| {
+        let mut app = game(WALL_CUSHION, harmony);
+        let beat = 60.0 / WALTZ_BPM as f64;
+        let mut beats = beats;
+        let tick = |app: &mut App, beats: &mut f64| {
+            if harmony == Harmony::Waltz {
+                *beats += DT / beat;
+                waltz_at(app, *beats);
+            }
+            app.update();
+        };
+        if harmony == Harmony::Waltz {
+            waltz_at(&mut app, beats);
+        }
+        step(&mut app, 0.2);
+        let floor = nat(&mut app).y;
+        RIGHT.press(app.world_mut());
+        let pad = |app: &mut App| app.world_mut().query_filtered::<&Body, With<Player>>().single(app.world()).unwrap().pad;
+        while pad(&mut app) == 0.0 {
+            tick(&mut app, &mut beats);
+        }
+        RIGHT.release(app.world_mut());
+        let caught = beats;
+        let mut held = 0;
+        while pad(&mut app) != 0.0 {
+            tick(&mut app, &mut beats);
+            held += 1;
+            assert!(held < 240, "let go");
+        }
+        let fired = beats;
+        let mut high = f32::MIN;
+        for _ in 0..90 {
+            tick(&mut app, &mut beats);
+            high = high.max(nat(&mut app).y);
+        }
+        assert!(deaths(&app).is_empty());
+        (caught, fired, held, (high - floor) / TILE)
+    };
+    let (_, _, held, plain) = sling(Harmony::Original, 0.0);
+    assert!(held < 15, "the everyday catch is quick: {held} frames");
+    // Run in just after ONE: held the whole bar, till the next ONE.
+    let (caught, fired, held, high) = sling(Harmony::Waltz, 0.3);
+    assert!(caught < 3.0, "caught off ONE ({caught:.2} beats)");
+    assert!(held > 30, "held till ONE: {held} frames");
+    let off = fired.rem_euclid(3.0);
+    assert!(!(0.3..2.7).contains(&off), "fired on ONE ({fired:.2} beats)");
+    assert!(high > plain * 1.4, "slung harder on ONE: {high:.2} tiles vs {plain:.2}");
 }
 
 const DUCK: &str = "name: Duck
