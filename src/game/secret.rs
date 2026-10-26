@@ -1,5 +1,5 @@
 //! A level's secret (`secret@` in the level file, NAT ALONE): Han glimpsed through a grate.
-//! World 3 has Nat lost alone; now and then, somewhere hidden, he sees Han on the other side of
+//! World 2 has Nat lost alone; now and then, somewhere hidden, he sees Han on the other side of
 //! a wall. The first time in a level visit Nat comes close, Han barks the line ("Nat?!"), a
 //! little fanfare plays and [`SecretFound`] tells the save (`Progress::solo_secrets`).
 //!

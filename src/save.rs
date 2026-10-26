@@ -244,14 +244,16 @@ impl Progress {
         self.solo_nuggets.iter().filter(|n| n.is_some()).count()
     }
 
+    /// Side B (`game::sideb`), the third world, opens on the title once NAT ALONE's last level
+    /// is cleared (or for a save that's already played it: it used to be the second).
     pub fn side_b_unlocked(&self) -> bool {
-        self.best_nuggets[LEVEL_COUNT - 1].is_some()
+        self.solo_nuggets[SOLO_COUNT - 1].is_some() || self.side_b_rewinds.iter().any(Option::is_some)
     }
 
-    /// NAT ALONE (`game::solo`), the third world, opens on the title once Side B's last level
-    /// is cleared.
+    /// NAT ALONE (`game::solo`), the second world, opens on the title once the story's last
+    /// level is cleared.
     pub fn solo_world_unlocked(&self) -> bool {
-        self.side_b_rewinds[SIDE_B_COUNT - 1].is_some()
+        self.best_nuggets[LEVEL_COUNT - 1].is_some()
     }
 
     /// NAT ALONE secrets found (Han glimpsed behind a grate, `game::secret`).
@@ -679,15 +681,25 @@ mod tests {
     }
 
     #[test]
-    fn side_b_opens_once_the_last_level_is_cleared() {
+    fn nat_alone_opens_after_the_story_and_side_b_after_nat_alone() {
         let mut p = Progress::default();
         for level in 0..LEVEL_COUNT - 1 {
             p.record(level, 0, 1.0);
         }
-        assert!(!p.side_b_unlocked(), "playable is not cleared");
+        assert!(!p.solo_world_unlocked(), "playable is not cleared");
         p.record(LEVEL_COUNT - 1, 0, 1.0);
+        assert!(p.solo_world_unlocked());
+        assert!(!p.side_b_unlocked());
+        for level in 0..SOLO_COUNT {
+            p.record_solo(level, 0, 1.0);
+        }
         assert!(p.side_b_unlocked());
-        assert!(Progress::from_text(&p.to_text()).unwrap().side_b_unlocked(), "it survives a save");
+        let p = Progress::from_text(&p.to_text()).unwrap();
+        assert!(p.solo_world_unlocked() && p.side_b_unlocked(), "it survives a save");
+        // (A save from when Side B came second keeps it.)
+        let mut old = Progress::default();
+        old.record_side_b(0, 3);
+        assert!(old.side_b_unlocked());
     }
 
     #[test]
@@ -730,10 +742,8 @@ mod tests {
         assert!(!p.record_side_b(0, 20), "more rewinds is no best");
         assert!(p.record_side_b(0, 3));
         assert_eq!((p.side_b_unlocked, p.side_b_rewinds[0]), (2, Some(3)));
-        assert!(!p.solo_world_unlocked());
         p.record_side_b(SIDE_B_COUNT - 1, 0);
         assert_eq!(p.side_b_unlocked, SIDE_B_COUNT);
-        assert!(p.solo_world_unlocked(), "clearing Side B opens NAT ALONE");
         assert_eq!(p.unlocked, 1, "the story's untouched");
         assert_eq!(Progress::from_text(&p.to_text()).unwrap(), p, "it survives a save");
     }

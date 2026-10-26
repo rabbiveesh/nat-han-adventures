@@ -4,13 +4,13 @@
 //! ([`LAP_SECS`]) where every call is free (Down cycles Giant Steps, fired up, melting) and the
 //! band goes all out, a shout chorus a key up. The more Nat calls, the bigger it gets. Then the
 //! band plays a Basie ending, and on its last chord the cymbal crash knocks Nat flying into the
-//! throne. Han dives with his plunger and misses by a hair. FLUSH. To be continued (Side B).
+//! throne. Han dives with his plunger and misses by a hair. FLUSH. To be continued (NAT ALONE).
 //!
 //! NAT ALONE ends the same way, with its own gag ([`Gag::Grate`]): The Grand Flush's goal
 //! starts the lap under a ceiling (the floor of the room above, a grate in it over the
 //! throne), and the last chord's rubber duck bounces Nat sky high, up through the grate. Han
 //! pops out of the throne below ("Nat?!"), they see each other through the hole, and a shutter
-//! SLAMs over it: Nat upstairs, Han downstairs. To be continued (World 4, the double game).
+//! SLAMs over it: Nat upstairs, Han downstairs. To be continued (Side B: Han alone, after Nat).
 //!
 //! The band and the FX follow [`EncoreCue`]s; the knock waits for the band's [`FinalHit`]
 //! (with no band, after [`ENDING_TIMEOUT`]).
@@ -103,13 +103,13 @@ pub struct Encore {
 /// How the encore goes wrong.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
 pub enum Gag {
-    /// The story (World 1): the cymbal knocks Nat into the throne, FLUSH (into Side B).
+    /// The story (World 1): the cymbal knocks Nat into the throne, FLUSH (into NAT ALONE).
     Throne,
-    /// NAT ALONE (World 3): the duck bounces Nat up through the grate, the shutter slams between
+    /// NAT ALONE (World 2): the duck bounces Nat up through the grate, the shutter slams between
     /// him and Han (into World 4).
     Grate,
-    /// Side B (World 2): Han's celebratory plunge yanks Nat up, and the throne slurps him
-    /// back down, deeper (into NAT ALONE). [`side_b`] runs it.
+    /// Side B (World 3): Han's celebratory plunge yanks Nat up, and the throne blows him on up
+    /// through the ceiling (into World 4). [`side_b`] runs it.
     Plunge,
 }
 

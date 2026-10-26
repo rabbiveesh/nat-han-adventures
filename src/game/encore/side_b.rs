@@ -4,8 +4,9 @@
 //! calls, Down or Jump; the band all out, a shout chorus a key up) with Han dancing on the
 //! stage (struts to the beat, hops on every call, floats in Giant Steps, rolls when melting).
 //! On the Basie ending's last chord he hops up on the throne for a celebratory plunge: GLUG,
-//! GLUG, and he yanks the plunger out with Nat stuck to the cup. "NAT!!" Nat slips off, and
-//! the throne slurps him back down, deeper. "...oops." To be continued (into NAT ALONE).
+//! GLUG, and he yanks the plunger out with Nat stuck to the cup. "NAT!!" Nat slips off into
+//! the bowl, and the throne blows him straight up through the ceiling, SPLOOSH. "...oops."
+//! Nat upstairs, Han downstairs: to be continued (into World 4, the double game).
 
 use bevy::prelude::*;
 
@@ -32,7 +33,7 @@ pub const PLUNGES: u32 = 4;
 pub const PLUNGE_SECS: f32 = 0.4;
 /// Nat stuck on the cup, wiggling (s).
 pub const YANKED_SECS: f32 = 1.4;
-/// Nat slides off the cup into the bowl (s), then the throne slurps him down (s).
+/// Nat slides off the cup into the bowl (s), then the throne blows him up and away (s).
 const SLIDE_SECS: f32 = 0.35;
 pub const SUCK_SECS: f32 = 2.0;
 /// Where Han stands to plunge, from the throne's bottom-center: on the seat's far side, facing
@@ -40,8 +41,8 @@ pub const SUCK_SECS: f32 = 2.0;
 const SEAT: Vec2 = Vec2::new(13.0, 19.0);
 /// The yanked plunger's cup, from Han's feet (facing left): up high in front of him.
 const CUP: Vec2 = Vec2::new(-6.0, 20.0);
-/// How deep Nat goes (px): deeper than the story's flush.
-const SINK: f32 = 22.0;
+/// How high the throne blows Nat (px): off the top of the screen, up to the floor above.
+const RISE: f32 = 260.0;
 
 /// Han's dance in the lap.
 #[derive(Debug, Clone, Copy, Default, Reflect)]
@@ -265,10 +266,12 @@ pub(super) fn run(
                     tf.translation.z = 1.4;
                     cues.write(EncoreCue::Flush { pos: bowl });
                 }
+                // (A moment's gurgle in the bowl, then up he goes.)
                 let s = ((e.t - SLIDE_SECS) / (SUCK_SECS - SLIDE_SECS)).min(1.0);
-                np.0 = bowl - Vec2::new(0.0, SINK * s * s);
-                tf.rotation = Quat::from_rotation_z(3.0 + e.t * (6.0 + 24.0 * s));
-                tf.scale = Vec3::splat((1.0 - s * s).max(0.0));
+                let up = ((s - 0.2) / 0.8).max(0.0);
+                np.0 = bowl + Vec2::new(0.0, RISE * up.powf(0.6));
+                tf.translation.z = 5.0;
+                tf.rotation = Quat::from_rotation_z(3.0 + e.t * (6.0 + 18.0 * s));
             }
         }
         EncorePhase::Continued => tf.scale = Vec3::ZERO,

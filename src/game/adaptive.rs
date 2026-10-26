@@ -570,7 +570,7 @@ pub const SIDE_B_FLOOR: f32 = 0.55;
 const SIDE_B_REWIND_COOLS: f32 = 0.06;
 const SIDE_B_CALL_HEATS: f32 = 0.05;
 
-/// The band's mood in NAT ALONE (`super::solo`), the third world: a drop hotter than Side B
+/// The band's mood in NAT ALONE (`super::solo`), the second world: a drop hotter than Side B
 /// ([`SOLO_BASE`]); each death since the last checkpoint cools it, never below [`SOLO_FLOOR`],
 /// and a checkpoint brings it back.
 pub fn solo_mood(deaths_in_segment: u32) -> BandMood {

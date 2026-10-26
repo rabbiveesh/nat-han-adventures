@@ -501,10 +501,10 @@ fn the_last_level_ends_in_hans_encore_gone_wrong() {
     assert!(said(&app, "NAT!!"));
     let nat = |a: &mut App| a.world_mut().query_filtered::<&Pos, With<Player>>().single(a.world()).unwrap().0;
     assert!(nat(&mut app).y > seat.y + 16.0, "Nat up on the cup");
-    // ...and back down he goes, deeper.
+    // ...and the throne blows him up through the ceiling, upstairs.
     until(&mut app, 5.0, |a| phase(a) == EncorePhase::Continued).expect("to be continued");
     let bowl = app.world().resource::<Encore>().bowl();
-    assert!(nat(&mut app).y < bowl.y && (nat(&mut app).x - bowl.x).abs() < 4.0, "down the bowl");
+    assert!(nat(&mut app).y > bowl.y + 200.0 && (nat(&mut app).x - bowl.x).abs() < 4.0, "up and away");
     assert!(said(&app, "...oops."));
     until(&mut app, 5.0, |a| a.world().get_resource::<SideB>().is_none()).expect("left Side B");
     assert_eq!(*app.world().resource::<State<AppState>>().get(), AppState::LevelSelect);
