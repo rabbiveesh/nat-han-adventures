@@ -664,6 +664,10 @@ fn animate_player(
             let k = (l.speed / tuning::MAX_FALL).clamp(0.3, 1.0);
             cs.squash = Vec2::new(1.0 + 0.4 * k, 1.0 - 0.35 * k);
         }
+        // Sunk into a wall cushion: squashed flat against it, winding up.
+        if body.pad != 0.0 {
+            cs.squash = Vec2::new(0.6, 1.25);
+        }
         let (id, frame) = if let Some(dead) = dead {
             let since = tuning::RESPAWN_DELAY - dead.remaining;
             *vis = if since < SPLAT_SHOW { Visibility::Inherited } else { Visibility::Hidden };

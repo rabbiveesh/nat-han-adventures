@@ -14,7 +14,7 @@ every one on some tour's line from Breezy's v3 on, Disco 39).
 | Level | Band fork | Second fork | Flow (worst held) | Nuggets per route | Runs |
 |---|---|---|---|---|---|
 | 1. Breezy Does It | GS rooftop, fired canal, no call tunnel | nerve (spiky low line or the climb) | 3.8 s (no call), 3.75 s (GS fan hovers) | 40 in all | GS 56, fired 38, no call 48 s |
-| 2. Bouncy Castle | waltz keep, fired moat, no call dungeon | backwards (into the cushion, onto the roof) | 2.3 s; no call 3.3 s (the chimney ride) | 40 in all | waltz 45, fired 39, no call 49 s |
+| 2. Bouncy Castle | waltz keep, fired moat, no call dungeon | backwards (into the cushion, onto the roof) | 2.3 s (the chimneys are steered now) | 40 in all | waltz 44.6, fired 39.2, no call 49.0 s |
 | 3. Up the Spout! | GS ledge, fired vault, no call stair | greed (the brick vault) | 2.5 s (elevator walk-in) | 40 in all | GS 41, fired 44, no call 52 s |
 | 4. Brush Hour | GS gantry, fired express, no call underpass | braid (fast lane over slow lane) | GS 2.9, no call 2.9, fired < 2 s | GS 18, fired 19, no call 16 | GS 57, fired 36, no call 54 s |
 | 5. Tilt! | waltz beat stairs, fired outlane, no call outlane | rhythm (the doors or the gallery) | 2.95 s (plunger lane), fired 3.6 s | waltz 22, fired 27, no call 25 | waltz 51.5, fired 42.6, no call 51.7 s |
@@ -112,6 +112,16 @@ quick statement of the level's idea, not a tutorial.
   with only a held direction key** (`scripts/held-gaps <tour>`: the timeline's press/tap/release times).
   Breezy v3's longest are under 4 s (walking a nugget lane, hovering in a fan).
 - Each beat asks for a jump, a toot or a hover at a readable spot.
+- **Density, measured:** `scripts/density [tour-prefix]` plays every NAT ALONE tour headless
+  (`density_report` in `tests/showcase.rs`) and lists, per tour, the quiet share (time beyond
+  1 s in each stretch between actions, over the run), the longest stretch and how many run
+  over 2 s; `DENSITY_GAPS=1` lists every stretch over 1 s. An action is a key pressed or
+  released, a nugget, a fan's gust entered, or a kick from a duck, cushion or spring. Aim for
+  under 10% quiet and nothing over 2 s. To fill a stretch, a spike tuft or a crate the tour hops
+  (not on a mode's runway: it breaks the fired-up readiness; and a stretch walked both ways
+  needs a hop each way). The 2026-10-23 pass: `gadgets/nat-alone/density.md` (worst before:
+  Breezy 18%, Brush 17%, Ping Pong's cellar 17%; after: Brush's Giant Steps 16%, the fast lane
+  under its rollers has no room, then Spin's sump 12%; the rest 10% or less).
 
 ## 5. Nuggets
 - They trace the lines the good runs take. Check this with each tour's trace.
@@ -243,11 +253,20 @@ decision), and all ten open World 4, the double game where Nat and Han are in si
   fork), 33 s (the merge), goal 45 s. The validator's 150 path-cost segments keep them a bit
   under 12 s apart here.
 - Flow: the worst held stretches are ~2.3 s (the walkway into the keep's trampoline, the
-  battlements' drop) and 3.3 s on the no-call route (the dungeon chimney's ride up).
+  battlements' drop); the chimneys are a steering rhythm now (Left, Right, Left), not a hold.
 - Clips: `nat-alone/w3-bouncy-waltz.mp4`, `w3-bouncy-fired.mp4`, `w3-bouncy-dungeon.mp4`.
-- Lessons: a cushion's fling refreshes the toot, so jump, toot into a tall face and toot again
-  at the fling's apex; flings are fast (26 t/s, 39 fired up) but drop quickly, so toot at the
-  apex, not on the way up. A chimney's right wall must not be cushion near the top if a fling
+- The slingshot (wall cushions catch now): a cushion holds Nat 0.2 s (in the waltz till ONE,
+  which can be most of a bar: jump to fire it early, or arrive just before ONE) and slings
+  him by the aim held as it fires: into it steep (150 across, 520 up), away long and flat (600,
+  220), neither the plain shot (420, 260). The chimneys are where aiming matters: steer at the
+  wall you're flying to, each catch is then held into and fires steep, ~5 rows a crossing
+  (the plain shot only creeps up). At a chimney's top that steep shot hovers in place against
+  the held key, so leave by the other wall: a long shot across, caught high on the far wall,
+  steep out over the near one, or a toot just after the last sling. Kickbacks and slingshots:
+  fire plain (let go as you sink in) and toot at the apex; a jump pressed on the sling's own
+  frame fires it and is spent, so toot a few frames later.
+- Lessons: a cushion's sling refreshes the toot, so toot again at the apex; slings drop
+  quickly, so toot at the apex, not on the way up. A chimney's right wall must not be cushion near the top if a fling
   left from there reaches a mode's island (the validator calls it a giant wall). A chimney
   entrance under a hanging wall needs 3 tiles of floor inside, or the jump window is 0.2 s.
   Under a cushion ceiling with one free row, hops between stones need gaps of 2 (a 3-gap needs
@@ -515,15 +534,21 @@ decision), and all ten open World 4, the double game where Nat and Han are in si
   each gap and a nugget on each arc. No call: off the runway into the cellar: a hole, low hops
   under its cushion ceiling (a 2-wide hole under it), two ducks, the elevator (plain walls at
   its top: toot at the top of the last bat, up through the hatch).
-- Each mode changes the characters, through the physics rather than a TileMood: Giant Steps'
-  low gravity makes the duck shafts climb themselves and the throws carry farther; fired up
-  outruns the ducks' bats (let go of Right in the shafts so both ducks bat). The waltz's
-  ×1.4 fling on ONE isn't used here (gap).
+- Each mode changes the characters: Giant Steps' low gravity makes the duck shafts climb
+  themselves and the throws carry farther, and Giant Steps softens the ceiling cushions
+  (`GIANT_CUSHION_BAT`: they bat you down at a tenth of the speed, and still give the toot
+  back), so the gallery's first stretch is a rally: a spike bed under the cushions (a stone in
+  it), toot up into the cushion about every 0.36 s (hold each toot till the bonk: a released
+  toot is cut in half and falls short) and ride along under it. Fired up outruns the ducks'
+  bats (let go of Right in the shafts so both ducks bat). The waltz's ×1.4 fling on ONE isn't
+  used here (gap).
 - Second fork, the bank shot: the merge ends at a wall with a duck's face up it. Jump, toot
   into the duck, it bats you back up and refills your toot; toot at the top of its bat (Giant
   Steps doesn't need to) up through the one-way shelf behind you, onto the high score table
   (nuggets over 3-wide spiky slots, a duck to hop). Or the tunnel at its foot under a cushion
   ceiling: hop its two holes low. Giant Steps and fired up bank, no call tunnels.
+- A spike bed of 8 or more under a ceiling the validator can't rally across is a stain pit
+  ("leads nowhere much"): split it with a stone.
 - The umpire's chair: a cushion block hanging over the merge stops the bank shot's duck from
   batting you back onto the gallery's end.
 - Secret: the low passage back under the landing, where the cellar route lands (a lone nugget
@@ -542,8 +567,8 @@ decision), and all ten open World 4, the double game where Nat and Han are in si
 - The idea: **the whole world, flushed in one go.** A medley, one section per earlier level
   in level order, each remixed rather than copied: Breezy (a fan dip, a crumbling bridge with
   a hole over a fan ditch, fan posts over sewage with a crumbling stone between), Bouncy Castle
-  (drop onto the belt island, it carries you back into the bank's cushion, flung over the
-  moat), Up the Spout! (two ducks bat you up a 3-wide elevator, a toot smashes the brick plug;
+  (drop onto the belt island, it carries you back into the bank's cushion, caught and slung
+  over the moat), Up the Spout! (two ducks bat you up a 3-wide elevator, a toot smashes the brick plug;
   the checkpoint on its ledge), Brush Hour (belt islands carry you into brushed posts: jump
   onto each post), Tilt! (red and blue beat blocks across the drain, rest stones between). Ten:
   the band, four ways. Ketsu (`shout:` from 412, the Champion's Road): a fan post over sewage,
@@ -584,6 +609,11 @@ decision), and all ten open World 4, the double game where Nat and Han are in si
 - Runs: GS 72.1 s, waltz 64.2 s, no call 65.4 s, fired up 56.0 s (it waits out one crusher
   cycle before the plunger). Clips: `nat-alone/w3-flush-giant.mp4`, `w3-flush-waltz.mp4`,
   `w3-flush-fired.mp4`, `w3-flush-sump.mp4`.
+- The encore's promise: the ceiling over the goal's stage is built into the level (row 21, all
+  but the grate's hole and the first four columns, where the Giant Steps arrival's arc flies
+  through) and the grate is drawn from the start, with light falling through it onto the
+  throne (it's above the screen as you come in; the beam isn't). The encore adds the missing
+  seam tiles and slams the shutter, which puts the light out.
 - Lessons: a jump and toot rises about 8 rows in Giant Steps (4.6 + the toot at the apex): the
   balcony 8 up needed lowering to 7.6. A sock hung over the walking row walls it off: hang it
   two rows up and leave two clear tiles after it to jump from. After a waltz spring a toot only

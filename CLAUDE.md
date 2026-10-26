@@ -85,9 +85,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   next: NAT ALONE's (`Gag::Grate`, The Grand Flush's goal) plays its lap under a ceiling, and the
   last chord's rubber duck bounces Nat up through its grate; Han pops out of the throne below
   ("Nat?!"), a shutter SLAMs over the hole: Nat upstairs, Han downstairs (into Side B, the third
-  world: Han alone; "find all ten grates" while World 4's shut). Side B's (B10's goal): Han's
+  world: Han alone). Side B's (B10's goal): Han's
   celebratory plunge yanks Nat up, and the throne blows him on up through the ceiling, SPLOOSH
-  (`encore/side_b.rs`; into World 4). `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
+  (`encore/side_b.rs`; into World 4: "find all ten grates" while it's shut). `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
   scripts/tours/encore.timeline 10` (`NATHAN_START=<col>`: start on that column's floor);
   NAT ALONE's: `NATHAN_SOLO=10 NATHAN_START=507 ... scripts/tours/encore-solo.timeline`.
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
@@ -105,7 +105,10 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run` (`NATHAN_SIDE_B_FILE=<path>` plays a level file as it; `NATHAN_SIDE_B_PLAN="<plan>"` plays a route by itself, for recordings). `tests/side_b.rs` (a plan's `col/20` is a hit).
 - `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,
   `levels/solo/`), the gadget tiles sideways and upside down too (wall/ceiling fans `e` `w` `!`,
-  wall/ceiling cushions `b` `d` `m`, wall brushes `|`). A `GeneratedLevel` like Side B, its own
+  wall/ceiling cushions `b` `d` `m`, wall brushes `|`; a wall cushion catches Nat, holds him
+  0.2 s (the waltz: till ONE, then 1.4x) and slings him, aimed by what's held as it fires: into
+  it steep, away long and flat, neither plain; a jump fires it early, `level::cushion_shot`;
+  `tests/sideways.rs`). A `GeneratedLevel` like Side B, its own
   `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once story level 10 is cleared (the second world),
   Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
   run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
