@@ -25,6 +25,16 @@ pub enum Action {
     Back,
     /// Menu select (Enter, Space).
     Confirm,
+    /// Side B: play the set list's first, second or third call at once (1, 2, 3; on a phone,
+    /// the left, middle and right thirds of the screen).
+    Call1,
+    Call2,
+    Call3,
+}
+
+impl Action {
+    /// Side B's direct calls, in set list order.
+    pub const CALLS: [Action; 3] = [Action::Call1, Action::Call2, Action::Call3];
 }
 
 /// Marker for the entity holding the global [`ActionState<Action>`].
@@ -51,6 +61,9 @@ pub fn input_map() -> InputMap<Action> {
         (Back, KeyCode::Backspace),
         (Confirm, KeyCode::Enter),
         (Confirm, KeyCode::Space),
+        (Call1, KeyCode::Digit1),
+        (Call2, KeyCode::Digit2),
+        (Call3, KeyCode::Digit3),
     ])
 }
 

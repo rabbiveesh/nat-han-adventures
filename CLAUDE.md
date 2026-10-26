@@ -81,29 +81,35 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/game/encore.rs` the story's ending: level 10's goal starts an encore lap (free calls,
   the band all out, a shout chorus a key up), then a Basie ending whose last chord (`FinalHit`,
   the engine's `end_step`) knocks Nat into the throne; Han dives and misses; FLUSH; to be
-  continued (into Side B). Each world is to end in an "encore gone wrong" that leads into the
+  continued (into NAT ALONE, the second world). Each world is to end in an "encore gone wrong" that leads into the
   next: NAT ALONE's (`Gag::Grate`, The Grand Flush's goal) plays its lap under a ceiling, and the
   last chord's rubber duck bounces Nat up through its grate; Han pops out of the throne below
-  ("Nat?!"), a shutter SLAMs over the hole: Nat upstairs, Han downstairs (into World 4; "find
-  all ten grates" while it's shut). `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
+  ("Nat?!"), a shutter SLAMs over the hole: Nat upstairs, Han downstairs (into Side B, the third
+  world: Han alone). Side B's (B10's goal): Han's
+  celebratory plunge yanks Nat up, and the throne blows him on up through the ceiling, SPLOOSH
+  (`encore/side_b.rs`; into World 4: "find all ten grates" while it's shut). `tests/encore.rs`; video: `NATHAN_START=333 scripts/record-run --capture out.mp4
   scripts/tours/encore.timeline 10` (`NATHAN_START=<col>`: start on that column's floor);
   NAT ALONE's: `NATHAN_SOLO=10 NATHAN_START=507 ... scripts/tours/encore-solo.timeline`.
 - `src/game/sideb.rs` SIDE B, the post-game: Nat's off screen, Han walks
   `levels/side-b/` alone and the player calls the band from each level's set list (`setlist:`
-  header, empty at the start, shown in one fixed order; a nugget Han grabs is one more of the picked call; Left/Right pick, Down or Jump call; every level forks (over a deck or a spike alley's roof, or under); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
+  header, empty at the start, shown in one fixed order: three calls on every level, of five (`giant gap waltz nervous melt`; in the waltz Han swings a `gate: trapeze` gap on his own, letting go on ONE; nervous, he climbs a `gate: shaft` wall, also the cliff face over a drip pipe: `brain::cliff_ahead`; B4, B6 and B7 trade one call for them); a nugget Han grabs is one more of the picked call; Left/Right pick, Down calls, 1/2/3 pick, again calls (on a phone the strip sits along the bottom: a tap on its third of the screen's bottom picks its cell, a second tap calls); Jump or Up is the *hit* (a phone: a tap above the strip), a free drum stab on the next beat: Side B's beat blocks swap on hits instead of bars, and a trapdoor (`-`) under Han drops (`sideb::land_hits`); no signs: the obstacles say which call they want; every level forks (over a deck or a spike alley's roof, or under); B4 is built of *passages* (each call's hold is one stretch for its mode: pits, trapezes, walls) with a checkpoint (`C`) at each mouth: a death rewinds to the last one Han passed, the set list as it was there (`sideb::Mouth`); a rewind restarts the tune; `melt` holds the laughing band on its melting phrase and
   shrinks Han; a call holds 6 s, not the story's 20). Side B plays its own tunes (`Music::SideB`, `Music::side_b`: its levels in runs, one tune
   to each run; free play's Han rooms take them in turn; the band starts hot there and still follows play, `adaptive::side_b_mood`;
   `cargo run --release --example side_b_tunes` renders them as played). Han just runs and jumps at what's ahead
-  (`han::brain::charge`), so a wrong call and he comically dies, the level rewinds. Each
-  level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once level 10 is cleared (its own level select, the
-  `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run`. `tests/side_b.rs`.
+  (`han::brain::charge`: he also waits for and rides ferries, rides lifts to the top, stops at
+  drips unless melted, never jumps off grease; fired up he leaps holes), so a wrong call and he
+  comically dies, the level rewinds. `turns: walls` levels (B8-B10) are mazes: he turns round at
+  walls, ducks, grease walls and drips (`sideb::turn_at_walls`). Their `secret@` is Nat behind a
+  grate that Han finds (`sideb_secrets`), and their `shout:` goes by Han. Each
+  level's routes are plans in `tests/side_b.rs` (`ROUTES`; `try_a_plan` tries one, `how_tight` shows each call's slack). Ways in: SIDE B on the title once NAT ALONE's last level is cleared (the third world; its own level select, the
+  `Shelf`; progress saved as fewest rewinds per level), Up Up Down Down on the title, `?sideb=1` on the web, `NATHAN_SIDE_B=1 cargo run` (`NATHAN_SIDE_B_FILE=<path>` plays a level file as it; `NATHAN_SIDE_B_PLAN="<plan>"` plays a route by itself, for recordings). `tests/side_b.rs` (a plan's `col/20` is a hit).
 - `src/game/solo.rs` NAT ALONE, the gadget world: 10 levels of Nat without Han (`solo: nat`,
   `levels/solo/`), the gadget tiles sideways and upside down too (wall/ceiling fans `e` `w` `!`,
   wall/ceiling cushions `b` `d` `m`, wall brushes `|`; a wall cushion catches Nat, holds him
   0.2 s (the waltz: till ONE, then 1.4x) and slings him, aimed by what's held as it fires: into
   it steep, away long and flat, neither plain; a jump fires it early, `level::cushion_shot`;
   `tests/sideways.rs`). A `GeneratedLevel` like Side B, its own
-  `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once Side B's B10 is cleared (the third world),
+  `Shelf` and progress (`solo_*`). Ways in: NAT ALONE on the title once story level 10 is cleared (the second world),
   Down Down Up Up on the title, `?solo=1` on the web, `NATHAN_SOLO=1 cargo run`. Each level's
   run is `scripts/tours/<level>.timeline`, played in `tests/showcase.rs` (it documents the
   tracing knobs for writing one). A level can hide a secret (`secret@`: Han glimpsed behind a

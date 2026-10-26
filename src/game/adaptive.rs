@@ -570,7 +570,7 @@ pub const SIDE_B_FLOOR: f32 = 0.55;
 const SIDE_B_REWIND_COOLS: f32 = 0.06;
 const SIDE_B_CALL_HEATS: f32 = 0.05;
 
-/// The band's mood in NAT ALONE (`super::solo`), the third world: a drop hotter than Side B
+/// The band's mood in NAT ALONE (`super::solo`), the second world: a drop hotter than Side B
 /// ([`SOLO_BASE`]); each death since the last checkpoint cools it, never below [`SOLO_FLOOR`],
 /// and a checkpoint brings it back.
 pub fn solo_mood(deaths_in_segment: u32) -> BandMood {
@@ -599,8 +599,13 @@ fn decide_music(
     mut was_side: Local<Option<(u32, u32)>>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
+    encore: Option<Res<super::encore::Encore>>,
 ) {
     let Some(run) = run else { return };
+    // (The encore has the band all out: `audio::plugin`'s `encore_band`.)
+    if encore.is_some() {
+        return;
+    }
     // A secret found sets the band loose at once (the instant feedback); the next decision
     // (a death, a checkpoint, or [`MUSIC_CHECK_SECS`] on) brings it back to following play.
     if secret.read().count() > 0 {

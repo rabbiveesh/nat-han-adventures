@@ -55,7 +55,7 @@ mod world;
 
 use bevy::prelude::*;
 
-pub use brain::{HanBrain, HanMode, HanNav, nav_cell, stand};
+pub use brain::{DRIP_BERTH, HanBrain, HanMode, HanNav, nav_cell, stand};
 pub use world::{FlySpin, HanRaft, SprayPlug, han_raft_life};
 
 use super::{ActiveLevel, GameSet};
@@ -234,6 +234,10 @@ pub enum HanPose {
     Cling,
     /// On the trapeze (the waltz): hanging from his plunger stuck in the ceiling.
     Trapeze,
+    /// Side B's encore: plunging the throne.
+    Plunge,
+    /// Side B's encore: the plunger yanked out, held up high.
+    Yank,
 }
 
 /// For visuals: what Han is doing and which way he faces.

@@ -112,7 +112,8 @@ fn restart_level(
     // itself).
     match (generated, side_b) {
         // (A free play Side B room rewinds itself: `sideb`.)
-        (Some(_), Some(s)) if s.room.is_some() => return,
+        // (A death past a checkpoint rewinds to it: `sideb`.)
+        (Some(_), Some(s)) if s.room.is_some() || s.to_mouth => return,
         (Some(g), Some(_)) => {
             load(&mut commands, g.0.clone(), index, &old);
             return;

@@ -25,15 +25,15 @@ pub fn plugin(app: &mut App) {
 #[derive(Component)]
 struct TitleScreen;
 
-/// The menu: story mode, free play, Side B (once the story's cleared) and NAT ALONE (once
-/// Side B's cleared).
-const OPTIONS: [&str; 4] = ["STORY", "FREE PLAY", "SIDE B", "NAT ALONE"];
+/// The menu: story mode, free play, NAT ALONE (once the story's cleared) and Side B (once NAT
+/// ALONE's cleared).
+const OPTIONS: [&str; 4] = ["STORY", "FREE PLAY", "NAT ALONE", "SIDE B"];
 
 /// How many of `OPTIONS` the title shows.
 fn shown(progress: Option<&Progress>) -> usize {
     match progress {
-        Some(p) if p.solo_world_unlocked() => 4,
-        Some(p) if p.side_b_unlocked() => 3,
+        Some(p) if p.side_b_unlocked() => 4,
+        Some(p) if p.solo_world_unlocked() => 3,
         _ => 2,
     }
 }
@@ -158,8 +158,8 @@ fn input(
             i => {
                 commands.insert_resource(match i {
                     0 => Shelf::Story,
-                    2 => Shelf::SideB,
-                    _ => Shelf::Solo,
+                    2 => Shelf::Solo,
+                    _ => Shelf::SideB,
                 });
                 next.set(AppState::LevelSelect);
             }
