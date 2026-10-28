@@ -58,8 +58,10 @@ pub static SIDE_B_SOURCES: [&str; SIDE_B_COUNT] = [
 pub const REWIND_SECS: f32 = 2.0;
 /// The goal reached: this long on the cheer, then back to the title.
 pub const CLEARED_SECS: f32 = 4.0;
-/// Cells a frontier search may simulate per step.
-const SEARCH_BUDGET: usize = 120;
+/// Cells a frontier search may simulate per step (~0.15 ms each natively, several times that
+/// in a browser on a slow laptop, where the music renders on the same thread): a big search
+/// spreads over a few frames rather than dropping one.
+const SEARCH_BUDGET: usize = 8;
 
 /// Han's size while melting (Nat's melting is only drawn, and less: on Side B he really
 /// shrinks, enough to duck under a row of ceiling spikes).
