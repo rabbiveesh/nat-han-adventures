@@ -236,6 +236,7 @@ pub(super) fn check_hazards(
     mut says: MessageWriter<HanSays>,
     side_stains: Query<&SideStain>,
     crushers: Query<(&super::crushers::CrusherBlock, &Pos), (Without<Player>, Without<Raft>)>,
+    mut robot_pit: MessageWriter<super::robot::FellInRobotPit>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
@@ -298,6 +299,13 @@ pub(super) fn check_hazards(
     }
 
     let Some(cause) = cause else { return };
+    // A robot pit isn't bottomless: it drops Nat into the wrong game (`robot`), no splat.
+    if cause == DeathCause::Pit
+        && let Some(pit) = super::robot::pit_at(level, pos.0.x)
+    {
+        robot_pit.write(super::robot::FellInRobotPit { pit });
+        return;
+    }
     let skill = death_skill(level, pos.0, cause);
     // Sliding on grease into spikes splats their side (short-lived, so the chute keeps killing
     // until grip comes); any other death on spikes leaves a lasting stain on top.

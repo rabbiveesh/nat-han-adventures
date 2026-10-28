@@ -33,6 +33,10 @@
 //!   it, feet on the cell's floor. The first time in a level visit Nat comes within
 //!   [`SECRET_RADIUS`] of it, Han barks the line and the save remembers it was found
 //!   (`game::secret`). [`validate`] checks Nat can get that close.
+//! - `robotpit: <c0> <c1>`: a *robot pit*, a joke secret: the bottomless gap over columns
+//!   c0..=c1 (the bottom row empty there, a floor left of it) drops Nat into the wrong game,
+//!   Sparky's (`game::robot`), instead of splatting him. Sparky's antenna blinks at its bottom.
+//!   More than one line, more than one pit.
 //! - `shout: <col>`: from that column on, the band plays shout choruses (the closing stretch);
 //!   `shout: row <row>` (a tower): once above that row.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
@@ -934,6 +938,8 @@ pub struct Level {
     pub secret: Option<Spot>,
     /// `shout:` where the shout choruses start.
     pub shout: Option<Shout>,
+    /// `robotpit:` gaps (columns, inclusive) that drop Nat into Sparky's game.
+    pub robot_pits: Vec<(usize, usize)>,
 }
 
 /// Where a level's closing stretch starts (`shout:`): past a column, or (a tower) above a row.
@@ -1122,6 +1128,7 @@ impl Level {
         let mut solo = false;
         let mut secret = None;
         let mut shout = None;
+        let mut robot_pits = Vec::new();
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
@@ -1165,6 +1172,12 @@ impl Level {
                         .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
                         .ok_or_else(|| format!("expected `secret@<col>,<row>`, got `{k}`"))?;
                     secret = Some(Spot { col, row, text: value.to_string(), topics: Vec::new() });
+                }
+                "robotpit" => {
+                    let bad = || format!("expected `robotpit: <c0> <c1>`, got `{value}`");
+                    let w: Vec<usize> = value.split_whitespace().map(|v| v.parse().map_err(|_| bad())).collect::<Result<_, _>>()?;
+                    let [c0, c1] = w[..] else { return Err(bad()) };
+                    robot_pits.push((c0.min(c1), c0.max(c1)));
                 }
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
@@ -1394,6 +1407,12 @@ impl Level {
                 return Err(format!("secret@{},{}: the grate (that cell and the one above) must be solid", s.col, s.row));
             }
         }
+        for &(c0, c1) in &robot_pits {
+            let bottom = height - 1;
+            if c0 == 0 || c1 >= width || (c0..=c1).any(|c| tiles[bottom * width + c].is_solid()) {
+                return Err(format!("robotpit: {c0} {c1}: wants an open gap in the bottom row with a column left of it"));
+            }
+        }
         Ok(Level {
             name: name.ok_or("missing `name:`")?,
             world,
@@ -1414,6 +1433,7 @@ impl Level {
             solo,
             secret,
             shout,
+            robot_pits,
         })
     }
 }
@@ -1533,6 +1553,14 @@ mod tests {
         assert!(l.in_chasm(35) && !l.in_chasm(41));
         assert!(Level::parse("name: T\ngate: toot 1,1 2,2\n---\nPG\n##\n").is_err());
         assert!(Level::parse("name: T\ngate: giant 1,1\n---\nPG\n##\n").is_err());
+    }
+
+    #[test]
+    fn parses_robot_pits() {
+        let l = Level::parse("name: T\nrobotpit: 3 2\n---\nP....G\n##..##\n").unwrap();
+        assert_eq!(l.robot_pits, vec![(2, 3)]);
+        assert!(Level::parse("name: T\nrobotpit: 1 2\n---\nP....G\n##..##\n").is_err(), "floor under it");
+        assert!(Level::parse("name: T\nrobotpit: 2\n---\nP....G\n##..##\n").is_err());
     }
 
     #[test]

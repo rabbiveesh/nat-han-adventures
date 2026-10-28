@@ -8,6 +8,7 @@ mod camera;
 mod encore;
 mod gadgets;
 mod particles;
+mod robot;
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -80,6 +81,7 @@ pub(super) fn plugin(app: &mut App) {
     particles::plugin(app);
     gadgets::plugin(app);
     encore::plugin(app);
+    robot::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
 }
@@ -642,12 +644,12 @@ const SPLAT_SHOW: f32 = 0.5;
 fn animate_player(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    player: Query<(&Body, &PlayerControl, Option<&Dead>, &Children), With<Player>>,
+    player: Query<(&Body, &PlayerControl, Option<&Dead>, &Children, Has<crate::game::robot::TopDown>), With<Player>>,
     mut kids: Query<(&mut Sprite, &mut CharacterSprite, &mut Visibility)>,
     mut jumped: MessageReader<Jumped>,
     mut landed: MessageReader<Landed>,
 ) {
-    let Ok((body, ctl, dead, children)) = player.single() else {
+    let Ok((body, ctl, dead, children, top_down)) = player.single() else {
         jumped.clear();
         landed.clear();
         return;
@@ -676,7 +678,7 @@ fn animate_player(
             *vis = Visibility::Inherited;
             if !body.on_ground {
                 (if body.vel.y > 0.0 { SpriteId::PooJump } else { SpriteId::PooFall }, (t * 10.0) as usize)
-            } else if body.vel.x.abs() > 10.0 {
+            } else if body.vel.x.abs() > 10.0 || (top_down && body.vel.length() > 10.0) {
                 (SpriteId::PooRun, (t * 12.0) as usize)
             } else {
                 (SpriteId::PooIdle, (t * 3.0) as usize)

@@ -21,6 +21,7 @@ mod lifecycle;
 mod physics;
 mod pickups;
 mod platforms;
+pub mod robot;
 pub mod secret;
 pub mod sideb;
 pub mod solo;
@@ -111,7 +112,12 @@ pub fn plugin(app: &mut App) {
                 GameSet::Sync,
             )
                 .chain()
-                .run_if(in_state(PlayState::Running).and_then(resource_exists::<ActiveLevel>)),
+                // (The robot pit's wrong game freezes the platformer: `robot`.)
+                .run_if(
+                    in_state(PlayState::Running)
+                        .and_then(resource_exists::<ActiveLevel>)
+                        .and_then(not(resource_exists::<robot::RobotRoom>)),
+                ),
         )
         .add_systems(FixedUpdate, sync_transforms.in_set(GameSet::Sync))
         .add_plugins((
@@ -128,6 +134,7 @@ pub fn plugin(app: &mut App) {
             secret::plugin,
             crushers::plugin,
             encore::plugin,
+            robot::plugin,
         ));
 }
 
