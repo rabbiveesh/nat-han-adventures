@@ -3,8 +3,8 @@
 //! he lets go when he likes. His tricks go round in order, one a grab ([`TRICKS`]; a level's
 //! second helper starts one further along, its third two):
 //! - [`Trick::Drop`]: partway up he snickers, and lets go.
-//! - [`Trick::Fling`]: he swings it hard and wide, snickers, and lets go at the bottom of a
-//!   swing, out away from his ledge: Nat flies.
+//! - [`Trick::Fling`]: he swings it hard and wide, snickers, and flings Nat out away from his
+//!   ledge ([`FLING`]) as it swings out its fastest: Nat flies.
 //! - [`Trick::Honest`]: all the way up, and he hoists Nat onto the ledge. "SEE? I HELPED!"
 //!
 //! The snicker comes [`SNICKER`] s before he lets go: time enough to jump off (Jump lets go,
@@ -37,6 +37,10 @@ pub const SNICKER: f32 = 0.6;
 pub const SWING_PERIOD: f32 = 1.6;
 /// The shortest the rope gets (px): his hands.
 pub const ROPE_MIN: f32 = 14.0;
+/// The fling's toss on top of the swing (px/s, out and up), and the fastest it throws Nat
+/// out (px/s).
+pub const FLING: Vec2 = Vec2::new(140.0, 260.0);
+pub const FLING_MAX: f32 = 320.0;
 /// He lowers the rope again this fast (px/s) after a trick.
 const LOWER_SPEED: f32 = 120.0;
 /// A Nat who just let go can't grab the rope again for this long (s).
@@ -163,8 +167,8 @@ pub fn snicker_at(trick: Trick, rope: f32) -> Option<f32> {
 }
 
 /// The helper standing in cell (col, row), his rope: hanging off whichever side of his ledge
-/// is open (right if both), down to a tile and a bit above the floor below (at most
-/// [`HELPER_ROPE`] tiles).
+/// is open (right if both), down to a tile and a bit above the floor (or sewage) below (at
+/// most [`HELPER_ROPE`] tiles).
 pub fn rope_of(level: &Level, col: usize, row: usize) -> (Vec2, f32, f32) {
     let (c, r) = (col as i32, row as i32);
     let open = |dc: i32| !level.tile(c + dc, r + 1).is_solid() && !level.tile(c + dc, r).is_solid();
@@ -173,7 +177,8 @@ pub fn rope_of(level: &Level, col: usize, row: usize) -> (Vec2, f32, f32) {
     let pivot = Vec2::new(center.x + side * (TILE / 2.0 + 3.0), center.y + 2.0);
     let rc = c + side as i32;
     let mut floor = r + 1;
-    while floor < level.height as i32 && !level.tile(rc, floor).is_solid() && !level.tile(rc, floor).is_one_way() {
+    let stops = |t: crate::level::Tile| t.is_solid() || t.is_one_way() || t == crate::level::Tile::Liquid;
+    while floor < level.height as i32 && !stops(level.tile(rc, floor)) {
         floor += 1;
     }
     let floor_y = (level.height as i32 - floor) as f32 * TILE;
@@ -286,7 +291,9 @@ fn swing_rope(
             commands.entity(*e).remove::<OnRope>();
             *ctl = PlayerControl { facing: ctl.facing, ..PlayerControl::default() };
             body.on_ground = false;
-            body.vel = rope.vel;
+            // The swing's speed carries him till he lands (like a jump off a moving platform).
+            body.vel = Vec2::new(0.0, rope.vel.y);
+            body.launch = rope.vel.x.clamp(-tuning::LAUNCH_MAX, tuning::LAUNCH_MAX);
         };
         rope.held += dt;
         // Nat lets go: a jump off it (not the jump that caught it).
@@ -318,6 +325,7 @@ fn swing_rope(
                     let_go(ctl, body, rope, &mut commands);
                     pos.0 = Vec2::new(hp.0.x - h.side * TILE * 0.6, hp.0.y - TILE / 2.0 + body.half.y + 1.0);
                     body.vel = Vec2::new(0.0, 160.0);
+                    body.launch = 0.0;
                     h.state = HelperState::Lowering;
                     h.since_release = 0.0;
                     events.write(RopeEvent::Hoisted(pos.0));
@@ -334,6 +342,11 @@ fn swing_rope(
                 }
                 if left <= 0.0 {
                     let_go(ctl, body, rope, &mut commands);
+                    if trick == Trick::Fling {
+                        // He doesn't just let go: he flings.
+                        body.vel.y = body.vel.y.max(0.0) + FLING.y;
+                        body.launch = (rope.vel.x + h.side * FLING.x).clamp(-FLING_MAX, FLING_MAX);
+                    }
                     h.state = HelperState::Lowering;
                     h.since_release = 0.0;
                     events.write(RopeEvent::LetGo(pos.0));

@@ -113,7 +113,7 @@ fn landed(level: &Level, p: Vec2) -> bool {
 }
 
 #[allow(clippy::type_complexity)]
-fn flap_and_drop(
+pub(super) fn flap_and_drop(
     time: Res<Time>,
     active: Res<ActiveLevel>,
     groove: Res<Groove>,

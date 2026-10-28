@@ -1,0 +1,10 @@
+# Stop Right There (levels/toybox/stop.txt).
+t=0.5 press Right
+t=1.6 press Space
+t=1.85 release Space
+t=2.55 press Space
+t=2.8 release Space
+t=3.46 release Right
+t=3.75 tap Space 150ms
+t=4.3 press Right
+t=9.5 release Right

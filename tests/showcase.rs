@@ -1,6 +1,7 @@
 //! The showcase levels and the scripted runs their demo videos record:
-//! - the sky things' playground (`levels/toybox/boom.txt`, `scripts/tours/boom.timeline`):
-//!   both Booms and every diaper, without a death;
+//! - the secret playground (`game::toybox`, `levels/toybox/`): one level per toy (the Boom,
+//!   sploosh diapers, the helper, the blast button, the stop sign, the houses), each with its tour
+//!   (`scripts/tours/<level>.timeline`), cleared with only the deaths its gag needs;
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
 //! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): each of its ten levels has a
@@ -283,14 +284,26 @@ fn the_tour_beats_the_gauntlet_without_a_death() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 
-/// The sky things' playground (`levels/toybox/boom.txt`): its tour rides both Booms and
-/// stops at every diaper's whistle, without a death.
-#[test]
-fn the_boom_tour_clears_its_playground_without_a_death() {
-    let run = play(include_str!("../levels/toybox/boom.txt"), include_str!("../scripts/tours/boom.timeline"));
-    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
-    assert!(run.goal.is_some(), "the tour reaches the goal");
+/// A secret playground (`levels/toybox/`) and its tour: it clears the level (the goal, or a
+/// stop sign) with only the deaths the gag needs (Schnitzel Street's first chef).
+macro_rules! playground {
+    ($name:ident, $file:literal, $deaths:literal) => {
+        #[test]
+        fn $name() {
+            let run = play(include_str!(concat!("../levels/toybox/", $file, ".txt")), include_str!(concat!("../scripts/tours/", $file, ".timeline")));
+            assert!(run.deaths.len() <= $deaths, "deaths (s, col, row): {:?}", run.deaths);
+            let goal = run.goal.expect("the tour clears the level");
+            assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+        }
+    };
 }
+
+playground!(the_boom_tour_clears_its_playground_without_a_death, "boom", 0);
+playground!(the_sploosh_tour_dodges_every_diaper, "sploosh", 0);
+playground!(the_helper_tour_survives_the_helpers_tricks, "helper", 0);
+playground!(the_blast_tour_rides_the_blasts, "blast", 0);
+playground!(the_stop_tour_stops_at_the_sign, "stop", 0);
+playground!(the_houses_tour_gets_fried_once_then_flies_the_chimneys, "houses", 1);
 
 /// A NAT ALONE level passes the full check, and its tour clears it without a death.
 macro_rules! nat_alone {

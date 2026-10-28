@@ -3,8 +3,9 @@
 //! **The blast button**, with a speaker stack either side: land on it (a jump onto it, not a
 //! walk) and the band BLASTS: [`BlastMusic`] tells the audio to play a shout chorus a key up,
 //! flat out and louder for [`BLAST_SECS`], the blast throws Nat high ([`BLAST_SPEED`], the
-//! toot back) and knocks every sploosh diaper near out of the sky. Landing on it again while
-//! it blasts throws him again and keeps it going.
+//! toot back) and knocks every sploosh diaper near out of the sky; while it blasts, none
+//! dares come back near a button. Landing on it again while it blasts throws him again and
+//! keeps it going.
 //!
 //! **A stop sign**: touch it and the level stops right there. Nat skids to a halt ("STOP!"),
 //! and a moment later it's cleared, like the goal.
@@ -29,12 +30,16 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(Update, calm_down)
         .add_systems(
             FixedUpdate,
-            (press_button.after(super::physics::player_step).in_set(GameSet::Player), (stop_sign, stop_the_level).chain().in_set(GameSet::Interact)),
+            (
+                press_button.after(super::physics::player_step).in_set(GameSet::Player),
+                scare_diapers.in_set(GameSet::World).after(super::diapers::flap_and_drop),
+                (stop_sign, stop_the_level).chain().in_set(GameSet::Interact),
+            ),
         );
 }
 
-/// A blast knocks diapers out of the sky this far away (px).
-pub const BLAST_REACH: f32 = 12.0 * TILE;
+/// A blast knocks diapers out of the sky this far away (px: about a screen).
+pub const BLAST_REACH: f32 = 20.0 * TILE;
 /// The button: this wide (px), and Nat lands within this much of its middle to press it.
 pub const BUTTON_HALF: f32 = 8.0;
 /// A stop sign's box (half extents, px; its feet on its cell's floor).
@@ -132,6 +137,24 @@ fn press_button(
             }
         }
         return;
+    }
+}
+
+/// While the band blasts, a diaper back near a button is knocked right out of the sky again.
+fn scare_diapers(
+    blasting: Res<Blasting>,
+    buttons: Query<&Transform, With<Blaster>>,
+    mut diapers: Query<(&mut Diaper, &Pos)>,
+    mut splooshed: MessageWriter<Splooshed>,
+) {
+    if blasting.0 <= 0.0 {
+        return;
+    }
+    for (mut d, dp) in &mut diapers {
+        if d.state == DiaperState::Flapping && buttons.iter().any(|b| b.translation.truncate().distance(dp.0) <= BLAST_REACH) {
+            d.state = DiaperState::Splooshed { t: 0.0 };
+            splooshed.write(Splooshed { pos: dp.0 });
+        }
     }
 }
 

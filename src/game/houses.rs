@@ -30,7 +30,7 @@ pub const INDOORS_SECS: f32 = 1.0;
 /// The chimney's top: this far right of the door and this high over the floor (px).
 pub const CHIMNEY: Vec2 = Vec2::new(5.0, 40.0);
 /// Nat goes in at a door within this much (px) of its middle.
-const DOOR_HALF: f32 = 6.0;
+const DOOR_HALF: f32 = 8.0;
 /// The chef calls a Nat this near (px)...
 const CALL_REACH: f32 = 5.0 * TILE;
 /// ...this often (s).
