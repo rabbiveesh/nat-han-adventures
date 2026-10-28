@@ -75,6 +75,8 @@ pub enum DeathCause {
     Spray,
     /// Squashed by a crusher.
     Crusher,
+    /// A sploosh diaper on the head.
+    Diaper,
 }
 
 #[derive(Message, Debug, Clone, Copy)]

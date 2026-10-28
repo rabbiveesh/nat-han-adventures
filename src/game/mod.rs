@@ -12,7 +12,9 @@ use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
 pub mod adaptive;
+pub mod boom;
 pub mod crushers;
+pub mod diapers;
 pub mod encore;
 mod groove;
 mod han;
@@ -127,6 +129,8 @@ pub fn plugin(app: &mut App) {
             solo::plugin,
             secret::plugin,
             crushers::plugin,
+            boom::plugin,
+            diapers::plugin,
             encore::plugin,
         ));
 }

@@ -18,12 +18,15 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::HanBlip => 0.6,
         Sfx::Jump | Sfx::Land => 0.75,
         Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect | Sfx::Secret => 0.85,
+        Sfx::Whistle => 0.6,
+        Sfx::Sputter => 0.8,
+        Sfx::Sploosh => 1.0,
         Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing | Sfx::Crash => 1.0,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 13] = [
+    pub const ALL: [Sfx; 16] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -37,6 +40,9 @@ impl Sfx {
         Sfx::Boing,
         Sfx::Crash,
         Sfx::Secret,
+        Sfx::Sploosh,
+        Sfx::Whistle,
+        Sfx::Sputter,
     ];
 }
 
@@ -59,6 +65,9 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::Boing => boing(),
         Sfx::Crash => crash(),
         Sfx::Secret => secret(),
+        Sfx::Sploosh => sploosh(),
+        Sfx::Whistle => whistle(),
+        Sfx::Sputter => sputter(),
     };
     finish(mono, level(sfx))
 }
@@ -310,6 +319,56 @@ fn secret() -> Vec<f32> {
     out.resize(out.len() + delay, 0.0);
     for i in (delay..out.len()).rev() {
         out[i] += out[i - delay] * 0.3;
+    }
+    out
+}
+
+/// A diaper lands: a wet thwump, then a spray of droplets ("SPLOOSH").
+fn sploosh() -> Vec<f32> {
+    let n = secs(0.5);
+    let (mut o, mut wob) = (Osc::default(), Osc::default());
+    let mut noise = Lfsr::with_seed(0x5100);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let thump = o.tri(exp_sweep(180.0, 45.0, (t * 4.0).min(1.0))) * (-t * 10.0).exp();
+            let w = wob.sine(18.0);
+            let cutoff = exp_sweep(1_200.0, 5_500.0, (t * 3.0).min(1.0)) * (1.0 + 0.3 * w);
+            let spray = lp.run(noise.next(30_000.0, false), cutoff) * (t * 8.0).min(1.0) * (1.0 - t).powf(1.6);
+            (thump * 0.9 + spray * 0.8) * env_ar(i, n, 0.002, 0.05)
+        })
+        .collect()
+}
+
+/// A diaper drops: a cartoon falling whistle, high to low.
+fn whistle() -> Vec<f32> {
+    let n = secs(0.45);
+    let (mut o, mut vib) = (Osc::default(), Osc::default());
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let f = exp_sweep(1_800.0, 700.0, t) * (1.0 + 0.015 * vib.sine(9.0));
+            o.sine(f) * 0.6 * env_ar(i, n, 0.01, 0.08)
+        })
+        .collect()
+}
+
+/// The Boom runs dry: three wheezy coughs, each lower, and a last "pfft".
+fn sputter() -> Vec<f32> {
+    let mut noise = Lfsr::with_seed(0x0ff);
+    let mut o = Osc::default();
+    let mut lp = LowPass(0.0);
+    let mut out = Vec::new();
+    for (k, (f, d)) in [(140.0, 0.09), (120.0, 0.09), (100.0, 0.1), (80.0, 0.3)].into_iter().enumerate() {
+        let n = secs(d);
+        for i in 0..n {
+            let t = i as f32 / n as f32;
+            let buzz = o.pulse(f * (1.0 - 0.2 * t), 0.125) * 0.7;
+            let air = lp.run(noise.next(6_000.0, false), 1_500.0) * 0.6;
+            out.push((buzz + air) * (1.0 - t).powf(if k == 3 { 1.0 } else { 2.0 }) * env_ar(i, n, 0.004, 0.02));
+        }
+        out.resize(out.len() + secs(0.04), 0.0);
     }
     out
 }

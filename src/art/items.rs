@@ -2,7 +2,7 @@
 
 use super::palette::*;
 
-const OUTLINE: Rgba = hex(0x1b1420);
+pub(super) const OUTLINE: Rgba = hex(0x1b1420);
 
 // ---------------------------------------------------------------- nugget
 

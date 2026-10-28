@@ -80,6 +80,9 @@ pub fn text(l: &Level) -> String {
             ThingKind::Checkpoint => 'C',
             ThingKind::Fly => 'F',
             ThingKind::Spray => 'S',
+            ThingKind::Boom => 'B',
+            ThingKind::Bean => ':',
+            ThingKind::Diaper => 'D',
         };
     }
     g[l.start.1][l.start.0] = 'P';

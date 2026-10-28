@@ -335,6 +335,8 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Beat => vec!["RED AND BLUE BLOCKS".into(), "SWAP ON EVERY BAR!".into()],
         Topic::Wind => vec!["FANS ON WALLS PUSH YOU.".into(), "ON CEILINGS? NO RISING!".into()],
         Topic::Fling => vec!["CUSHIONS ON WALLS FLING".into(), "YOU. ON CEILINGS: BONK!".into()],
+        Topic::Boom => vec!["HOP ON! ARROWS STEER,".into(), "JUMP HOPS OFF.".into(), "BEANS FILL ITS TANK!".into()],
+        Topic::Diaper => vec!["DIAPERS AIM AHEAD.".into(), "HEAR THE WHISTLE?".into(), "STOP OR TURN BACK!".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -355,6 +357,8 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Beat => "NEW: BEAT BLOCKS",
         Topic::Wind => "NEW: SIDEWAYS FANS",
         Topic::Fling => "NEW: SIDEWAYS CUSHIONS",
+        Topic::Boom => "NEW: THE BOOM",
+        Topic::Diaper => "NEW: SPLOOSH DIAPERS",
         _ => "NEW!",
     };
     (title, lines)

@@ -10,6 +10,7 @@ mod characters;
 mod gadgets;
 mod items;
 pub mod palette;
+mod sky;
 mod tiles;
 
 pub use palette::Pixels;
@@ -83,6 +84,13 @@ pub enum SpriteId {
     LiquidFill(u8),
     /// Fly, wing-flap frames. 8x8.
     Fly,
+    /// The Boom (a plump flying pal, puffing beans out the back), 2 frames; its body is the
+    /// middle 14x10. 16x16.
+    Boom,
+    /// Beans, the Boom's fuel. 8x8.
+    Bean,
+    /// Sploosh diaper: two flaps, then the drop. 16x16.
+    Diaper,
     /// Air-freshener can (on the floor), 16x16; and the spray jet segment (animated), 16x16.
     SprayCan,
     SprayJet,
@@ -165,7 +173,7 @@ impl SpriteId {
             HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
             WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
-            StainRaft, Fly, SprayCan,
+            StainRaft, Fly, Boom, Bean, Diaper, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
             CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
@@ -184,7 +192,7 @@ impl SpriteId {
             HanBraced => (16, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
-            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
+            Fly | Bean | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
             Wisp => (4, 6),
@@ -235,6 +243,9 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         LiquidTop(w) => tiles::liquid_top(w),
         LiquidFill(w) => tiles::liquid_fill(w),
         Fly => items::fly(),
+        Boom => sky::boom(),
+        Bean => sky::bean(),
+        Diaper => sky::diaper(),
         SprayCan => items::spray_can(),
         SprayJet => items::spray_jet(),
         PlatformTp => items::platform_tp(),

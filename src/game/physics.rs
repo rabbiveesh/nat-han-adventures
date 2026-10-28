@@ -655,7 +655,7 @@ pub fn han_carrier(id: Entity, pos: Vec2, prev: Vec2, head: &HanHead) -> Option<
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
-fn player_step(
+pub(super) fn player_step(
     time: Res<Time>,
     mut active: ResMut<ActiveLevel>,
     groove: Res<Groove>,
@@ -663,7 +663,7 @@ fn player_step(
     input: Single<&ActionState<Action>>,
     mut player: Query<
         (&mut Pos, &mut Body, &mut PlayerControl),
-        (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>),
+        (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>, Without<super::boom::Aboard>),
     >,
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), Without<Player>>,
     han: Query<(Entity, &Pos, &PrevPos, &HanHead), (Without<Player>, Without<MovingPlatform>)>,

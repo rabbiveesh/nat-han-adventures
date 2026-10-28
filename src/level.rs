@@ -78,6 +78,9 @@
 //! | `!` `e` `w` | fans laid on a ceiling (`!`, blowing down: a downdraft you can't rise through) or a wall (`e` blowing right, `w` left: a gust that pushes you along at [`WIND_SPEED`]); like `*`, [`FAN_REACH`] empty tiles |
 //! | `b` `d` `m` | cushions laid on a wall (`b`: its spring on its right face, `d`: its left; run or fly into it and it catches you, holds you [`CUSHION_HOLD`] (in the waltz, until ONE: [`WALTZ_SPRING_BOOST`] harder) and slings you away; hold into it as it fires for a steep shot, away for a long flat one, neither for the plain one ([`cushion_shot`]); a jump fires it early) or a ceiling (`m`: bump your head on it and it springs you back down); the toot comes back |
 //! | `\|` | brushes sticking out of a wall sideways, pointing away from it (there must be a wall on exactly one side); deadly in that half of the tile |
+//! | `B` | the Boom: a bean-fuelled flying pal, parked bobbing in its cell. Touch it and it catches Nat and flies wherever you steer (all four arrows; Jump hops off). Anything deadly it touches splats Nat. Its tank holds [`BOOM_FUEL`] s; when it runs dry it sputters and drops him. See `game::boom` |
+//! | `:` | beans: the Boom's fuel. Flying through them (on the Boom) tops the tank up [`BEAN_FUEL`]; Nat on foot leaves them be. Eaten beans are back the next time the Boom parks |
+//! | `D` | sploosh diaper: flaps back and forth [`DIAPER_RANGE`] tiles either side of its cell, and drops (with a whistle) when it would land on Nat's head if he kept on: stop or turn and it misses; deadly while it flies and falls, then splooshes and flaps back [`DIAPER_BACK`] s later. See `game::diapers` |
 //! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -242,6 +245,22 @@ pub fn cushion_shot(aim: f32) -> (f32, f32) {
         (CUSHION_FLING, CUSHION_LIFT)
     }
 }
+
+/// The Boom's full tank (s of flying).
+pub const BOOM_FUEL: f32 = 8.0;
+/// A bean tops the Boom's tank up this much (s, never past full).
+pub const BEAN_FUEL: f32 = 2.5;
+/// The Boom flies this fast (px/s, its top speed in any direction)...
+pub const BOOM_SPEED: f32 = 120.0;
+/// ...and this much slower once the tank's nearly dry ([`BOOM_LOW`] s left): it sputters.
+pub const BOOM_SPUTTER: f32 = 0.6;
+pub const BOOM_LOW: f32 = 2.0;
+/// A diaper flaps this many tiles either side of its cell...
+pub const DIAPER_RANGE: f32 = 3.0;
+/// ...at this speed (px/s, at its fastest)...
+pub const DIAPER_SPEED: f32 = 50.0;
+/// ...and is back flapping this long (s) after it splooshed.
+pub const DIAPER_BACK: f32 = 2.5;
 
 /// The farthest (tiles) a crusher slams, with nothing in its way.
 pub const CRUSH_MAX_TRAVEL: i32 = 10;
@@ -515,10 +534,14 @@ pub enum Topic {
     Wind,
     /// Cushions laid sideways or upside down `b` `d` `m` (`fling`).
     Fling,
+    /// The Boom `B` and its beans `:` (`boom`).
+    Boom,
+    /// Sploosh diapers `D` (`diaper`).
+    Diaper,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 26] = [
+    pub const ALL: [Topic; 28] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -545,6 +568,8 @@ impl Topic {
         Topic::Beat,
         Topic::Wind,
         Topic::Fling,
+        Topic::Boom,
+        Topic::Diaper,
     ];
 
     /// The gadget tiles: not in the campaign yet (only `levels/playground/gadgets.txt`), so the
@@ -561,6 +586,10 @@ impl Topic {
         Topic::Wind,
         Topic::Fling,
     ];
+
+    /// The sky things (the Boom and its beans, sploosh diapers): playground-only, since the
+    /// validator can't fly the Boom yet (`levels/playground/boom.txt`).
+    pub const SKY: [Topic; 2] = [Topic::Boom, Topic::Diaper];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -590,6 +619,8 @@ impl Topic {
             Topic::Beat => "beat",
             Topic::Wind => "wind",
             Topic::Fling => "fling",
+            Topic::Boom => "boom",
+            Topic::Diaper => "diaper",
         }
     }
 
@@ -889,6 +920,12 @@ pub enum ThingKind {
     Checkpoint,
     Fly,
     Spray,
+    /// The Boom (`B`), parked.
+    Boom,
+    /// Beans (`:`), the Boom's fuel.
+    Bean,
+    /// A sploosh diaper (`D`).
+    Diaper,
 }
 
 /// A non-tile object at a grid cell.
@@ -1329,6 +1366,9 @@ impl Level {
                     'C' => things.push(Thing { kind: ThingKind::Checkpoint, col, row }),
                     'F' => things.push(Thing { kind: ThingKind::Fly, col, row }),
                     'S' => things.push(Thing { kind: ThingKind::Spray, col, row }),
+                    'B' => things.push(Thing { kind: ThingKind::Boom, col, row }),
+                    ':' => things.push(Thing { kind: ThingKind::Bean, col, row }),
+                    'D' => things.push(Thing { kind: ThingKind::Diaper, col, row }),
                     '1'..='9' => {
                         let digit = c.to_digit(10).unwrap() as usize;
                         let start_col = col;

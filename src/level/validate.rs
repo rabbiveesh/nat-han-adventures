@@ -710,6 +710,16 @@ impl<'a> Map<'a> {
                         }
                     }
                 }
+                // A diaper's swing is deadly like a fly's circle (its drop is dodged by
+                // stopping at its whistle: it leads you, so it lands in front).
+                ThingKind::Diaper => {
+                    let reach = crate::level::DIAPER_RANGE.ceil() as i32 + 1;
+                    for c in t.col as i32 - reach..=t.col as i32 + reach {
+                        if let Some(i) = at(c, t.row as i32) {
+                            flags[i] |= FLY;
+                        }
+                    }
+                }
                 ThingKind::Spray => {
                     for k in 0..=3 {
                         if let Some(i) = at(t.col as i32, t.row as i32 - k) {
@@ -3846,6 +3856,8 @@ fn lessons(
         let topic = match t.kind {
             ThingKind::Fly => Topic::Fly,
             ThingKind::Spray => Topic::Spray,
+            ThingKind::Boom | ThingKind::Bean => Topic::Boom,
+            ThingKind::Diaper => Topic::Diaper,
             _ => continue,
         };
         for &cell in &g.order {
@@ -3999,6 +4011,9 @@ fn dump(level: &Level, map: &Map, g: &Graph, crossings: &[Crossing]) -> String {
             (ThingKind::Checkpoint, false) => '!',
             (ThingKind::Fly, _) => 'F',
             (ThingKind::Spray, _) => 'S',
+            (ThingKind::Boom, _) => 'B',
+            (ThingKind::Bean, _) => ':',
+            (ThingKind::Diaper, _) => 'D',
         };
     }
     for h in &level.hints {

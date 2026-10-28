@@ -1,0 +1,15 @@
+# The Boom's Big Day (levels/playground/boom.txt): walk onto the Boom, fly the spike pit (over
+# the first pillar, under the stalactite, over the second, under the spiky ceiling), eating the
+# beans on the way; dodge the diapers; hop off on the ledge. Then on foot under three more
+# diapers (stop at each whistle), the second Boom over the sewage lake, the goal.
+t=0.3 press Right
+t=1.2 press Up
+t=2.3 release Up
+t=2.9 press Down
+t=3.5 release Down
+t=5.6 press Up
+t=6.6 release Up
+t=8.4 press Down
+t=9.0 release Down
+t=12.0 release Right
+wait 2

@@ -8,6 +8,7 @@ mod camera;
 mod encore;
 mod gadgets;
 mod particles;
+mod sky;
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -79,6 +80,7 @@ pub(super) fn plugin(app: &mut App) {
     camera::plugin(app);
     particles::plugin(app);
     gadgets::plugin(app);
+    sky::plugin(app);
     encore::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);

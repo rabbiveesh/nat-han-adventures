@@ -167,6 +167,12 @@ pub enum Sfx {
     Crash,
     /// A level's secret found (`game::secret`).
     Secret,
+    /// A diaper lands: SPLOOSH (`game::diapers`).
+    Sploosh,
+    /// A diaper lets go: a falling whistle.
+    Whistle,
+    /// The Boom runs dry: a sputtering cough.
+    Sputter,
 }
 
 #[cfg(test)]
