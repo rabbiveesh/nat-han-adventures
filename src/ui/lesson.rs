@@ -337,6 +337,10 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Fling => vec!["CUSHIONS ON WALLS FLING".into(), "YOU. ON CEILINGS: BONK!".into()],
         Topic::Boom => vec!["HOP ON! ARROWS STEER,".into(), "JUMP HOPS OFF.".into(), "BEANS FILL ITS TANK!".into()],
         Topic::Diaper => vec!["DIAPERS AIM AHEAD.".into(), "HEAR THE WHISTLE?".into(), "STOP OR TURN BACK!".into()],
+        Topic::Helper => vec!["HE SAYS HE'LL HELP.".into(), "HE SNICKERS? HE'LL".into(), "LET GO! JUMP OFF FIRST.".into()],
+        Topic::Blast => vec!["JUMP ON THE BUTTON".into(), "AND THE BAND BLASTS!".into(), "IT BLASTS YOU UP TOO.".into()],
+        Topic::Stop => vec!["A STOP SIGN!".into(), "TOUCH IT AND THE LEVEL".into(), "STOPS RIGHT THERE.".into()],
+        Topic::House => vec![format!("{} AT A DOOR: GO IN.", if touch { "STICK UP" } else { "UP" }), "NOBODY HOME? CHIMNEY!".into(), "SMOKE? IT'S A CHEF...".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -359,6 +363,10 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
         Topic::Fling => "NEW: SIDEWAYS CUSHIONS",
         Topic::Boom => "NEW: THE BOOM",
         Topic::Diaper => "NEW: SPLOOSH DIAPERS",
+        Topic::Helper => "NEW: A \"HELPER\"",
+        Topic::Blast => "NEW: THE BLAST BUTTON",
+        Topic::Stop => "NEW: STOP SIGNS",
+        Topic::House => "NEW: HOUSES",
         _ => "NEW!",
     };
     (title, lines)

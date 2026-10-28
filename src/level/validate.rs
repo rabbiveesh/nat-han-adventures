@@ -3858,6 +3858,10 @@ fn lessons(
             ThingKind::Spray => Topic::Spray,
             ThingKind::Boom | ThingKind::Bean => Topic::Boom,
             ThingKind::Diaper => Topic::Diaper,
+            ThingKind::Helper => Topic::Helper,
+            ThingKind::Blaster => Topic::Blast,
+            ThingKind::StopSign => Topic::Stop,
+            ThingKind::House(_) => Topic::House,
             _ => continue,
         };
         for &cell in &g.order {
@@ -4014,6 +4018,12 @@ fn dump(level: &Level, map: &Map, g: &Graph, crossings: &[Crossing]) -> String {
             (ThingKind::Boom, _) => 'B',
             (ThingKind::Bean, _) => ':',
             (ThingKind::Diaper, _) => 'D',
+            (ThingKind::Helper, _) => 'H',
+            (ThingKind::Blaster, _) => 'M',
+            (ThingKind::StopSign, _) => '@',
+            (ThingKind::House(crate::level::Cook::Never), _) => 'A',
+            (ThingKind::House(crate::level::Cook::Always), _) => 'K',
+            (ThingKind::House(crate::level::Cook::Sometimes), _) => 'a',
         };
     }
     for h in &level.hints {

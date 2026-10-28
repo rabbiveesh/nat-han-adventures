@@ -81,6 +81,10 @@
 //! | `B` | the Boom: a bean-fuelled flying pal, parked bobbing in its cell. Touch it and it catches Nat and flies wherever you steer (all four arrows; Jump hops off). Anything deadly it touches splats Nat. Its tank holds [`BOOM_FUEL`] s; when it runs dry it sputters and drops him. See `game::boom` |
 //! | `:` | beans: the Boom's fuel. Flying through them (on the Boom) tops the tank up [`BEAN_FUEL`]; Nat on foot leaves them be. Eaten beans are back the next time the Boom parks |
 //! | `D` | sploosh diaper: flaps back and forth [`DIAPER_RANGE`] tiles either side of its cell, and drops (with a whistle) when it would land on Nat's head if he kept on: stop or turn and it misses; deadly while it flies and falls, then splooshes and flaps back [`DIAPER_BACK`] s later. See `game::diapers` |
+//! | `H` | the "helper": a shifty guy on a ledge, his rope dangling off it. Grab the rope and he hauls Nat up, swinging it about, and he lets go when he likes (a snicker first): his tricks go drop, fling, honest, then round again. Jump lets go of it, keeping the swing. See `game::helper` |
+//! | `M` | the blast button, with its speakers: land on it and the band BLASTS (a shout chorus a key up, flat out, louder, [`BLAST_SECS`]) and the blast throws Nat up ([`BLAST_SPEED`]) and every diaper near out of the sky. See `game::toys` |
+//! | `@` | a stop sign: touch it and the level stops right there (cleared, like the goal). See `game::toys` |
+//! | `A` `K` `a` | a house (its door in this cell, the house around it): Up at the door goes in. `A`: nobody's in, out the chimney Nat flies, up high; `K`: a chef's home (smoke, a lit window) and Nat comes out a schnitzel (a death); `a`: the chef's in every other [`HOUSE_SHIFT`] s. See `game::houses` |
 //! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -261,6 +265,19 @@ pub const DIAPER_RANGE: f32 = 3.0;
 pub const DIAPER_SPEED: f32 = 50.0;
 /// ...and is back flapping this long (s) after it splooshed.
 pub const DIAPER_BACK: f32 = 2.5;
+
+/// The helper hauls his rope in this fast (px/s)...
+pub const HELPER_HAUL: f32 = 40.0;
+/// ...from at most this long a rope (tiles; it hangs to just above the floor below him).
+pub const HELPER_ROPE: f32 = 8.0;
+/// The blast button throws Nat up this fast (px/s, ~10 tiles)...
+pub const BLAST_SPEED: f32 = 700.0;
+/// ...and the band blasts this long (s).
+pub const BLAST_SECS: f32 = 12.0;
+/// A sometimes house (`a`): the chef's in, then out, this long each (s).
+pub const HOUSE_SHIFT: f32 = 3.0;
+/// A house nobody's in throws Nat out of its chimney this fast (px/s, ~8 tiles up).
+pub const CHIMNEY_SPEED: f32 = 620.0;
 
 /// The farthest (tiles) a crusher slams, with nothing in its way.
 pub const CRUSH_MAX_TRAVEL: i32 = 10;
@@ -538,10 +555,18 @@ pub enum Topic {
     Boom,
     /// Sploosh diapers `D` (`diaper`).
     Diaper,
+    /// The helper `H` and his rope (`helper`).
+    Helper,
+    /// The blast button `M` (`blast`).
+    Blast,
+    /// Stop signs `@` (`stop`).
+    Stop,
+    /// Houses `A` `K` `a` (`house`).
+    House,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 28] = [
+    pub const ALL: [Topic; 32] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -570,6 +595,10 @@ impl Topic {
         Topic::Fling,
         Topic::Boom,
         Topic::Diaper,
+        Topic::Helper,
+        Topic::Blast,
+        Topic::Stop,
+        Topic::House,
     ];
 
     /// The gadget tiles: not in the campaign yet (only `levels/playground/gadgets.txt`), so the
@@ -587,9 +616,10 @@ impl Topic {
         Topic::Fling,
     ];
 
-    /// The sky things (the Boom and its beans, sploosh diapers): playground-only, since the
-    /// validator can't fly the Boom yet (`levels/playground/boom.txt`).
-    pub const SKY: [Topic; 2] = [Topic::Boom, Topic::Diaper];
+    /// The toys (the Boom and its beans, sploosh diapers, the helper, the blast button, stop
+    /// signs, houses): only in the secret playground (`game::toybox`, `levels/toybox/`), since
+    /// the validator can't fly the Boom, swing on a rope or go indoors.
+    pub const TOYS: [Topic; 6] = [Topic::Boom, Topic::Diaper, Topic::Helper, Topic::Blast, Topic::Stop, Topic::House];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -621,6 +651,10 @@ impl Topic {
             Topic::Fling => "fling",
             Topic::Boom => "boom",
             Topic::Diaper => "diaper",
+            Topic::Helper => "helper",
+            Topic::Blast => "blast",
+            Topic::Stop => "stop",
+            Topic::House => "house",
         }
     }
 
@@ -926,6 +960,25 @@ pub enum ThingKind {
     Bean,
     /// A sploosh diaper (`D`).
     Diaper,
+    /// The helper (`H`), on his ledge.
+    Helper,
+    /// The blast button (`M`).
+    Blaster,
+    /// A stop sign (`@`).
+    StopSign,
+    /// A house's door (`A` `K` `a`).
+    House(Cook),
+}
+
+/// Who's in a house (`A` `K` `a`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum Cook {
+    /// `A`: nobody: out the chimney.
+    Never,
+    /// `K`: a chef, always.
+    Always,
+    /// `a`: a chef, every other [`HOUSE_SHIFT`] s (out first).
+    Sometimes,
 }
 
 /// A non-tile object at a grid cell.
@@ -1369,6 +1422,12 @@ impl Level {
                     'B' => things.push(Thing { kind: ThingKind::Boom, col, row }),
                     ':' => things.push(Thing { kind: ThingKind::Bean, col, row }),
                     'D' => things.push(Thing { kind: ThingKind::Diaper, col, row }),
+                    'H' => things.push(Thing { kind: ThingKind::Helper, col, row }),
+                    'M' => things.push(Thing { kind: ThingKind::Blaster, col, row }),
+                    '@' => things.push(Thing { kind: ThingKind::StopSign, col, row }),
+                    'A' => things.push(Thing { kind: ThingKind::House(Cook::Never), col, row }),
+                    'K' => things.push(Thing { kind: ThingKind::House(Cook::Always), col, row }),
+                    'a' => things.push(Thing { kind: ThingKind::House(Cook::Sometimes), col, row }),
                     '1'..='9' => {
                         let digit = c.to_digit(10).unwrap() as usize;
                         let start_col = col;

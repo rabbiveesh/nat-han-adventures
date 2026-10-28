@@ -20,8 +20,17 @@ pub fn plugin(app: &mut App) {
         .add_message::<CallBand>()
         .add_message::<EncoreCue>()
         .add_message::<FinalHit>()
+        .add_message::<ToyShout>()
         .add_message::<crate::audio::MusicStarted>()
         .add_message::<crate::audio::MusicChanged>();
+}
+
+/// A word shouted out in the level at `pos` (the helper's "HELP! HELP!", a stop sign's
+/// "STOP!", a house's "SIZZLE!"): it pops up there and floats away.
+#[derive(Message, Debug, Clone, Copy, PartialEq)]
+pub struct ToyShout {
+    pub pos: Vec2,
+    pub text: &'static str,
 }
 
 /// Picked up a golden nugget (the coin) at `pos`.
@@ -77,6 +86,8 @@ pub enum DeathCause {
     Crusher,
     /// A sploosh diaper on the head.
     Diaper,
+    /// Went into a house with the chef home: breaded and fried.
+    Schnitzel,
 }
 
 #[derive(Message, Debug, Clone, Copy)]

@@ -103,6 +103,7 @@ fn restart_level(
     generated: Option<Res<GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
     solo: Option<Res<super::solo::SoloRun>>,
+    toy: Option<Res<super::toybox::ToyRun>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
     if requests.read().count() == 0 {
@@ -118,7 +119,7 @@ fn restart_level(
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
-        (Some(g), None) if solo.is_some() => {
+        (Some(g), None) if solo.is_some() || toy.is_some() => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
@@ -245,6 +246,10 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
             ThingKind::Boom => super::boom::spawn_boom(commands, center),
             ThingKind::Bean => super::boom::spawn_bean(commands, center),
             ThingKind::Diaper => super::diapers::spawn_diaper(commands, center, (i as f32 * 0.618_034).fract()),
+            ThingKind::Helper => super::helper::spawn_helper(commands, level, thing.col, thing.row),
+            ThingKind::Blaster => super::toys::spawn_blaster(commands, level, thing.col, thing.row),
+            ThingKind::StopSign => super::toys::spawn_sign(commands, level, thing.col, thing.row),
+            ThingKind::House(cook) => super::houses::spawn_house(commands, level, thing.col, thing.row, cook),
             ThingKind::Spray => {
                 commands.spawn((
                     Name::new("Spray"),

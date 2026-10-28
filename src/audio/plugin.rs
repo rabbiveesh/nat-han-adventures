@@ -53,6 +53,8 @@ use super::{Filters, Harmony, Music, Sfx, director, sfx, synth};
 const MUSIC_DB: f32 = -4.0;
 /// Extra music attenuation while paused.
 const PAUSE_DUCK_DB: f32 = -12.0;
+/// The blast button turns the music up this much (dB).
+const BLAST_DB: f32 = 5.0;
 /// Max fall speed in px/s ([`crate::game::tuning::MAX_FALL`]), for scaling the landing thud.
 const LAND_FULL_SPEED: f32 = 420.0;
 
@@ -68,7 +70,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, blast_band, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -208,7 +210,8 @@ pub struct LivePlayer {
     sounding: Option<(Filters, Tuning)>,
     /// The last decision and its reason (for the toast when it lands).
     decided: Option<(Filters, &'static str)>,
-    ducked: Option<bool>,
+    /// (Ducked for the pause, blasting: `game::toys`.)
+    ducked: Option<(bool, bool)>,
     /// Last published chunk count, and when we saw it change.
     seen: (u64, f64),
     /// What's playing (tempo, meter, loop, filters, tuning), and the first bar played with it:
@@ -658,17 +661,32 @@ pub struct Calibrating;
 fn duck(
     play_state: Option<Res<State<PlayState>>>,
     calibrating: Option<Res<Calibrating>>,
+    blasting: Option<Res<crate::game::toys::Blasting>>,
     mut player: ResMut<LivePlayer>,
     mut audio: NonSendMut<Audio>,
 ) {
     let duck = play_state.is_some_and(|s| *s.get() == PlayState::Paused) && calibrating.is_none();
-    if player.ducked == Some(duck) {
+    let blast = blasting.is_some_and(|b| b.0 > 0.0);
+    if player.ducked == Some((duck, blast)) {
         return;
     }
     let Some(h) = audio.handle.as_mut() else { return };
-    let db = if duck { MUSIC_DB + PAUSE_DUCK_DB } else { MUSIC_DB };
+    let db = if duck { MUSIC_DB + PAUSE_DUCK_DB } else if blast { MUSIC_DB + BLAST_DB } else { MUSIC_DB };
     if h.set_volume_db(db, 0.2) {
-        player.ducked = Some(duck);
+        player.ducked = Some((duck, blast));
+    }
+}
+
+/// The blast button (`game::toys`): the band blasts a shout chorus a key up, louder, from the
+/// next bar; then back to arranging as it likes.
+fn blast_band(mut blasts: MessageReader<crate::game::toys::BlastMusic>, mut audio: NonSendMut<Audio>) {
+    use super::live::chorus::{Call, Chorus};
+    let Some(h) = audio.handle.as_mut() else {
+        blasts.clear();
+        return;
+    };
+    for b in blasts.read() {
+        h.post(Input::ForceChorus(b.0.then_some(Call { chorus: Chorus::Shout, key_up: true })));
     }
 }
 

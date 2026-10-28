@@ -173,6 +173,16 @@ pub enum Sfx {
     Whistle,
     /// The Boom runs dry: a sputtering cough.
     Sputter,
+    /// The blast button: a big brassy BWAAMP and a drum (`game::toys`).
+    Blast,
+    /// A chef fries Nat: a sizzle (`game::houses`).
+    Sizzle,
+    /// A stop sign: a skid's screech.
+    Screech,
+    /// The helper snickers: "hehehe".
+    Snicker,
+    /// Out of a chimney: a "foomp".
+    Foomp,
 }
 
 #[cfg(test)]

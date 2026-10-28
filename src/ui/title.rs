@@ -45,6 +45,8 @@ struct TitleCursor(usize, Vec<i32>);
 const SIDE_B_COMBO: [i32; 4] = [-1, -1, 1, 1];
 /// ...and into NAT ALONE (`game::solo`): Down Down Up Up.
 const SOLO_COMBO: [i32; 4] = [1, 1, -1, -1];
+/// ...and into the secret playground (`game::toybox`), which never shows: Up Down Up Down.
+const TOY_COMBO: [i32; 4] = [-1, 1, -1, 1];
 
 #[derive(Component)]
 struct TitleOption(usize);
@@ -138,6 +140,7 @@ fn input(
         let shelf = match cursor.1.as_slice() {
             c if c == SIDE_B_COMBO => Some(Shelf::SideB),
             c if c == SOLO_COMBO => Some(Shelf::Solo),
+            c if c == TOY_COMBO => Some(Shelf::Toybox),
             _ => None,
         };
         if let Some(shelf) = shelf {

@@ -312,7 +312,7 @@ fn stopping_at_the_whistle_dodges_a_diaper() {
 
 #[test]
 fn the_playground_parses() {
-    let level = Level::parse(include_str!("../levels/playground/boom.txt")).expect("boom.txt parses");
+    let level = Level::parse(include_str!("../levels/toybox/boom.txt")).expect("boom.txt parses");
     assert!(level.things.iter().any(|t| t.kind == ThingKind::Boom));
     assert!(level.things.iter().any(|t| t.kind == ThingKind::Diaper));
 }

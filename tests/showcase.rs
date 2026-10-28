@@ -1,5 +1,5 @@
 //! The showcase levels and the scripted runs their demo videos record:
-//! - the sky things' playground (`levels/playground/boom.txt`, `scripts/tours/boom.timeline`):
+//! - the sky things' playground (`levels/toybox/boom.txt`, `scripts/tours/boom.timeline`):
 //!   both Booms and every diaper, without a death;
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
@@ -28,8 +28,8 @@
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
 //! bar lines, his toots, nuggets, band calls and secrets found, a wall cushion catching and slinging
-//! him, the Boom catching him, its beans, a diaper dropping and splooshing, the harmony, and the
-//! crushers near him;
+//! him, the Boom catching him, its beans, a diaper dropping and splooshing, the helper's rope,
+//! houses, blast buttons and stop signs, the harmony, and the crushers near him;
 //! `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play another level / timeline in
 //! `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`: trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
@@ -48,7 +48,10 @@ use nat_han_adventures::{
         boom::BoomEvent,
         crushers::CrusherBlock,
         diapers::{DiaperDropped, Splooshed},
+        helper::RopeEvent,
+        houses::HouseEvent,
         secret::SecretFound,
+        toys::{Blasted, SignHit},
     },
     level::{Level, Levels, TILE, Topic, validate},
     state::AppState,
@@ -158,7 +161,11 @@ fn play(level: &str, tour: &str) -> Run {
              mut s: MessageReader<SecretFound>,
              mut boom: MessageReader<BoomEvent>,
              mut dropped: MessageReader<DiaperDropped>,
-             mut splooshed: MessageReader<Splooshed>| {
+             mut splooshed: MessageReader<Splooshed>,
+             mut rope: MessageReader<RopeEvent>,
+             mut house: MessageReader<HouseEvent>,
+             mut blasted: MessageReader<Blasted>,
+             mut sign: MessageReader<SignHit>| {
                 h.0.extend(j.read().filter(|j| j.double).map(|_| "toot"));
                 h.0.extend(boom.read().map(|e| match e {
                     BoomEvent::Caught(_) => "caught by the Boom",
@@ -166,6 +173,20 @@ fn play(level: &str, tour: &str) -> Run {
                     BoomEvent::Dry(_) => "the Boom ran dry",
                     BoomEvent::HoppedOff(_) => "hopped off the Boom",
                 }));
+                h.0.extend(rope.read().map(|e| match e {
+                    RopeEvent::Grabbed(_) => "grabbed the rope",
+                    RopeEvent::Snicker(_) => "the helper snickers",
+                    RopeEvent::LetGo(_) => "he let go",
+                    RopeEvent::JumpedOff(_) => "jumped off the rope",
+                    RopeEvent::Hoisted(_) => "hoisted onto the ledge",
+                }));
+                h.0.extend(house.read().map(|e| match e {
+                    HouseEvent::In(_) => "in the house",
+                    HouseEvent::Sizzle(_) => "SIZZLE",
+                    HouseEvent::Chimney(_) => "out of the chimney",
+                }));
+                h.0.extend(blasted.read().map(|_| "BLAST"));
+                h.0.extend(sign.read().map(|_| "STOP"));
                 h.0.extend(dropped.read().map(|_| "diaper drops"));
                 h.0.extend(splooshed.read().map(|_| "sploosh"));
                 h.0.extend(n.read().map(|_| "nugget"));
@@ -262,11 +283,11 @@ fn the_tour_beats_the_gauntlet_without_a_death() {
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
 }
 
-/// The sky things' playground (`levels/playground/boom.txt`): its tour rides both Booms and
+/// The sky things' playground (`levels/toybox/boom.txt`): its tour rides both Booms and
 /// stops at every diaper's whistle, without a death.
 #[test]
 fn the_boom_tour_clears_its_playground_without_a_death() {
-    let run = play(include_str!("../levels/playground/boom.txt"), include_str!("../scripts/tours/boom.timeline"));
+    let run = play(include_str!("../levels/toybox/boom.txt"), include_str!("../scripts/tours/boom.timeline"));
     assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
     assert!(run.goal.is_some(), "the tour reaches the goal");
 }

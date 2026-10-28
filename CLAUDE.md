@@ -42,7 +42,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   The sky things: the Boom (`B`, `src/game/boom.rs`: a bean-fuelled flying pal Nat rides, steered
   with all four arrows, Space hops off; beans `:` fill its tank; what it touches splats Nat) and
   sploosh diapers (`D`, `src/game/diapers.rs`: flap back and forth, drop with a whistle where Nat's
-  headed, so stop or turn); `levels/playground/boom.txt`, `tests/boom.rs`. The validator only
+  headed, so stop or turn); `levels/toybox/boom.txt`, `tests/boom.rs`. The validator only
   knows the diapers' swing is deadly (it can't fly the Boom yet), so no validated level uses them.
   `src/game/han/` is Han, the AI buddy (`docs/han-buddy.md`); `tests/han.rs` and
   `tests/han_campaign.rs` play him headless.

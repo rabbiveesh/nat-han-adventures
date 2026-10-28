@@ -86,6 +86,11 @@ pub(super) fn update_sprays(clock: Res<SimClock>, groove: Res<Groove>, mut spray
     }
 }
 
+/// On Nat: something's done for him (a chef, `houses`): the next hazard check splats him by
+/// that cause.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Doomed(pub DeathCause);
+
 fn rects_overlap(a_min: Vec2, a_max: Vec2, b_min: Vec2, b_max: Vec2) -> bool {
     a_min.x < b_max.x && a_max.x > b_min.x && a_min.y < b_max.y && a_max.y > b_min.y
 }
@@ -238,6 +243,7 @@ pub(super) fn check_hazards(
     crushers: Query<(&super::crushers::CrusherBlock, &Pos), (Without<Player>, Without<Raft>)>,
     diapers: Query<(&super::diapers::Diaper, &Pos), (Without<Player>, Without<Raft>)>,
     aboard: Query<(), (With<Player>, With<super::boom::Aboard>)>,
+    doomed: Query<&Doomed, With<Player>>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
@@ -307,6 +313,12 @@ pub(super) fn check_hazards(
         cause = Some(DeathCause::Crusher);
     }
 
+    // Done for by something else (a chef: `houses`).
+    if let Ok(d) = doomed.get(entity) {
+        cause = Some(d.0);
+        commands.entity(entity).remove::<Doomed>();
+    }
+
     let Some(cause) = cause else { return };
     let skill = death_skill(level, pos.0, cause);
     // Sliding on grease into spikes splats their side (short-lived, so the chute keeps killing
@@ -348,7 +360,7 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
     let near = |c0: i32, r0: i32, c1: i32, r1: i32| {
         (c0 - 2..=c1 + 2).contains(&c) && (pit || (r0 - 2..=r1 + 2).contains(&r))
     };
-    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher | DeathCause::Diaper);
+    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher | DeathCause::Diaper | DeathCause::Schnitzel);
     // Flies, sprays and crushers never count against a gate: none is built of them.
     if !hazard
         && let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1))

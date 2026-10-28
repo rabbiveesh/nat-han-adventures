@@ -11,6 +11,7 @@ mod gadgets;
 mod items;
 pub mod palette;
 mod sky;
+mod toys;
 mod tiles;
 
 pub use palette::Pixels;
@@ -91,6 +92,17 @@ pub enum SpriteId {
     Bean,
     /// Sploosh diaper: two flaps, then the drop. 16x16.
     Diaper,
+    /// The "helper": idle (holding his rope out right; flip it for left), calling, snickering.
+    /// 16x16.
+    Helper,
+    /// The blast button between its speakers: up, and pressed (the cones out). 48x16.
+    Blaster,
+    /// A stop sign on its pole. 16x32.
+    StopSign,
+    /// A house: nobody home, and the chef in (the window lit). 48x48.
+    House,
+    /// Nat the schnitzel. 16x16.
+    Schnitzel,
     /// Air-freshener can (on the floor), 16x16; and the spray jet segment (animated), 16x16.
     SprayCan,
     SprayJet,
@@ -173,7 +185,7 @@ impl SpriteId {
             HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
             WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
-            StainRaft, Fly, Boom, Bean, Diaper, SprayCan,
+            StainRaft, Fly, Boom, Bean, Diaper, Helper, Blaster, StopSign, House, Schnitzel, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
             CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
@@ -188,7 +200,9 @@ impl SpriteId {
     pub fn size(self) -> (u32, u32) {
         use SpriteId::*;
         match self {
-            GoalFlag | Grate => (16, 32),
+            GoalFlag | Grate | StopSign => (16, 32),
+            Blaster => (48, 16),
+            House => (48, 48),
             HanBraced => (16, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
@@ -246,6 +260,11 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         Boom => sky::boom(),
         Bean => sky::bean(),
         Diaper => sky::diaper(),
+        Helper => toys::helper(),
+        Blaster => toys::blaster(),
+        StopSign => toys::stop_sign(),
+        House => toys::house(),
+        Schnitzel => toys::schnitzel(),
         SprayCan => items::spray_can(),
         SprayJet => items::spray_jet(),
         PlatformTp => items::platform_tp(),

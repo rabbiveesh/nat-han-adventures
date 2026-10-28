@@ -20,13 +20,15 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect | Sfx::Secret => 0.85,
         Sfx::Whistle => 0.6,
         Sfx::Sputter => 0.8,
-        Sfx::Sploosh => 1.0,
+        Sfx::Sploosh | Sfx::Blast => 1.0,
+        Sfx::Sizzle | Sfx::Screech | Sfx::Foomp => 0.85,
+        Sfx::Snicker => 0.7,
         Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing | Sfx::Crash => 1.0,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 16] = [
+    pub const ALL: [Sfx; 21] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -43,6 +45,11 @@ impl Sfx {
         Sfx::Sploosh,
         Sfx::Whistle,
         Sfx::Sputter,
+        Sfx::Blast,
+        Sfx::Sizzle,
+        Sfx::Screech,
+        Sfx::Snicker,
+        Sfx::Foomp,
     ];
 }
 
@@ -68,6 +75,11 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::Sploosh => sploosh(),
         Sfx::Whistle => whistle(),
         Sfx::Sputter => sputter(),
+        Sfx::Blast => blast(),
+        Sfx::Sizzle => sizzle(),
+        Sfx::Screech => screech(),
+        Sfx::Snicker => snicker(),
+        Sfx::Foomp => foomp(),
     };
     finish(mono, level(sfx))
 }
@@ -371,6 +383,94 @@ fn sputter() -> Vec<f32> {
         out.resize(out.len() + secs(0.04), 0.0);
     }
     out
+}
+
+/// The blast button: a brassy major chord stab (three pulses, bent down into it), a kick
+/// and a crash under it.
+fn blast() -> Vec<f32> {
+    let n = secs(0.9);
+    let mut horns = [Osc::default(), Osc::default(), Osc::default(), Osc::default()];
+    let mut kick = Osc::default();
+    let mut noise = Lfsr::with_seed(0xb1a5);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let secs_in = i as f32 / SR;
+            // A fall-in: a quarter tone flat, up to pitch in 40 ms.
+            let bend = 1.0 - 0.03 * (1.0 - (secs_in / 0.04).min(1.0));
+            let chord: f32 = [196.0, 246.94, 293.66, 392.0]
+                .iter()
+                .zip(horns.iter_mut())
+                .map(|(&f, o)| o.pulse(f * bend, 0.25))
+                .sum::<f32>()
+                / 4.0;
+            let brass = chord * (1.0 - t).powf(0.7);
+            let k = kick.tri(exp_sweep(150.0, 40.0, (secs_in / 0.12).min(1.0))) * (-secs_in * 14.0).exp();
+            let crash = lp.run(noise.next(28_000.0, false), 7_000.0) * (-secs_in * 4.0).exp() * 0.5;
+            (brass * 0.9 + k * 1.0 + crash) * env_ar(i, n, 0.002, 0.1)
+        })
+        .collect()
+}
+
+/// A chef at the stove: a frying sizzle (crackly noise, swelling and fading).
+fn sizzle() -> Vec<f32> {
+    let n = secs(0.8);
+    let mut noise = Lfsr::with_seed(0x5122);
+    let mut crackle = Lfsr::with_seed(0x0c0c);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let hiss = lp.run(noise.next(40_000.0, false), 9_000.0) * 0.5;
+            let pop = if crackle.next(300.0, false) > 0.6 { 0.7 } else { 0.0 };
+            (hiss + pop * hiss.signum()) * (t * 5.0).min(1.0) * (1.0 - t).powf(0.8) * env_ar(i, n, 0.01, 0.1)
+        })
+        .collect()
+}
+
+/// A stop sign: tyres screeching to a halt, high and wobbly, sliding down.
+fn screech() -> Vec<f32> {
+    let n = secs(0.6);
+    let (mut a, mut b, mut wob) = (Osc::default(), Osc::default(), Osc::default());
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let f = exp_sweep(2_400.0, 1_400.0, t) * (1.0 + 0.04 * wob.sine(31.0));
+            (a.pulse(f, 0.125) * 0.5 + b.pulse(f * 1.013, 0.25) * 0.4) * env_ar(i, n, 0.005, 0.12)
+        })
+        .collect()
+}
+
+/// The helper's snicker: "he-he-he", three nasal blips, each lower.
+fn snicker() -> Vec<f32> {
+    let mut o = Osc::default();
+    let mut out = Vec::new();
+    for f in [740.0, 660.0, 587.0] {
+        let n = secs(0.08);
+        for i in 0..n {
+            let t = i as f32 / n as f32;
+            out.push(o.pulse(f * (1.0 + 0.08 * (1.0 - t)), 0.125) * 0.7 * env_ar(i, n, 0.004, 0.03));
+        }
+        out.resize(out.len() + secs(0.05), 0.0);
+    }
+    out
+}
+
+/// Out of a chimney: a soft "foomp", a puff of noise and a rising thump.
+fn foomp() -> Vec<f32> {
+    let n = secs(0.35);
+    let mut o = Osc::default();
+    let mut noise = Lfsr::with_seed(0xf00);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let thump = o.tri(exp_sweep(90.0, 320.0, t)) * (1.0 - t);
+            let puff = lp.run(noise.next(20_000.0, false), 1_800.0) * (1.0 - t).powf(2.0);
+            (thump * 0.8 + puff * 0.6) * env_ar(i, n, 0.004, 0.05)
+        })
+        .collect()
 }
 
 /// The flush: a noise swirl whose "filter" sweeps down then back up (~1.2s), then a gurgle of

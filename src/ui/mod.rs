@@ -20,6 +20,7 @@ mod lesson;
 mod level_select;
 mod pause;
 mod results;
+mod shouts;
 mod sideb;
 mod strip;
 mod title;
@@ -92,6 +93,7 @@ pub fn plugin(app: &mut App) {
             results::plugin,
             victory::plugin,
             bubble::plugin,
+            shouts::plugin,
             encore::plugin,
             crate::freeplay::ui::plugin,
         ));

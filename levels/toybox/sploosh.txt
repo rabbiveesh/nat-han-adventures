@@ -1,0 +1,7 @@
+name: sploosh
+world: 1
+solo: nat
+---
+..........
+.P.......G
+##########
