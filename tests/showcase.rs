@@ -1,4 +1,6 @@
 //! The showcase levels and the scripted runs their demo videos record:
+//! - the sky things' playground (`levels/playground/boom.txt`, `scripts/tours/boom.timeline`):
+//!   both Booms and every diaper, without a death;
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
 //! - NAT ALONE, the gadget world (`game::solo`, `levels/solo/`): each of its ten levels has a
@@ -26,7 +28,8 @@
 //!
 //! For writing a timeline: `SHOWCASE_TRACE=1` prints where Nat is every quarter second, the
 //! bar lines, his toots, nuggets, band calls and secrets found, a wall cushion catching and slinging
-//! him, the harmony, and the crushers near him;
+//! him, the Boom catching him, its beans, a diaper dropping and splooshing, the harmony, and the
+//! crushers near him;
 //! `SHOWCASE_LEVEL=<file>` / `SHOWCASE_TOUR=<file>` play another level / timeline in
 //! `the_tour_beats_the_gauntlet_without_a_death` (`SHOWCASE_EVERY=n`: trace every n frames), and
 //! `SHOWCASE_CHECK=<file>` prints the validator's report on a level file.
@@ -40,7 +43,13 @@ use nat_han_adventures::{
         timeline::{Script, TimelinePlayer, play_timeline},
     },
     events::{BandFreedom, CallBand, Jumped, NuggetCollected, PlayerDied},
-    game::{Body, Groove, Han, Player, Pos, crushers::CrusherBlock, secret::SecretFound},
+    game::{
+        Body, Groove, Han, Player, Pos,
+        boom::BoomEvent,
+        crushers::CrusherBlock,
+        diapers::{DiaperDropped, Splooshed},
+        secret::SecretFound,
+    },
     level::{Level, Levels, TILE, Topic, validate},
     state::AppState,
 };
@@ -146,8 +155,19 @@ fn play(level: &str, tour: &str) -> Run {
              mut j: MessageReader<Jumped>,
              mut n: MessageReader<NuggetCollected>,
              mut c: MessageReader<CallBand>,
-             mut s: MessageReader<SecretFound>| {
+             mut s: MessageReader<SecretFound>,
+             mut boom: MessageReader<BoomEvent>,
+             mut dropped: MessageReader<DiaperDropped>,
+             mut splooshed: MessageReader<Splooshed>| {
                 h.0.extend(j.read().filter(|j| j.double).map(|_| "toot"));
+                h.0.extend(boom.read().map(|e| match e {
+                    BoomEvent::Caught(_) => "caught by the Boom",
+                    BoomEvent::Bean(_) => "bean",
+                    BoomEvent::Dry(_) => "the Boom ran dry",
+                    BoomEvent::HoppedOff(_) => "hopped off the Boom",
+                }));
+                h.0.extend(dropped.read().map(|_| "diaper drops"));
+                h.0.extend(splooshed.read().map(|_| "sploosh"));
                 h.0.extend(n.read().map(|_| "nugget"));
                 h.0.extend(c.read().map(|_| "call"));
                 let found = s.read().count();
@@ -240,6 +260,15 @@ fn the_tour_beats_the_gauntlet_without_a_death() {
     assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
     let goal = run.goal.expect("the tour reaches the goal");
     assert!(run.end - goal < 6.0, "the tour ends soon after the goal (goal at {goal}s)");
+}
+
+/// The sky things' playground (`levels/playground/boom.txt`): its tour rides both Booms and
+/// stops at every diaper's whistle, without a death.
+#[test]
+fn the_boom_tour_clears_its_playground_without_a_death() {
+    let run = play(include_str!("../levels/playground/boom.txt"), include_str!("../scripts/tours/boom.timeline"));
+    assert!(run.deaths.is_empty(), "deaths (s, col, row): {:?}", run.deaths);
+    assert!(run.goal.is_some(), "the tour reaches the goal");
 }
 
 /// A NAT ALONE level passes the full check, and its tour clears it without a death.
