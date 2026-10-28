@@ -304,7 +304,8 @@ fn spawn_antennas(mut commands: Commands, active: Option<Res<ActiveLevel>>, ante
         return;
     }
     for &(c0, c1) in &active.level.robot_pits {
-        let at = Vec2::new((c0 + c1 + 1) as f32 * TILE / 2.0, TILE / 2.0);
+        // (A tile up from the bottom edge: the stick shows, not just the ball.)
+        let at = Vec2::new((c0 + c1 + 1) as f32 * TILE / 2.0, TILE * 1.5);
         commands.spawn((Name::new("PitAntenna"), LevelEntity, PitAntenna, Transform::from_translation(at.extend(2.0))));
     }
 }

@@ -71,7 +71,7 @@ fn spawn_screen(mut commands: Commands, f: Res<UiFont>) {
                 Visibility::Hidden,
                 Node {
                     position_type: PositionType::Absolute,
-                    bottom: px(6.0),
+                    bottom: px(24.0),
                     width: percent(92.0),
                     max_width: px(360.0),
                     flex_direction: FlexDirection::Column,
