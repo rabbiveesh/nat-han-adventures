@@ -74,8 +74,10 @@ impl HanNav {
     }
 }
 
-/// Cells (not yet simulated) a route search may simulate per step: a few ms at most.
-const ROUTE_BUDGET: usize = 24;
+/// Cells (not yet simulated) a route search may simulate per step: ~0.15 ms each natively, and
+/// several times that in a browser on a slow laptop, where the music renders on the same
+/// thread, so a long search spreads over a few frames rather than dropping one.
+const ROUTE_BUDGET: usize = 8;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Reflect)]
 pub enum HanMode {
