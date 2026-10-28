@@ -1,6 +1,7 @@
 //! Words shouted out in a level ([`ToyShout`]: the helper's "HELP! HELP!", a stop sign's
 //! "STOP!", a house's "SIZZLE!"): they pop up where they're said, in the house font with a
-//! shadow, float up a little and fade.
+//! shadow, float up a little and fade. A new one said close by takes the old one's place, so
+//! two never jumble.
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -30,6 +31,7 @@ fn spawn_shouts(
     mut shouts: MessageReader<ToyShout>,
     font: Option<Res<UiFont>>,
     window: Option<Single<&Window, With<PrimaryWindow>>>,
+    old: Query<(Entity, &Transform), With<Shout>>,
 ) {
     let Some(font) = font else {
         shouts.clear();
@@ -37,7 +39,15 @@ fn spawn_shouts(
     };
     // Rendered at the window's scale, then shrunk, so it's crisp.
     let k = window.map_or(1.0, |w| (w.resolution.height() / VIRTUAL_HEIGHT).ceil().max(1.0));
+    let mut gone = Vec::new();
     for s in shouts.read() {
+        for (e, tf) in &old {
+            let d = tf.translation.truncate() - s.pos;
+            if d.x.abs() < 64.0 && d.y.abs() < 24.0 && !gone.contains(&e) {
+                commands.entity(e).despawn();
+                gone.push(e);
+            }
+        }
         let text = |color: Color, at: Vec2, z: f32| {
             (
                 Text2d::new(s.text),
