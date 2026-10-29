@@ -5,6 +5,7 @@ use leafwing_input_manager::prelude::*;
 
 use super::{palette::*, *};
 use crate::game::solo::{self, SOLO_COUNT, SoloRun};
+use crate::game::toybox::{self, TOY_COUNT, ToyRun};
 use crate::game::{GeneratedLevel, LevelRun};
 use crate::input::Action;
 use crate::level::{LEVEL_COUNT, Levels};
@@ -26,6 +27,8 @@ pub struct LastResult {
     pub level: usize,
     /// A NAT ALONE level (`game::solo`), not the story's.
     pub solo: bool,
+    /// A secret playground (`game::toybox`): nothing's recorded.
+    pub toy: bool,
     pub run: LevelRun,
     pub outcome: RecordOutcome,
 }
@@ -41,10 +44,12 @@ fn record(
     current: Res<CurrentLevel>,
     run: Res<LevelRun>,
     solo: Option<Res<SoloRun>>,
+    toy: Option<Res<ToyRun>>,
 ) {
-    let result = match solo {
-        Some(s) => LastResult { level: s.0, solo: true, run: run.clone(), outcome: progress.record_solo(s.0, run.nuggets, run.time) },
-        None => LastResult { level: current.0, solo: false, run: run.clone(), outcome: record_run(&mut progress, current.0, &run) },
+    let result = match (solo, toy) {
+        (_, Some(t)) => LastResult { level: t.0, toy: true, run: run.clone(), ..default() },
+        (Some(s), None) => LastResult { level: s.0, solo: true, toy: false, run: run.clone(), outcome: progress.record_solo(s.0, run.nuggets, run.time) },
+        (None, None) => LastResult { level: current.0, solo: false, toy: false, run: run.clone(), outcome: record_run(&mut progress, current.0, &run) },
     };
     commands.insert_resource(result);
 }
@@ -59,11 +64,11 @@ fn spawn(
 ) {
     let f = &*font;
     let r = &*result;
-    let level = if r.solo { generated.as_deref().map(|g| &g.0) } else { levels.0.get(r.level) };
+    let level = if r.solo || r.toy { generated.as_deref().map(|g| &g.0) } else { levels.0.get(r.level) };
     let total = r.run.nuggets_total.max(level.map_or(0, |l| l.nugget_count() as u32));
     let name = level.map_or_else(|| "???".into(), |l| l.name.to_uppercase());
-    let last = r.level + 1 >= if r.solo { SOLO_COUNT } else { LEVEL_COUNT };
-    let what = if r.solo { "NAT ALONE" } else { "LEVEL" };
+    let last = r.level + 1 >= if r.toy { TOY_COUNT } else if r.solo { SOLO_COUNT } else { LEVEL_COUNT };
+    let what = if r.toy { "PLAYGROUND" } else if r.solo { "NAT ALONE" } else { "LEVEL" };
     commands
         .spawn((
             Name::new("ResultsCard"),
@@ -102,7 +107,7 @@ fn spawn(
                     if r.outcome.unlocked_next && !last {
                         p.spawn(label(f, format!("{what} {} UNLOCKED!", r.level + 2), 8.0, GREEN));
                     }
-                    let prompt = match (last, r.solo) {
+                    let prompt = match (last, r.solo || r.toy) {
                         (true, true) => "ENTER:ALL FLUSHED!",
                         (true, false) => "ENTER:THE THRONE AWAITS",
                         _ => "ENTER:NEXT  ESC:LEVELS",
@@ -118,12 +123,19 @@ fn input(
     mut next: ResMut<NextState<AppState>>,
     mut sfx_w: MessageWriter<PlaySfx>,
     solo: Option<Res<SoloRun>>,
+    toy: Option<Res<ToyRun>>,
     mut commands: Commands,
 ) {
     if action.just_pressed(&Action::Confirm) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
         // NAT ALONE: on to its next level, or back to its shelf after the last.
-        if let Some(s) = solo {
+        if let Some(t) = toy {
+            if t.0 + 1 < TOY_COUNT {
+                toybox::start(&mut commands, t.0 + 1);
+            } else {
+                next.set(AppState::LevelSelect);
+            }
+        } else if let Some(s) = solo {
             if s.0 + 1 < SOLO_COUNT {
                 solo::start(&mut commands, s.0 + 1);
             } else {

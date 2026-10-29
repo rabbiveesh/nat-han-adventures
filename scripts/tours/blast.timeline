@@ -1,0 +1,17 @@
+# Turn It Up! (levels/toybox/blast.txt).
+t=0.5 press Right
+t=1.35 release Right
+t=1.7 tap Space 150ms
+t=2.2 press Right
+t=3.0 release Right
+t=3.6 tap Space 150ms
+t=3.9 press Right
+t=6.5 release Right
+t=6.8 tap Space 150ms
+t=7.35 press Right
+t=8.0 tap Space 200ms
+t=9.45 tap Space 250ms
+t=11.45 release Right
+t=11.75 tap Space 150ms
+t=12.3 press Right
+t=16 release Right

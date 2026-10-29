@@ -8,6 +8,8 @@ mod camera;
 mod encore;
 mod gadgets;
 mod particles;
+mod sky;
+mod toys;
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -79,6 +81,8 @@ pub(super) fn plugin(app: &mut App) {
     camera::plugin(app);
     particles::plugin(app);
     gadgets::plugin(app);
+    sky::plugin(app);
+    toys::plugin(app);
     encore::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
@@ -642,12 +646,12 @@ const SPLAT_SHOW: f32 = 0.5;
 fn animate_player(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    player: Query<(&Body, &PlayerControl, Option<&Dead>, &Children), With<Player>>,
+    player: Query<(&Body, &PlayerControl, Option<&Dead>, &Children, Has<crate::game::houses::Indoors>, Has<toys::Fried>, Has<crate::game::code::ThroughDoor>), With<Player>>,
     mut kids: Query<(&mut Sprite, &mut CharacterSprite, &mut Visibility)>,
     mut jumped: MessageReader<Jumped>,
     mut landed: MessageReader<Landed>,
 ) {
-    let Ok((body, ctl, dead, children)) = player.single() else {
+    let Ok((body, ctl, dead, children, indoors, fried, through)) = player.single() else {
         jumped.clear();
         landed.clear();
         return;
@@ -668,12 +672,13 @@ fn animate_player(
         }
         let (id, frame) = if let Some(dead) = dead {
             let since = tuning::RESPAWN_DELAY - dead.remaining;
-            *vis = if since < SPLAT_SHOW { Visibility::Inherited } else { Visibility::Hidden };
+            // (A schnitzel flies off instead: `toys`.)
+            *vis = if since < SPLAT_SHOW && !fried { Visibility::Inherited } else { Visibility::Hidden };
             cs.squash = Vec2::ONE;
             let n = sprites.frames(SpriteId::PooSplat).len().max(1);
             (SpriteId::PooSplat, ((since * 14.0) as usize).min(n - 1))
         } else {
-            *vis = Visibility::Inherited;
+            *vis = if indoors || through { Visibility::Hidden } else { Visibility::Inherited };
             if !body.on_ground {
                 (if body.vel.y > 0.0 { SpriteId::PooJump } else { SpriteId::PooFall }, (t * 10.0) as usize)
             } else if body.vel.x.abs() > 10.0 {

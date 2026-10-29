@@ -86,6 +86,11 @@ pub(super) fn update_sprays(clock: Res<SimClock>, groove: Res<Groove>, mut spray
     }
 }
 
+/// On Nat: something's done for him (a chef, `houses`): the next hazard check splats him by
+/// that cause.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct Doomed(pub DeathCause);
+
 fn rects_overlap(a_min: Vec2, a_max: Vec2, b_min: Vec2, b_max: Vec2) -> bool {
     a_min.x < b_max.x && a_max.x > b_min.x && a_min.y < b_max.y && a_max.y > b_min.y
 }
@@ -236,13 +241,18 @@ pub(super) fn check_hazards(
     mut says: MessageWriter<HanSays>,
     side_stains: Query<&SideStain>,
     crushers: Query<(&super::crushers::CrusherBlock, &Pos), (Without<Player>, Without<Raft>)>,
+    diapers: Query<(&super::diapers::Diaper, &Pos), (Without<Player>, Without<Raft>)>,
+    aboard: Query<(), (With<Player>, With<super::boom::Aboard>)>,
+    doomed: Query<&Doomed, With<Player>>,
 ) {
     let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let level = &active.level;
     // The adaptive assist forgives hazards a little more (never the pit).
     let extra = assists.extra_forgiveness();
-    let min = pos.0 - body.half + FORGIVE + extra;
-    let max = pos.0 + body.half - FORGIVE - extra;
+    // On the Boom, what it touches splats Nat too.
+    let (lo, hi) = if aboard.is_empty() { (pos.0 - body.half, pos.0 + body.half) } else { super::boom::hazard_box(pos.0) };
+    let min = lo + FORGIVE + extra;
+    let max = hi - FORGIVE - extra;
 
     let mut cause = (max.y + extra < 0.0).then_some(DeathCause::Pit); // Fell into the pit.
 
@@ -292,9 +302,21 @@ pub(super) fn check_hazards(
         cause = Some(DeathCause::Spray);
     }
 
+    // Sploosh diapers, flapping or falling.
+    let dh = super::diapers::DIAPER_HALF;
+    if diapers.iter().any(|(d, p)| d.deadly() && rects_overlap(min, max, p.0 - dh, p.0 + dh)) {
+        cause = Some(DeathCause::Diaper);
+    }
+
     // Crushers: in the block's way (it moved into him).
     if crushers.iter().any(|(b, p)| super::crushers::squashed(pos.0, body.half, b.bounds(p.0))) {
         cause = Some(DeathCause::Crusher);
+    }
+
+    // Done for by something else (a chef: `houses`).
+    if let Ok(d) = doomed.get(entity) {
+        cause = Some(d.0);
+        commands.entity(entity).remove::<Doomed>();
     }
 
     let Some(cause) = cause else { return };
@@ -338,7 +360,7 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
     let near = |c0: i32, r0: i32, c1: i32, r1: i32| {
         (c0 - 2..=c1 + 2).contains(&c) && (pit || (r0 - 2..=r1 + 2).contains(&r))
     };
-    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher);
+    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher | DeathCause::Diaper | DeathCause::Schnitzel | DeathCause::Police);
     // Flies, sprays and crushers never count against a gate: none is built of them.
     if !hazard
         && let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1))

@@ -10,6 +10,8 @@ mod characters;
 mod gadgets;
 mod items;
 pub mod palette;
+mod sky;
+mod toys;
 mod tiles;
 
 pub use palette::Pixels;
@@ -83,6 +85,35 @@ pub enum SpriteId {
     LiquidFill(u8),
     /// Fly, wing-flap frames. 8x8.
     Fly,
+    /// The Boom (a plump flying pal, puffing beans out the back), 2 frames; its body is the
+    /// middle 14x10. 16x16.
+    Boom,
+    /// Beans, the Boom's fuel. 8x8.
+    Bean,
+    /// Sploosh diaper: two flaps, then the drop. 16x16.
+    Diaper,
+    /// The "helper": idle (holding his rope out right; flip it for left), calling, snickering.
+    /// 16x16.
+    Helper,
+    /// The blast button between its speakers: up, and pressed (the cones out). 48x16.
+    Blaster,
+    /// A stop sign on its pole. 16x32.
+    StopSign,
+    /// A house: nobody home, and the chef in (the window lit). 48x48.
+    House,
+    /// Nat the schnitzel. 16x16.
+    Schnitzel,
+    /// A policeman: walking (two frames), "STOP!" (his hand up), "THIS WAY!" (his arm out
+    /// right; flip it for left). 16x24.
+    Police,
+    /// The order over his head: stop, and go (an arrow right). 16x16.
+    OrderSign,
+    /// A traffic cone. 16x16.
+    Cone,
+    /// The secret paper with the building code. 16x16.
+    CodePaper,
+    /// The door with a keypad: shut, and open. 16x32.
+    CodeDoor,
     /// Air-freshener can (on the floor), 16x16; and the spray jet segment (animated), 16x16.
     SprayCan,
     SprayJet,
@@ -165,7 +196,7 @@ impl SpriteId {
             HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
             WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
-            StainRaft, Fly, SprayCan,
+            StainRaft, Fly, Boom, Bean, Diaper, Helper, Blaster, StopSign, House, Schnitzel, Police, OrderSign, Cone, CodePaper, CodeDoor, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
             CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
@@ -180,11 +211,14 @@ impl SpriteId {
     pub fn size(self) -> (u32, u32) {
         use SpriteId::*;
         match self {
-            GoalFlag | Grate => (16, 32),
+            GoalFlag | Grate | StopSign | CodeDoor => (16, 32),
+            Police => (16, 24),
+            Blaster => (48, 16),
+            House => (48, 48),
             HanBraced => (16, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
-            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
+            Fly | Bean | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
             Wisp => (4, 6),
@@ -235,6 +269,19 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         LiquidTop(w) => tiles::liquid_top(w),
         LiquidFill(w) => tiles::liquid_fill(w),
         Fly => items::fly(),
+        Boom => sky::boom(),
+        Bean => sky::bean(),
+        Diaper => sky::diaper(),
+        Helper => toys::helper(),
+        Blaster => toys::blaster(),
+        StopSign => toys::stop_sign(),
+        House => toys::house(),
+        Schnitzel => toys::schnitzel(),
+        Police => toys::police(),
+        OrderSign => toys::order_sign(),
+        Cone => toys::cone(),
+        CodePaper => toys::code_paper(),
+        CodeDoor => toys::code_door(),
         SprayCan => items::spray_can(),
         SprayJet => items::spray_jet(),
         PlatformTp => items::platform_tp(),

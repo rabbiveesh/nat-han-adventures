@@ -1,0 +1,37 @@
+# The Boom's Big Day (levels/toybox/boom.txt). Walk onto the Boom; fly the spike pit: up
+# over the first pillar, down under the stalactite (stop when the first diaper whistles, it
+# lands in front), up over the second pillar along the beans, down under the spiky ceiling,
+# stop for the third diaper, hop off onto the ledge. On foot, stop at each of the three
+# diapers' whistles. The second Boom over the sewage lake: stop for its first diaper, climb
+# between the stalactite and the pillar (stop for the second), stop for the third, hop off at
+# the goal.
+t=0.3 press Right
+t=1.4 press Up
+t=2.4 release Up
+t=4.6 press Down
+t=4.95 release Down
+t=5.85 release Right
+t=6.3 press Right
+t=7.1 press Up
+t=7.7 release Up
+t=10.3 press Down
+t=10.95 release Down
+t=11.55 release Right
+t=12.0 press Right
+t=12.75 tap Space 200ms
+t=14.95 release Right
+t=15.5 press Right
+t=16.32 release Right
+t=16.9 press Right
+t=17.82 release Right
+t=18.4 press Right
+t=20.35 release Right
+t=20.9 press Right
+t=21.5 press Up
+t=22.2 release Up
+t=22.05 release Right
+t=22.6 press Right
+t=24.52 release Right
+t=25.1 press Right
+t=26.1 tap Space 200ms
+wait 3

@@ -167,6 +167,34 @@ pub enum Sfx {
     Crash,
     /// A level's secret found (`game::secret`).
     Secret,
+    /// A diaper lands: SPLOOSH (`game::diapers`).
+    Sploosh,
+    /// A diaper lets go: a falling whistle.
+    Whistle,
+    /// The Boom runs dry: a sputtering cough.
+    Sputter,
+    /// The blast button: a big brassy BWAAMP and a drum (`game::toys`).
+    Blast,
+    /// A chef fries Nat: a sizzle (`game::houses`).
+    Sizzle,
+    /// A stop sign: a skid's screech.
+    Screech,
+    /// The helper snickers: "hehehe".
+    Snicker,
+    /// Out of a chimney: a "foomp".
+    Foomp,
+    /// A policeman's whistle: a trilled "phweeet" with each order.
+    Trill,
+    /// A police spike pops up: "schwing".
+    Pop,
+    /// A traffic cone on the head: a hollow "bonk".
+    Bonk,
+    /// A keypad key: a short beep (pitched by the arrow).
+    Beep,
+    /// A wrong code: a rude buzz.
+    Buzz,
+    /// The right code: the lock clacks and a little fanfare.
+    Unlock,
 }
 
 #[cfg(test)]

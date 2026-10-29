@@ -75,6 +75,7 @@ fn level_hotkeys(
     mut next: ResMut<NextState<PlayState>>,
     side_b: Option<Res<super::sideb::SideB>>,
     encore: Option<Res<super::encore::Encore>>,
+    aboard: Query<(), Or<(With<super::boom::Aboard>, With<super::code::AtKeypad>)>>,
 ) {
     // (The encore can't be restarted, and Down is its free call: `encore`.)
     if encore.is_some() {
@@ -87,8 +88,9 @@ fn level_hotkeys(
         restart.write(RestartLevel);
     } else if input.just_pressed(&Action::Back) {
         next.set(PlayState::Paused);
-    } else if input.just_pressed(&Action::Down) && side_b.is_none() {
-        // (On Side B, Down calls the set list's pick instead: `sideb`.)
+    } else if input.just_pressed(&Action::Down) && side_b.is_none() && aboard.is_empty() {
+        // (On Side B, Down calls the set list's pick instead: `sideb`; on the Boom, it steers;
+        // at a keypad, it types.)
         call.write(crate::events::CallBand);
     }
 }
@@ -102,6 +104,7 @@ fn restart_level(
     generated: Option<Res<GeneratedLevel>>,
     side_b: Option<Res<super::sideb::SideB>>,
     solo: Option<Res<super::solo::SoloRun>>,
+    toy: Option<Res<super::toybox::ToyRun>>,
     old: Query<Entity, With<LevelEntity>>,
 ) {
     if requests.read().count() == 0 {
@@ -117,7 +120,7 @@ fn restart_level(
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
-        (Some(g), None) if solo.is_some() => {
+        (Some(g), None) if solo.is_some() || toy.is_some() => {
             load(&mut commands, g.0.clone(), index, &old);
             return;
         }
@@ -241,6 +244,18 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
                     Transform::from_translation(center.extend(2.0)),
                 ));
             }
+            ThingKind::Boom => super::boom::spawn_boom(commands, center),
+            ThingKind::Bean => super::boom::spawn_bean(commands, center),
+            ThingKind::Diaper => super::diapers::spawn_diaper(commands, center, (i as f32 * 0.618_034).fract()),
+            ThingKind::Helper => super::helper::spawn_helper(commands, level, thing.col, thing.row),
+            ThingKind::Blaster => super::toys::spawn_blaster(commands, level, thing.col, thing.row),
+            ThingKind::StopSign => super::toys::spawn_sign(commands, level, thing.col, thing.row),
+            ThingKind::House(cook) => super::houses::spawn_house(commands, level, thing.col, thing.row, cook),
+            ThingKind::Police => super::police::spawn_police(commands, level, thing.col, thing.row),
+            ThingKind::PoliceSpikes => super::police::spawn_spike(commands, level, thing.col, thing.row),
+            ThingKind::CodePaper => super::code::spawn_paper(commands, level, thing.col, thing.row),
+            ThingKind::CodeDoor => super::code::spawn_door(commands, level, thing.col, thing.row),
+            ThingKind::SecretRoom => {}
             ThingKind::Spray => {
                 commands.spawn((
                     Name::new("Spray"),

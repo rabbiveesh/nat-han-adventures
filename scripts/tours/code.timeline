@@ -1,0 +1,23 @@
+# The Building Code (levels/toybox/code.txt).
+t=0.5 press Right
+t=0.95 tap Space 300ms
+t=1.5 tap Space 300ms
+t=3.97 release Right
+t=4.4 tap Up 100ms
+t=4.8 tap Up 100ms
+t=5.15 tap Up 100ms
+t=5.5 tap Up 100ms
+t=5.85 tap Up 100ms
+t=6.8 tap Up 100ms
+t=7.3 tap Up 100ms
+t=7.7 tap Down 100ms
+t=8.1 tap Left 100ms
+t=8.5 tap Right 100ms
+t=9.6 press Right
+t=9.9 tap Space 250ms
+t=10.2 tap Space 250ms
+t=10.7 tap Space 250ms
+t=11.0 tap Space 250ms
+t=12.2 tap Space 250ms
+t=12.5 tap Space 250ms
+t=16 release Right
