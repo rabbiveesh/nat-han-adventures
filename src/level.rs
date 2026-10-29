@@ -37,6 +37,10 @@
 //!   c0..=c1 (the bottom row empty there, a floor left of it) drops Nat into the wrong game,
 //!   Sparky's (`game::robot`), instead of splatting him. Sparky's antenna blinks at its bottom.
 //!   More than one line, more than one pit.
+//! - `crutchpit: <c0> <c1>`: a *crutch pit*, the other trick gap (a WET FLOOR sign at its bottom):
+//!   Nat doesn't die at its bottom, he breaks his legs; Han's plunger hauls him out to the ledge
+//!   before it, the hospital hands him crutches, and he hobbles (no toot, slow, small jumps) till
+//!   his next death heals him (`game::crutches`). Same rules as `robotpit:`.
 //! - `shout: <col>`: from that column on, the band plays shout choruses (the closing stretch);
 //!   `shout: row <row>` (a tower): once above that row.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
@@ -940,6 +944,8 @@ pub struct Level {
     pub shout: Option<Shout>,
     /// `robotpit:` gaps (columns, inclusive) that drop Nat into Sparky's game.
     pub robot_pits: Vec<(usize, usize)>,
+    /// `crutchpit:` gaps (columns, inclusive) that break Nat's legs.
+    pub crutch_pits: Vec<(usize, usize)>,
 }
 
 /// Where a level's closing stretch starts (`shout:`): past a column, or (a tower) above a row.
@@ -1129,6 +1135,7 @@ impl Level {
         let mut secret = None;
         let mut shout = None;
         let mut robot_pits = Vec::new();
+        let mut crutch_pits = Vec::new();
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
@@ -1173,11 +1180,12 @@ impl Level {
                         .ok_or_else(|| format!("expected `secret@<col>,<row>`, got `{k}`"))?;
                     secret = Some(Spot { col, row, text: value.to_string(), topics: Vec::new() });
                 }
-                "robotpit" => {
-                    let bad = || format!("expected `robotpit: <c0> <c1>`, got `{value}`");
+                k @ ("robotpit" | "crutchpit") => {
+                    let bad = || format!("expected `{k}: <c0> <c1>`, got `{value}`");
                     let w: Vec<usize> = value.split_whitespace().map(|v| v.parse().map_err(|_| bad())).collect::<Result<_, _>>()?;
                     let [c0, c1] = w[..] else { return Err(bad()) };
-                    robot_pits.push((c0.min(c1), c0.max(c1)));
+                    let pits = if k == "robotpit" { &mut robot_pits } else { &mut crutch_pits };
+                    pits.push((c0.min(c1), c0.max(c1)));
                 }
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
@@ -1407,10 +1415,10 @@ impl Level {
                 return Err(format!("secret@{},{}: the grate (that cell and the one above) must be solid", s.col, s.row));
             }
         }
-        for &(c0, c1) in &robot_pits {
+        for (k, &(c0, c1)) in robot_pits.iter().map(|p| ("robotpit", p)).chain(crutch_pits.iter().map(|p| ("crutchpit", p))) {
             let bottom = height - 1;
             if c0 == 0 || c1 >= width || (c0..=c1).any(|c| tiles[bottom * width + c].is_solid()) {
-                return Err(format!("robotpit: {c0} {c1}: wants an open gap in the bottom row with a column left of it"));
+                return Err(format!("{k}: {c0} {c1}: wants an open gap in the bottom row with a column left of it"));
             }
         }
         Ok(Level {
@@ -1434,6 +1442,7 @@ impl Level {
             secret,
             shout,
             robot_pits,
+            crutch_pits,
         })
     }
 }
@@ -1561,6 +1570,9 @@ mod tests {
         assert_eq!(l.robot_pits, vec![(2, 3)]);
         assert!(Level::parse("name: T\nrobotpit: 1 2\n---\nP....G\n##..##\n").is_err(), "floor under it");
         assert!(Level::parse("name: T\nrobotpit: 2\n---\nP....G\n##..##\n").is_err());
+        let l = Level::parse("name: T\ncrutchpit: 2 3\n---\nP....G\n##..##\n").unwrap();
+        assert_eq!((l.crutch_pits.clone(), l.robot_pits.len()), (vec![(2, 3)], 0));
+        assert!(Level::parse("name: T\ncrutchpit: 1 2\n---\nP....G\n##..##\n").is_err());
     }
 
     #[test]

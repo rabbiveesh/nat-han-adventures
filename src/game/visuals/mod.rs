@@ -5,6 +5,7 @@
 //! gameplay components are added (and only if the [`Sprites`] resource exists).
 
 mod camera;
+mod crutches;
 mod encore;
 mod gadgets;
 mod particles;
@@ -82,6 +83,7 @@ pub(super) fn plugin(app: &mut App) {
     gadgets::plugin(app);
     encore::plugin(app);
     robot::plugin(app);
+    crutches::plugin(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Startup, dev_jump_to_level);
 }

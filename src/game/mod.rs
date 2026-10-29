@@ -13,6 +13,7 @@ use crate::state::PlayState;
 
 pub mod adaptive;
 pub mod crushers;
+pub mod crutches;
 pub mod encore;
 mod groove;
 mod han;
@@ -112,11 +113,13 @@ pub fn plugin(app: &mut App) {
                 GameSet::Sync,
             )
                 .chain()
-                // (The robot pit's wrong game freezes the platformer: `robot`.)
+                // (The robot pit's wrong game freezes the platformer: `robot`; so does the crutch
+                // pit's rescue: `crutches`.)
                 .run_if(
                     in_state(PlayState::Running)
                         .and_then(resource_exists::<ActiveLevel>)
-                        .and_then(not(resource_exists::<robot::RobotRoom>)),
+                        .and_then(not(resource_exists::<robot::RobotRoom>))
+                        .and_then(not(resource_exists::<crutches::CrutchRescue>)),
                 ),
         )
         .add_systems(FixedUpdate, sync_transforms.in_set(GameSet::Sync))
@@ -135,6 +138,7 @@ pub fn plugin(app: &mut App) {
             crushers::plugin,
             encore::plugin,
             robot::plugin,
+            crutches::plugin,
         ));
 }
 

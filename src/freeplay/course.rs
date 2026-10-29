@@ -80,6 +80,7 @@ impl Course {
             solo: false,
             secret: None,
             robot_pits: Vec::new(),
+            crutch_pits: Vec::new(),
             shout: None,
         };
         (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)

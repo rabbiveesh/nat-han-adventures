@@ -117,6 +117,11 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   walks Sparky's top-down meadow (`art/robot.rs`, its colours), answers a nugget sum on a pad
   (wrong drains Sparky's battery, never punishes), and the whirlpool flushes him back to the
   ledge before the pit. `ui/robot.rs` its dialogue box; `tests/robot.rs`.
+- `src/game/crutches.rs` the crutch pit (`crutchpit: c0 c1`; level 1's gap past the robot pit, a
+  WET FLOOR sign at its bottom): not a death; CRACK, Han's plunger hauls Nat to the ledge, St.
+  Plunger's Hospital (`ui/crutches.rs`) hands him crutches: no toot, half speed, small hops
+  (`physics::player_step`), till his next death heals him. `tests/crutches.rs`; video:
+  `NATHAN_START=102 scripts/record-run --capture out.mp4 scripts/tours/crutch-pit.timeline 1`.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
   calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
   capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.

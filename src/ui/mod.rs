@@ -14,6 +14,7 @@ use crate::audio::Sfx;
 use crate::events::PlaySfx;
 
 mod bubble;
+mod crutches;
 mod encore;
 mod hud;
 mod lesson;
@@ -95,6 +96,7 @@ pub fn plugin(app: &mut App) {
             bubble::plugin,
             encore::plugin,
             robot::plugin,
+            crutches::plugin,
             crate::freeplay::ui::plugin,
         ));
 }

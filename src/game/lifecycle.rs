@@ -76,10 +76,11 @@ fn level_hotkeys(
     side_b: Option<Res<super::sideb::SideB>>,
     encore: Option<Res<super::encore::Encore>>,
     robot: Option<Res<super::robot::RobotRoom>>,
+    rescue: Option<Res<super::crutches::CrutchRescue>>,
 ) {
     // (The encore can't be restarted, and Down is its free call: `encore`. In the robot pit's
-    // wrong game Down walks: `robot`.)
-    if encore.is_some() || robot.is_some() {
+    // wrong game Down walks: `robot`. The crutch pit's rescue plays out: `crutches`.)
+    if encore.is_some() || robot.is_some() || rescue.is_some() {
         if input.just_pressed(&Action::Back) {
             next.set(PlayState::Paused);
         }
