@@ -89,6 +89,11 @@ pub fn text(l: &Level) -> String {
             ThingKind::House(Cook::Never) => 'A',
             ThingKind::House(Cook::Always) => 'K',
             ThingKind::House(Cook::Sometimes) => 'a',
+            ThingKind::Police => 'Q',
+            ThingKind::PoliceSpikes => 'y',
+            ThingKind::CodePaper => '?',
+            ThingKind::CodeDoor => '&',
+            ThingKind::SecretRoom => '$',
         };
     }
     g[l.start.1][l.start.0] = 'P';

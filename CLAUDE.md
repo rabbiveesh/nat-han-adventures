@@ -48,8 +48,12 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   `src/game/toys.rs`: land on it and the band BLASTS a shout chorus a key up, louder, Nat thrown
   high, diapers knocked out of the sky), the stop sign (`@`: the level stops right there), and
   houses (`A` empty, `K` the chef's in, `a` sometimes: Up at the door, and either SIZZLE, a
-  schnitzel death, or out the chimney). Words they shout float up (`ToyShout`, `src/ui/shouts.rs`).
-  `tests/toys.rs`. The validator only knows the diapers' swing is deadly (it can't fly the Boom
+  schnitzel death, or out the chimney), the policeman (`Q`, `src/game/police.rs`: with Nat near,
+  orders round and round, STOP and THIS WAY; listen and his spikes `y` fold, don't and a spike
+  pops up where you step, or in the air a cone drops on you) and the building code (`code:` on
+  a secret paper `?`, typed with the arrows at a keypad door `&`, through to the secret room `$`
+  where the band plays `mode:`, a feel; `src/game/code.rs`, `src/ui/code.rs`). Words they shout
+  float up (`ToyShout`, `src/ui/shouts.rs`). `tests/toys.rs`, `tests/police_code.rs`. The validator only knows the diapers' swing is deadly (it can't fly the Boom
   or work the toys), so no validated level uses them. They live in the SECRET PLAYGROUND
   (`src/game/toybox.rs`, `levels/toybox/`: one level per toy, its own `Shelf::Toybox`, nothing
   saved; Up Down Up Down on the title, `?toybox=n` on the web, `NATHAN_TOYBOX=n cargo run`), each

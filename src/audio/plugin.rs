@@ -70,7 +70,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, blast_band, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, blast_band, mode_band, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -687,6 +687,25 @@ fn blast_band(mut blasts: MessageReader<crate::game::toys::BlastMusic>, mut audi
     };
     for b in blasts.read() {
         h.post(Input::ForceChorus(b.0.then_some(Call { chorus: Chorus::Shout, key_up: true })));
+    }
+}
+
+/// A building code's door (`game::code`): behind it the band plays the level's mode, one of
+/// its feels, until the mode's over.
+fn mode_band(mut modes: MessageReader<crate::game::code::ModeMusic>, mut audio: NonSendMut<Audio>) {
+    use super::live::feel::Feel;
+    use crate::level::RoomMode;
+    let Some(h) = audio.handle.as_mut() else {
+        modes.clear();
+        return;
+    };
+    for m in modes.read() {
+        h.post(Input::ForceFeel(m.0.map(|m| match m {
+            RoomMode::Funk => Feel::Funk,
+            RoomMode::Bossa => Feel::Bossa,
+            RoomMode::Samba => Feel::Samba,
+            RoomMode::Rock => Feel::Rock,
+        })));
     }
 }
 

@@ -3862,6 +3862,8 @@ fn lessons(
             ThingKind::Blaster => Topic::Blast,
             ThingKind::StopSign => Topic::Stop,
             ThingKind::House(_) => Topic::House,
+            ThingKind::Police | ThingKind::PoliceSpikes => Topic::Police,
+            ThingKind::CodePaper | ThingKind::CodeDoor | ThingKind::SecretRoom => Topic::Code,
             _ => continue,
         };
         for &cell in &g.order {
@@ -4024,6 +4026,11 @@ fn dump(level: &Level, map: &Map, g: &Graph, crossings: &[Crossing]) -> String {
             (ThingKind::House(crate::level::Cook::Never), _) => 'A',
             (ThingKind::House(crate::level::Cook::Always), _) => 'K',
             (ThingKind::House(crate::level::Cook::Sometimes), _) => 'a',
+            (ThingKind::Police, _) => 'Q',
+            (ThingKind::PoliceSpikes, _) => 'y',
+            (ThingKind::CodePaper, _) => '?',
+            (ThingKind::CodeDoor, _) => '&',
+            (ThingKind::SecretRoom, _) => '$',
         };
     }
     for h in &level.hints {

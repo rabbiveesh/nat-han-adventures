@@ -103,6 +103,17 @@ pub enum SpriteId {
     House,
     /// Nat the schnitzel. 16x16.
     Schnitzel,
+    /// A policeman: walking (two frames), "STOP!" (his hand up), "THIS WAY!" (his arm out
+    /// right; flip it for left). 16x24.
+    Police,
+    /// The order over his head: stop, and go (an arrow right). 16x16.
+    OrderSign,
+    /// A traffic cone. 16x16.
+    Cone,
+    /// The secret paper with the building code. 16x16.
+    CodePaper,
+    /// The door with a keypad: shut, and open. 16x32.
+    CodeDoor,
     /// Air-freshener can (on the floor), 16x16; and the spray jet segment (animated), 16x16.
     SprayCan,
     SprayJet,
@@ -185,7 +196,7 @@ impl SpriteId {
             HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
             WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
-            StainRaft, Fly, Boom, Bean, Diaper, Helper, Blaster, StopSign, House, Schnitzel, SprayCan,
+            StainRaft, Fly, Boom, Bean, Diaper, Helper, Blaster, StopSign, House, Schnitzel, Police, OrderSign, Cone, CodePaper, CodeDoor, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
             CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
@@ -200,7 +211,8 @@ impl SpriteId {
     pub fn size(self) -> (u32, u32) {
         use SpriteId::*;
         match self {
-            GoalFlag | Grate | StopSign => (16, 32),
+            GoalFlag | Grate | StopSign | CodeDoor => (16, 32),
+            Police => (16, 24),
             Blaster => (48, 16),
             House => (48, 48),
             HanBraced => (16, 20),
@@ -265,6 +277,11 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         StopSign => toys::stop_sign(),
         House => toys::house(),
         Schnitzel => toys::schnitzel(),
+        Police => toys::police(),
+        OrderSign => toys::order_sign(),
+        Cone => toys::cone(),
+        CodePaper => toys::code_paper(),
+        CodeDoor => toys::code_door(),
         SprayCan => items::spray_can(),
         SprayJet => items::spray_jet(),
         PlatformTp => items::platform_tp(),

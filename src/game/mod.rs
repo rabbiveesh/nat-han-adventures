@@ -14,6 +14,7 @@ use crate::state::PlayState;
 pub mod adaptive;
 pub mod boom;
 pub mod crushers;
+pub mod code;
 pub mod diapers;
 pub mod encore;
 mod groove;
@@ -21,6 +22,7 @@ mod han;
 mod hazards;
 pub mod helper;
 pub mod houses;
+pub mod police;
 mod lifecycle;
 mod physics;
 mod pickups;
@@ -137,7 +139,7 @@ pub fn plugin(app: &mut App) {
             diapers::plugin,
             encore::plugin,
         ))
-        .add_plugins((helper::plugin, houses::plugin, toys::plugin, toybox::plugin));
+        .add_plugins((helper::plugin, houses::plugin, toys::plugin, toybox::plugin, police::plugin, code::plugin));
 }
 
 /// Order of the fixed-step simulation. Everything only runs while [`PlayState::Running`].

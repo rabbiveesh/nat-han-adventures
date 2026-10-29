@@ -38,6 +38,9 @@
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
 //!   three splats that make the band nervous for a grease chute). [`validate`] checks it; the
 //!   adaptive engine can read it.
+//! - `code: <arrows>` (with a keypad door `&`): the building code, a few of `up` `down` `left`
+//!   `right`, written on the level's secret paper `?`; `mode: funk|bossa|samba|rock` (default
+//!   funk): what the band plays once the door's open. See `game::code`.
 //! - `N: ...` (a digit): a moving platform, see below.
 //! - `crusher@<col>,<row>: phase=<0..1> beat=<bars>` (either or both): shift the cycle of the
 //!   crusher covering that cell (so neighbours don't slam in lockstep); with `beat=N` it slams
@@ -85,6 +88,11 @@
 //! | `M` | the blast button, with its speakers: land on it and the band BLASTS (a shout chorus a key up, flat out, louder, [`BLAST_SECS`]) and the blast throws Nat up ([`BLAST_SPEED`]) and every diaper near out of the sky. See `game::toys` |
 //! | `@` | a stop sign: touch it and the level stops right there (cleared, like the goal). See `game::toys` |
 //! | `A` `K` `a` | a house (its door in this cell, the house around it): Up at the door goes in. `A`: nobody's in, out the chimney Nat flies, up high; `K`: a chef's home (smoke, a lit window) and Nat comes out a schnitzel (a death); `a`: the chef's in every other [`HOUSE_SHIFT`] s. See `game::houses` |
+//! | `Q` | a policeman: he walks his beat, and with Nat near he gives orders, "STOP!" and "THIS WAY!" (an arrow), round and round ([`POLICE_ORDERS`]). Listen and you're fine: his spikes `y` fold down while he says go. Don't, and spikes pop up right where you were about to step; jump or fly and a traffic cone drops on your head. See `game::police` |
+//! | `y` | police spikes: deadly, except while the nearest policeman says go; they never come up under someone standing on them |
+//! | `?` | the secret paper: touch it and the building code (`code:`) comes up to read, for a moment |
+//! | `&` | a door with a keypad (its floor in this cell): Up at it and the arrows type; the code opens it, through to the secret room `$`, and the band plays `mode:`. A wrong code buzzes |
+//! | `$` | the secret room: where the door `&` lets Nat in (one, with a door) |
 //! | `X` `<` `>` | crusher: a rectangle of the same char is one block that slams down (`X`), left (`<`) or right (`>`) until it meets a tile, holds, and creeps back ([`Crusher`]). Its slamming face squashes; it's solid, and rideable on top |
 //!
 //! Moving platform header: `N: dx=<tiles> dy=<tiles> period=<secs> [kind=tp|duck|plunger] [phase=<0..1>]`.
@@ -278,6 +286,63 @@ pub const BLAST_SECS: f32 = 12.0;
 pub const HOUSE_SHIFT: f32 = 3.0;
 /// A house nobody's in throws Nat out of its chimney this fast (px/s, ~8 tiles up).
 pub const CHIMNEY_SPEED: f32 = 620.0;
+
+/// The policeman's orders, round and round while Nat's near (from when he came near): what,
+/// and how long (s). `Go(d)`: this way (+1 right, -1 left).
+pub const POLICE_ORDERS: [(Order, f32); 4] = [(Order::Stop, 1.6), (Order::Go(1), 2.4), (Order::Stop, 1.6), (Order::Go(-1), 1.0)];
+/// He gives orders to a Nat this near (tiles across; and [`POLICE_ROWS`] up or down)...
+pub const POLICE_REACH: f32 = 9.0;
+pub const POLICE_ROWS: f32 = 5.0;
+/// ...and a new order gives Nat this long (s) to do it.
+pub const POLICE_GRACE: f32 = 0.45;
+
+/// A policeman's order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum Order {
+    Stop,
+    Go(i8),
+}
+
+/// An arrow of a building code.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect)]
+pub enum Arrow {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Arrow {
+    pub fn glyph(self) -> char {
+        match self {
+            Arrow::Up => '↑',
+            Arrow::Down => '↓',
+            Arrow::Left => '←',
+            Arrow::Right => '→',
+        }
+    }
+}
+
+/// What the band plays behind a building code's door (`mode:`): one of its feels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Reflect, Default)]
+pub enum RoomMode {
+    #[default]
+    Funk,
+    Bossa,
+    Samba,
+    Rock,
+}
+
+impl RoomMode {
+    pub fn word(self) -> &'static str {
+        match self {
+            RoomMode::Funk => "funk",
+            RoomMode::Bossa => "bossa",
+            RoomMode::Samba => "samba",
+            RoomMode::Rock => "rock",
+        }
+    }
+}
 
 /// The farthest (tiles) a crusher slams, with nothing in its way.
 pub const CRUSH_MAX_TRAVEL: i32 = 10;
@@ -563,10 +628,14 @@ pub enum Topic {
     Stop,
     /// Houses `A` `K` `a` (`house`).
     House,
+    /// The policeman `Q` and his spikes `y` (`police`).
+    Police,
+    /// The building code: its paper `?` and its door `&` (`code`).
+    Code,
 }
 
 impl Topic {
-    pub const ALL: [Topic; 32] = [
+    pub const ALL: [Topic; 34] = [
         Topic::Toot,
         Topic::OneWay,
         Topic::Platform,
@@ -599,6 +668,8 @@ impl Topic {
         Topic::Blast,
         Topic::Stop,
         Topic::House,
+        Topic::Police,
+        Topic::Code,
     ];
 
     /// The gadget tiles: not in the campaign yet (only `levels/playground/gadgets.txt`), so the
@@ -617,9 +688,10 @@ impl Topic {
     ];
 
     /// The toys (the Boom and its beans, sploosh diapers, the helper, the blast button, stop
-    /// signs, houses): only in the secret playground (`game::toybox`, `levels/toybox/`), since
-    /// the validator can't fly the Boom, swing on a rope or go indoors.
-    pub const TOYS: [Topic; 6] = [Topic::Boom, Topic::Diaper, Topic::Helper, Topic::Blast, Topic::Stop, Topic::House];
+    /// signs, houses, the policeman, the building code): only in the secret playground
+    /// (`game::toybox`, `levels/toybox/`), since the validator can't fly the Boom, swing on a
+    /// rope, go indoors, follow orders or type a code.
+    pub const TOYS: [Topic; 8] = [Topic::Boom, Topic::Diaper, Topic::Helper, Topic::Blast, Topic::Stop, Topic::House, Topic::Police, Topic::Code];
 
     pub fn word(self) -> &'static str {
         match self {
@@ -655,6 +727,8 @@ impl Topic {
             Topic::Blast => "blast",
             Topic::Stop => "stop",
             Topic::House => "house",
+            Topic::Police => "police",
+            Topic::Code => "code",
         }
     }
 
@@ -968,6 +1042,16 @@ pub enum ThingKind {
     StopSign,
     /// A house's door (`A` `K` `a`).
     House(Cook),
+    /// A policeman (`Q`), on his beat.
+    Police,
+    /// Police spikes (`y`).
+    PoliceSpikes,
+    /// The secret paper with the building code (`?`).
+    CodePaper,
+    /// The door with a keypad (`&`).
+    CodeDoor,
+    /// The secret room the door lets into (`$`).
+    SecretRoom,
 }
 
 /// Who's in a house (`A` `K` `a`).
@@ -1024,6 +1108,10 @@ pub struct Level {
     pub secret: Option<Spot>,
     /// `shout:` where the shout choruses start.
     pub shout: Option<Shout>,
+    /// `code:` the building code (empty: none).
+    pub code: Vec<Arrow>,
+    /// `mode:` what the band plays behind the code's door.
+    pub mode: RoomMode,
 }
 
 /// Where a level's closing stretch starts (`shout:`): past a column, or (a tower) above a row.
@@ -1212,6 +1300,8 @@ impl Level {
         let mut solo = false;
         let mut secret = None;
         let mut shout = None;
+        let mut code = Vec::new();
+        let mut mode = RoomMode::default();
         let mut gates = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
@@ -1241,6 +1331,27 @@ impl Level {
                     solo = true;
                 }
                 "say" => says.push(value.to_string()),
+                "code" => {
+                    code = value
+                        .split_whitespace()
+                        .map(|w| match w {
+                            "up" => Ok(Arrow::Up),
+                            "down" => Ok(Arrow::Down),
+                            "left" => Ok(Arrow::Left),
+                            "right" => Ok(Arrow::Right),
+                            _ => Err(format!("code: `{w}` isn't an arrow (up, down, left, right)")),
+                        })
+                        .collect::<Result<_, _>>()?;
+                    if !(1..=8).contains(&code.len()) {
+                        return Err("code: 1 to 8 arrows".into());
+                    }
+                }
+                "mode" => {
+                    mode = [RoomMode::Funk, RoomMode::Bossa, RoomMode::Samba, RoomMode::Rock]
+                        .into_iter()
+                        .find(|m| m.word() == value)
+                        .ok_or_else(|| format!("mode: `{value}` (want funk, bossa, samba or rock)"))?;
+                }
                 "shout" => {
                     let bad = || format!("bad shout `{value}` (want `<col>` or `row <row>`)");
                     shout = Some(match value.strip_prefix("row ") {
@@ -1428,6 +1539,11 @@ impl Level {
                     'A' => things.push(Thing { kind: ThingKind::House(Cook::Never), col, row }),
                     'K' => things.push(Thing { kind: ThingKind::House(Cook::Always), col, row }),
                     'a' => things.push(Thing { kind: ThingKind::House(Cook::Sometimes), col, row }),
+                    'Q' => things.push(Thing { kind: ThingKind::Police, col, row }),
+                    'y' => things.push(Thing { kind: ThingKind::PoliceSpikes, col, row }),
+                    '?' => things.push(Thing { kind: ThingKind::CodePaper, col, row }),
+                    '&' => things.push(Thing { kind: ThingKind::CodeDoor, col, row }),
+                    '$' => things.push(Thing { kind: ThingKind::SecretRoom, col, row }),
                     '1'..='9' => {
                         let digit = c.to_digit(10).unwrap() as usize;
                         let start_col = col;
@@ -1493,6 +1609,13 @@ impl Level {
                 return Err(format!("secret@{},{}: the grate (that cell and the one above) must be solid", s.col, s.row));
             }
         }
+        let count = |k: ThingKind| things.iter().filter(|t| t.kind == k).count();
+        match (count(ThingKind::CodeDoor), count(ThingKind::SecretRoom)) {
+            (0, 0) => {}
+            (1, 1) if !code.is_empty() => {}
+            (1, 1) => return Err("a keypad door `&` needs a `code:`".into()),
+            _ => return Err("a keypad door `&` goes with one secret room `$` (one of each)".into()),
+        }
         Ok(Level {
             name: name.ok_or("missing `name:`")?,
             world,
@@ -1513,6 +1636,8 @@ impl Level {
             solo,
             secret,
             shout,
+            code,
+            mode,
         })
     }
 }

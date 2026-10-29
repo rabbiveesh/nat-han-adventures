@@ -646,12 +646,12 @@ const SPLAT_SHOW: f32 = 0.5;
 fn animate_player(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    player: Query<(&Body, &PlayerControl, Option<&Dead>, &Children, Has<crate::game::houses::Indoors>, Has<toys::Fried>), With<Player>>,
+    player: Query<(&Body, &PlayerControl, Option<&Dead>, &Children, Has<crate::game::houses::Indoors>, Has<toys::Fried>, Has<crate::game::code::ThroughDoor>), With<Player>>,
     mut kids: Query<(&mut Sprite, &mut CharacterSprite, &mut Visibility)>,
     mut jumped: MessageReader<Jumped>,
     mut landed: MessageReader<Landed>,
 ) {
-    let Ok((body, ctl, dead, children, indoors, fried)) = player.single() else {
+    let Ok((body, ctl, dead, children, indoors, fried, through)) = player.single() else {
         jumped.clear();
         landed.clear();
         return;
@@ -678,7 +678,7 @@ fn animate_player(
             let n = sprites.frames(SpriteId::PooSplat).len().max(1);
             (SpriteId::PooSplat, ((since * 14.0) as usize).min(n - 1))
         } else {
-            *vis = if indoors { Visibility::Hidden } else { Visibility::Inherited };
+            *vis = if indoors || through { Visibility::Hidden } else { Visibility::Inherited };
             if !body.on_ground {
                 (if body.vel.y > 0.0 { SpriteId::PooJump } else { SpriteId::PooFall }, (t * 10.0) as usize)
             } else if body.vel.x.abs() > 10.0 {

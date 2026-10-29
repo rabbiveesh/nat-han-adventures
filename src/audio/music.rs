@@ -183,6 +183,18 @@ pub enum Sfx {
     Snicker,
     /// Out of a chimney: a "foomp".
     Foomp,
+    /// A policeman's whistle: a trilled "phweeet" with each order.
+    Trill,
+    /// A police spike pops up: "schwing".
+    Pop,
+    /// A traffic cone on the head: a hollow "bonk".
+    Bonk,
+    /// A keypad key: a short beep (pitched by the arrow).
+    Beep,
+    /// A wrong code: a rude buzz.
+    Buzz,
+    /// The right code: the lock clacks and a little fanfare.
+    Unlock,
 }
 
 #[cfg(test)]

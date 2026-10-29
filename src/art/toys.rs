@@ -350,3 +350,320 @@ const SCHNITZEL: &[&str] = &[
 pub fn schnitzel() -> Vec<Pixels> {
     vec![grid(SCHNITZEL, SCHNITZEL_PAL)]
 }
+
+// ---------------------------------------------------------------- the policeman
+
+const POLICE_PAL: Palette = &[
+    ('k', OUTLINE),
+    ('b', hex(0x2a3a8a)), // uniform
+    ('B', hex(0x18245a)),
+    ('y', hex(0xffd040)), // badge, buttons
+    ('s', hex(0xf0b890)), // skin
+    ('S', hex(0xc88a68)),
+    ('w', hex(0xffffff)),
+    ('m', hex(0x4a2a18)), // mustache
+    ('g', hex(0xb0b0c0)), // whistle
+];
+
+/// Walking (two steps), "STOP!" (his hand up, whistle in), "THIS WAY!" (his arm out right,
+/// whistle in). 16x24, his feet on the bottom row.
+const POLICE: [&[&str]; 4] = [
+    &[
+        "................",
+        ".....kkkkkk.....",
+        "....kbbbbbbk....",
+        "...kbbbybbbbk...",
+        "...kkkkkkkkkkk..",
+        "....kssssssk....",
+        "....kswksswk....",
+        "....kssssssSk...",
+        "....kmmmmmmk....",
+        "....kssssssk....",
+        ".....kkkkkk.....",
+        "....kbbbbbbk....",
+        "...kbbbbybbbk...",
+        "...kbkbbbbkbk...",
+        "...kbkbbybkbk...",
+        "...kskbbbbksk...",
+        "....kbbbbbbk....",
+        "....kBBBBBBk....",
+        "....kbbkkbbk....",
+        "....kbbk.kbk....",
+        "...kbbk..kbk....",
+        "...kbk...kbbk...",
+        "..kkkk...kkkk...",
+        "................",
+    ],
+    &[
+        "................",
+        ".....kkkkkk.....",
+        "....kbbbbbbk....",
+        "...kbbbybbbbk...",
+        "...kkkkkkkkkkk..",
+        "....kssssssk....",
+        "....kswksswk....",
+        "....kssssssSk...",
+        "....kmmmmmmk....",
+        "....kssssssk....",
+        ".....kkkkkk.....",
+        "....kbbbbbbk....",
+        "...kbbbbybbbk...",
+        "...kbkbbbbkbk...",
+        "...kbkbbybkbk...",
+        "...kskbbbbksk...",
+        "....kbbbbbbk....",
+        "....kBBBBBBk....",
+        "....kbbkkbbk....",
+        "....kbk.kbbk....",
+        "....kbk..kbbk...",
+        "...kbbk...kbk...",
+        "...kkkk...kkkk..",
+        "................",
+    ],
+    &[
+        "..........kkk...",
+        ".....kkkkkskk...",
+        "....kbbbbbkssk..",
+        "...kbbbybbbkssk.",
+        "...kkkkkkkkkskk.",
+        "....kssssssk.kbk",
+        "....kswksswk.kbk",
+        "....kssssssSkkbk",
+        "....kmmmmmmkkbk.",
+        "....ksskggggkbk.",
+        ".....kkkkkkkbbk.",
+        "....kbbbbbbbbk..",
+        "...kbbbbybbbk...",
+        "...kbkbbbbbk....",
+        "...kbkbbybbk....",
+        "...kskbbbbbk....",
+        "....kbbbbbbk....",
+        "....kBBBBBBk....",
+        "....kbbkkbbk....",
+        "....kbbk.kbk....",
+        "....kbbk.kbk....",
+        "....kbbk.kbbk...",
+        "...kkkkk.kkkkk..",
+        "................",
+    ],
+    &[
+        "................",
+        ".....kkkkkk.....",
+        "....kbbbbbbk....",
+        "...kbbbybbbbk...",
+        "...kkkkkkkkkkk..",
+        "....kssssssk....",
+        "....kswksswk....",
+        "....kssssssSk...",
+        "....kmmmmmmk....",
+        "....ksskggggk...",
+        ".....kkkkkkkkkkk",
+        "....kbbbbbbbbbsk",
+        "...kbbbbybbbkkk.",
+        "...kbkbbbbbk....",
+        "...kbkbbybbk....",
+        "...kskbbbbbk....",
+        "....kbbbbbbk....",
+        "....kBBBBBBk....",
+        "....kbbkkbbk....",
+        "....kbbk.kbk....",
+        "....kbbk.kbk....",
+        "....kbbk.kbbk...",
+        "...kkkkk.kkkkk..",
+        "................",
+    ],
+];
+
+pub fn police() -> Vec<Pixels> {
+    POLICE.iter().map(|g| grid(g, POLICE_PAL)).collect()
+}
+
+const ORDER_PAL: Palette = &[('k', OUTLINE), ('r', hex(0xe02828)), ('R', hex(0x9a1420)), ('g', hex(0x30b848)), ('G', hex(0x1a7a2c)), ('w', hex(0xffffff))];
+
+/// The order over his head: stop (a red disc, a white hand up) and go (a green disc, a white
+/// arrow right; flipped for left). 16x16.
+const ORDER: [&[&str]; 2] = [
+    &[
+        ".....kkkkkk.....",
+        "...kkrrrrrrkk...",
+        "..krrrrwrwrrrk..",
+        ".krrrwrwrwrrrRk.",
+        ".krrrwrwrwrwrRk.",
+        "krrrrwwwwwwrrrRk",
+        "krrrrwwwwwwrrrRk",
+        "krrwrwwwwwwrrrRk",
+        "krrwwwwwwwwrrrRk",
+        "krrrwwwwwwwrrrRk",
+        "krrrrwwwwwrrrrRk",
+        ".krrrrwwwwrrrRk.",
+        ".kRrrrrrrrrrrRk.",
+        "..kRRrrrrrrRRk..",
+        "...kkRRRRRRkk...",
+        ".....kkkkkk.....",
+    ],
+    &[
+        ".....kkkkkk.....",
+        "...kkggggggkk...",
+        "..kgggggggggGk..",
+        ".kggggggwggggGk.",
+        ".kggggggwwgggGk.",
+        "kgggggggwwwgggGk",
+        "kgwwwwwwwwwwggGk",
+        "kgwwwwwwwwwwwgGk",
+        "kgwwwwwwwwwwwgGk",
+        "kgwwwwwwwwwwggGk",
+        "kgggggggwwwgggGk",
+        ".kggggggwwgggGk.",
+        ".kGgggggwggggGk.",
+        "..kGGgggggggGk..",
+        "...kkGGGGGGkk...",
+        ".....kkkkkk.....",
+    ],
+];
+
+pub fn order_sign() -> Vec<Pixels> {
+    ORDER.iter().map(|g| grid(g, ORDER_PAL)).collect()
+}
+
+const CONE_PAL: Palette = &[('k', OUTLINE), ('o', hex(0xff7a1a)), ('O', hex(0xc04a08)), ('w', hex(0xffffff)), ('W', hex(0xc8c8d0))];
+
+/// A traffic cone. 16x16.
+const CONE: &[&str] = &[
+    ".......kk.......",
+    "......kook......",
+    "......kooOk.....",
+    ".....kwwwWk.....",
+    ".....kwwwWk.....",
+    ".....koooOOk....",
+    "....kooooOOk....",
+    "....kwwwwwWk....",
+    "....kwwwwwWWk...",
+    "...kooooooOOk...",
+    "...koooooooOOk..",
+    "...koooooooOOk..",
+    "..kkkkkkkkkkkkk.",
+    ".kooooooooooooOk",
+    ".kOOOOOOOOOOOOOk",
+    ".kkkkkkkkkkkkkkk",
+];
+
+pub fn cone() -> Vec<Pixels> {
+    vec![grid(CONE, CONE_PAL)]
+}
+
+// ---------------------------------------------------------------- the building code
+
+const PAPER_PAL: Palette = &[('k', OUTLINE), ('p', hex(0xfff4d0)), ('P', hex(0xd8c890)), ('i', hex(0x3050c0)), ('r', hex(0xe02828))];
+
+/// The secret paper: rolled at both ends, a big question mark on it. 16x16.
+const PAPER: &[&str] = &[
+    "................",
+    ".kkkkkkkkkkkkkk.",
+    "kPPPPPPPPPPPPPPk",
+    ".kkkkkkkkkkkkkk.",
+    "..kppppiiiipPk..",
+    "..kpppipppipPk..",
+    "..kppppppipppk..",
+    "..kpppppipppPk..",
+    "..kppppipppPPk..",
+    "..kppppipppPPk..",
+    "..kpppppppppPk..",
+    "..kppppipppPPk..",
+    "..kpppppprrpPk..",
+    ".kkkkkkkkkkkkkk.",
+    "kPPPPPPPPPPPPPPk",
+    ".kkkkkkkkkkkkkk.",
+];
+
+pub fn code_paper() -> Vec<Pixels> {
+    vec![grid(PAPER, PAPER_PAL)]
+}
+
+const DOOR_PAL: Palette = &[
+    ('k', OUTLINE),
+    ('d', hex(0x5a6a88)), // a steel door
+    ('D', hex(0x3a4660)),
+    ('f', hex(0x8a8a98)), // frame
+    ('F', hex(0x5a5a68)),
+    ('p', hex(0x24202c)), // keypad
+    ('g', hex(0x60e070)), // its keys' light
+    ('r', hex(0xff4040)),
+    ('n', hex(0x0c0a10)), // the dark through the open door
+    ('y', hex(0xffd860)),
+];
+
+/// The door with a keypad: shut (a red light), and open (dark inside, the light green). 16x32.
+const DOOR: [&[&str]; 2] = [
+    &[
+        "................",
+        "................",
+        "kkkkkkkkkkkkkkkk",
+        "kffffffffffffffk",
+        "kfkkkkkkkkkkkkFk",
+        "kfkddddddddddkFk",
+        "kfkdDDDDDDDDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDDDDDDDDdkFk",
+        "kfkddddddddddkFk",
+        "kfkdddddkkkkdkFk",
+        "kfkdddddkrrkdkFk",
+        "kfkdddddkpppkkFk",
+        "kfkdddddkgpgkkFk",
+        "kfkdddyddpgpkkFk",
+        "kfkdddyddkkkdkFk",
+        "kfkddddddddddkFk",
+        "kfkdDDDDDDDDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDddddddDdkFk",
+        "kfkdDDDDDDDDdkFk",
+        "kfkddddddddddkFk",
+        "kfkddddddddddkFk",
+        "kfkddddddddddkFk",
+        "kfkddddddddddkFk",
+        "kfkkkkkkkkkkkkFk",
+        "kFFFFFFFFFFFFFFk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+    &[
+        "................",
+        "................",
+        "kkkkkkkkkkkkkkkk",
+        "kffffffffffffffk",
+        "kfkkkkkkkkkkkkFk",
+        "kfknnnnnnnnnkdkk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdkk",
+        "kfknnnnnnnnnkdgk",
+        "kfknnnnnnnnnkdgk",
+        "kfknnnnnnnnnkdkk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdDk",
+        "kfknnnnnnnnnkdkk",
+        "kfkkkkkkkkkkkkFk",
+        "kFFFFFFFFFFFFFFk",
+        "kkkkkkkkkkkkkkkk",
+    ],
+];
+
+pub fn code_door() -> Vec<Pixels> {
+    DOOR.iter().map(|g| grid(g, DOOR_PAL)).collect()
+}

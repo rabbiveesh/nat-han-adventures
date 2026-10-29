@@ -23,12 +23,14 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::Sploosh | Sfx::Blast => 1.0,
         Sfx::Sizzle | Sfx::Screech | Sfx::Foomp => 0.85,
         Sfx::Snicker => 0.7,
+        Sfx::Trill | Sfx::Pop | Sfx::Bonk | Sfx::Buzz | Sfx::Unlock => 0.85,
+        Sfx::Beep => 0.55,
         Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing | Sfx::Crash => 1.0,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 21] = [
+    pub const ALL: [Sfx; 27] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -50,6 +52,12 @@ impl Sfx {
         Sfx::Screech,
         Sfx::Snicker,
         Sfx::Foomp,
+        Sfx::Trill,
+        Sfx::Pop,
+        Sfx::Bonk,
+        Sfx::Beep,
+        Sfx::Buzz,
+        Sfx::Unlock,
     ];
 }
 
@@ -80,6 +88,12 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::Screech => screech(),
         Sfx::Snicker => snicker(),
         Sfx::Foomp => foomp(),
+        Sfx::Trill => trill(),
+        Sfx::Pop => pop(),
+        Sfx::Bonk => bonk(),
+        Sfx::Beep => beep(),
+        Sfx::Buzz => buzz(),
+        Sfx::Unlock => unlock(),
     };
     finish(mono, level(sfx))
 }
@@ -471,6 +485,95 @@ fn foomp() -> Vec<f32> {
             (thump * 0.8 + puff * 0.6) * env_ar(i, n, 0.004, 0.05)
         })
         .collect()
+}
+
+/// A police whistle: a pea rattling in it (a fast warble) on a high pulse, with breath.
+fn trill() -> Vec<f32> {
+    let n = secs(0.5);
+    let (mut a, mut wob) = (Osc::default(), Osc::default());
+    let mut noise = Lfsr::with_seed(0x7e11);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            // A short "phw" then the long "eeet".
+            let f = 2_700.0 * (1.0 + 0.06 * wob.sine(26.0)) * if t < 0.18 { 0.94 } else { 1.0 };
+            let breath = lp.run(noise.next(30_000.0, false), 6_000.0) * 0.25;
+            (a.pulse(f, 0.5) * 0.6 + breath) * env_ar(i, n, 0.01, 0.08) * if (0.16..0.2).contains(&t) { 0.2 } else { 1.0 }
+        })
+        .collect()
+}
+
+/// A spike popping up out of the floor: a quick metallic rising "schwing".
+fn pop() -> Vec<f32> {
+    let n = secs(0.25);
+    let (mut a, mut b) = (Osc::default(), Osc::default());
+    let mut noise = Lfsr::with_seed(0x0909);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let f = exp_sweep(600.0, 2_400.0, (t * 4.0).min(1.0));
+            let ring = a.pulse(f, 0.125) * 0.5 + b.pulse(f * 1.5, 0.25) * 0.3;
+            let hit = noise.next(18_000.0, false) * (1.0 - t * 6.0).max(0.0) * 0.5;
+            (ring * (1.0 - t).powf(1.5) + hit) * env_ar(i, n, 0.002, 0.05)
+        })
+        .collect()
+}
+
+/// A cone on the head: a hollow plastic "bonk", a falling knock with a short rattle.
+fn bonk() -> Vec<f32> {
+    let n = secs(0.3);
+    let mut o = Osc::default();
+    let mut noise = Lfsr::with_seed(0xb04c);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let knock = o.tri(exp_sweep(520.0, 260.0, (t * 3.0).min(1.0))) * (-t * 9.0).exp();
+            let rattle = lp.run(noise.next(12_000.0, true), 3_000.0) * (-t * 14.0).exp() * 0.5;
+            (knock + rattle) * env_ar(i, n, 0.002, 0.04)
+        })
+        .collect()
+}
+
+/// A keypad key: a short square beep.
+fn beep() -> Vec<f32> {
+    let n = secs(0.09);
+    let mut o = Osc::default();
+    (0..n).map(|i| o.pulse(1_320.0, 0.5) * 0.6 * env_ar(i, n, 0.003, 0.02)).collect()
+}
+
+/// A wrong code: a low, rude, two-part buzz.
+fn buzz() -> Vec<f32> {
+    let mut out = Vec::new();
+    let (mut a, mut b) = (Osc::default(), Osc::default());
+    for len in [0.18, 0.32] {
+        let n = secs(len);
+        for i in 0..n {
+            out.push((a.pulse(110.0, 0.25) * 0.6 + b.pulse(116.5, 0.5) * 0.4) * env_ar(i, n, 0.004, 0.03));
+        }
+        out.resize(out.len() + secs(0.06), 0.0);
+    }
+    out
+}
+
+/// The right code: the lock's clack, then a little rising arpeggio.
+fn unlock() -> Vec<f32> {
+    let mut out = Vec::new();
+    let mut noise = Lfsr::with_seed(0xc1ac);
+    let clack = secs(0.05);
+    for i in 0..clack {
+        out.push(noise.next(16_000.0, true) * (1.0 - i as f32 / clack as f32) * 0.8 * env_ar(i, clack, 0.002, 0.0));
+    }
+    out.resize(out.len() + secs(0.05), 0.0);
+    let mut o = Osc::default();
+    for f in [523.25, 659.25, 783.99, 1_046.5] {
+        let n = secs(0.09);
+        for i in 0..n {
+            out.push(o.pulse(f, 0.25) * 0.6 * env_ar(i, n, 0.003, 0.03));
+        }
+    }
+    out
 }
 
 /// The flush: a noise swirl whose "filter" sweeps down then back up (~1.2s), then a gurgle of

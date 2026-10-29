@@ -360,7 +360,7 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
     let near = |c0: i32, r0: i32, c1: i32, r1: i32| {
         (c0 - 2..=c1 + 2).contains(&c) && (pit || (r0 - 2..=r1 + 2).contains(&r))
     };
-    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher | DeathCause::Diaper | DeathCause::Schnitzel);
+    let hazard = matches!(cause, DeathCause::Fly | DeathCause::Spray | DeathCause::Crusher | DeathCause::Diaper | DeathCause::Schnitzel | DeathCause::Police);
     // Flies, sprays and crushers never count against a gate: none is built of them.
     if !hazard
         && let Some(g) = level.gates.iter().find(|g| near(g.c0, g.r0, g.c1, g.r1))

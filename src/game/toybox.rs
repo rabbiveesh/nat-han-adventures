@@ -1,6 +1,6 @@
 //! **THE SECRET PLAYGROUND**: a hidden world of silly toys, one playground level each
 //! (`levels/toybox/`): the Boom, sploosh diapers, the "helper" on his rope, the blast button,
-//! stop signs and schnitzel houses. No Han, no saves to beat: every level's open, and
+//! stop signs, schnitzel houses, the policeman and the building code. No Han, no saves to beat: every level's open, and
 //! nothing's recorded but that you played.
 //!
 //! Wired like NAT ALONE (`super::solo`): the level is a [`GeneratedLevel`] (the story's levels
@@ -15,7 +15,7 @@ use crate::level::Level;
 use crate::state::{AppState, Shelf};
 
 /// How many playgrounds there are.
-pub const TOY_COUNT: usize = 6;
+pub const TOY_COUNT: usize = 8;
 
 /// The playgrounds, in play order.
 pub static TOY_SOURCES: [&str; TOY_COUNT] = [
@@ -25,6 +25,8 @@ pub static TOY_SOURCES: [&str; TOY_COUNT] = [
     include_str!("../../levels/toybox/blast.txt"),
     include_str!("../../levels/toybox/stop.txt"),
     include_str!("../../levels/toybox/houses.txt"),
+    include_str!("../../levels/toybox/police.txt"),
+    include_str!("../../levels/toybox/code.txt"),
 ];
 
 /// The playground being played (0-based).

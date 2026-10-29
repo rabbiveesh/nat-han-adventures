@@ -663,7 +663,7 @@ pub(super) fn player_step(
     input: Single<&ActionState<Action>>,
     mut player: Query<
         (&mut Pos, &mut Body, &mut PlayerControl),
-        (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>, Without<super::boom::Aboard>, Without<super::helper::OnRope>, Without<super::houses::Indoors>),
+        (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>, Without<super::boom::Aboard>, Without<super::helper::OnRope>, Without<super::houses::Indoors>, Without<super::code::AtKeypad>, Without<super::code::ThroughDoor>),
     >,
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), Without<Player>>,
     han: Query<(Entity, &Pos, &PrevPos, &HanHead), (Without<Player>, Without<MovingPlatform>)>,

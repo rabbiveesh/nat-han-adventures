@@ -1,6 +1,7 @@
 //! The secret playground's toys on screen: the helper and his rope, the blast button (its
 //! speakers pumping, notes flying while it blasts), stop signs, houses (the lit window, the
-//! chimney smoke while the chef's in) and Nat the schnitzel; and their sounds.
+//! chimney smoke while the chef's in), Nat the schnitzel, the policeman (his order over his
+//! head), his spikes and cones, the secret paper and the keypad door; and their sounds.
 
 use bevy::{prelude::*, sprite::Anchor};
 
@@ -10,7 +11,10 @@ use crate::audio::Sfx;
 use crate::events::{DeathCause, PlayerDied, PlaySfx};
 use crate::game::helper::{Helper, HelperState, RopeEvent};
 use crate::game::houses::{CHIMNEY, House, HouseEvent};
+use crate::game::code::{CodeDoor, CodePaper, CodeRead, KeypadEvent};
+use crate::game::police::{Cone, Police, PoliceEvent, PoliceSpike, PoppedSpike};
 use crate::game::toys::{Blasted, Blaster, Blasting, SignHit, StopSign};
+use crate::level::{Arrow, Order};
 use crate::game::{Dead, LevelEntity, Player, SimClock};
 
 pub(super) fn plugin(app: &mut App) {
@@ -18,11 +22,160 @@ pub(super) fn plugin(app: &mut App) {
         .add_observer(blaster_sprite)
         .add_observer(sign_sprite)
         .add_observer(house_sprite)
+        .add_observer(police_sprite)
+        .add_observer(spike_sprite)
+        .add_observer(popped_sprite)
+        .add_observer(cone_sprite)
+        .add_observer(paper_sprite)
+        .add_observer(door_sprite)
         .add_systems(Update, unfry)
         .add_systems(
             PostUpdate,
-            (helper_looks, blaster_looks, house_looks, toy_fx).in_set(super::VisualSet::Animate).run_if(resource_exists::<Sprites>),
+            (helper_looks, blaster_looks, house_looks, toy_fx, police_looks, spike_looks, code_looks, police_fx)
+                .in_set(super::VisualSet::Animate)
+                .run_if(resource_exists::<Sprites>),
         );
+}
+
+/// Police spikes are the toilet brushes in police blue.
+const POLICE_BLUE: Color = Color::srgb(0.55, 0.7, 1.0);
+
+/// The order sign over a policeman's head.
+#[derive(Component)]
+struct OrderBoard;
+
+fn police_sprite(add: On<Add, Police>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    commands.entity(add.entity).insert((sprite(&sprites, SpriteId::Police), Anchor::BOTTOM_CENTER)).with_children(|p| {
+        p.spawn((sprite(&sprites, SpriteId::OrderSign), OrderBoard, Transform::from_xyz(0.0, 34.0, 0.1), Visibility::Hidden));
+    });
+}
+
+fn spike_sprite(add: On<Add, PoliceSpike>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    commands.entity(add.entity).insert((Sprite { color: POLICE_BLUE, ..sprite(&sprites, SpriteId::SpikesUp) }, Anchor::BOTTOM_CENTER));
+}
+
+fn popped_sprite(add: On<Add, PoppedSpike>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    commands.entity(add.entity).insert((
+        Sprite { color: POLICE_BLUE, ..sprite(&sprites, SpriteId::SpikesUp) },
+        Anchor::BOTTOM_CENTER,
+    ));
+}
+
+fn cone_sprite(add: On<Add, Cone>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    commands.entity(add.entity).insert(sprite(&sprites, SpriteId::Cone));
+}
+
+fn paper_sprite(add: On<Add, CodePaper>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    commands.entity(add.entity).insert((sprite(&sprites, SpriteId::CodePaper), Bob(None)));
+}
+
+/// Bobbing about its first height.
+#[derive(Component)]
+struct Bob(Option<f32>);
+
+fn door_sprite(add: On<Add, CodeDoor>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+    let Some(sprites) = sprites else { return };
+    commands.entity(add.entity).insert((sprite(&sprites, SpriteId::CodeDoor), Anchor::BOTTOM_CENTER));
+}
+
+/// Walking his beat (two steps), or giving his order (his hand up, his arm out), the order
+/// up on its sign over his head.
+fn police_looks(
+    sprites: Res<Sprites>,
+    mut police: Query<(&Police, &Transform, &mut Sprite, &Children), Without<OrderBoard>>,
+    mut boards: Query<(&mut Sprite, &mut Visibility), With<OrderBoard>>,
+) {
+    for (p, tf, mut s, children) in &mut police {
+        let order = p.order();
+        let frame = match order {
+            None => ((tf.translation.x / 6.0).floor() as i32).rem_euclid(2) as usize,
+            Some(Order::Stop) => 2,
+            Some(Order::Go(_)) => 3,
+        };
+        let img = sprites.frame(SpriteId::Police, frame);
+        if s.image != img {
+            s.image = img;
+        }
+        s.flip_x = match order {
+            Some(Order::Go(d)) => d < 0,
+            _ => p.facing < 0.0,
+        };
+        for &c in children {
+            let Ok((mut b, mut vis)) = boards.get_mut(c) else { continue };
+            *vis = if order.is_some() { Visibility::Inherited } else { Visibility::Hidden };
+            let img = sprites.frame(SpriteId::OrderSign, usize::from(matches!(order, Some(Order::Go(_)))));
+            if b.image != img {
+                b.image = img;
+            }
+            // The board's a child: undo his flip, then point its arrow.
+            b.flip_x = matches!(order, Some(Order::Go(d)) if d < 0) != s.flip_x;
+        }
+    }
+}
+
+/// Police spikes fold flat; popped ones shoot up.
+fn spike_looks(mut spikes: Query<(&PoliceSpike, &mut Transform)>, mut popped: Query<(&PoppedSpike, &mut Transform), Without<PoliceSpike>>) {
+    for (s, mut tf) in &mut spikes {
+        tf.scale.y = 0.15 + 0.85 * s.up;
+    }
+    for (s, mut tf) in &mut popped {
+        tf.scale.y = (s.t / 0.05).clamp(0.1, 1.0);
+    }
+}
+
+/// The paper bobs; the door's open or shut.
+fn code_looks(
+    time: Res<Time>,
+    sprites: Res<Sprites>,
+    mut papers: Query<(&mut Transform, &mut Bob), With<CodePaper>>,
+    mut doors: Query<(&CodeDoor, &mut Sprite)>,
+) {
+    let t = time.elapsed_secs();
+    for (mut tf, mut bob) in &mut papers {
+        let y = *bob.0.get_or_insert(tf.translation.y);
+        tf.translation.y = y + (t * 3.0).sin() * 1.5;
+        tf.rotation = Quat::from_rotation_z((t * 2.0).sin() * 0.1);
+    }
+    for (d, mut s) in &mut doors {
+        let img = sprites.frame(SpriteId::CodeDoor, usize::from(d.open));
+        if s.image != img {
+            s.image = img;
+        }
+        // A wrong code: its light flashes red.
+        s.color = if !d.open && d.since_wrong < 0.6 && (d.since_wrong * 10.0) as i32 % 2 == 0 { Color::srgb(1.0, 0.6, 0.6) } else { Color::WHITE };
+    }
+}
+
+/// The policeman's and the keypad's sounds.
+fn police_fx(
+    mut police: MessageReader<PoliceEvent>,
+    mut keypad: MessageReader<KeypadEvent>,
+    mut read: MessageReader<CodeRead>,
+    mut sfx: MessageWriter<PlaySfx>,
+) {
+    for e in police.read() {
+        sfx.write(PlaySfx(match e {
+            PoliceEvent::Order(_) => Sfx::Trill,
+            PoliceEvent::Pop(_) => Sfx::Pop,
+            PoliceEvent::Cone(_) => Sfx::Whistle,
+            PoliceEvent::Bonk(_) => Sfx::Bonk,
+        }));
+    }
+    for e in keypad.read() {
+        sfx.write(PlaySfx(match e {
+            KeypadEvent::On(_) | KeypadEvent::Key(Arrow::Up | Arrow::Down | Arrow::Left | Arrow::Right) => Sfx::Beep,
+            KeypadEvent::Open(_) => Sfx::Unlock,
+            KeypadEvent::Wrong(_) => Sfx::Buzz,
+        }));
+    }
+    for _ in read.read() {
+        sfx.write(PlaySfx(Sfx::Secret));
+    }
 }
 
 /// On Nat while he's a schnitzel (his splat's hidden: the schnitzel flies off instead).

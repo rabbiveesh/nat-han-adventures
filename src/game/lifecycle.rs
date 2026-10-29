@@ -75,7 +75,7 @@ fn level_hotkeys(
     mut next: ResMut<NextState<PlayState>>,
     side_b: Option<Res<super::sideb::SideB>>,
     encore: Option<Res<super::encore::Encore>>,
-    aboard: Query<(), With<super::boom::Aboard>>,
+    aboard: Query<(), Or<(With<super::boom::Aboard>, With<super::code::AtKeypad>)>>,
 ) {
     // (The encore can't be restarted, and Down is its free call: `encore`.)
     if encore.is_some() {
@@ -89,7 +89,8 @@ fn level_hotkeys(
     } else if input.just_pressed(&Action::Back) {
         next.set(PlayState::Paused);
     } else if input.just_pressed(&Action::Down) && side_b.is_none() && aboard.is_empty() {
-        // (On Side B, Down calls the set list's pick instead: `sideb`; on the Boom, it steers.)
+        // (On Side B, Down calls the set list's pick instead: `sideb`; on the Boom, it steers;
+        // at a keypad, it types.)
         call.write(crate::events::CallBand);
     }
 }
@@ -250,6 +251,11 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
             ThingKind::Blaster => super::toys::spawn_blaster(commands, level, thing.col, thing.row),
             ThingKind::StopSign => super::toys::spawn_sign(commands, level, thing.col, thing.row),
             ThingKind::House(cook) => super::houses::spawn_house(commands, level, thing.col, thing.row, cook),
+            ThingKind::Police => super::police::spawn_police(commands, level, thing.col, thing.row),
+            ThingKind::PoliceSpikes => super::police::spawn_spike(commands, level, thing.col, thing.row),
+            ThingKind::CodePaper => super::code::spawn_paper(commands, level, thing.col, thing.row),
+            ThingKind::CodeDoor => super::code::spawn_door(commands, level, thing.col, thing.row),
+            ThingKind::SecretRoom => {}
             ThingKind::Spray => {
                 commands.spawn((
                     Name::new("Spray"),

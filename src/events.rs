@@ -88,6 +88,8 @@ pub enum DeathCause {
     Diaper,
     /// Went into a house with the chef home: breaded and fried.
     Schnitzel,
+    /// Didn't listen to the police: a spike popped up in his way, or a cone came down.
+    Police,
 }
 
 #[derive(Message, Debug, Clone, Copy)]

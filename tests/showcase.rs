@@ -1,6 +1,7 @@
 //! The showcase levels and the scripted runs their demo videos record:
 //! - the secret playground (`game::toybox`, `levels/toybox/`): one level per toy (the Boom,
-//!   sploosh diapers, the helper, the blast button, the stop sign, the houses), each with its tour
+//!   sploosh diapers, the helper, the blast button, the stop sign, the houses, the police, the
+//!   building code), each with its tour
 //!   (`scripts/tours/<level>.timeline`), cleared with only the deaths its gag needs;
 //! - the secret gadget gauntlet (`levels/secret/gauntlet.txt`, `scripts/tours/gauntlet.timeline`):
 //!   every gadget tile in one hard level, beaten without a death;
@@ -47,6 +48,8 @@ use nat_han_adventures::{
     game::{
         Body, Groove, Han, Player, Pos,
         boom::BoomEvent,
+        code::KeypadEvent,
+        police::PoliceEvent,
         crushers::CrusherBlock,
         diapers::{DiaperDropped, Splooshed},
         helper::RopeEvent,
@@ -166,7 +169,21 @@ fn play(level: &str, tour: &str) -> Run {
              mut rope: MessageReader<RopeEvent>,
              mut house: MessageReader<HouseEvent>,
              mut blasted: MessageReader<Blasted>,
-             mut sign: MessageReader<SignHit>| {
+             mut sign: MessageReader<SignHit>,
+             mut police: MessageReader<PoliceEvent>,
+             mut keypad: MessageReader<KeypadEvent>| {
+                h.0.extend(police.read().map(|e| match e {
+                    PoliceEvent::Order(_) => "whistle: a new order",
+                    PoliceEvent::Pop(_) => "a spike pops up",
+                    PoliceEvent::Cone(_) => "a cone drops",
+                    PoliceEvent::Bonk(_) => "BONK",
+                }));
+                h.0.extend(keypad.read().map(|e| match e {
+                    KeypadEvent::On(_) => "at the keypad",
+                    KeypadEvent::Key(_) => "key",
+                    KeypadEvent::Open(_) => "the door opens",
+                    KeypadEvent::Wrong(_) => "wrong code",
+                }));
                 h.0.extend(j.read().filter(|j| j.double).map(|_| "toot"));
                 h.0.extend(boom.read().map(|e| match e {
                     BoomEvent::Caught(_) => "caught by the Boom",
@@ -304,6 +321,8 @@ playground!(the_helper_tour_survives_the_helpers_tricks, "helper", 0);
 playground!(the_blast_tour_rides_the_blasts, "blast", 0);
 playground!(the_stop_tour_stops_at_the_sign, "stop", 0);
 playground!(the_houses_tour_gets_fried_once_then_flies_the_chimneys, "houses", 1);
+playground!(the_police_tour_gets_one_cone_then_listens, "police", 1);
+playground!(the_code_tour_reads_the_paper_and_opens_the_door, "code", 0);
 
 /// A NAT ALONE level passes the full check, and its tour clears it without a death.
 macro_rules! nat_alone {
