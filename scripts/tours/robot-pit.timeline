@@ -1,0 +1,42 @@
+# The robot pit (`game::robot`) in level 1, for `scripts/record-run --capture` (format:
+# src/capture/timeline.rs). Start a few tiles before the pit, Sparky's antenna blinking in it:
+#   NATHAN_START=84 scripts/record-run --capture robot-pit.mp4 scripts/tours/robot-pit.timeline 1
+# Run into the pit: WRONG GAME! Stroll the meadow while Sparky chats, pick a wrong pad (his
+# battery drains), then the right one (5), and round the pond into the whirlpool: back on the
+# ledge, "Where were you?!". ~30 s. (Nat walks a tile in 1/6 s there: 167ms a tile.)
+
+# The level's intro line; a look at the antenna.
+wait 2.5
+
+# Off the ledge.
+hold Right 0.9
+
+# Falling, then WRONG GAME!
+wait 2.4
+
+# Sparky chats (three lines): a stroll round the path while he does.
+hold Left 500ms
+hold Up 333ms
+hold Right 1000ms
+hold Down 333ms
+hold Left 500ms
+wait 4.7
+
+# The question: NAT has 3 nuggets, HAN finds 2 more. Not 4...
+hold Down 333ms
+wait 2.6
+
+# ...it's 5.
+hold Up 167ms
+hold Right 500ms
+hold Down 167ms
+wait 3.6
+
+# Home: round the pond to the whirlpool's open side.
+hold Down 167ms
+hold Right 1833ms
+hold Up 333ms
+hold Left 333ms
+
+# Down the drain, and back: Han wants to know.
+wait 4.5
