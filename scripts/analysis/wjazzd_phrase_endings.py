@@ -227,7 +227,7 @@ class Beats:
         cur = None
         for b in beats:
             c = parse_chord(b[3]) if b[3] else None
-            changed = bool(b[3]) and (cur is None or (c and (c[0], c[1]) != (cur[0], cur[1])))
+            changed = bool(c) and (cur is None or (c[0], c[1]) != (cur[0], cur[1]))  # NC changes nothing
             if c:
                 cur = c
             self.chord.append(cur)
@@ -385,7 +385,7 @@ def report(results):
         "",
     ]
     for slug, s in results.items():
-        out.append(f"{slug}: {s['phrases']} phrases from {s['solos']} solos")
+        out.append(f"{slug}: {s['phrases']} phrases from {s['solos']} solos ({s['no_chord']} more dropped: no chord there)")
         if not s["phrases"]:
             out.append("")
             continue
@@ -417,20 +417,25 @@ def analyse(db):
     for slug, perf, y0, y1, feel in PLAYERS:
         ids = pick(rows, perf, y0, y1, feel)
         ends = []
+        total = 0
         for melid in ids:
             if melid not in cache:
                 notes, beats, secs = load(db, melid)
                 got = []
+                found = 0
                 if notes and len(beats) > 1:
                     grid = Beats(beats)
                     for k in phrase_ends(notes, secs):
+                        found += 1
                         e = ending(notes, k, grid)
                         if e:
                             got.append(e)
-                cache[melid] = got
-            ends.extend(cache[melid])
+                cache[melid] = got, found
+            ends.extend(cache[melid][0])
+            total += cache[melid][1]
         s = summarise(ends)
         s["solos"] = len(ids)
+        s["no_chord"] = total - len(ends)  # phrases dropped: no chord (yet) at their last note
         results[slug] = s
     return results
 
