@@ -338,6 +338,24 @@ impl Musician for Comp {
                     }
                 }
             }
+            // Call and response: in a soloist's breath, the comp answers (two stabs, the "and"
+            // and the next beat), the more the looser it plays.
+            let own_line = fired.has(Orn::Riff) || fired.has(Orn::Soli) || fired.has(Orn::ShoutStabs);
+            if swing && own_chorus && band.hits == 0 && !own_line && ctx.soloist.profile().is_some() && r.chance(0.5 * self.p.freedom as f64)
+                && let Some((g0, g1)) = lead_gap(ctx, out)
+            {
+                clear_span(ctx, &mut self.dst, g0, g1);
+                for (k, (b, d)) in [(g0 + 0.5, 0.4), (g0 + 1.0, 0.6)].into_iter().enumerate() {
+                    if b + 0.25 > g1 || b >= bb - 1e-9 {
+                        break;
+                    }
+                    let Some(h) = ctx.harm_at(b) else { continue };
+                    let mut e = stab(ctx.swing8(b), d, ornament::voice(&h.chord, center, k));
+                    e.volume = (e.volume + 1).min(15);
+                    push(&mut self.dst, e);
+                    fired.add(Orn::CompAnswer);
+                }
+            }
             // Room for the drums' big fill at a phrase end.
             if phrase_last && band.hits == 0 && matches!(band.fill, Fill::Full | Fill::PressRoll) && !fired.has(Orn::PlaneChords) && !fired.has(Orn::Soli) {
                 clear_from(ctx, &mut self.dst, bb - 2.0);
@@ -574,4 +592,31 @@ impl Comp {
             Feel::Swing => unreachable!("only in a feel"),
         }
     }
+}
+
+/// The soloist's first breath in the bar of 1.5 beats or more (from, to: beats from the bar
+/// line), from the lead's notes already committed in `out` (a bar without one: all of it).
+fn lead_gap(ctx: &Ctx, out: &[NoteEvent]) -> Option<(f64, f64)> {
+    let bb = ctx.bb();
+    let mut spans = [(0.0f64, 0.0f64); 32];
+    let mut n = 0;
+    for e in out.iter().filter(|e| e.ch == 0 && e.bar == ctx.bar.index && matches!(e.sound, Sound::Note(_))) {
+        if n < spans.len() {
+            spans[n] = (ctx.rel(e), ctx.rel(e) + ctx.len(e));
+            n += 1;
+        }
+    }
+    if n == 0 {
+        // A bar's breath, start to end (the lead's soloing here: the caller checks).
+        return Some((0.0, bb));
+    }
+    spans[..n].sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut at = 0.0f64;
+    for &(s, e) in &spans[..n] {
+        if s - at >= 1.5 - 1e-9 {
+            return Some((at, s));
+        }
+        at = at.max(e);
+    }
+    (bb - at >= 1.5 - 1e-9).then_some((at, bb))
 }

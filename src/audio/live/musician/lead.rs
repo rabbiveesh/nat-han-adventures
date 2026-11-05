@@ -20,12 +20,12 @@
 
 use super::{Ctx, Musician, PhrasePlan, Player, Role, fold_sound, musician_common, push, tidy, work};
 use crate::audio::chart::{Chord, Quality};
-use crate::audio::live::band::{Flourish, Trade};
+use crate::audio::live::band::{Fill, Flourish, HitKind, Trade};
 use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
-use crate::audio::live::soloist::{self, Changes, Line, Played, Soloist};
+use crate::audio::live::soloist::{self, Changes, Heard, Line, Played, Soloist};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Arp;
 
@@ -849,12 +849,14 @@ impl Lead {
                 e.fx.fall = -3;
                 e.fx.fall_frames = 10;
             }
-            // A fast run (16ths, triplets) is slurred: each beat's group attacked once, the rest
-            // carried on the breath and a touch softer.
+            // A fast run (16ths, triplets) is slurred: attacked on the beat (and on the "and"),
+            // the rest carried on the breath and a touch softer.
+            // (The "and" is tongued too: two attacks a beat, so a 16th run doesn't smear.)
             if let Some((i, q)) = prev
                 && !q.last
                 && k.at - q.at <= 0.34 + 1e-6
                 && (k.at - k.at.round()).abs() > 1e-6
+                && ((k.at * 2.0).round() - k.at * 2.0).abs() > 1e-6
                 && i + 1 == self.dst.len()
             {
                 self.dst[i].end = e.start;
@@ -877,6 +879,34 @@ impl Changes for Ctx<'_> {
 
     fn harm(&self, beat: f64) -> Option<Harm> {
         if beat < self.bb() - 1e-9 { self.harm_at(beat) } else { self.plain_harm_at(beat) }
+    }
+
+    fn ahead(&self, beat: f64) -> Option<Harm> {
+        self.harm(beat)
+    }
+
+    fn form(&self) -> Option<(f64, f64)> {
+        Some((self.bar.song_bar as f64, self.shape.bars as f64))
+    }
+
+    fn bpm(&self) -> f32 {
+        self.shape.bpm
+    }
+
+    fn heard(&self) -> Heard {
+        let band = self.band;
+        let bb = self.bb();
+        Heard {
+            // (Stop-time's hits are the band's, the soloist plays through them.)
+            hits: if band.hit_kind == HitKind::Stop { 0 } else { band.hits },
+            crash: band.crash,
+            fill_from: match band.fill {
+                Fill::None => None,
+                Fill::Short => Some(bb - 1.0),
+                Fill::Full | Fill::PressRoll => Some(bb - 2.0),
+            },
+            comp: self.heard,
+        }
     }
 }
 

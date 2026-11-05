@@ -27,6 +27,7 @@
 //! start_tones = 0.20 0.14 0.12 0.13 0.21 0.07 0.11   ; its first note: R 3 5 7 9 11 13
 //! start_chromatic = 0.14    ; ...or a half step into a chord tone (`from_below` from below)
 //! start_up = 0.69           ; the line goes up from it
+//! density = 4.30 3.76 3.92 3.87 3.98   ; notes per bar at <140, 140-200, 200-260, >260 bpm, all
 //!
 //! [dynamics]
 //! arch = -1.46 1.06 0.58 -0.83 -1.31   ; dB: first note, early, middle, late, last
@@ -145,7 +146,7 @@ impl PlayerFile {
                 "name" | "lay_back" | "swing" | "legato" | "register" => "player",
                 "phrase" | "rest" | "cells" | "intervals" | "step_back" | "end_chord_tone" | "approach" | "from_below" | "enclosure" | "pentatonic"
                 | "anticipation" | "falls" | "strong_chord_tone" | "end_beats" | "end_push" | "end_tones" | "end_chromatic" | "start_place" | "start_on" | "start_and" | "start_tones"
-                | "start_chromatic" | "start_up" => "line",
+                | "start_chromatic" | "start_up" | "density" => "line",
                 "arch" | "per_octave" | "ghost" | "accent" | "long" | "scatter" => "dynamics",
                 "motif" | "sequence" | "moves" => "motifs",
                 _ => return Err(err(n, format!("unknown key `{key}` in [{sec}]"))),
@@ -218,6 +219,9 @@ impl PlayerFile {
                 }
                 "start_chromatic" => p.start_chromatic = share()?,
                 "start_up" => p.start_up = share()?,
+                "density" => {
+                    p.density = floats::<5>(v).filter(|w| w.iter().all(|x| *x > 0.0)).ok_or_else(|| bad("expected 5 notes-per-bar figures > 0 (<140, 140-200, 200-260, >260 bpm, all)"))?
+                }
                 "end_chromatic" => {
                     let [c, a] = floats::<2>(v).filter(|w| w.iter().all(|x| (0.0..=1.0).contains(x))).ok_or_else(|| bad("expected two shares: unresolved, and from above"))?;
                     (p.end_chromatic, p.end_above) = (c, a);

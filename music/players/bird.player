@@ -29,6 +29,7 @@ start_and = 0.30 0.32 0.20 0.18  ; the beat an off-beat start is in (4: a pickup
 start_tones = 0.14 0.08 0.16 0.15 0.19 0.13 0.13   ; its first note: R 3 5 7 9 11 13
 start_chromatic = 0.26      ; ...or a half step into a chord tone
 start_up = 0.69             ; the line goes up from it
+density = 12.21 6.81 5.72 5.62 7.67   ; notes per bar by tempo: <140, 140-200, 200-260, >260 bpm, all. Parker doubling up at ballad tempos
 approach = 0.22             ; a half step into a strong-beat chord tone...
 from_below = 0.40           ; ...from below this share of the time
 enclosure = 0.13            ; one above and one below into a strong-beat chord tone

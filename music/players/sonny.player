@@ -29,6 +29,7 @@ start_and = 0.29 0.24 0.29 0.18  ; the beat an off-beat start is in (4: a pickup
 start_tones = 0.11 0.10 0.24 0.16 0.16 0.12 0.11   ; its first note: R 3 5 7 9 11 13
 start_chromatic = 0.16      ; ...or a half step into a chord tone
 start_up = 0.81             ; the line goes up from it
+density = 6.09 5.68 5.38 4.85 5.60   ; notes per bar by tempo: <140, 140-200, 200-260, >260 bpm, all. Rollins
 approach = 0.18             ; a half step into a strong-beat chord tone...
 from_below = 0.51           ; ...from below this share of the time
 enclosure = 0.11            ; one above and one below into a strong-beat chord tone

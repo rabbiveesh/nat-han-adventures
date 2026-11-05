@@ -140,6 +140,8 @@ pub struct Ctx<'a> {
     pub soloist: Soloist,
     /// The tune's own bassist, if it names one (else the soloist's: [`Soloist::bassist`]).
     pub bassist: Option<&'static super::walkers::Walker>,
+    /// The comp's figure in the bar before, as the soloist heard it.
+    pub heard: super::soloist::Figure,
 }
 
 impl Ctx<'_> {

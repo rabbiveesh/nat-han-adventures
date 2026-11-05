@@ -420,6 +420,8 @@ pub struct Engine {
     /// The last bar committed: its band plan and harmony (fills crash into the next bar; a
     /// harmony switch is a summon's flourish).
     prev_band: BandPlan,
+    /// The comp's figure in the last bar committed (the soloist hears it).
+    heard: soloist::Figure,
     prev_harmony: Option<Harmony>,
     /// Who's soloing, and in which loop pass ([`EngineConfig::soloist`]).
     soloing: Option<(u64, Soloist)>,
@@ -492,6 +494,7 @@ impl Engine {
             instruments,
             bassist: song.bassist.as_deref().and_then(super::walkers::by),
             prev_band: BandPlan::default(),
+            heard: soloist::Figure::default(),
             prev_harmony: None,
             soloing: None,
         })
@@ -732,6 +735,7 @@ impl Engine {
             instruments: &self.instruments,
             soloist,
             bassist: self.bassist,
+            heard: self.heard,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
@@ -786,6 +790,13 @@ impl Engine {
             *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
         let events = self.scratch.len() as u32;
+        // What the soloist hears next bar: the comp's figure in this one.
+        self.heard = soloist::Figure::default();
+        for e in self.scratch.iter().filter(|e| e.ch == 1) {
+            if let Some(&top) = e.sound.notes().iter().max() {
+                self.heard.push(ctx.rel(e), top);
+            }
+        }
         // The arrangement on top: louder or softer, a half step up; and each player where they
         // sit against the beat (the bar's notes as written in time: [`pocket`]).
         let (sr, pocket_seed, loose, lay_back) = (shape.sample_rate, self.config.seed ^ shape.song_hash, self.config.loose, soloist.lay_back());
