@@ -80,3 +80,4 @@ output today is byte-identical to the saved report from the time. The rest were 
 - **Smaller one-off snippets from the transcription sessions** (scoring first-pass notes against the answer key, tempo and bar-phase checks): these exist only in the session logs.
 
 - `wjazzd_phrase_starts.py`: the phrase-endings script's partner for each phrase's first note (beat, pickups, arrival, degrees, first move).
+- `wjazzd_phrase_start_slots.py`: adds to it the exact start slot (1, the "and" of 1, 2 ...), the first interval's size, the leap from the last phrase's end and rests in buckets.
