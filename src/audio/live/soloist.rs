@@ -230,6 +230,17 @@ pub struct Profile {
     pub end_tones: [f32; 7],
     pub end_chromatic: f32,
     pub end_above: f32,
+    /// Where a phrase starts (all zero: wherever the rest runs out). On the beat, on the "and"
+    /// or elsewhere (a 16th or a triplet before the beat), and the beat (1-4) for an on-beat
+    /// start and for an off-beat one (the "and" of 4: a pickup into the bar). Its first note's
+    /// degree (R 3 5 7 9 11 13), or a half step off a chord tone, stepping into it; and how
+    /// often the line then goes up.
+    pub start_place: [f32; 3],
+    pub start_on: [f32; 4],
+    pub start_and: [f32; 4],
+    pub start_tones: [f32; 7],
+    pub start_chromatic: f32,
+    pub start_up: f32,
     /// Dynamics, dB against the solo's median: the phrase's arch (first note, early, middle,
     /// late, last note), louder going up (dB per octave above the register's centre), the
     /// offbeat 8th ghosted (−4 dB) this often or else accented this much, long notes (≥ 1.2
@@ -275,27 +286,60 @@ impl Profile {
     fn end_note(&self, h: &Harm, note: u8, r: &mut Rng) -> u8 {
         let chromatic = r.chance(self.end_chromatic as f64);
         let tones = if chromatic { [self.end_tones[0], self.end_tones[1], self.end_tones[2], self.end_tones[3], 0.0, 0.0, 0.0] } else { self.end_tones };
-        let iv = h.chord.quality.intervals();
-        let fam = h.chord.family();
-        let seventh = iv.get(3).copied().unwrap_or(if fam == Family::Major { 9 } else { 10 }) % 12;
-        let pc = match pick(&tones, r) {
-            0 => h.chord.root,
-            1 => (h.chord.root + iv[1]) % 12,
-            2 => (h.chord.root + iv[2]) % 12,
-            3 => (h.chord.root + seventh) % 12,
-            k => {
-                // The scale's 9th, 11th or 13th (no natural 11 over a major 3rd: the 9th).
-                let mut d = [1, 3, 5][k - 4];
-                if d == 3 && matches!(fam, Family::Major | Family::Dominant) && h.degree(3, 0) % 12 == (h.chord.root + 5) % 12 {
-                    d = 1;
-                }
-                h.degree(d, 0) % 12
-            }
-        };
-        let n = nearest_pc(pc, note as i32, note as i32 - 6, note as i32 + 6) as i32;
+        let n = tone_near(h, pick(&tones, r), note) as i32;
         let n = if chromatic { n + if r.chance(self.end_above as f64) { 1 } else { -1 } } else { n };
         n.clamp(0, 127) as u8
     }
+
+    /// Does the player place their phrase starts (`start_place` ...)?
+    pub fn starts(&self) -> bool {
+        self.start_place.iter().sum::<f32>() > 0.0
+    }
+
+    /// A start slot in the bar (beats from the bar line).
+    fn start_slot(&self, r: &mut Rng, bb: f64) -> f64 {
+        let beats = bb.round().max(1.0) as usize;
+        let (w, off) = match pick(&self.start_place, r) {
+            0 => (&self.start_on, 0.0),
+            1 => (&self.start_and, 0.5),
+            // A 16th or a triplet into the next beat, or a 16th after this one.
+            _ => (&self.start_and, [0.75, 2.0 / 3.0, 0.25][r.below(3)]),
+        };
+        (pick(w, r) % beats) as f64 + off
+    }
+
+    /// A phrase's first note near `note` over `h`, and the chord tone it steps into when it's a
+    /// half step off one.
+    fn start_note(&self, h: &Harm, note: u8, r: &mut Rng) -> (u8, Option<u8>) {
+        if r.chance(self.start_chromatic as f64) {
+            let t = tone_near(h, pick(&self.start_tones[..4], r), note);
+            let a = if r.chance(self.from_below as f64) { t.saturating_sub(1) } else { t.saturating_add(1).min(127) };
+            return (a, Some(t));
+        }
+        (tone_near(h, pick(&self.start_tones, r), note), None)
+    }
+}
+
+/// Degree `k` (R 3 5 7 9 11 13) of `h` nearest `note`.
+fn tone_near(h: &Harm, k: usize, note: u8) -> u8 {
+    let iv = h.chord.quality.intervals();
+    let fam = h.chord.family();
+    let seventh = iv.get(3).copied().unwrap_or(if fam == Family::Major { 9 } else { 10 }) % 12;
+    let pc = match k {
+        0 => h.chord.root,
+        1 => (h.chord.root + iv[1]) % 12,
+        2 => (h.chord.root + iv[2]) % 12,
+        3 => (h.chord.root + seventh) % 12,
+        k => {
+            // The scale's 9th, 11th or 13th (no natural 11 over a major 3rd: the 9th).
+            let mut d = [1, 3, 5][k - 4];
+            if d == 3 && matches!(fam, Family::Major | Family::Dominant) && h.degree(3, 0) % 12 == (h.chord.root + 5) % 12 {
+                d = 1;
+            }
+            h.degree(d, 0) % 12
+        }
+    };
+    nearest_pc(pc, note as i32, note as i32 - 6, note as i32 + 6)
 }
 
 /// What chord a lick is written over (its family).
@@ -501,6 +545,8 @@ pub struct Line {
     push: bool,
     /// Its last note is short, off the beat.
     short: bool,
+    /// The way the line heads after a phrase's first note.
+    start_dir: Option<i32>,
     started: bool,
     /// The phrase's length (beats), whether its first note is still to come, and the rest
     /// before it (for the dynamics).
@@ -566,7 +612,7 @@ impl Line {
                 b += d;
                 self.rest -= d;
                 // A breath that would end on the bar line comes in on the "and" before it.
-                if self.rest > 0.4 && (b + self.rest - bb).abs() < 1e-6 && r.chance(p.anticipation as f64 * 2.0) {
+                if !p.starts() && self.rest > 0.4 && (b + self.rest - bb).abs() < 1e-6 && r.chance(p.anticipation as f64 * 2.0) {
                     self.rest -= 0.5;
                 }
                 continue;
@@ -633,7 +679,7 @@ impl Line {
                 b += d;
                 self.phrase -= d;
                 if self.phrase <= 1e-6 {
-                    self.end_phrase(p, r);
+                    self.end_phrase(p, r, b, bb);
                     break;
                 }
             }
@@ -747,7 +793,7 @@ impl Line {
         }
     }
 
-    fn end_phrase(&mut self, p: &Profile, r: &mut Rng) {
+    fn end_phrase(&mut self, p: &Profile, r: &mut Rng, b: f64, bb: f64) {
         self.phrase = 0.0;
         self.replay = None;
         if self.now.n >= 4 {
@@ -758,6 +804,17 @@ impl Line {
         self.penta = 0;
         // Whole 8ths of rest, so the next phrase starts on the 8th grid.
         self.rest = (lognormal(r, p.rest).clamp(0.5, 10.0) * 2.0).round() / 2.0;
+        if p.starts() {
+            // The rest nearest its length that ends on a start slot.
+            let slot = p.start_slot(r, bb);
+            let first = (slot - b).rem_euclid(bb);
+            let k = ((self.rest - first) / bb).round().max(0.0);
+            let mut rest = first + k * bb;
+            if rest < 0.5 - 1e-9 {
+                rest += bb;
+            }
+            self.rest = rest;
+        }
         self.breath = self.rest;
     }
 
@@ -818,7 +875,9 @@ impl Line {
             next_in(&pentatonic(&h), cur.clamp(0, 127) as u8, self.dir) as i32
         } else {
             let size = pick(&p.intervals, r);
-            if self.leapt && r.chance(p.step_back as f64) {
+            if self.now.n == 1 && p.starts() {
+                // (The second note keeps the way the first one set.)
+            } else if self.leapt && r.chance(p.step_back as f64) {
                 self.dir = -self.dir;
             } else if size > 0 && r.chance(0.2) {
                 self.dir = -self.dir;
@@ -847,12 +906,25 @@ impl Line {
         };
         if last {
             note = end_of(self.push, p, ch, r, b, h, note.clamp(0, 127) as u8) as i32;
+        } else if self.first && self.now.n == 0 && p.starts() {
+            // The phrase's first note: a measured degree, or a half step into one.
+            let (n, into) = p.start_note(&h, note.clamp(0, 127) as u8, r);
+            // (A chromatic first note steps into its chord tone about a third of the time, as
+            // theirs do; the rest leave it.)
+            if let Some(t) = into.filter(|_| r.chance(0.3)) {
+                self.load(&[t], 0);
+            }
+            note = n as i32;
+            self.start_dir = Some(if r.chance(p.start_up as f64) { 1 } else { -1 });
         } else if strong && r.chance(p.strong_chord_tone as f64) {
             note = h.nearest_chord_tone(note.clamp(0, 127) as u8) as i32;
         }
         note = note.clamp(floor - 6, ceil + 6);
         self.leapt = (note - cur).abs() >= 5;
-        if note != cur {
+        if let Some(d) = self.start_dir.take() {
+            // After the first note, the line heads off the way the player's do.
+            self.dir = d;
+        } else if note != cur {
             self.dir = (note - cur).signum();
         }
         self.cur = Some(note);
@@ -1103,7 +1175,7 @@ mod tests {
 
     #[test]
     fn soloists_aim_their_endings_like_their_numbers() {
-        let (m, t, so, po) = (endings(prof(Soloist::Miles), 600), endings(prof(Soloist::Trane), 600), endings(prof(Soloist::Sonny), 600), endings(prof(Soloist::Pops), 600));
+        let (m, t, so, po) = (endings(prof(Soloist::Miles), 1500), endings(prof(Soloist::Trane), 1500), endings(prof(Soloist::Sonny), 1500), endings(prof(Soloist::Pops), 1500));
         eprintln!("beats 1 2 3 4 off; degrees R 3 5 7 other\nmiles {m:.2?}\ntrane {t:.2?}\nsonny {so:.2?}\npops {po:.2?}");
         // Trane on the ONE, Sonny on 2, Pops on 3 (hardly ever 2), Miles on 3.
         assert!(t.0[0] > m.0[0] + 0.05 && t.0[0] > t.0[1] + 0.1, "{t:?} {m:?}");
@@ -1114,6 +1186,54 @@ mod tests {
         for e in [&m, &t, &so, &po] {
             assert!((0.5..0.85).contains(&(e.1[..4].iter().sum::<f64>())), "chord tones on most endings: {e:?}");
         }
+    }
+
+    /// Each phrase's first note: on the beat, the "and" or elsewhere; the beat of an on-beat
+    /// start (1-4); the line going up after it, shares.
+    fn starts(p: &Profile, bars: u64) -> ([f64; 3], [f64; 4], f64) {
+        let mut line = Line::default();
+        let mut r = Rng::new(9);
+        let (mut place, mut on, mut up, mut n, mut prev_last, mut first) = ([0.0; 3], [0.0; 4], 0.0, 0.0, true, None::<u8>);
+        for bar in 0..bars {
+            let ch = Turnaround(bar);
+            let mut out = [Played::default(); 24];
+            let k = line.bar(p, &ch, &mut r, bar % 8 == 7, &mut out);
+            for e in &out[..k] {
+                if let Some(f) = first.take() {
+                    up += (e.note > f) as u8 as f64;
+                }
+                if prev_last && bar > 0 {
+                    let frac = e.at - e.at.floor();
+                    let slot = if frac < 1e-6 { 0 } else if (frac - 0.5).abs() < 1e-6 { 1 } else { 2 };
+                    place[slot] += 1.0;
+                    if slot == 0 {
+                        on[e.at.round() as usize % 4] += 1.0;
+                    }
+                    n += 1.0;
+                    first = Some(e.note);
+                }
+                prev_last = e.last;
+            }
+        }
+        let on_n: f64 = on.iter().sum();
+        (place.map(|x| x / n), on.map(|x| x / on_n), up / n)
+    }
+
+    #[test]
+    fn soloists_start_their_phrases_like_their_numbers() {
+        // (Licks and restated motifs start their own way: none here.)
+        let free = |s: Soloist| {
+            let mut p = *prof(s);
+            (p.licks.rate, p.motif) = (0.0, 0.0);
+            starts(&p, 1500)
+        };
+        let (m, b, po, so) = (free(Soloist::Miles), free(Soloist::Bird), free(Soloist::Pops), free(Soloist::Sonny));
+        eprintln!("on and other; on-beat starts on 1 2 3 4; up\nmiles {m:.2?}\nbird {b:.2?}\npops {po:.2?}\nsonny {so:.2?}");
+        // Miles comes in on 2, Pops on the ONE; Bird hardly ever on the beat.
+        assert!(m.1[1] > m.1[0] + 0.1 && po.1[0] > po.1[1] + 0.15, "{m:?} {po:?}");
+        assert!(b.0[0] < 0.3 && b.0[2] > b.0[0] && po.0[0] > b.0[0] + 0.15, "{b:?} {po:?}");
+        // Sonny heads up from his first note the most.
+        assert!(so.2 > m.2 + 0.05 && so.2 > 0.65 && m.2 > 0.55, "{so:?} {m:?}");
     }
 
     #[test]
