@@ -78,3 +78,5 @@ output today is byte-identical to the saved report from the time. The rest were 
 - **Jazz Trio Database timing** (`pocket.rs`): no script found on the laptop or in its session logs.
 - **The transcription kit** (`~/personal/durhay-transcribe`: `prep.sh`, `song_setup.sh`, `export.sh`, `scripts/`): a tool for learning tunes, not an analysis, so it stays there.
 - **Smaller one-off snippets from the transcription sessions** (scoring first-pass notes against the answer key, tempo and bar-phase checks): these exist only in the session logs.
+
+- `wjazzd_phrase_starts.py`: the phrase-endings script's partner for each phrase's first note (beat, pickups, arrival, degrees, first move).
