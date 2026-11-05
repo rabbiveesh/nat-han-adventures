@@ -138,7 +138,9 @@ impl Musician for Lead {
         if intent.answer && !replaced {
             self.answer(ctx, &tmpl, &mut fired);
         }
-        if phrase_last && (!replaced || fired.has(Orn::Solo)) {
+        // (A soloist who aims their endings has already picked the last note.)
+        let aimed = fired.has(Orn::Solo) && ctx.soloist.profile().is_some_and(|p| p.aims());
+        if phrase_last && (!replaced || fired.has(Orn::Solo)) && !aimed {
             self.resolve(ctx);
         }
         // An instrument for the phrase (or a solo / a fill on a loose night).

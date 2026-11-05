@@ -33,7 +33,7 @@ use crate::audio::accomp::Rng;
 use crate::audio::chart::Family;
 use std::sync::OnceLock;
 
-use crate::audio::live::ornament::{Harm, next_in};
+use crate::audio::live::ornament::{Harm, nearest_pc, next_in};
 use crate::audio::live::player_file::PlayerFile;
 
 /// Who the lead solos like.
@@ -219,6 +219,17 @@ pub struct Profile {
     pub swing: f32,
     /// A fall off a phrase's last note.
     pub falls: f32,
+    /// Where a phrase ends (all zero: anywhere, its last note snapped to a chord tone
+    /// `end_chord_tone` of the time). The beat its target lands on (1, 2, 3, 4, or off the
+    /// beat: a short note on an "and"), and how often an on-beat target is anticipated (its
+    /// note an 8th early, held into the beat, against the beat's chord). The target's degree:
+    /// R 3 5 7 9 11 13; and how often the last note is a half step off its chord tone instead,
+    /// left unresolved, with the share of those from above.
+    pub end_beats: [f32; 5],
+    pub end_push: f32,
+    pub end_tones: [f32; 7],
+    pub end_chromatic: f32,
+    pub end_above: f32,
     /// Dynamics, dB against the solo's median: the phrase's arch (first note, early, middle,
     /// late, last note), louder going up (dB per octave above the register's centre), the
     /// offbeat 8th ghosted (−4 dB) this often or else accented this much, long notes (≥ 1.2
@@ -237,6 +248,54 @@ pub struct Profile {
     pub moves: [(i8, f32); 5],
     /// The licks a phrase can open with.
     pub licks: Licks,
+}
+
+impl Profile {
+    /// Does the player aim their phrase endings (`end_beats`, `end_tones`)?
+    pub fn aims(&self) -> bool {
+        self.end_beats.iter().sum::<f32>() > 0.0
+    }
+
+    /// Where a phrase that could end `len` beats after bar position `b` ends instead: on a
+    /// target beat (beats from `b`, at least `min`), whether it's anticipated, and whether
+    /// it's off the beat (a short note on an "and").
+    fn aim(&self, r: &mut Rng, b: f64, bb: f64, len: f64, min: f64) -> (f64, bool, bool) {
+        let i = pick(&self.end_beats, r);
+        let beats = bb.round().max(1.0) as usize;
+        let (pos, push) = if i == 4 { ((r.below(beats)) as f64 + 0.5, false) } else { ((i % beats) as f64, r.chance(self.end_push as f64)) };
+        let at = pos - if push { 0.5 } else { 0.0 };
+        let mut t = at + ((b + len - at) / bb).round() * bb;
+        while t - b < min.max(1.0) {
+            t += bb;
+        }
+        (t - b, push, i == 4)
+    }
+
+    /// The last note of a phrase near `note` over `h`: a target degree, or a half step off it.
+    fn end_note(&self, h: &Harm, note: u8, r: &mut Rng) -> u8 {
+        let chromatic = r.chance(self.end_chromatic as f64);
+        let tones = if chromatic { [self.end_tones[0], self.end_tones[1], self.end_tones[2], self.end_tones[3], 0.0, 0.0, 0.0] } else { self.end_tones };
+        let iv = h.chord.quality.intervals();
+        let fam = h.chord.family();
+        let seventh = iv.get(3).copied().unwrap_or(if fam == Family::Major { 9 } else { 10 }) % 12;
+        let pc = match pick(&tones, r) {
+            0 => h.chord.root,
+            1 => (h.chord.root + iv[1]) % 12,
+            2 => (h.chord.root + iv[2]) % 12,
+            3 => (h.chord.root + seventh) % 12,
+            k => {
+                // The scale's 9th, 11th or 13th (no natural 11 over a major 3rd: the 9th).
+                let mut d = [1, 3, 5][k - 4];
+                if d == 3 && matches!(fam, Family::Major | Family::Dominant) && h.degree(3, 0) % 12 == (h.chord.root + 5) % 12 {
+                    d = 1;
+                }
+                h.degree(d, 0) % 12
+            }
+        };
+        let n = nearest_pc(pc, note as i32, note as i32 - 6, note as i32 + 6) as i32;
+        let n = if chromatic { n + if r.chance(self.end_above as f64) { 1 } else { -1 } } else { n };
+        n.clamp(0, 127) as u8
+    }
 }
 
 /// What chord a lick is written over (its family).
@@ -438,6 +497,10 @@ pub struct Line {
     leapt: bool,
     /// A chromatic passing note must carry on by half step in its direction.
     passing: bool,
+    /// The phrase's last note is anticipated: an 8th early, against the next beat's chord.
+    push: bool,
+    /// Its last note is short, off the beat.
+    short: bool,
     started: bool,
     /// The phrase's length (beats), whether its first note is still to come, and the rest
     /// before it (for the dynamics).
@@ -482,13 +545,21 @@ impl Line {
             self.phrase = 0.0;
         }
         if land && self.phrase > bb && r.chance(0.6) {
-            self.phrase = (bb - 0.5).max(1.0);
+            if p.aims() {
+                // On a target beat of this bar (beat 1: the next bar's ONE).
+                let (t, push, short) = p.aim(r, 0.0, bb, bb - 1.0, 1.0);
+                if t + 0.01 < self.phrase {
+                    (self.phrase, self.push, self.short) = (t + 0.01, push, short);
+                }
+            } else {
+                self.phrase = (bb - 0.5).max(1.0);
+            }
         }
         let mut b = 0.0;
         while b < bb - 1e-9 && n < out.len() {
             if self.phrase <= 1e-9 {
                 if self.rest <= 1e-9 {
-                    self.start_phrase(p, r, ch.harm(b));
+                    self.start_phrase(p, r, ch.harm(b), b, bb);
                     continue;
                 }
                 let d = self.rest.min(bb - b);
@@ -514,7 +585,8 @@ impl Line {
                 (d, 1)
             } else {
                 let mut cell = pick_cell(p, r);
-                if b + cell.beats() > bb + 1e-9 {
+                // (No cell across an aimed ending: its last note starts on the target.)
+                if b + cell.beats() > bb + 1e-9 || p.aims() && cell.beats() > self.phrase - 0.01 + 1e-6 && self.phrase > 0.5 {
                     cell = Cell::Eighths;
                 }
                 if cell == Cell::Sixteenths && self.penta == 0 && r.chance(p.pentatonic as f64 * 1.5) {
@@ -552,7 +624,8 @@ impl Line {
                         self.pitches[self.now.n] = note;
                     }
                     self.now.push(before.filter(|_| self.now.n > 0), note, d);
-                    let hold = if last { (d + self.rest_hint(p).min(1.0)).min(bb - b) } else { d };
+                    // The last note rings into the rest (an anticipation over the bar line too).
+                    let hold = if last && !self.short { (d + self.rest_hint(p).min(1.0)).min(bb - b + if self.push { 1.0 } else { 0.0 }) } else { d };
                     let db = self.loudness(p, r, b, d, note, last);
                     out[n] = Played { at: b, len: (hold * p.legato as f64).max(0.05), note, last, db };
                     n += 1;
@@ -613,8 +686,21 @@ impl Line {
         p.rest.0 * 0.5
     }
 
-    fn start_phrase(&mut self, p: &Profile, r: &mut Rng, h: Option<Harm>) {
-        self.phrase = lognormal(r, p.phrase).clamp(1.0, 24.0);
+    fn start_phrase(&mut self, p: &Profile, r: &mut Rng, h: Option<Harm>, b: f64, bb: f64) {
+        let len = lognormal(r, p.phrase).clamp(1.0, 24.0);
+        self.phrase = len;
+        (self.push, self.short) = (false, false);
+        self.begin(p, r, h);
+        if p.aims() {
+            // Its end moved to the nearest target beat (no shorter than a restatement needs).
+            let min = if self.phrase > len { self.phrase } else { 1.0 };
+            let (t, push, short) = p.aim(r, b, bb, self.phrase, min);
+            (self.phrase, self.push, self.short) = (t + 0.01, push, short);
+            self.total = self.phrase;
+        }
+    }
+
+    fn begin(&mut self, p: &Profile, r: &mut Rng, h: Option<Harm>) {
         self.total = self.phrase;
         self.first = true;
         self.queued = 0;
@@ -678,6 +764,7 @@ impl Line {
     /// The next note (none when there's no harmony to play on).
     fn next(&mut self, p: &Profile, ch: &impl Changes, r: &mut Rng, b: f64, last: bool) -> Option<u8> {
         let h = ch.harm(b)?;
+        let push = self.push;
         let (centre, floor, ceil) = p.register;
         let cur = self.cur.unwrap_or(centre);
         if self.skip > 0 {
@@ -700,7 +787,7 @@ impl Line {
             } else {
                 let n = want.clamp(floor - 6, ceil + 6).clamp(0, 127) as u8;
                 let n = if h.scale.contains(n % 12) || !strong && r.chance(0.5) { n } else { h.scale.snap(n) };
-                if last && r.chance(p.end_chord_tone as f64) { h.nearest_chord_tone(n) } else { n }
+                if last { end_of(push, p, ch, r, b, h, n) } else { n }
             };
             rp.i += 1;
             if rp.i >= rp.until.min(rp.src.n) {
@@ -758,7 +845,9 @@ impl Line {
                 _ => h.scale.snap(want.clamp(0, 127) as u8) as i32,
             }
         };
-        if (strong && r.chance(p.strong_chord_tone as f64)) || (last && r.chance(p.end_chord_tone as f64)) {
+        if last {
+            note = end_of(self.push, p, ch, r, b, h, note.clamp(0, 127) as u8) as i32;
+        } else if strong && r.chance(p.strong_chord_tone as f64) {
             note = h.nearest_chord_tone(note.clamp(0, 127) as u8) as i32;
         }
         note = note.clamp(floor - 6, ceil + 6);
@@ -768,6 +857,19 @@ impl Line {
         }
         self.cur = Some(note);
         Some(note as u8)
+    }
+}
+
+/// A phrase's last note: aimed (against the next beat's chord when anticipated), or a chord
+/// tone `end_chord_tone` of the time.
+fn end_of(push: bool, p: &Profile, ch: &impl Changes, r: &mut Rng, b: f64, h: Harm, note: u8) -> u8 {
+    if p.aims() {
+        let h = if push { ch.harm(b + 0.5).unwrap_or(h) } else { h };
+        p.end_note(&h, note, r)
+    } else if r.chance(p.end_chord_tone as f64) {
+        h.nearest_chord_tone(note)
+    } else {
+        note
     }
 }
 
@@ -969,6 +1071,49 @@ mod tests {
             }
         }
         assert!(found > 40, "{found}");
+    }
+
+    /// Each phrase's target: its beat (1-4; an "and" held into the next beat counts as that
+    /// beat, a short one is off) and its degree against the chord there (0 R, 1 3, 2 5, 3 7,
+    /// 4 another note), shares.
+    fn endings(p: &Profile, bars: u64) -> ([f64; 5], [f64; 5]) {
+        let mut line = Line::default();
+        let mut r = Rng::new(5);
+        let (mut beats, mut degs, mut n) = ([0.0; 5], [0.0; 5], 0.0);
+        for bar in 0..bars {
+            let ch = Turnaround(bar);
+            let mut out = [Played::default(); 24];
+            let k = line.bar(p, &ch, &mut r, bar % 8 == 7, &mut out);
+            for e in out[..k].iter().filter(|e| e.last) {
+                let and = (e.at - e.at.floor() - 0.5).abs() < 1e-6;
+                let held = and && e.len / p.legato as f64 > 0.5 + 1e-6;
+                let on = (e.at - e.at.round()).abs() < 1e-6;
+                let (slot, t) = if on { (e.at.round() as usize % 4, e.at) } else if held { (e.at.ceil() as usize % 4, e.at.ceil()) } else { (4, e.at) };
+                beats[slot] += 1.0;
+                // The chord at the target (the next bar's, past the bar line).
+                let h = Turnaround(bar + (t / 4.0).floor() as u64).harm(t % 4.0).unwrap();
+                let i = (e.note as i32 - h.chord.root as i32).rem_euclid(12) as u8;
+                let iv = h.chord.quality.intervals();
+                degs[iv.iter().take(4).position(|x| x % 12 == i).unwrap_or(4)] += 1.0;
+                n += 1.0;
+            }
+        }
+        (beats.map(|x| x / n), degs.map(|x| x / n))
+    }
+
+    #[test]
+    fn soloists_aim_their_endings_like_their_numbers() {
+        let (m, t, so, po) = (endings(prof(Soloist::Miles), 600), endings(prof(Soloist::Trane), 600), endings(prof(Soloist::Sonny), 600), endings(prof(Soloist::Pops), 600));
+        eprintln!("beats 1 2 3 4 off; degrees R 3 5 7 other\nmiles {m:.2?}\ntrane {t:.2?}\nsonny {so:.2?}\npops {po:.2?}");
+        // Trane on the ONE, Sonny on 2, Pops on 3 (hardly ever 2), Miles on 3.
+        assert!(t.0[0] > m.0[0] + 0.05 && t.0[0] > t.0[1] + 0.1, "{t:?} {m:?}");
+        assert!(so.0[1] > so.0[2] && so.0[1] > t.0[1] + 0.08, "{so:?}");
+        assert!(po.0[2] > 2.0 * po.0[1] && m.0[2] > m.0[1], "{po:?} {m:?}");
+        // Miles on the root most, Pops on the 3rd more than the root, Trane on the 5th.
+        assert!(m.1[0] > m.1[1] && po.1[1] > po.1[0] && t.1[2] > t.1[1], "{m:?} {po:?} {t:?}");
+        for e in [&m, &t, &so, &po] {
+            assert!((0.5..0.85).contains(&(e.1[..4].iter().sum::<f64>())), "chord tones on most endings: {e:?}");
+        }
     }
 
     #[test]

@@ -177,6 +177,10 @@ fn the_lead_resolves_phrase_ends() {
                 if p.last_bar() != b.c.slot.index || b.c.orns[0].is_empty() || b.c.orns[0].has(Orn::LayOut) {
                     continue;
                 }
+                // A measured soloist ends where their numbers say: tensions, chromatic notes.
+                if b.c.orns[0].has(Orn::Solo) && b.c.soloist.profile().is_some_and(|p| p.aims()) {
+                    continue;
+                }
                 let Some(last) = b.ch(0).filter(|e| matches!(e.sound, Sound::Note(_))).last() else { continue };
                 let Sound::Note(n) = last.sound else { unreachable!() };
                 let harm: Harm = match arr.harm_at(last.beat) {
