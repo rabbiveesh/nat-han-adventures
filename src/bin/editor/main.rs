@@ -16,6 +16,9 @@
 //! (force the chorus), `--soloist band|miles|trane|bird|sonny|wayne|pops|funk|latin` (one soloist all
 //! through), `--on-grid` (no pocket, ducking or drift), `--auto <chaos 0..1>`,
 //! `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
+//! `--capture <dir>` (a video's frames: time steps 1/`--fps` (30) a frame, every frame saved as
+//! `<dir>/f00000.png`, the sound in lockstep into `<dir>/audio.wav`, `--secs` (30) of it, then
+//! quit; with `NATHAN_AUDIO=headless`),
 //! `--check` (no window: load and reformat every song, then quit). `NATHAN_AUDIO=headless`
 //! renders without a sound card.
 
@@ -59,12 +62,15 @@ struct Args {
     screenshot: Option<PathBuf>,
     wait: f32,
     check: bool,
+    capture: Option<PathBuf>,
+    fps: f32,
+    secs: f32,
     /// `--replace FIND=>WITH`: edit the text at the start (demos, screenshots of errors).
     replace: Vec<(String, String)>,
 }
 
 fn args() -> Result<Args, String> {
-    let mut a = Args { size: (1440, 900), wait: 4.0, ..Args::default() };
+    let mut a = Args { size: (1440, 900), wait: 4.0, fps: 30.0, secs: 30.0, ..Args::default() };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         let mut val = || it.next().ok_or(format!("{arg} needs a value"));
@@ -90,6 +96,9 @@ fn args() -> Result<Args, String> {
             "--screenshot" => a.screenshot = Some(PathBuf::from(val()?)),
             "--wait" => a.wait = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--check" => a.check = true,
+            "--capture" => a.capture = Some(PathBuf::from(val()?)),
+            "--fps" => a.fps = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
+            "--secs" => a.secs = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--replace" => {
                 let v = val()?;
                 let (f, w) = v.split_once("=>").ok_or("--replace FIND=>WITH")?;
@@ -141,6 +150,17 @@ fn main() {
         return;
     }
     let mut ed = Editor::new(repo_root(), a.song.as_deref(), AudioOutput::from_env());
+    if let Some(dir) = &a.capture {
+        if let Err(e) = std::fs::create_dir_all(dir) {
+            eprintln!("editor: {}: {e}", dir.display());
+            std::process::exit(2);
+        }
+        if !ed.player.headless() {
+            eprintln!("editor: --capture needs NATHAN_AUDIO=headless");
+            std::process::exit(2);
+        }
+        ed.player.tape = Some(Vec::new());
+    }
     if let Some(v) = a.view {
         ed.view = v;
     }
@@ -183,6 +203,7 @@ fn main() {
         }))
         .add_plugins(EguiPlugin::default())
         .insert_non_send(ed)
+        .insert_resource(Clock { fps: a.capture.as_ref().map(|_| a.fps as f64), frame: 0 })
         .insert_resource(a)
         .add_systems(Startup, |mut commands: Commands| {
             commands.spawn(Camera2d);
@@ -192,7 +213,23 @@ fn main() {
         .run();
 }
 
-fn ui(mut contexts: EguiContexts, mut ed: NonSendMut<Editor>, time: Res<Time<Real>>, mut styled: Local<bool>) -> Result {
+/// The editor's time: real, or (`--capture`) a frame's worth each frame.
+#[derive(Resource)]
+struct Clock {
+    fps: Option<f64>,
+    frame: u64,
+}
+
+impl Clock {
+    fn now(&self, time: &Time<Real>) -> (f64, f64) {
+        match self.fps {
+            Some(fps) => (self.frame as f64 / fps, 1.0 / fps),
+            None => (time.elapsed_secs_f64(), time.delta_secs_f64()),
+        }
+    }
+}
+
+fn ui(mut contexts: EguiContexts, mut ed: NonSendMut<Editor>, time: Res<Time<Real>>, clock: Res<Clock>, mut styled: Local<bool>) -> Result {
     let ctx = contexts.ctx_mut()?;
     if !*styled {
         // New fonts bind from the next pass.
@@ -200,7 +237,8 @@ fn ui(mut contexts: EguiContexts, mut ed: NonSendMut<Editor>, time: Res<Time<Rea
         *styled = true;
         return Ok(());
     }
-    ed.update(time.elapsed_secs_f64(), time.delta_secs_f64());
+    let (now, dt) = clock.now(&time);
+    ed.update(now, dt);
     views::frame(&mut ed, ctx);
     Ok(())
 }
@@ -210,11 +248,29 @@ fn script(
     mut commands: Commands,
     time: Res<Time<Real>>,
     args: Res<Args>,
+    mut clock: ResMut<Clock>,
     mut ed: NonSendMut<Editor>,
     mut stage: Local<u8>,
     mut exit: MessageWriter<AppExit>,
 ) {
-    let t = time.elapsed_secs();
+    let t = clock.now(&time).0 as f32;
+    if let Some(dir) = &args.capture {
+        // Every frame saved (from the second, when the fonts are in), then the sound.
+        if clock.frame >= 2 {
+            let path = dir.join(format!("f{:05}.png", clock.frame - 2));
+            commands.spawn(Screenshot::primary_window()).observe(save_to_disk(path));
+        }
+        clock.frame += 1;
+        if t > args.secs + 0.2 {
+            let tape = ed.player.tape.take().unwrap_or_default();
+            // (The frames start at frame 2: the sound too.)
+            let skip = (2.0 / args.fps * 48_000.0) as usize;
+            if let Err(e) = write_wav(&dir.join("audio.wav"), &tape[skip.min(tape.len())..]) {
+                eprintln!("editor: audio.wav: {e}");
+            }
+            exit.write(AppExit::Success);
+        }
+    }
     if *stage == 0 && t > 0.3 {
         *stage = 1;
         if args.play {
@@ -239,4 +295,28 @@ fn script(
             exit.write(AppExit::Success);
         }
     }
+}
+
+/// 48 kHz 16-bit stereo.
+fn write_wav(path: &std::path::Path, frames: &[[f32; 2]]) -> std::io::Result<()> {
+    let data = (frames.len() * 4) as u32;
+    let mut out = Vec::with_capacity(44 + data as usize);
+    out.extend_from_slice(b"RIFF");
+    out.extend_from_slice(&(36 + data).to_le_bytes());
+    out.extend_from_slice(b"WAVEfmt ");
+    out.extend_from_slice(&16u32.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&2u16.to_le_bytes());
+    out.extend_from_slice(&48_000u32.to_le_bytes());
+    out.extend_from_slice(&(48_000u32 * 4).to_le_bytes());
+    out.extend_from_slice(&4u16.to_le_bytes());
+    out.extend_from_slice(&16u16.to_le_bytes());
+    out.extend_from_slice(b"data");
+    out.extend_from_slice(&data.to_le_bytes());
+    for f in frames {
+        for s in f {
+            out.extend_from_slice(&((s.clamp(-1.0, 1.0) * 32767.0) as i16).to_le_bytes());
+        }
+    }
+    std::fs::write(path, out)
 }

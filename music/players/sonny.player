@@ -29,7 +29,7 @@ start_and = 0.29 0.24 0.29 0.18  ; the beat an off-beat start is in (4: a pickup
 start_tones = 0.11 0.10 0.24 0.16 0.16 0.12 0.11   ; its first note: R 3 5 7 9 11 13
 start_chromatic = 0.16      ; ...or a half step into a chord tone
 start_up = 0.81             ; the line goes up from it
-density = 6.09 5.68 5.38 4.85 5.60   ; notes per bar by tempo: <140, 140-200, 200-260, >260 bpm, all. Rollins
+sixteenths = 0.492 0.124 0.065 0.043   ; 16th-or-faster notes by tempo: <140, 140-200, 200-260, >260 bpm. Rollins
 approach = 0.18             ; a half step into a strong-beat chord tone...
 from_below = 0.51           ; ...from below this share of the time
 enclosure = 0.11            ; one above and one below into a strong-beat chord tone
@@ -48,8 +48,9 @@ scatter = 3.2               ; each note's own spread (dB, a standard deviation)
 
 [motifs]
 ; A motif developer: cells shared phrase to phrase at 1.9x chance, short-phrase relations 17% (1-5% by chance).
-motif = 0.25                ; a phrase restates the last one's head, then goes its own way
+motif = 0.05               ; a phrase restates the last one's head, then goes its own way
 sequence = 0.05             ; a 3-4 note cell restated straight after (a sequence)
+carry = 0.22               ; a 4-5 note cell (a turn or a leap in it) carried into the next phrase, new rhythm
 moves = 0:4.8 -2:1.4 -3:1.0 -1:0.8 5:0.6 ; the sequences' transpositions (semitones:weight)
 
 [licks]

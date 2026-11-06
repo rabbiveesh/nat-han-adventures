@@ -251,6 +251,8 @@ pub struct CommittedBar {
     pub band: BandPlan,
     /// Who the lead solos like in it (when it solos).
     pub soloist: Soloist,
+    /// The soloist's thinking in it (when it solos like a player).
+    pub thought: Option<soloist::Thought>,
 }
 
 /// One musician, for UIs.
@@ -829,7 +831,8 @@ impl Engine {
         if self.committed.len() == self.committed.capacity() {
             self.committed.pop_front();
         }
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist });
+        let thought = self.musicians[0].thought();
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;

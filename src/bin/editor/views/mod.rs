@@ -1,4 +1,5 @@
-//! Drawing: the panels of the approved layout, and the three views of the song.
+//! Drawing: the panels of the approved layout, the three views of the song, the instruments
+//! and the band's thinking.
 
 pub mod bottom;
 pub mod feed;
@@ -6,6 +7,7 @@ pub mod instruments;
 pub mod left;
 pub mod piano;
 pub mod text;
+pub mod thinking;
 pub mod top;
 pub mod tracker;
 
@@ -37,6 +39,7 @@ pub fn frame(ed: &mut Editor, ctx: &egui::Context) {
             View::Piano => piano::ui(ed, ui),
             View::Text => text::ui(ed, ui),
             View::Instruments => instruments::ui(ed, ui),
+            View::Thinking => thinking::ui(ed, ui),
         }
     });
 }

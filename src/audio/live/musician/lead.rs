@@ -49,11 +49,13 @@ pub struct Lead {
     /// The instrument a soloist keeps all through their solo (a persona doesn't switch), and
     /// whose it is: the next soloist steps up on another.
     persona_inst: Option<(Soloist, u8)>,
+    /// The soloist's thinking in the bar last committed (none when it didn't solo as a player).
+    thought: Option<soloist::Thought>,
 }
 
 impl Lead {
     pub(super) fn new(p: Player) -> Self {
-        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default(), persona_inst: None }
+        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default(), persona_inst: None, thought: None }
     }
 }
 
@@ -88,6 +90,7 @@ impl Musician for Lead {
         let mut r = ctx.rng(Role::Lead, 3);
         self.dst.clear();
         let mut replaced = true;
+        self.thought = None;
         let f = self.p.freedom;
         let step = band.ending.map(|e| e.step());
         let solos =
@@ -187,6 +190,10 @@ impl Musician for Lead {
         self.src.extend(self.dst.iter().copied());
         self.remember(ctx);
         fired
+    }
+
+    fn thought(&self) -> Option<soloist::Thought> {
+        self.thought
     }
 
     fn on_input(&mut self, input: &Input, next_bar: u64) {
@@ -832,6 +839,7 @@ impl Lead {
     fn improvise(&mut self, ctx: &Ctx, p: &soloist::Profile, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
         let mut notes = [Played::default(); 24];
         let n = self.line.bar(p, ctx, r, phrase_last, &mut notes);
+        self.thought = Some(self.line.thought());
         // Their swing on the offbeat 8ths (straight in a feel), the band's own if it's straighter.
         let s = if ctx.feel() == Feel::Swing && ctx.arrangement.swing > 0.0 {
             (((p.swing - 1.0) / (p.swing + 1.0)) as f64).min(ctx.arrangement.swing as f64)
