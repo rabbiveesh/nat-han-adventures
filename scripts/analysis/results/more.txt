@@ -1,0 +1,59 @@
+More habits in the Weimar Jazz Database v2.1, by player (%, each with its chance baseline where one
+applies; strong: on beats 1 and 3; phrase lengths in beats are medians).
+
+miles: 10 solos
+  blue notes over major/dom (n=2066): b3 4.7, b5 3.5 (chance 8.3 each); a b3 up to the 3rd next 28.9
+  a strong-beat tension or chromatic note stepping onto a chord tone 32.2 (n=242); after a chord tone 11.6
+  phrases with a dotted-quarter hemiola 0.4; an 8th line repeating its contour every 3 notes 1.3 (every 4: 0.9) (n=231)
+  against the bass on 1 and 3 (n=568)  unison/8ve 12.3  3rd/6th 26.4  5th/4th 23.6  2nd/7th 32.2  tritone 5.5   (chance 7.9 31.7 19 33.5 7.9)
+  long notes (n=304): chord tone 57.9, tension 29.3, chromatic 12.8  (all notes 50.9/34.6/14.5)
+  phrase length by tempo   <140: 9 notes, 6.6 beats, rest 3.3 (n=77)  140-200: 7 notes, 5.2 beats, rest 3.2 (n=63)  200-260: 10 notes, 7.7 beats, rest 2.5 (n=39)  >260: 12 notes, 9.8 beats, rest 4.5 (n=52)
+
+trane: 7 solos
+  blue notes over major/dom (n=1454): b3 2.5, b5 2.5 (chance 8.3 each); a b3 up to the 3rd next 27
+  a strong-beat tension or chromatic note stepping onto a chord tone 30.5 (n=961); after a chord tone 4.2
+  phrases with a dotted-quarter hemiola 0; an 8th line repeating its contour every 3 notes 3.2 (every 4: 4.1) (n=712)
+  against the bass on 1 and 3 (n=1099)  unison/8ve 9.2  3rd/6th 30.7  5th/4th 20.9  2nd/7th 32.1  tritone 7.1   (chance 9.6 32.3 20.3 31.2 6.6)
+  long notes (n=686): chord tone 53.8, tension 36, chromatic 10.2  (all notes 49.4/29.8/20.9)
+  phrase length by tempo   <140: 13.5 notes, 8.8 beats, rest 1.6 (n=24)  140-200: 12 notes, 6.2 beats, rest 1.3 (n=193)  200-260: - notes, - beats, rest - (n=0)  >260: 9 notes, 5.4 beats, rest 2.3 (n=495)
+
+bird: 16 solos
+  blue notes over major/dom (n=3675): b3 4, b5 3 (chance 8.3 each); a b3 up to the 3rd next 32.2
+  a strong-beat tension or chromatic note stepping onto a chord tone 39.6 (n=356); after a chord tone 9.7
+  phrases with a dotted-quarter hemiola 0; an 8th line repeating its contour every 3 notes 3.4 (every 4: 3.1) (n=292)
+  against the bass on 1 and 3 (n=671)  unison/8ve 9.1  3rd/6th 33.5  5th/4th 19.7  2nd/7th 30.4  tritone 7.3   (chance 11.6 32.2 17.4 32.6 6.1)
+  long notes (n=186): chord tone 59.7, tension 32.3, chromatic 8.1  (all notes 52.5/29.7/17.8)
+  phrase length by tempo   <140: 15 notes, 4.2 beats, rest 1.1 (n=129)  140-200: 18.5 notes, 8.7 beats, rest 2.2 (n=56)  200-260: 14.5 notes, 7.9 beats, rest 2.1 (n=84)  >260: 22 notes, 11.9 beats, rest 3 (n=23)
+
+sonny: 7 solos
+  blue notes over major/dom (n=2111): b3 4.3, b5 5.1 (chance 8.3 each); a b3 up to the 3rd next 26.4
+  a strong-beat tension or chromatic note stepping onto a chord tone 33 (n=206); after a chord tone 7.3
+  phrases with a dotted-quarter hemiola 0; an 8th line repeating its contour every 3 notes 2.4 (every 4: 1.8) (n=164)
+  against the bass on 1 and 3 (n=428)  unison/8ve 12.1  3rd/6th 29.4  5th/4th 20.1  2nd/7th 30.6  tritone 7.7   (chance 10.3 33.9 15.7 34.1 6.1)
+  long notes (n=98): chord tone 55.1, tension 37.8, chromatic 7.1  (all notes 51.4/34.3/14.3)
+  phrase length by tempo   <140: 9 notes, 4.7 beats, rest 2.9 (n=77)  140-200: 10 notes, 5.5 beats, rest 2.8 (n=38)  200-260: 14 notes, 9 beats, rest 2.8 (n=31)  >260: 20.5 notes, 11.9 beats, rest 3.9 (n=18)
+
+wayne: 7 solos
+  blue notes over major/dom (n=1275): b3 4.9, b5 8.5 (chance 8.3 each); a b3 up to the 3rd next 17.5
+  a strong-beat tension or chromatic note stepping onto a chord tone 35.5 (n=183); after a chord tone 13.9
+  phrases with a dotted-quarter hemiola 0.7; an 8th line repeating its contour every 3 notes 3.4 (every 4: 4.8) (n=145)
+  against the bass on 1 and 3 (n=322)  unison/8ve 10.9  3rd/6th 32  5th/4th 22  2nd/7th 28.3  tritone 6.8   (chance 9 30.1 19.9 32.6 8.4)
+  long notes (n=110): chord tone 52.7, tension 28.2, chromatic 19.1  (all notes 46.3/35.5/18.2)
+  phrase length by tempo   <140: 10.5 notes, 6.3 beats, rest 1.6 (n=42)  140-200: 15 notes, 7.4 beats, rest 2.9 (n=44)  200-260: - notes, - beats, rest - (n=0)  >260: 13 notes, 9.7 beats, rest 2.6 (n=59)
+
+pops: 8 solos
+  blue notes over major/dom (n=1048): b3 4.2, b5 2.5 (chance 8.3 each); a b3 up to the 3rd next 61.4
+  a strong-beat tension or chromatic note stepping onto a chord tone 37.4 (n=107); after a chord tone 3.4
+  phrases with a dotted-quarter hemiola 0; an 8th line repeating its contour every 3 notes 1.1 (every 4: 0) (n=89)
+  against the bass on 1 and 3 (n=258)  unison/8ve 11.6  3rd/6th 32.2  5th/4th 15.5  2nd/7th 35.3  tritone 5.4   (chance 9.7 32.6 14.7 36 7)
+  long notes (n=49): chord tone 49, tension 38.8, chromatic 12.2  (all notes 54.7/30.3/14.9)
+  phrase length by tempo   <140: 11.5 notes, 5.8 beats, rest 1.6 (n=26)  140-200: 11 notes, 6.7 beats, rest 1.3 (n=63)  200-260: - notes, - beats, rest - (n=0)  >260: - notes, - beats, rest - (n=0)
+
+all: 402 solos
+  blue notes over major/dom (n=110109): b3 5.2, b5 4.5 (chance 8.3 each); a b3 up to the 3rd next 26.3
+  a strong-beat tension or chromatic note stepping onto a chord tone 34.1 (n=13829); after a chord tone 10
+  phrases with a dotted-quarter hemiola 0.1; an 8th line repeating its contour every 3 notes 4.1 (every 4: 3.8) (n=8933)
+  against the bass on 1 and 3 (n=26510)  unison/8ve 11.6  3rd/6th 32.6  5th/4th 19  2nd/7th 29.9  tritone 6.9   (chance 10.2 33.6 17.3 31.4 7.5)
+  long notes (n=8214): chord tone 57.4, tension 29.6, chromatic 13  (all notes 49.2/32.4/18.4)
+  phrase length by tempo   <140: 14 notes, 5.5 beats, rest 1.3 (n=2985)  140-200: 14 notes, 7.7 beats, rest 1.9 (n=2031)  200-260: 17 notes, 11 beats, rest 2.4 (n=1891)  >260: 15 notes, 10.3 beats, rest 2.6 (n=2026)
+
