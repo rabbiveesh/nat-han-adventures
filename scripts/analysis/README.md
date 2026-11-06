@@ -81,3 +81,4 @@ output today is byte-identical to the saved report from the time. The rest were 
 
 - `wjazzd_phrase_starts.py`: the phrase-endings script's partner for each phrase's first note (beat, pickups, arrival, degrees, first move).
 - `wjazzd_phrase_start_slots.py`: adds to it the exact start slot (1, the "and" of 1, 2 ...), the first interval's size, the leap from the last phrase's end and rests in buckets.
+- `wjazzd_strategies.py`: how a solo is planned, to check the soloist's choices: the arc over each chorus and solo, restated ideas and their transposition, the notes on chord changes and phrase contours, 16ths and notes per bar by tempo, and phrase starts after 8-bar lines. Results in `results/strategies.txt`.

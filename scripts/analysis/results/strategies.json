@@ -1,0 +1,1276 @@
+{
+ "miles": {
+  "solos": 10,
+  "arc_chorus": {
+   "density": [
+    0.97,
+    0.89,
+    0.97,
+    1.07,
+    1.09
+   ],
+   "pitch": [
+    0.9,
+    0.05,
+    -0.73,
+    -0.2,
+    -0.02
+   ],
+   "phrase": [
+    0.98,
+    0.88,
+    1.0,
+    1.22,
+    0.92
+   ],
+   "rest": [
+    1.12,
+    1.03,
+    0.85,
+    1.07,
+    0.92
+   ],
+   "fast": [
+    1.03,
+    0.89,
+    0.9,
+    0.93,
+    1.25
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    0.96,
+    1.04,
+    1.03,
+    0.94,
+    1.04
+   ],
+   "pitch": [
+    -0.36,
+    -0.64,
+    1.04,
+    -0.42,
+    0.39
+   ],
+   "phrase": [
+    0.91,
+    1.16,
+    0.92,
+    0.9,
+    1.12
+   ],
+   "rest": [
+    0.99,
+    1.06,
+    1.07,
+    0.96,
+    0.92
+   ],
+   "fast": [
+    1.24,
+    0.87,
+    1.14,
+    1.02,
+    0.74
+   ]
+  },
+  "shapes": {
+   "builds": 20.0,
+   "arch": 60.0,
+   "front-loaded": 20.0,
+   "flat": 0.0
+  },
+  "shapes_n": 10,
+  "top_in_solo": {
+   "median": 0.6,
+   "last_quarter": 30.0,
+   "quarters": [
+    20.0,
+    20.0,
+    30.0,
+    30.0
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.3,
+   "last_quarter": 20.0,
+   "quarters": [
+    30.0,
+    30.0,
+    20.0,
+    20.0
+   ]
+  },
+  "first_vs_later": {
+   "density": 0.94,
+   "pitch": -0.41,
+   "phrase": 0.88,
+   "fast": 1.04
+  },
+  "first_vs_later_n": 10,
+  "ideas": {
+   "pairs": 197,
+   "restated": 5.1,
+   "chance": 6.6,
+   "again_after_restated": 11.1,
+   "again_after_new": 5.1,
+   "chains": {
+    "1": 8,
+    "2": 1,
+    "3": 0,
+    "4+": 0
+   },
+   "head_only": 60.0,
+   "all": 40.0,
+   "notes_median": 5.5,
+   "new_chord": 8,
+   "moved_with_root": 12.5,
+   "at_0_new_chord": 25.0,
+   "other_new_chord": 62.5,
+   "same_chord": 2,
+   "at_0_same_chord": 0.0
+  },
+  "skeleton": {
+   "n": 445,
+   "degrees": {
+    "3": 9.7,
+    "7": 13.7,
+    "5": 15.3,
+    "R": 15.7,
+    "9": 19.8,
+    "other": 25.8
+   },
+   "move_median": 3.0,
+   "move_2_or_less": 43.9,
+   "contours": {
+    "arch": 39.8,
+    "up": 13.4,
+    "down": 35.1,
+    "flat": 3.0,
+    "other": 8.7
+   },
+   "contours_n": 231
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 18.4,
+    "notes_per_bar": 4.2,
+    "gaps": 866
+   },
+   "140-200": {
+    "fast": 12.2,
+    "notes_per_bar": 3.7,
+    "gaps": 558
+   },
+   "200-260": {
+    "fast": 3.9,
+    "notes_per_bar": 3.92,
+    "gaps": 389
+   },
+   ">260": {
+    "fast": 2.0,
+    "notes_per_bar": 3.75,
+    "gaps": 801
+   }
+  },
+  "entries": {
+   "after_8bar_line": 9.3,
+   "chance": 4.0,
+   "after_any_bar_line": 36.8,
+   "phrases": 258
+  }
+ },
+ "trane": {
+  "solos": 7,
+  "arc_chorus": {
+   "density": [
+    0.94,
+    0.99,
+    1.04,
+    1.03,
+    1.0
+   ],
+   "pitch": [
+    1.03,
+    0.19,
+    0.07,
+    -0.93,
+    -0.38
+   ],
+   "phrase": [
+    1.05,
+    1.0,
+    1.03,
+    1.0,
+    0.92
+   ],
+   "rest": [
+    1.08,
+    0.97,
+    1.01,
+    0.96,
+    0.99
+   ],
+   "fast": [
+    0.96,
+    1.01,
+    0.83,
+    1.0,
+    1.21
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    0.88,
+    1.05,
+    1.03,
+    1.07,
+    0.97
+   ],
+   "pitch": [
+    0.52,
+    0.13,
+    -0.33,
+    0.59,
+    -0.91
+   ],
+   "phrase": [
+    1.05,
+    0.93,
+    0.98,
+    0.96,
+    1.08
+   ],
+   "rest": [
+    0.96,
+    1.03,
+    1.07,
+    0.98,
+    0.97
+   ],
+   "fast": [
+    0.7,
+    0.87,
+    1.02,
+    1.16,
+    1.25
+   ]
+  },
+  "shapes": {
+   "builds": 28.6,
+   "arch": 57.1,
+   "front-loaded": 14.3,
+   "flat": 0.0
+  },
+  "shapes_n": 7,
+  "top_in_solo": {
+   "median": 0.34,
+   "last_quarter": 28.6,
+   "quarters": [
+    28.6,
+    28.6,
+    14.3,
+    28.6
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.66,
+   "last_quarter": 28.6,
+   "quarters": [
+    0.0,
+    14.3,
+    57.1,
+    28.6
+   ]
+  },
+  "first_vs_later": {
+   "density": 1.07,
+   "pitch": 1.0,
+   "phrase": 0.98,
+   "fast": 0.61
+  },
+  "first_vs_later_n": 6,
+  "ideas": {
+   "pairs": 649,
+   "restated": 3.7,
+   "chance": 1.8,
+   "again_after_restated": 20.8,
+   "again_after_new": 3.1,
+   "chains": {
+    "1": 14,
+    "2": 5,
+    "3": 0,
+    "4+": 0
+   },
+   "head_only": 37.5,
+   "all": 62.5,
+   "notes_median": 5.0,
+   "new_chord": 5,
+   "moved_with_root": 20.0,
+   "at_0_new_chord": 0.0,
+   "other_new_chord": 80.0,
+   "same_chord": 19,
+   "at_0_same_chord": 52.6
+  },
+  "skeleton": {
+   "n": 401,
+   "degrees": {
+    "3": 19.7,
+    "7": 10.0,
+    "5": 15.7,
+    "R": 15.5,
+    "9": 17.5,
+    "other": 21.7
+   },
+   "move_median": 4.0,
+   "move_2_or_less": 38.2,
+   "contours": {
+    "arch": 50.3,
+    "up": 14.2,
+    "down": 29.2,
+    "flat": 0.7,
+    "other": 5.6
+   },
+   "contours_n": 712
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 53.7,
+    "notes_per_bar": 6.48,
+    "gaps": 397
+   },
+   "140-200": {
+    "fast": 27.5,
+    "notes_per_bar": 5.91,
+    "gaps": 2501
+   },
+   "200-260": {
+    "fast": null,
+    "notes_per_bar": null,
+    "gaps": 0
+   },
+   ">260": {
+    "fast": 8.2,
+    "notes_per_bar": 4.82,
+    "gaps": 6326
+   }
+  },
+  "entries": {
+   "after_8bar_line": 4.9,
+   "chance": 4.2,
+   "after_any_bar_line": 31.2,
+   "phrases": 810
+  }
+ },
+ "bird": {
+  "solos": 16,
+  "arc_chorus": {
+   "density": [
+    1.12,
+    0.85,
+    0.97,
+    1.07,
+    0.99
+   ],
+   "pitch": [
+    -0.39,
+    0.42,
+    -0.05,
+    0.9,
+    -0.88
+   ],
+   "phrase": [
+    0.96,
+    1.04,
+    0.95,
+    1.02,
+    1.02
+   ],
+   "rest": [
+    1.03,
+    1.07,
+    0.99,
+    1.03,
+    0.88
+   ],
+   "fast": [
+    1.04,
+    0.86,
+    0.94,
+    1.17,
+    0.99
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    1.02,
+    1.01,
+    0.96,
+    0.97,
+    1.03
+   ],
+   "pitch": [
+    -0.19,
+    0.33,
+    0.11,
+    0.3,
+    -0.54
+   ],
+   "phrase": [
+    0.97,
+    1.07,
+    0.99,
+    0.96,
+    1.01
+   ],
+   "rest": [
+    1.03,
+    0.99,
+    1.06,
+    0.97,
+    0.95
+   ],
+   "fast": [
+    1.1,
+    0.94,
+    1.04,
+    0.98,
+    0.94
+   ]
+  },
+  "shapes": {
+   "builds": 12.5,
+   "arch": 62.5,
+   "front-loaded": 25.0,
+   "flat": 0.0
+  },
+  "shapes_n": 16,
+  "top_in_solo": {
+   "median": 0.45,
+   "last_quarter": 12.5,
+   "quarters": [
+    31.2,
+    18.8,
+    37.5,
+    12.5
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.36,
+   "last_quarter": 21.4,
+   "quarters": [
+    35.7,
+    28.6,
+    14.3,
+    21.4
+   ]
+  },
+  "first_vs_later": {
+   "density": 1.06,
+   "pitch": 0.83,
+   "phrase": 1.02,
+   "fast": 1.39
+  },
+  "first_vs_later_n": 11,
+  "ideas": {
+   "pairs": 273,
+   "restated": 4.4,
+   "chance": 2.7,
+   "again_after_restated": 16.7,
+   "again_after_new": 3.3,
+   "chains": {
+    "1": 8,
+    "2": 2,
+    "3": 0,
+    "4+": 0
+   },
+   "head_only": 100.0,
+   "all": 0.0,
+   "notes_median": 6.0,
+   "new_chord": 10,
+   "moved_with_root": 30.0,
+   "at_0_new_chord": 20.0,
+   "other_new_chord": 50.0,
+   "same_chord": 2,
+   "at_0_same_chord": 50.0
+  },
+  "skeleton": {
+   "n": 640,
+   "degrees": {
+    "3": 11.4,
+    "7": 12.3,
+    "5": 17.3,
+    "R": 12.5,
+    "9": 18.0,
+    "other": 28.4
+   },
+   "move_median": 5.0,
+   "move_2_or_less": 30.9,
+   "contours": {
+    "arch": 55.8,
+    "up": 11.3,
+    "down": 29.1,
+    "flat": 0.0,
+    "other": 3.8
+   },
+   "contours_n": 292
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 76.4,
+    "notes_per_bar": 11.9,
+    "gaps": 2203
+   },
+   "140-200": {
+    "fast": 37.5,
+    "notes_per_bar": 6.78,
+    "gaps": 1024
+   },
+   "200-260": {
+    "fast": 12.6,
+    "notes_per_bar": 5.53,
+    "gaps": 1377
+   },
+   ">260": {
+    "fast": 6.6,
+    "notes_per_bar": 5.49,
+    "gaps": 514
+   }
+  },
+  "entries": {
+   "after_8bar_line": 5.4,
+   "chance": 3.9,
+   "after_any_bar_line": 23.5,
+   "phrases": 298
+  }
+ },
+ "sonny": {
+  "solos": 7,
+  "arc_chorus": {
+   "density": [
+    0.96,
+    0.84,
+    1.0,
+    1.26,
+    0.95
+   ],
+   "pitch": [
+    -0.59,
+    -0.35,
+    1.02,
+    0.8,
+    -0.88
+   ],
+   "phrase": [
+    0.84,
+    1.05,
+    1.25,
+    0.98,
+    0.91
+   ],
+   "rest": [
+    0.8,
+    1.08,
+    1.17,
+    0.9,
+    1.04
+   ],
+   "fast": [
+    1.1,
+    0.76,
+    0.99,
+    0.92,
+    1.24
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    0.98,
+    1.01,
+    1.0,
+    1.14,
+    0.87
+   ],
+   "pitch": [
+    -1.82,
+    0.92,
+    1.23,
+    0.37,
+    -0.7
+   ],
+   "phrase": [
+    1.24,
+    1.04,
+    0.87,
+    1.01,
+    0.84
+   ],
+   "rest": [
+    1.11,
+    1.11,
+    0.93,
+    0.87,
+    0.98
+   ],
+   "fast": [
+    0.93,
+    1.01,
+    1.24,
+    0.94,
+    0.89
+   ]
+  },
+  "shapes": {
+   "builds": 42.9,
+   "arch": 42.9,
+   "front-loaded": 14.3,
+   "flat": 0.0
+  },
+  "shapes_n": 7,
+  "top_in_solo": {
+   "median": 0.36,
+   "last_quarter": 0.0,
+   "quarters": [
+    28.6,
+    57.1,
+    14.3,
+    0.0
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.43,
+   "last_quarter": 28.6,
+   "quarters": [
+    28.6,
+    28.6,
+    14.3,
+    28.6
+   ]
+  },
+  "first_vs_later": {
+   "density": 1.03,
+   "pitch": -1.25,
+   "phrase": 1.51,
+   "fast": 0.8
+  },
+  "first_vs_later_n": 7,
+  "ideas": {
+   "pairs": 143,
+   "restated": 4.2,
+   "chance": 1.6,
+   "again_after_restated": 0.0,
+   "again_after_new": 4.6,
+   "chains": {
+    "1": 6,
+    "2": 0,
+    "3": 0,
+    "4+": 0
+   },
+   "head_only": 50.0,
+   "all": 50.0,
+   "notes_median": 6.5,
+   "new_chord": 5,
+   "moved_with_root": 40.0,
+   "at_0_new_chord": 0.0,
+   "other_new_chord": 60.0,
+   "same_chord": 1,
+   "at_0_same_chord": 100.0
+  },
+  "skeleton": {
+   "n": 284,
+   "degrees": {
+    "3": 12.7,
+    "7": 11.3,
+    "5": 16.2,
+    "R": 12.7,
+    "9": 18.0,
+    "other": 29.2
+   },
+   "move_median": 5.0,
+   "move_2_or_less": 22.1,
+   "contours": {
+    "arch": 53.0,
+    "up": 10.4,
+    "down": 31.7,
+    "flat": 0.0,
+    "other": 4.9
+   },
+   "contours_n": 164
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 49.2,
+    "notes_per_bar": 5.86,
+    "gaps": 1007
+   },
+   "140-200": {
+    "fast": 12.4,
+    "notes_per_bar": 5.21,
+    "gaps": 468
+   },
+   "200-260": {
+    "fast": 6.5,
+    "notes_per_bar": 5.1,
+    "gaps": 520
+   },
+   ">260": {
+    "fast": 4.3,
+    "notes_per_bar": 4.73,
+    "gaps": 443
+   }
+  },
+  "entries": {
+   "after_8bar_line": 5.0,
+   "chance": 4.0,
+   "after_any_bar_line": 28.3,
+   "phrases": 180
+  }
+ },
+ "wayne": {
+  "solos": 7,
+  "arc_chorus": {
+   "density": [
+    0.96,
+    0.95,
+    0.95,
+    1.01,
+    1.13
+   ],
+   "pitch": [
+    0.25,
+    1.62,
+    -1.04,
+    0.92,
+    -1.76
+   ],
+   "phrase": [
+    1.02,
+    1.04,
+    1.03,
+    1.01,
+    0.9
+   ],
+   "rest": [
+    1.06,
+    1.02,
+    0.91,
+    1.11,
+    0.89
+   ],
+   "fast": [
+    0.94,
+    1.01,
+    0.59,
+    0.96,
+    1.5
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    0.97,
+    1.06,
+    1.09,
+    0.86,
+    1.02
+   ],
+   "pitch": [
+    0.56,
+    -0.9,
+    -0.77,
+    1.08,
+    0.03
+   ],
+   "phrase": [
+    0.84,
+    1.14,
+    1.13,
+    1.0,
+    0.89
+   ],
+   "rest": [
+    1.11,
+    0.94,
+    1.15,
+    1.04,
+    0.77
+   ],
+   "fast": [
+    1.04,
+    1.28,
+    0.93,
+    0.92,
+    0.83
+   ]
+  },
+  "shapes": {
+   "builds": 14.3,
+   "arch": 28.6,
+   "front-loaded": 28.6,
+   "flat": 28.6
+  },
+  "shapes_n": 7,
+  "top_in_solo": {
+   "median": 0.4,
+   "last_quarter": 0.0,
+   "quarters": [
+    14.3,
+    42.9,
+    42.9,
+    0.0
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.4,
+   "last_quarter": 14.3,
+   "quarters": [
+    14.3,
+    57.1,
+    14.3,
+    14.3
+   ]
+  },
+  "first_vs_later": {
+   "density": 0.89,
+   "pitch": 1.28,
+   "phrase": 0.87,
+   "fast": 1.06
+  },
+  "first_vs_later_n": 5,
+  "ideas": {
+   "pairs": 132,
+   "restated": 5.3,
+   "chance": 3.6,
+   "again_after_restated": 0.0,
+   "again_after_new": 5.0,
+   "chains": {
+    "1": 7,
+    "2": 0,
+    "3": 0,
+    "4+": 0
+   },
+   "head_only": 85.7,
+   "all": 14.3,
+   "notes_median": 5,
+   "new_chord": 4,
+   "moved_with_root": 25.0,
+   "at_0_new_chord": 0.0,
+   "other_new_chord": 75.0,
+   "same_chord": 1,
+   "at_0_same_chord": 100.0
+  },
+  "skeleton": {
+   "n": 237,
+   "degrees": {
+    "3": 14.8,
+    "7": 15.2,
+    "5": 12.2,
+    "R": 12.7,
+    "9": 16.0,
+    "other": 29.1
+   },
+   "move_median": 4.0,
+   "move_2_or_less": 36.2,
+   "contours": {
+    "arch": 41.4,
+    "up": 21.4,
+    "down": 28.3,
+    "flat": 2.8,
+    "other": 6.2
+   },
+   "contours_n": 145
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 41.3,
+    "notes_per_bar": 5.71,
+    "gaps": 489
+   },
+   "140-200": {
+    "fast": 38.1,
+    "notes_per_bar": 5.52,
+    "gaps": 678
+   },
+   "200-260": {
+    "fast": null,
+    "notes_per_bar": null,
+    "gaps": 0
+   },
+   ">260": {
+    "fast": 5.0,
+    "notes_per_bar": 4.63,
+    "gaps": 972
+   }
+  },
+  "entries": {
+   "after_8bar_line": 8.4,
+   "chance": 3.8,
+   "after_any_bar_line": 31.6,
+   "phrases": 155
+  }
+ },
+ "pops": {
+  "solos": 8,
+  "arc_chorus": {
+   "density": [
+    1.01,
+    1.02,
+    0.98,
+    0.93,
+    1.05
+   ],
+   "pitch": [
+    0.97,
+    0.57,
+    -1.85,
+    0.73,
+    -0.42
+   ],
+   "phrase": [
+    1.23,
+    1.03,
+    0.89,
+    0.94,
+    0.92
+   ],
+   "rest": [
+    1.1,
+    1.09,
+    0.93,
+    1.07,
+    0.81
+   ],
+   "fast": [
+    1.06,
+    0.84,
+    1.18,
+    0.62,
+    1.29
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    1.02,
+    0.97,
+    1.02,
+    0.94,
+    1.05
+   ],
+   "pitch": [
+    0.63,
+    -0.43,
+    0.62,
+    0.17,
+    -1.0
+   ],
+   "phrase": [
+    0.99,
+    0.98,
+    0.98,
+    1.08,
+    0.96
+   ],
+   "rest": [
+    1.01,
+    1.12,
+    0.88,
+    1.02,
+    0.95
+   ],
+   "fast": [
+    1.61,
+    0.57,
+    1.51,
+    0.44,
+    0.87
+   ]
+  },
+  "shapes": {
+   "builds": 37.5,
+   "arch": 12.5,
+   "front-loaded": 50.0,
+   "flat": 0.0
+  },
+  "shapes_n": 8,
+  "top_in_solo": {
+   "median": 0.2,
+   "last_quarter": 12.5,
+   "quarters": [
+    62.5,
+    12.5,
+    12.5,
+    12.5
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.21,
+   "last_quarter": 25.0,
+   "quarters": [
+    50.0,
+    12.5,
+    12.5,
+    25.0
+   ]
+  },
+  "first_vs_later": {
+   "density": 1.06,
+   "pitch": -1.42,
+   "phrase": 0.6,
+   "fast": 0.87
+  },
+  "first_vs_later_n": 3,
+  "ideas": {
+   "pairs": 79,
+   "restated": 2.5,
+   "chance": 1.8,
+   "again_after_restated": 0.0,
+   "again_after_new": 2.9,
+   "chains": {
+    "1": 2,
+    "2": 0,
+    "3": 0,
+    "4+": 0
+   },
+   "head_only": 50.0,
+   "all": 50.0,
+   "notes_median": 5.5,
+   "new_chord": 2,
+   "moved_with_root": 0.0,
+   "at_0_new_chord": 50.0,
+   "other_new_chord": 50.0,
+   "same_chord": 0,
+   "at_0_same_chord": null
+  },
+  "skeleton": {
+   "n": 131,
+   "degrees": {
+    "3": 16.0,
+    "7": 9.2,
+    "5": 16.8,
+    "R": 15.3,
+    "9": 22.1,
+    "other": 20.6
+   },
+   "move_median": 3.5,
+   "move_2_or_less": 35.2,
+   "contours": {
+    "arch": 49.4,
+    "up": 10.1,
+    "down": 32.6,
+    "flat": 2.2,
+    "other": 5.6
+   },
+   "contours_n": 89
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 26.1,
+    "notes_per_bar": 6.49,
+    "gaps": 352
+   },
+   "140-200": {
+    "fast": 9.1,
+    "notes_per_bar": 5.12,
+    "gaps": 715
+   },
+   "200-260": {
+    "fast": null,
+    "notes_per_bar": null,
+    "gaps": 0
+   },
+   ">260": {
+    "fast": null,
+    "notes_per_bar": null,
+    "gaps": 0
+   }
+  },
+  "entries": {
+   "after_8bar_line": 5.6,
+   "chance": 4.4,
+   "after_any_bar_line": 41.1,
+   "phrases": 90
+  }
+ },
+ "all": {
+  "solos": 402,
+  "arc_chorus": {
+   "density": [
+    0.99,
+    0.98,
+    1.0,
+    1.04,
+    1.0
+   ],
+   "pitch": [
+    0.42,
+    0.1,
+    -0.13,
+    -0.01,
+    -0.38
+   ],
+   "phrase": [
+    0.95,
+    1.01,
+    1.03,
+    1.03,
+    0.98
+   ],
+   "rest": [
+    1.01,
+    1.03,
+    1.02,
+    0.98,
+    0.96
+   ],
+   "fast": [
+    0.98,
+    0.99,
+    0.99,
+    1.02,
+    1.03
+   ]
+  },
+  "arc_solo": {
+   "density": [
+    0.96,
+    1.01,
+    1.01,
+    1.0,
+    1.02
+   ],
+   "pitch": [
+    -0.61,
+    -0.21,
+    0.4,
+    0.64,
+    -0.22
+   ],
+   "phrase": [
+    1.01,
+    1.02,
+    0.99,
+    1.02,
+    0.96
+   ],
+   "rest": [
+    1.03,
+    1.04,
+    1.03,
+    1.01,
+    0.88
+   ],
+   "fast": [
+    0.85,
+    0.97,
+    1.04,
+    1.06,
+    1.08
+   ]
+  },
+  "shapes": {
+   "builds": 31.1,
+   "arch": 49.0,
+   "front-loaded": 18.2,
+   "flat": 1.7
+  },
+  "shapes_n": 402,
+  "top_in_solo": {
+   "median": 0.51,
+   "last_quarter": 20.9,
+   "quarters": [
+    17.9,
+    29.9,
+    31.3,
+    20.9
+   ]
+  },
+  "top_in_chorus": {
+   "median": 0.44,
+   "last_quarter": 19.2,
+   "quarters": [
+    26.6,
+    30.4,
+    23.8,
+    19.2
+   ]
+  },
+  "first_vs_later": {
+   "density": 0.94,
+   "pitch": -0.5,
+   "phrase": 1.02,
+   "fast": 0.92
+  },
+  "first_vs_later_n": 273,
+  "ideas": {
+   "pairs": 8210,
+   "restated": 4.5,
+   "chance": 2.3,
+   "again_after_restated": 16.0,
+   "again_after_new": 3.9,
+   "chains": {
+    "1": 267,
+    "2": 39,
+    "3": 4,
+    "4+": 3
+   },
+   "head_only": 61.5,
+   "all": 38.5,
+   "notes_median": 6,
+   "new_chord": 249,
+   "moved_with_root": 12.4,
+   "at_0_new_chord": 30.9,
+   "other_new_chord": 56.6,
+   "same_chord": 101,
+   "at_0_same_chord": 57.4
+  },
+  "skeleton": {
+   "n": 19411,
+   "degrees": {
+    "3": 13.6,
+    "7": 13.6,
+    "5": 14.7,
+    "R": 14.2,
+    "9": 17.8,
+    "other": 26.1
+   },
+   "move_median": 4.0,
+   "move_2_or_less": 31.8,
+   "contours": {
+    "arch": 52.3,
+    "up": 15.1,
+    "down": 26.1,
+    "flat": 0.8,
+    "other": 5.8
+   },
+   "contours_n": 8933
+  },
+  "tempo": {
+   "0-140": {
+    "fast": 57.5,
+    "notes_per_bar": 8.42,
+    "gaps": 50510
+   },
+   "140-200": {
+    "fast": 26.9,
+    "notes_per_bar": 5.83,
+    "gaps": 34950
+   },
+   "200-260": {
+    "fast": 10.9,
+    "notes_per_bar": 5.1,
+    "gaps": 38031
+   },
+   ">260": {
+    "fast": 5.6,
+    "notes_per_bar": 4.99,
+    "gaps": 40841
+   }
+  },
+  "entries": {
+   "after_8bar_line": 5.9,
+   "chance": 4.0,
+   "after_any_bar_line": 31.1,
+   "phrases": 9535
+  }
+ }
+}
