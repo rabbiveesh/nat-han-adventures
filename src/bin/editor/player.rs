@@ -110,7 +110,7 @@ pub struct Player {
 }
 
 fn to_static(r: synth::Rendered) -> StaticSoundData {
-    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into(), settings: StaticSoundSettings::new(), slice: None }
+    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into_iter().map(Into::into).collect(), settings: StaticSoundSettings::new(), slice: None }
 }
 
 impl Player {
