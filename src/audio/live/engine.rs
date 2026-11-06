@@ -775,6 +775,7 @@ impl Engine {
             force_chorus: self.forced_chorus,
             intro,
             ending,
+            reharm: soloist.profile().map_or(soloist::BAND_REHARM, |p| p.reharm()),
         });
         ctx.band = &band;
         // A feel section gets the feel's own soloists (measured over funk and Latin grooves);

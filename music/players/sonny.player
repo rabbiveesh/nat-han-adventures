@@ -10,6 +10,7 @@ name = Sonny
 lay_back = 2.2              ; +6.2 ms
 swing = 1.50                ; long 8th over short (2.0: a full triplet)
 legato = 0.88               ; sounding length against the time to the next note
+reharm = 0.8 0.3 0.7    ; the band's reharm under him: rate, tritone sub, ii-V. implies a ii-V over long dominants 15% (chance 10%)
 register = 64 55 77         ; MIDI, the lead's octave: centre, soft floor, soft ceiling
 
 [line]
@@ -30,6 +31,11 @@ start_tones = 0.11 0.10 0.24 0.16 0.16 0.12 0.11   ; its first note: R 3 5 7 9 1
 start_chromatic = 0.16      ; ...or a half step into a chord tone
 start_up = 0.81             ; the line goes up from it
 sixteenths = 0.492 0.124 0.065 0.043   ; 16th-or-faster notes by tempo: <140, 140-200, 200-260, >260 bpm. Rollins
+sections = 0.85 0.99 0.89 0.97 0.77 1.17 1.07 0.79 0.58   ; notes per bar by bar of an 8-bar section (1-8), and the turnaround, against the mean
+phrase_tempo = 4.7 5.5 9.0 11.9   ; median phrase length (beats) by tempo: <140, 140-200, 200-260, >260 (0: no solo there)
+rest_tempo = 2.9 2.8 2.8 3.9   ; median rest (beats) by tempo
+resolve = 0.33             ; a strong-beat tension steps onto a chord tone next
+blue = 0.05                ; a 3rd off the beat bent up from the minor 3rd (major, dominant)
 approach = 0.18             ; a half step into a strong-beat chord tone...
 from_below = 0.51           ; ...from below this share of the time
 enclosure = 0.11            ; one above and one below into a strong-beat chord tone

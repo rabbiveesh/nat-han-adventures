@@ -10,6 +10,7 @@ name = Miles '56
 lay_back = 1.6              ; on-beat notes +4.6 ms behind (the average soloist: +2.8)
 swing = 1.36                ; long 8th over short (2.0: a full triplet)
 legato = 0.88               ; sounding length against the time to the next note
+reharm = 0.4 0.3 0.7    ; the band's reharm under him: rate, tritone sub, ii-V. the most inside: the sub fits his lines 6% (chance 19%); light
 register = 72 64 82         ; MIDI, the lead's octave: centre, soft floor, soft ceiling
 
 [line]
@@ -30,6 +31,11 @@ start_tones = 0.20 0.14 0.12 0.13 0.21 0.07 0.11   ; its first note: R 3 5 7 9 1
 start_chromatic = 0.14      ; ...or a half step into a chord tone
 start_up = 0.69             ; the line goes up from it
 sixteenths = 0.184 0.122 0.039 0.020   ; 16th-or-faster notes by tempo: <140, 140-200, 200-260, >260 bpm. Miles 1950s
+sections = 0.78 1.14 0.94 0.62 0.95 1.32 0.94 0.61 0.59   ; notes per bar by bar of an 8-bar section (1-8), and the turnaround, against the mean
+phrase_tempo = 6.6 5.2 7.7 9.8   ; median phrase length (beats) by tempo: <140, 140-200, 200-260, >260 (0: no solo there)
+rest_tempo = 3.3 3.2 2.5 4.5   ; median rest (beats) by tempo
+resolve = 0.32             ; a strong-beat tension steps onto a chord tone next
+blue = 0.05                ; a 3rd off the beat bent up from the minor 3rd (major, dominant)
 approach = 0.24             ; a half step into a strong-beat chord tone...
 from_below = 0.69           ; ...from below this share of the time
 enclosure = 0.10            ; one above and one below into a strong-beat chord tone

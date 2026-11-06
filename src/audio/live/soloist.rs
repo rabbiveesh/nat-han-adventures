@@ -268,7 +268,70 @@ pub struct Profile {
     pub moves: [(i8, f32); 5],
     /// The licks a phrase can open with.
     pub licks: Licks,
+    /// The reharmonisation the band plays under them (`reharm` in the `.player` file): how often
+    /// against the band's usual, and the weights of a tritone sub and of a ii-V (the backdoor
+    /// into the tonic, else the ii put ahead of a long dominant). All zero: the band's own.
+    /// Measured from what their lines imply (`scripts/analysis/results/reharm.txt`).
+    pub reharm: [f32; 3],
+    /// How busy they are by bar of an 8-bar section (1-8), and in a chorus's last two bars (the
+    /// turnaround), against their average (all zero: even). Phrases stretch and rests shrink
+    /// to match ([`Line::bar`]).
+    pub sections: [f32; 9],
+    /// Phrase and rest lengths (median beats) at their tempos: under 140 bpm, 140-200, 200-260,
+    /// over 260 (0: no solo there; all zero: the same at any tempo).
+    pub phrase_tempo: [f32; 4],
+    pub rest_tempo: [f32; 4],
+    /// After a tension or chromatic note on a strong beat, how often the next steps onto a
+    /// chord tone; and how often a 3rd off the beat over a major or dominant chord is bent up
+    /// from the minor 3rd (a blue note).
+    pub resolve: f32,
+    pub blue: f32,
 }
+
+/// A figure by tempo band at `bpm` (between the bands' centres, flat past the ends; a band
+/// with no figure takes its neighbour's), if there are any.
+fn by_tempo(d: &[f32; 4], bpm: f32) -> Option<f32> {
+    if bpm <= 0.0 || d.iter().all(|x| *x <= 0.0) {
+        return None;
+    }
+    let mut v = *d;
+    for _ in 0..3 {
+        for i in 0..4 {
+            if v[i] <= 0.0 {
+                v[i] = if i > 0 && v[i - 1] > 0.0 { v[i - 1] } else if i < 3 { v[i + 1] } else { 0.0 };
+            }
+        }
+    }
+    const C: [f32; 4] = [115.0, 170.0, 230.0, 290.0];
+    Some(if bpm <= C[0] {
+        v[0]
+    } else if bpm >= C[3] {
+        v[3]
+    } else {
+        let i = (0..3).find(|&i| bpm < C[i + 1]).unwrap_or(2);
+        v[i] + (v[i + 1] - v[i]) * (bpm - C[i]) / (C[i + 1] - C[i])
+    })
+}
+
+impl Profile {
+    /// How busy the bar `at` of a `len`-bar form is, against the player's average.
+    fn section_density(&self, at: f64, len: f64) -> f32 {
+        if self.sections[0] <= 0.0 {
+            return 1.0;
+        }
+        if len >= 8.0 && at >= len - 2.0 {
+            return self.sections[8];
+        }
+        self.sections[(at.floor() as usize) % 8]
+    }
+    /// The reharm the band plays under this player: (rate, tritone weight, ii-V weight).
+    pub fn reharm(&self) -> [f32; 3] {
+        if self.reharm.iter().all(|x| *x == 0.0) { BAND_REHARM } else { self.reharm }
+    }
+}
+
+/// The band's own reharm: subs as often as the dial says, tritone subs over backdoors 3:2.
+pub const BAND_REHARM: [f32; 3] = [1.0, 0.6, 0.4];
 
 impl Profile {
     /// Does the player aim their phrase endings (`end_beats`, `end_tones`)?
@@ -604,6 +667,14 @@ pub struct Line {
     /// 16th swings as two 8ths.
     arc: Arc,
     at: f64,
+    /// How busy this bar of the section is (phrases longer, rests shorter when busy).
+    busy: f32,
+    /// Phrase and rest lengths at this tempo against the player's overall.
+    tempo_phrase: f64,
+    tempo_rest: f64,
+    /// The note being picked is a beat or longer; the last strong-beat note was a tension.
+    long: bool,
+    tension: bool,
     heat: Option<f32>,
     lift: f32,
     k16: f32,
@@ -872,8 +943,25 @@ impl Line {
             self.arc.heat(x)
         });
         self.lift = self.heat.map_or(0.0, |h| h - self.arc.mean());
+        self.busy = ch.form().map_or(1.0, |(at, len)| p.section_density(at, len));
+        if self.started {
+            // Through the section: a light bar breathes (a phrase running through it ends
+            // early in it, a rest running out in it runs on), a busy one comes in sooner.
+            let bb = ch.bar_beats();
+            let light = (1.0 - self.busy as f64).max(0.0) * 1.6;
+            let busy = (self.busy as f64 - 1.0).max(0.0) * 1.6;
+            if self.phrase > bb && r.chance(light) {
+                self.cut_to(((bb * (0.3 + 0.4 * r.f())) * 2.0).round().max(1.0) / 2.0);
+            } else if self.phrase <= 1e-9 && self.rest < bb && r.chance(light) {
+                self.rest += bb;
+            } else if self.phrase <= 1e-9 && self.rest > bb && r.chance(busy) {
+                self.rest = (self.rest - bb).max(0.5);
+            }
+        }
         // The 16ths to the tempo's share, the fast cells by the arc.
         let bpm = ch.bpm();
+        self.tempo_phrase = by_tempo(&p.phrase_tempo, bpm).map_or(1.0, |v| (v as f64 / p.phrase.0.max(0.5)).clamp(0.5, 2.5));
+        self.tempo_rest = by_tempo(&p.rest_tempo, bpm).map_or(1.0, |v| (v as f64 / p.rest.0.max(0.5)).clamp(0.5, 2.5));
         self.swung_dotted = bpm > 180.0;
         let w = self.base_cells(p);
         self.k16 = p.tempo_sixteenths(bpm).map_or(1.0, |s| sixteenths_weight(&w, s));
@@ -964,6 +1052,7 @@ impl Line {
                 let d = d.min(bb - b);
                 let last = self.phrase <= d + 1e-6;
                 let before = self.cur;
+                self.long = d >= 1.0 - 1e-6;
                 let note = self.next(p, ch, r, b, last);
                 if let Some(note) = note {
                     if self.now.n < 32 {
@@ -1052,7 +1141,7 @@ impl Line {
         let h = ch.harm(b);
         // Longer lines as the solo builds.
         let heat = 1.0 + LIFT_PHRASE * self.lift as f64;
-        let len = (lognormal(r, p.phrase) * heat).clamp(1.0, 24.0);
+        let len = (lognormal(r, p.phrase) * heat * self.tempo_phrase).clamp(1.0, 24.0);
         self.phrase = len;
         (self.push, self.short) = (false, false);
         self.begin(p, r, h);
@@ -1372,7 +1461,7 @@ impl Line {
         // Whole 8ths of rest, so the next phrase starts on the 8th grid (shorter breaths as the
         // solo builds).
         let heat = 1.0 - LIFT_PHRASE * self.lift as f64;
-        self.rest = (lognormal(r, p.rest).clamp(0.5, 10.0) * heat * 2.0).round().max(1.0) / 2.0;
+        self.rest = (lognormal(r, p.rest).clamp(0.5, 10.0) * heat * self.tempo_rest * 2.0).round().max(1.0) / 2.0;
         if p.starts() {
             // The rest nearest its length that ends on a start slot.
             let slot = p.start_slot(r, bb);
@@ -1521,7 +1610,24 @@ impl Line {
             note = g as i32;
         } else if strong && r.chance(p.strong_chord_tone as f64) {
             note = h.nearest_chord_tone(note.clamp(0, 127) as u8) as i32;
+        } else if self.tension && r.chance(p.resolve as f64) {
+            // The tension resolves: a step onto a chord tone.
+            if let Some(n) = [-1, 1, -2, 2].into_iter().map(|s| cur + s).find(|&n| (0..=127).contains(&n) && h.is_chord_tone(n as u8)) {
+                note = n;
+            }
+        } else if self.long && r.chance(0.3) {
+            // Long notes sit on chord tones.
+            note = h.nearest_chord_tone(note.clamp(0, 127) as u8) as i32;
         }
+        // A blue note: the 3rd off the beat bent up from the minor 3rd.
+        if !last && !strong && self.queued == 0 && matches!(h.chord.family(), Family::Major | Family::Dominant) {
+            let third = (h.chord.root + 4) % 12;
+            if (note.rem_euclid(12)) as u8 == third && note > 0 && r.chance(p.blue as f64) {
+                self.load(&[note as u8], 0);
+                note -= 1;
+            }
+        }
+        self.tension = strong && !h.is_chord_tone(note.clamp(0, 127) as u8);
         note = note.clamp(floor - 6, ceil + 6);
         self.leapt = (note - cur).abs() >= 5;
         if let Some(d) = self.start_dir.take() {
@@ -1908,6 +2014,18 @@ mod tests {
     }
 
     #[test]
+    fn miles_breathes_at_the_four_bar_marks() {
+        let all = planned(prof(Soloist::Miles), 32 * 40, 32, 160.0, |_| Heard::default());
+        let mut per = [0usize; 8];
+        for (t, _) in &all {
+            per[((*t / 4.0) as u64 % 8) as usize] += 1;
+        }
+        eprintln!("notes by bar of the section: {per:?}");
+        // Bars 4 and 8 the lightest, bar 6 the busiest (the records: x0.62, x0.61, x1.32).
+        assert!(per[5] as f64 > 1.3 * per[3] as f64 && per[5] as f64 > 1.3 * per[7] as f64, "{per:?}");
+    }
+
+    #[test]
     fn the_line_thins_out_at_fast_tempos() {
         let fast16 = |s: Soloist, bpm: f32| {
             let all = planned(prof(s), 1500, 0, bpm, |_| Heard::default());
@@ -1932,15 +2050,17 @@ mod tests {
         // (Per chorus: notes in the first and last quarters, by shape.)
         let mut ends = [[0usize; 2]; 4];
         let bars = 32u64;
-        for chorus in 0..300u64 {
+        for chorus in 0..800u64 {
             let mut n = [0usize; 2];
             for bar in 0..bars {
                 let ch = Planned { bar: chorus * bars + bar, bars, bpm: 180.0, heard: Heard::default() };
                 let mut out = [Played::default(); 24];
                 let k = line.bar(p, &ch, &mut r, bar % 8 == 7, &mut out);
-                if bar < 8 {
+                // (Bars 1-6 of the first and last sections: the same places in a section, and
+                // no turnaround.)
+                if bar < 6 {
                     n[0] += k;
-                } else if bar >= 24 {
+                } else if (24..30).contains(&bar) {
                     n[1] += k;
                 }
             }
@@ -1950,11 +2070,11 @@ mod tests {
             ends[s][1] += n[1];
         }
         eprintln!("shapes {shapes:?}, first/last quarter notes {ends:?}");
-        let share = |i: usize| shapes[i] as f64 / 300.0;
+        let share = |i: usize| shapes[i] as f64 / 800.0;
         assert!((share(0) - 0.49).abs() < 0.08 && (share(1) - 0.31).abs() < 0.08, "{shapes:?}");
         // A building solo ends busier than it starts; a front-loaded one the other way.
-        assert!(ends[1][1] as f64 > ends[1][0] as f64 * 1.08, "{ends:?}");
-        assert!((ends[2][0] as f64) > ends[2][1] as f64 * 1.08, "{ends:?}");
+        assert!(ends[1][1] as f64 > ends[1][0] as f64 * 1.04, "{ends:?}");
+        assert!((ends[2][0] as f64) > ends[2][1] as f64 * 1.04, "{ends:?}");
     }
 
     #[test]

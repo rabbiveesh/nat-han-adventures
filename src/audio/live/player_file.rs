@@ -143,10 +143,10 @@ impl PlayerFile {
                 continue;
             }
             let key_sec = match key {
-                "name" | "lay_back" | "swing" | "legato" | "register" => "player",
+                "name" | "lay_back" | "swing" | "legato" | "register" | "reharm" => "player",
                 "phrase" | "rest" | "cells" | "intervals" | "step_back" | "end_chord_tone" | "approach" | "from_below" | "enclosure" | "pentatonic"
                 | "anticipation" | "falls" | "strong_chord_tone" | "end_beats" | "end_push" | "end_tones" | "end_chromatic" | "start_place" | "start_on" | "start_and" | "start_tones"
-                | "start_chromatic" | "start_up" | "sixteenths" => "line",
+                | "start_chromatic" | "start_up" | "sixteenths" | "sections" | "phrase_tempo" | "rest_tempo" | "resolve" | "blue" => "line",
                 "arch" | "per_octave" | "ghost" | "accent" | "long" | "scatter" => "dynamics",
                 "motif" | "sequence" | "carry" | "moves" => "motifs",
                 _ => return Err(err(n, format!("unknown key `{key}` in [{sec}]"))),
@@ -163,6 +163,9 @@ impl PlayerFile {
                 "lay_back" => lay_back = one()?,
                 "swing" => p.swing = one().and_then(|s| if (1.0..=3.0).contains(&s) { Ok(s) } else { Err(bad("swing is 1.0..3.0")) })?,
                 "legato" => p.legato = share()?,
+                "reharm" => {
+                    p.reharm = floats::<3>(v).filter(|w| w.iter().all(|x| (0.0..=3.0).contains(x)) && w[1] + w[2] > 0.0).ok_or_else(|| bad("expected a rate and two weights (tritone, ii-V), 0..3"))?
+                }
                 "register" => {
                     let [c, lo, hi] = floats::<3>(v).filter(|[c, lo, hi]| lo <= c && c <= hi).ok_or_else(|| bad("expected centre, floor, ceiling (MIDI)"))?;
                     p.register = (c as i32, lo as i32, hi as i32);
@@ -219,6 +222,15 @@ impl PlayerFile {
                 }
                 "start_chromatic" => p.start_chromatic = share()?,
                 "start_up" => p.start_up = share()?,
+                "phrase_tempo" | "rest_tempo" => {
+                    let w = floats::<4>(v).filter(|w| w.iter().all(|x| (0.0..40.0).contains(x)) && w.iter().any(|x| *x > 0.0)).ok_or_else(|| bad("expected 4 median lengths in beats (<140, 140-200, 200-260, >260 bpm; 0: none)"))?;
+                    if key == "phrase_tempo" { p.phrase_tempo = w } else { p.rest_tempo = w }
+                }
+                "resolve" => p.resolve = share()?,
+                "blue" => p.blue = share()?,
+                "sections" => {
+                    p.sections = floats::<9>(v).filter(|w| w.iter().all(|x| (0.2..3.0).contains(x))).ok_or_else(|| bad("expected 9 ratios (bars 1-8 of a section, the turnaround)"))?
+                }
                 "sixteenths" => {
                     p.sixteenths = floats::<4>(v).filter(|w| w.iter().all(|x| (0.0..1.0).contains(x) && *x > 0.0)).ok_or_else(|| bad("expected 4 shares 0..1 (<140, 140-200, 200-260, >260 bpm)"))?
                 }
