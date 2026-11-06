@@ -9,7 +9,10 @@ each of the band's measured soloists and the whole database:
      shape (builds, front-loaded, arch, flat); the first chorus against the later ones;
   2. ideas over phrases: a phrase restating the one before (its first 4 intervals within a
      semitone each), how often a restatement is restated again (chains), how much of it, and
-     its transposition against the root motion between the two phrases' first chords;
+     its transposition against the root motion between the two phrases' first chords; and
+     ideas carried: the head's rhythm or contour repeated, or a 4-interval cell shared anywhere,
+     against chance (with the excess as a carry probability), and where a shaped shared cell
+     sits, whether its rhythm is kept and how it is moved;
   3. the skeleton: the degree sounding on chord changes on beats 1 and 3 inside phrases, the
      voice leading between those notes, and the phrases' contours;
   4. tempo: the share of 16th-or-faster gaps and notes per bar by tempo band;
@@ -195,6 +198,40 @@ def chord_root(s, k):
     return c[0] if c else None
 
 
+def shaped(iv):
+    """A cell with a leap (3 or more) or a turn in it: an idea, not a plain scale run."""
+    return any(abs(i) >= 3 for i in iv) or any(a * b < 0 for a, b in zip(iv, iv[1:]))
+
+
+def shared_cell(x, y, need_shape=False):
+    """The first 4-interval cell of x found in y (each interval within a semitone): (i, j) or
+    None."""
+    for i in range(len(x) - 3):
+        c = x[i : i + 4]
+        if need_shape and not shaped(c):
+            continue
+        for j in range(len(y) - 3):
+            if all(abs(a - b) <= 1 for a, b in zip(c, y[j : j + 4])):
+                return i, j
+    return None
+
+
+def sign(v):
+    return [(x > 0) - (x < 0) for x in v]
+
+
+def repeats(s, p, q):
+    """How phrase q repeats phrase p: its head's intervals, rhythm or contour, or a cell anywhere."""
+    (pa, pz), (qa, qz) = p, q
+    x, y = intervals(s, pa, pz), intervals(s, qa, qz)
+    rx, ry = s.gaps(pa, pz), s.gaps(qa, qz)
+    rhythm = len(rx) >= 4 and len(ry) >= 4 and all(abs(a - b) <= 0.09 for a, b in zip(rx[:4], ry[:4])) and abs(s.b[pa] % 1 - s.b[qa] % 1) < 0.1
+    return {"head": matched(x, y) >= 4, "rhythm": rhythm, "contour": len(x) >= 5 and len(y) >= 5 and sign(x[:5]) == sign(y[:5]), "cell": shared_cell(x, y) is not None}
+
+
+REPEATS = ["head", "rhythm", "contour", "cell"]
+
+
 # --- 3. the skeleton ---------------------------------------------------------------------
 
 
@@ -317,6 +354,55 @@ def tally(a, s, rng_seed=0):
         prev_restated = restated
     if chain:
         a.c["chain_%d" % min(chain, 4)] += 1
+    # 2b. Ideas carried across phrases (phrases of 6 notes or more): the next phrase repeating
+    # the last one's head (intervals, rhythm, contour) or sharing a 4-interval cell anywhere,
+    # against a phrase from further back (chance) and the one two back; how often a repeat is
+    # followed by another (chains); and a shaped shared cell's place, rhythm and move.
+    long_ph = [(pa, pz) for pa, pz in s.phrases if pz - pa >= 5]
+    run = dict.fromkeys(REPEATS, 0)
+    last = None
+    for j in range(1, len(long_ph)):
+        t = repeats(s, long_ph[j - 1], long_ph[j])
+        a.c["rep_pairs"] += 1
+        for k in REPEATS:
+            a.c["rep_" + k] += t[k]
+            if last is not None and last[k]:
+                a.c["rep_after_" + k] += 1
+                a.c["rep_again_" + k] += t[k]
+            if t[k]:
+                run[k] += 1
+            elif run[k]:
+                a.c["rep_chain_%s_%d" % (k, min(run[k], 4))] += 1
+                run[k] = 0
+        last = t
+        if j >= 2:
+            t2 = repeats(s, long_ph[j - 2], long_ph[j])
+            a.c["rep_lag2_pairs"] += 1
+            for k in REPEATS:
+                a.c["rep_lag2_" + k] += t2[k]
+        if j >= 5:
+            tc = repeats(s, long_ph[(j * 7 + rng_seed) % (j - 3)], long_ph[j])
+            a.c["rep_chance_pairs"] += 1
+            for k in REPEATS:
+                a.c["rep_chance_" + k] += tc[k]
+        (pa, pz), (qa, qz) = long_ph[j - 1], long_ph[j]
+        found = shared_cell(intervals(s, pa, pz), intervals(s, qa, qz), need_shape=True)
+        if found:
+            i, jj = found
+            a.c["carried"] += 1
+            a.lists["carried_at"].append(jj / max(1, (qz - qa) - 3))
+            a.c["carried_rhythm"] += all(abs(g - h) <= 0.09 for g, h in zip(s.gaps(pa + i, pa + i + 4), s.gaps(qa + jj, qa + jj + 4)))
+            moved = (s.notes[qa + jj][3] - s.notes[pa + i][3]) % 12
+            r0, r1 = chord_root(s, pa + i), chord_root(s, qa + jj)
+            if r0 is None or r1 is None:
+                a.c["carried_no_chord"] += 1
+            elif (r1 - r0) % 12 == 0:
+                a.c["carried_same_at_0" if moved == 0 else "carried_same_moved"] += 1
+            else:
+                a.c["carried_new_root" if moved == (r1 - r0) % 12 else "carried_new_at_0" if moved == 0 else "carried_new_other"] += 1
+    for k in REPEATS:
+        if run[k]:
+            a.c["rep_chain_%s_%d" % (k, min(run[k], 4))] += 1
     # 3. The skeleton: chord changes on 1 and 3 inside phrases.
     g = s.grid
     for pa, pz in s.phrases:
@@ -396,6 +482,17 @@ def summary(a):
         new_chord=c["new_chord"], moved_with_root=pct(c, "new_chord_with_root", "new_chord"), at_0_new_chord=pct(c, "new_chord_at_0", "new_chord"), other_new_chord=pct(c, "new_chord_other", "new_chord"),
         same_chord=c["same_chord"], at_0_same_chord=pct(c, "same_chord_at_0", "same_chord"),
     )
+    rep = {}
+    for k in REPEATS:
+        adj, chance = pct(c, "rep_" + k, "rep_pairs"), pct(c, "rep_chance_" + k, "rep_chance_pairs")
+        rep[k] = dict(next=adj, two_back=pct(c, "rep_lag2_" + k, "rep_lag2_pairs"), chance=chance, again=pct(c, "rep_again_" + k, "rep_after_" + k),
+                      carry=round(max(0.0, (adj - chance) / (100 - chance)), 3) if adj is not None and chance is not None and chance < 100 else None,
+                      chains={str(n) + ("+" if n == 4 else ""): c["rep_chain_%s_%d" % (k, n)] for n in range(1, 5)})
+    at = a.lists["carried_at"]
+    out["carried"] = dict(pairs=c["rep_pairs"], repeats=rep, shaped_cells=c["carried"],
+                          at_fifths=[round(100 * sum(lo / 5 <= x < (lo + 1) / 5 or (lo == 4 and x >= 1) for x in at) / len(at), 1) for lo in range(5)] if at else None,
+                          rhythm_kept=pct(c, "carried_rhythm", "carried"),
+                          moves={k: pct(c, "carried_" + k, "carried") for k in ("new_root", "new_at_0", "new_other", "same_moved", "same_at_0", "no_chord")})
     mv = a.lists["skel_move"]
     out["skeleton"] = dict(n=c["skel_total"], degrees={d: pct(c, "skel_" + d, "skel_total") for d in SKELETON},
                            move_median=statistics.median(mv) if mv else None, move_2_or_less=round(100 * sum(x <= 2 for x in mv) / len(mv), 1) if mv else None,
@@ -456,6 +553,14 @@ def report(res):
         L.append(f"  restates the last phrase   {fmt(i['restated'])}% of {i['pairs']} (chance {fmt(i['chance'])}%); again after a restatement {fmt(i['again_after_restated'])}%, after a new one {fmt(i['again_after_new'])}%")
         L.append(f"  restatement chains          " + "  ".join(f"{k}: {v}" for k, v in i["chains"].items()) + f";  head only {fmt(i['head_only'])}%, nearly all {fmt(i['all'])}%; notes matched median {fmt(i['notes_median'])}")
         L.append(f"  moved, on a new chord (n={i['new_chord']}) with the root {fmt(i['moved_with_root'])}%, not moved {fmt(i['at_0_new_chord'])}%, other {fmt(i['other_new_chord'])}%; same chord (n={i['same_chord']}) not moved {fmt(i['at_0_same_chord'])}%")
+        cr = s["carried"]
+        L.append(f"  ideas carried (n={cr['pairs']} pairs of 6+ note phrases): the next phrase repeats the last one's")
+        for name, label in (("head", "head intervals"), ("rhythm", "head rhythm"), ("contour", "head contour"), ("cell", "a cell anywhere")):
+            x = cr["repeats"][name]
+            L.append(f"    {label:<16} {fmt(x['next'])}% (two back {fmt(x['two_back'])}%, chance {fmt(x['chance'])}%; carry {fmt(x['carry'])}); again after one {fmt(x['again'])}%; chains " + " ".join(f"{k}:{v}" for k, v in x["chains"].items()))
+        mv = cr["moves"]
+        L.append(f"    shaped cells shared (n={cr['shaped_cells']}): where, by fifths of the phrase {cr['at_fifths']}; rhythm kept {fmt(cr['rhythm_kept'])}%")
+        L.append(f"    moved: new chord with the root {fmt(mv['new_root'])}%, not moved {fmt(mv['new_at_0'])}%, other {fmt(mv['new_other'])}%; same chord moved {fmt(mv['same_moved'])}%, not moved {fmt(mv['same_at_0'])}%; no chord {fmt(mv['no_chord'])}%")
         k = s["skeleton"]
         L.append(f"  on changes at 1 and 3 (n={k['n']})  " + "  ".join(f"{d} {fmt(v)}" for d, v in k["degrees"].items()) + f";  move median {fmt(k['move_median'])} st, 2 or less {fmt(k['move_2_or_less'])}%")
         L.append(f"  contours (n={k['contours_n']})          " + "  ".join(f"{d} {fmt(v)}" for d, v in k["contours"].items()))
@@ -515,6 +620,9 @@ def selftest():
     assert r["skeleton"]["n"] == 2 and r["skeleton"]["degrees"]["3"] == 100.0, r["skeleton"]  # bar 1 and bar 9
     assert r["skeleton"]["contours"]["up"] == 100.0, r["skeleton"]
     assert r["entries"]["after_8bar_line"] == 66.7, r["entries"]  # on bar 1's ONE and bar 9's
+    assert shared_cell([1, 2, 3, 4, 5, -3, 4, 2], [7, 7, 5, -2, 4, 2, 9]) == (4, 2) and shaped([5, -3, 4, 2]) and not shaped([2, 2, 1, 2])
+    cr = r["carried"]
+    assert cr["pairs"] == 0, cr  # (the test phrases are 5 notes: too short to count)
     print("selftest: ok")
 
 
