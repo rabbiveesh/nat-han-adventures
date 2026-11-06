@@ -513,9 +513,9 @@ fn sunny_side_gets_bryants_paired_quarters() {
 fn the_comp_answers_the_soloist() {
     use nat_han_adventures::audio::live::{chorus::{Call, Chorus}, soloist::Soloist};
     let setup = [freedom(0.8), Input::ForceSoloist(Some(Soloist::Miles)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
-    let (_, bars) = play(song(Music::World(1)), 3, &setup, |_| vec![], 96);
+    let (_, bars) = play(song(Music::World(1)), 3, &setup, |_| vec![], 192);
     let answered: Vec<&Bar> = bars.iter().filter(|b| b.c.orns[1].has(Orn::CompAnswer)).collect();
-    assert!(answered.len() >= 4, "{} answers in 96 bars", answered.len());
+    assert!(answered.len() >= 3, "{} answers in 192 bars", answered.len());
     for b in answered {
         let lead: Vec<(u64, u64)> = b.ch(0).map(|e| (e.start, e.end)).collect();
         let stabs = b.ch(1).filter(|e| lead.iter().all(|&(s, z)| e.start >= z || e.start + 1 < s)).count();

@@ -341,7 +341,9 @@ impl Musician for Comp {
             // Call and response: in a soloist's breath, the comp answers (two stabs, the "and"
             // and the next beat), the more the looser it plays.
             let own_line = fired.has(Orn::Riff) || fired.has(Orn::Soli) || fired.has(Orn::ShoutStabs);
-            if swing && own_chorus && band.hits == 0 && !own_line && ctx.soloist.profile().is_some() && r.chance(0.5 * self.p.freedom as f64)
+            // (Not where it's about to lay out for the drums' big fill.)
+            let fill_room = phrase_last && matches!(band.fill, Fill::Full | Fill::PressRoll);
+            if swing && own_chorus && band.hits == 0 && !own_line && !fill_room && ctx.soloist.profile().is_some() && r.chance(0.5 * self.p.freedom as f64)
                 && let Some((g0, g1)) = lead_gap(ctx, out)
             {
                 clear_span(ctx, &mut self.dst, g0, g1);
