@@ -333,7 +333,7 @@ mod tests {
         let song = library::load("sweet_georgia_brown").unwrap();
         let mut engine = Engine::new(&song, 32_000).unwrap();
         let mut g = Gameplay::default();
-        let mut buf = vec![kira::Frame::ZERO; 512];
+        let mut buf = vec![nat_han_adventures::audio::Frame::ZERO; 512];
         let mut run = |g: &mut Gameplay, e: &mut Engine, inputs: Vec<Input>, secs: f32| {
             for i in inputs {
                 e.post(i);

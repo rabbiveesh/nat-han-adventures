@@ -8,8 +8,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 ## What's built (all on `main`)
 - **Story**: 10 levels, 5 worlds. Nat (the poo hero) + Han (the plumber, an AI buddy). Golden
   nuggets (ghost nuggets after a death count once), checkpoints, goal flag, level select, saving.
-- **Music**: a real-time chiptune engine (`src/audio/live/`) playing public-domain (pre-1931)
-  jazz standards from `music/*.song` (MML + chord chart + FamiTracker-style `[instruments]`).
+- **Music**: a real-time chiptune engine (`crates/bandstand`, `src/live/`) playing public-domain (pre-1931)
+  jazz standards from `crates/bandstand/music/*.song` (MML + chord chart + FamiTracker-style `[instruments]`).
   Four musicians (lead/comp/bass/drums) with freedom dials and a full ornament vocabulary
   (side-slipping, planing, enclosures, digital patterns, hemiola, reharm, hits, trading fours…),
   flourishes on game events (summon crash+fill, checkpoint fill, death wah-wah), and

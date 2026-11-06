@@ -4,7 +4,7 @@
 //! (the bossa clave, the samba's surdo, rock's backbeat, funk's 16ths), the harmony as charted
 //! (coloured, or simplified to power chords in rock), through every filter and tuning.
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony, Music,
     live::{

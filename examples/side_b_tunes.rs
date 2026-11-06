@@ -10,7 +10,7 @@
 
 use std::{fmt::Write as _, path::Path};
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::Music;
 use nat_han_adventures::audio::live::{Engine, EngineConfig, Input, library, musician::Role};
 use nat_han_adventures::adapt::BandMood;

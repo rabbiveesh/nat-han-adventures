@@ -1,6 +1,6 @@
 # Analysis scripts
 
-One-off measurements behind the band's numbers (`music/players/*.player`, `music/bass/`,
+One-off measurements behind the band's numbers (`crates/bandstand/music/players/*.player`, `crates/bandstand/music/bass/`,
 `pocket.rs`, `mix.rs`, `groove_ms`). None of them run in the game or its tests. They print
 statistics only. No audio or data dumps are kept here.
 

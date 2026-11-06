@@ -76,7 +76,7 @@ fn the_cheat_sheet_covers_every_token() {
 
 // --- streaming vs offline -----------------------------------------------------------------
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony,
     live::{Engine, EngineConfig, Input},
