@@ -5,7 +5,7 @@
 //! played beyond the written part.
 
 use bevy_egui::egui::{self, Align2, Color32, Pos2, Rect, Sense, Shape, Stroke, pos2, vec2};
-use nat_han_adventures::audio::live::band::{Fill, Trade};
+use nat_han_adventures::audio::live::band::{Fill, SubKind, Trade};
 use nat_han_adventures::audio::live::engine::CommittedBar;
 use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::ornament::Orn;
@@ -137,23 +137,29 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
             ui.painter_at(Rect::from_min_max(pos2(at, band_r.top()), pos2(grid.right(), band_r.bottom())))
                 .text(pos2(at + 5.0, band_r.top() + 10.0), Align2::LEFT_CENTER, format!("{chorus}{feel}{who}"), font.clone(), TEXT);
         }
-        let mut notes = Vec::new();
-        if c.band.subs.iter().any(|s| s.is_some()) {
-            notes.push("reharm");
+        let mut notes: Vec<String> = Vec::new();
+        for s in c.band.subs.iter().flatten() {
+            let kind = match s.kind {
+                SubKind::Tritone => "tritone sub",
+                SubKind::Backdoor => "backdoor",
+                SubKind::IiV => "ii",
+                SubKind::Arranged => "arranged",
+            };
+            notes.push(format!("{} {kind}", s.chord));
         }
         match c.band.trade {
-            Trade::Lead => notes.push("lead's 4"),
-            Trade::Drums => notes.push("drums' 4"),
+            Trade::Lead => notes.push("lead's 4".into()),
+            Trade::Drums => notes.push("drums' 4".into()),
             Trade::None => {}
         }
         if c.band.solo_break {
-            notes.push("break");
+            notes.push("break".into());
         }
         if c.band.tacet {
-            notes.push("tacet");
+            notes.push("tacet".into());
         }
         if !notes.is_empty() {
-            pa.text(pos2(xa + 5.0, band_r.bottom() - 9.0), Align2::LEFT_CENTER, notes.join(" "), small.clone(), TEXT_DIM);
+            pa.text(pos2(xa + 5.0, band_r.bottom() - 9.0), Align2::LEFT_CENTER, notes.join(" · "), small.clone(), GOLD);
         }
         // Hits: gold ticks on their 16ths.
         for k in 0..16 {

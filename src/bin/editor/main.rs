@@ -15,7 +15,7 @@
 //! (force the band's feel), `--chorus head|two-feel|blowing|stop-time|breaks|riffs|strolling|soli|shout`
 //! (force the chorus), `--soloist band|miles|trane|bird|sonny|wayne|pops|funk|latin` (one soloist all
 //! through), `--on-grid` (no pocket, ducking or drift), `--auto <chaos 0..1>`,
-//! `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
+//! `--freedom <0..1>` (every musician's dial), `--rec`, `--as-played` (the tracker shows the band's version), `--replace FIND=>WITH` (edit the text first), `--size <w>x<h>`, `--screenshot <file.png>` (after `--wait <secs>`, then quit),
 //! `--capture <dir>` (a video's frames: time steps 1/`--fps` (30) a frame, every frame saved as
 //! `<dir>/f00000.png`, the sound in lockstep into `<dir>/audio.wav`, `--secs` (30) of it, then
 //! quit; with `NATHAN_AUDIO=headless`),
@@ -63,6 +63,7 @@ struct Args {
     wait: f32,
     check: bool,
     capture: Option<PathBuf>,
+    freedom: Option<f32>,
     fps: f32,
     secs: f32,
     /// `--replace FIND=>WITH`: edit the text at the start (demos, screenshots of errors).
@@ -97,6 +98,7 @@ fn args() -> Result<Args, String> {
             "--wait" => a.wait = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--check" => a.check = true,
             "--capture" => a.capture = Some(PathBuf::from(val()?)),
+            "--freedom" => a.freedom = Some(val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
             "--fps" => a.fps = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--secs" => a.secs = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--replace" => {
@@ -171,6 +173,9 @@ fn main() {
         }
     }
     ed.dials.force_feel = a.feel;
+    if let Some(f) = a.freedom {
+        ed.dials.freedom = [f.clamp(0.0, 1.0); 5];
+    }
     ed.dials.soloist = a.soloist;
     if a.grid {
         (ed.dials.pocket, ed.dials.duck, ed.dials.drift) = (false, false, false);
