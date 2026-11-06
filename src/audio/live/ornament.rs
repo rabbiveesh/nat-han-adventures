@@ -97,10 +97,12 @@ pub enum Orn {
     ShoutStabs,
     Plinks,
     Stop,
+    /// The comp answers the soloist in their breath.
+    CompAnswer,
 }
 
 impl Orn {
-    pub const ALL: [Orn; 75] = [
+    pub const ALL: [Orn; 76] = [
         Orn::Grace,
         Orn::Vibrato,
         Orn::FallOff,
@@ -176,6 +178,7 @@ impl Orn {
         Orn::ShoutStabs,
         Orn::Plinks,
         Orn::Stop,
+        Orn::CompAnswer,
     ];
 
     pub fn name(self) -> &'static str {
@@ -255,6 +258,7 @@ impl Orn {
             Orn::ShoutStabs => "shout stabs",
             Orn::Plinks => "basie plinks",
             Orn::Stop => "stop-time",
+            Orn::CompAnswer => "comp answers",
         }
     }
 

@@ -1,0 +1,982 @@
+{
+ "miles": {
+  "solos": 10,
+  "timing": {
+   "<140": {
+    "swing": 1.43,
+    "lay_back_ms": 28.9,
+    "offbeat_vs_midpoint_ms": 41.7,
+    "jitter_ms": 26.3,
+    "pairs": 75,
+    "solos": 4
+   },
+   "140-200": {
+    "swing": 1.94,
+    "lay_back_ms": 16.7,
+    "offbeat_vs_midpoint_ms": 55.6,
+    "jitter_ms": 18.8,
+    "pairs": 84,
+    "solos": 2
+   },
+   "200-260": {
+    "swing": 1.19,
+    "lay_back_ms": 4.4,
+    "offbeat_vs_midpoint_ms": 10.6,
+    "jitter_ms": 17.1,
+    "pairs": 132,
+    "solos": 1
+   },
+   ">260": {
+    "swing": 1.18,
+    "lay_back_ms": 2.9,
+    "offbeat_vs_midpoint_ms": 9.2,
+    "jitter_ms": 14.3,
+    "pairs": 238,
+    "solos": 3
+   }
+  },
+  "register": {
+   "range_median": 13.3,
+   "choruses": 38,
+   "new_high": 35.7,
+   "later_choruses": 28,
+   "centre_move_median_abs": 1.0,
+   "centre_move_mean": 0.11
+  },
+  "chords": {
+   "starts_near_change": 69.4,
+   "ends_near_change": 57.4,
+   "chance": 65.1,
+   "held_and_into_change": 72.0,
+   "held_and_into_bar_without_change": 80.0,
+   "ands_before_changes": 164,
+   "ands_before_bars": 20
+  },
+  "form": {
+   "section_bars": [
+    0.78,
+    1.14,
+    0.94,
+    0.62,
+    0.95,
+    1.32,
+    0.94,
+    0.61
+   ],
+   "turnaround": 0.59
+  },
+  "habits": {
+   "<140": {
+    "steps": 53.6,
+    "leaps": 9.6,
+    "in_runs": 49.6,
+    "thirds_in_runs": 28.5,
+    "intervals": 866
+   },
+   "140-200": {
+    "steps": 53.9,
+    "leaps": 8.8,
+    "in_runs": 41.4,
+    "thirds_in_runs": 22.4,
+    "intervals": 558
+   },
+   "200-260": {
+    "steps": 65.8,
+    "leaps": 8.7,
+    "in_runs": 67.1,
+    "thirds_in_runs": 16.5,
+    "intervals": 389
+   },
+   ">260": {
+    "steps": 73.4,
+    "leaps": 4.1,
+    "in_runs": 61.2,
+    "thirds_in_runs": 14.4,
+    "intervals": 801
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -3.8,
+    "mid": 0.3,
+    "high": 2.7
+   },
+   "phrase": {
+    "first": -0.8,
+    "early": 0.9,
+    "middle": 0.3,
+    "late": -0.8,
+    "last": -1.5
+   },
+   "chorus": {
+    "1": -0.2,
+    "2": 0.1,
+    "3": -0.2,
+    "4+": 0.2
+   },
+   "notes": 2864
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.82,
+    "ghosted_offbeats": 16.0,
+    "offbeats": 632
+   },
+   "140-200": {
+    "legato": 0.82,
+    "ghosted_offbeats": 14.2,
+    "offbeats": 324
+   },
+   "200-260": {
+    "legato": 0.93,
+    "ghosted_offbeats": 12.2,
+    "offbeats": 238
+   },
+   ">260": {
+    "legato": 0.91,
+    "ghosted_offbeats": 12.7,
+    "offbeats": 537
+   }
+  }
+ },
+ "trane": {
+  "solos": 7,
+  "timing": {
+   "<140": {
+    "swing": 1.52,
+    "lay_back_ms": 12.1,
+    "offbeat_vs_midpoint_ms": 43.9,
+    "jitter_ms": 24.5,
+    "pairs": 41,
+    "solos": 1
+   },
+   "140-200": {
+    "swing": 1.71,
+    "lay_back_ms": 10.4,
+    "offbeat_vs_midpoint_ms": 41.8,
+    "jitter_ms": 19.3,
+    "pairs": 349,
+    "solos": 4
+   },
+   "200-260": {
+    "swing": null,
+    "lay_back_ms": null,
+    "offbeat_vs_midpoint_ms": null,
+    "jitter_ms": null,
+    "pairs": 0,
+    "solos": 0
+   },
+   ">260": {
+    "swing": 1.15,
+    "lay_back_ms": -2.8,
+    "offbeat_vs_midpoint_ms": 7.2,
+    "jitter_ms": 14.0,
+    "pairs": 1558,
+    "solos": 2
+   }
+  },
+  "register": {
+   "range_median": 18.0,
+   "choruses": 58,
+   "new_high": 7.8,
+   "later_choruses": 51,
+   "centre_move_median_abs": 3.0,
+   "centre_move_mean": -0.27
+  },
+  "chords": {
+   "starts_near_change": 13.6,
+   "ends_near_change": 16.2,
+   "chance": 16.6,
+   "held_and_into_change": 67.9,
+   "held_and_into_bar_without_change": 54.1,
+   "ands_before_changes": 109,
+   "ands_before_bars": 588
+  },
+  "form": {
+   "section_bars": [
+    0.85,
+    0.89,
+    0.98,
+    1.02,
+    1.02,
+    1.21,
+    1.01,
+    0.89
+   ],
+   "turnaround": 0.6
+  },
+  "habits": {
+   "<140": {
+    "steps": 54.4,
+    "leaps": 10.6,
+    "in_runs": 55.8,
+    "thirds_in_runs": 23.8,
+    "intervals": 397
+   },
+   "140-200": {
+    "steps": 49.6,
+    "leaps": 13.9,
+    "in_runs": 52.2,
+    "thirds_in_runs": 32.2,
+    "intervals": 2501
+   },
+   "200-260": {
+    "steps": null,
+    "leaps": null,
+    "in_runs": null,
+    "thirds_in_runs": null,
+    "intervals": 0
+   },
+   ">260": {
+    "steps": 43.0,
+    "leaps": 21.7,
+    "in_runs": 46.2,
+    "thirds_in_runs": 32.9,
+    "intervals": 6326
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -0.4,
+    "mid": 0.1,
+    "high": 0.3
+   },
+   "phrase": {
+    "first": 0.9,
+    "early": 0.1,
+    "middle": -0.1,
+    "late": -0.3,
+    "last": -0.4
+   },
+   "chorus": {
+    "1": 0.2,
+    "2": 0.3,
+    "3": 0.3,
+    "4+": -0.2
+   },
+   "notes": 10012
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.87,
+    "ghosted_offbeats": 5.3,
+    "offbeats": 283
+   },
+   "140-200": {
+    "legato": 0.91,
+    "ghosted_offbeats": 3.3,
+    "offbeats": 1755
+   },
+   "200-260": {
+    "legato": null,
+    "ghosted_offbeats": null,
+    "offbeats": 0
+   },
+   ">260": {
+    "legato": 0.87,
+    "ghosted_offbeats": 3.0,
+    "offbeats": 4669
+   }
+  }
+ },
+ "bird": {
+  "solos": 16,
+  "timing": {
+   "<140": {
+    "swing": 1.67,
+    "lay_back_ms": 16.3,
+    "offbeat_vs_midpoint_ms": 80.1,
+    "jitter_ms": 31.5,
+    "pairs": 44,
+    "solos": 6
+   },
+   "140-200": {
+    "swing": 2.03,
+    "lay_back_ms": 16.1,
+    "offbeat_vs_midpoint_ms": 58.3,
+    "jitter_ms": 19.3,
+    "pairs": 103,
+    "solos": 4
+   },
+   "200-260": {
+    "swing": 1.55,
+    "lay_back_ms": 5.6,
+    "offbeat_vs_midpoint_ms": 28.2,
+    "jitter_ms": 17.7,
+    "pairs": 353,
+    "solos": 5
+   },
+   ">260": {
+    "swing": 1.16,
+    "lay_back_ms": -0.2,
+    "offbeat_vs_midpoint_ms": 7.3,
+    "jitter_ms": 14.1,
+    "pairs": 159,
+    "solos": 1
+   }
+  },
+  "register": {
+   "range_median": 18.0,
+   "choruses": 27,
+   "new_high": 54.5,
+   "later_choruses": 11,
+   "centre_move_median_abs": 0.0,
+   "centre_move_mean": -0.18
+  },
+  "chords": {
+   "starts_near_change": 75.2,
+   "ends_near_change": 74.2,
+   "chance": 72.3,
+   "held_and_into_change": 68.3,
+   "held_and_into_bar_without_change": 60.7,
+   "ands_before_changes": 189,
+   "ands_before_bars": 28
+  },
+  "form": {
+   "section_bars": [
+    0.95,
+    1.2,
+    1.04,
+    0.86,
+    1.22,
+    1.21,
+    1.12,
+    0.82
+   ],
+   "turnaround": 0.83
+  },
+  "habits": {
+   "<140": {
+    "steps": 59.5,
+    "leaps": 10.8,
+    "in_runs": 64.4,
+    "thirds_in_runs": 25.3,
+    "intervals": 2203
+   },
+   "140-200": {
+    "steps": 61.3,
+    "leaps": 10.6,
+    "in_runs": 73.3,
+    "thirds_in_runs": 29.3,
+    "intervals": 1024
+   },
+   "200-260": {
+    "steps": 57.8,
+    "leaps": 13.1,
+    "in_runs": 69.3,
+    "thirds_in_runs": 26.0,
+    "intervals": 1377
+   },
+   ">260": {
+    "steps": 55.3,
+    "leaps": 9.7,
+    "in_runs": 81.4,
+    "thirds_in_runs": 35.7,
+    "intervals": 514
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -3.4,
+    "mid": 1.1,
+    "high": 1.8
+   },
+   "phrase": {
+    "first": 1.8,
+    "early": 1.1,
+    "middle": -0.0,
+    "late": -0.9,
+    "last": -4.0
+   },
+   "chorus": {
+    "1": -0.0,
+    "2": 0.2,
+    "3": -0.2,
+    "4+": -0.8
+   },
+   "notes": 5242
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.92,
+    "ghosted_offbeats": 12.3,
+    "offbeats": 1623
+   },
+   "140-200": {
+    "legato": 0.94,
+    "ghosted_offbeats": 16.3,
+    "offbeats": 718
+   },
+   "200-260": {
+    "legato": 0.9,
+    "ghosted_offbeats": 19.1,
+    "offbeats": 803
+   },
+   ">260": {
+    "legato": 0.92,
+    "ghosted_offbeats": 12.8,
+    "offbeats": 359
+   }
+  }
+ },
+ "sonny": {
+  "solos": 7,
+  "timing": {
+   "<140": {
+    "swing": 1.5,
+    "lay_back_ms": 20.6,
+    "offbeat_vs_midpoint_ms": 47.7,
+    "jitter_ms": 22.3,
+    "pairs": 64,
+    "solos": 4
+   },
+   "140-200": {
+    "swing": 1.77,
+    "lay_back_ms": 14.0,
+    "offbeat_vs_midpoint_ms": 46.8,
+    "jitter_ms": 20.3,
+    "pairs": 87,
+    "solos": 1
+   },
+   "200-260": {
+    "swing": 1.35,
+    "lay_back_ms": 7.0,
+    "offbeat_vs_midpoint_ms": 17.8,
+    "jitter_ms": 16.0,
+    "pairs": 173,
+    "solos": 1
+   },
+   ">260": {
+    "swing": 1.31,
+    "lay_back_ms": 2.0,
+    "offbeat_vs_midpoint_ms": 14.1,
+    "jitter_ms": 14.4,
+    "pairs": 114,
+    "solos": 1
+   }
+  },
+  "register": {
+   "range_median": 16.0,
+   "choruses": 28,
+   "new_high": 28.6,
+   "later_choruses": 21,
+   "centre_move_median_abs": 3.0,
+   "centre_move_mean": 0.12
+  },
+  "chords": {
+   "starts_near_change": 60.6,
+   "ends_near_change": 66.1,
+   "chance": 58.8,
+   "held_and_into_change": 78.8,
+   "held_and_into_bar_without_change": 68.4,
+   "ands_before_changes": 104,
+   "ands_before_bars": 19
+  },
+  "form": {
+   "section_bars": [
+    0.85,
+    0.99,
+    0.89,
+    0.97,
+    0.77,
+    1.17,
+    1.07,
+    0.79
+   ],
+   "turnaround": 0.58
+  },
+  "habits": {
+   "<140": {
+    "steps": 48.6,
+    "leaps": 14.4,
+    "in_runs": 55.2,
+    "thirds_in_runs": 36.8,
+    "intervals": 1007
+   },
+   "140-200": {
+    "steps": 45.1,
+    "leaps": 12.4,
+    "in_runs": 52.2,
+    "thirds_in_runs": 34.9,
+    "intervals": 468
+   },
+   "200-260": {
+    "steps": 64.0,
+    "leaps": 8.5,
+    "in_runs": 74.1,
+    "thirds_in_runs": 24.0,
+    "intervals": 520
+   },
+   ">260": {
+    "steps": 56.7,
+    "leaps": 13.5,
+    "in_runs": 56.8,
+    "thirds_in_runs": 26.4,
+    "intervals": 443
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -1.7,
+    "mid": 0.6,
+    "high": 1.0
+   },
+   "phrase": {
+    "first": 1.1,
+    "early": 0.3,
+    "middle": -0.2,
+    "late": -0.0,
+    "last": -1.9
+   },
+   "chorus": {
+    "1": -0.8,
+    "2": 0.8,
+    "3": -0.1,
+    "4+": 0.2
+   },
+   "notes": 2609
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.83,
+    "ghosted_offbeats": 9.4,
+    "offbeats": 700
+   },
+   "140-200": {
+    "legato": 0.89,
+    "ghosted_offbeats": 7.4,
+    "offbeats": 339
+   },
+   "200-260": {
+    "legato": 0.9,
+    "ghosted_offbeats": 12.1,
+    "offbeats": 321
+   },
+   ">260": {
+    "legato": 0.88,
+    "ghosted_offbeats": 19.0,
+    "offbeats": 290
+   }
+  }
+ },
+ "wayne": {
+  "solos": 7,
+  "timing": {
+   "<140": {
+    "swing": 1.72,
+    "lay_back_ms": 18.7,
+    "offbeat_vs_midpoint_ms": 65.5,
+    "jitter_ms": 33.8,
+    "pairs": 48,
+    "solos": 2
+   },
+   "140-200": {
+    "swing": 1.7,
+    "lay_back_ms": 21.2,
+    "offbeat_vs_midpoint_ms": 53.5,
+    "jitter_ms": 21.9,
+    "pairs": 100,
+    "solos": 2
+   },
+   "200-260": {
+    "swing": null,
+    "lay_back_ms": null,
+    "offbeat_vs_midpoint_ms": null,
+    "jitter_ms": null,
+    "pairs": 0,
+    "solos": 0
+   },
+   ">260": {
+    "swing": 1.18,
+    "lay_back_ms": -0.8,
+    "offbeat_vs_midpoint_ms": 8.8,
+    "jitter_ms": 14.1,
+    "pairs": 321,
+    "solos": 3
+   }
+  },
+  "register": {
+   "range_median": 17.0,
+   "choruses": 16,
+   "new_high": 44.4,
+   "later_choruses": 9,
+   "centre_move_median_abs": 2.5,
+   "centre_move_mean": 0.83
+  },
+  "chords": {
+   "starts_near_change": 57.0,
+   "ends_near_change": 62.2,
+   "chance": 60.5,
+   "held_and_into_change": 55.6,
+   "held_and_into_bar_without_change": 42.9,
+   "ands_before_changes": 99,
+   "ands_before_bars": 21
+  },
+  "form": {
+   "section_bars": [
+    0.85,
+    1.06,
+    0.88,
+    0.9,
+    1.13,
+    1.28,
+    1.13,
+    0.83
+   ],
+   "turnaround": 0.89
+  },
+  "habits": {
+   "<140": {
+    "steps": 57.7,
+    "leaps": 17.6,
+    "in_runs": 50.8,
+    "thirds_in_runs": 22.6,
+    "intervals": 489
+   },
+   "140-200": {
+    "steps": 55.6,
+    "leaps": 12.5,
+    "in_runs": 59.2,
+    "thirds_in_runs": 23.9,
+    "intervals": 678
+   },
+   "200-260": {
+    "steps": null,
+    "leaps": null,
+    "in_runs": null,
+    "thirds_in_runs": null,
+    "intervals": 0
+   },
+   ">260": {
+    "steps": 58.5,
+    "leaps": 15.2,
+    "in_runs": 65.4,
+    "thirds_in_runs": 21.5,
+    "intervals": 972
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -2.1,
+    "mid": 0.4,
+    "high": 1.1
+   },
+   "phrase": {
+    "first": 1.0,
+    "early": 0.4,
+    "middle": 0.2,
+    "late": -1.0,
+    "last": -1.7
+   },
+   "chorus": {
+    "1": -0.4,
+    "2": 0.3,
+    "3": -0.1,
+    "4+": 0.5
+   },
+   "notes": 2288
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.92,
+    "ghosted_offbeats": 10.8,
+    "offbeats": 353
+   },
+   "140-200": {
+    "legato": 0.91,
+    "ghosted_offbeats": 7.2,
+    "offbeats": 445
+   },
+   "200-260": {
+    "legato": null,
+    "ghosted_offbeats": null,
+    "offbeats": 0
+   },
+   ">260": {
+    "legato": 0.84,
+    "ghosted_offbeats": 6.5,
+    "offbeats": 659
+   }
+  }
+ },
+ "pops": {
+  "solos": 8,
+  "timing": {
+   "<140": {
+    "swing": 1.48,
+    "lay_back_ms": 23.4,
+    "offbeat_vs_midpoint_ms": 50.3,
+    "jitter_ms": 25.7,
+    "pairs": 45,
+    "solos": 2
+   },
+   "140-200": {
+    "swing": 1.61,
+    "lay_back_ms": 9.0,
+    "offbeat_vs_midpoint_ms": 38.8,
+    "jitter_ms": 18.7,
+    "pairs": 200,
+    "solos": 6
+   },
+   "200-260": {
+    "swing": null,
+    "lay_back_ms": null,
+    "offbeat_vs_midpoint_ms": null,
+    "jitter_ms": null,
+    "pairs": 0,
+    "solos": 0
+   },
+   ">260": {
+    "swing": null,
+    "lay_back_ms": null,
+    "offbeat_vs_midpoint_ms": null,
+    "jitter_ms": null,
+    "pairs": 0,
+    "solos": 0
+   }
+  },
+  "register": {
+   "range_median": 16.5,
+   "choruses": 12,
+   "new_high": 25.0,
+   "later_choruses": 4,
+   "centre_move_median_abs": 2.5,
+   "centre_move_mean": -1.5
+  },
+  "chords": {
+   "starts_near_change": 60.0,
+   "ends_near_change": 44.4,
+   "chance": 55.6,
+   "held_and_into_change": 62.1,
+   "held_and_into_bar_without_change": 71.4,
+   "ands_before_changes": 58,
+   "ands_before_bars": 14
+  },
+  "form": {
+   "section_bars": [
+    1.01,
+    1.11,
+    1.07,
+    0.73,
+    1.11,
+    1.05,
+    1.21,
+    1.06
+   ],
+   "turnaround": 0.62
+  },
+  "habits": {
+   "<140": {
+    "steps": 41.2,
+    "leaps": 20.7,
+    "in_runs": 43.1,
+    "thirds_in_runs": 37.5,
+    "intervals": 352
+   },
+   "140-200": {
+    "steps": 36.1,
+    "leaps": 19.0,
+    "in_runs": 32.0,
+    "thirds_in_runs": 39.5,
+    "intervals": 715
+   },
+   "200-260": {
+    "steps": null,
+    "leaps": null,
+    "in_runs": null,
+    "thirds_in_runs": null,
+    "intervals": 0
+   },
+   ">260": {
+    "steps": null,
+    "leaps": null,
+    "in_runs": null,
+    "thirds_in_runs": null,
+    "intervals": 0
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -2.4,
+    "mid": 0.4,
+    "high": 1.1
+   },
+   "phrase": {
+    "first": 0.4,
+    "early": 0.4,
+    "middle": 0.4,
+    "late": -1.1,
+    "last": -4.8
+   },
+   "chorus": {
+    "1": -0.1,
+    "2": 1.1,
+    "3": -2.1,
+    "4+": null
+   },
+   "notes": 1154
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.75,
+    "ghosted_offbeats": 11.7,
+    "offbeats": 248
+   },
+   "140-200": {
+    "legato": 0.79,
+    "ghosted_offbeats": 18.8,
+    "offbeats": 421
+   },
+   "200-260": {
+    "legato": null,
+    "ghosted_offbeats": null,
+    "offbeats": 0
+   },
+   ">260": {
+    "legato": null,
+    "ghosted_offbeats": null,
+    "offbeats": 0
+   }
+  }
+ },
+ "all": {
+  "solos": 402,
+  "timing": {
+   "<140": {
+    "swing": 1.6,
+    "lay_back_ms": 17.6,
+    "offbeat_vs_midpoint_ms": 55.8,
+    "jitter_ms": 25.9,
+    "pairs": 2975,
+    "solos": 133
+   },
+   "140-200": {
+    "swing": 1.66,
+    "lay_back_ms": 10.5,
+    "offbeat_vs_midpoint_ms": 42.5,
+    "jitter_ms": 19.3,
+    "pairs": 5792,
+    "solos": 111
+   },
+   "200-260": {
+    "swing": 1.4,
+    "lay_back_ms": 3.4,
+    "offbeat_vs_midpoint_ms": 21.6,
+    "jitter_ms": 16.9,
+    "pairs": 10487,
+    "solos": 91
+   },
+   ">260": {
+    "swing": 1.2,
+    "lay_back_ms": -0.9,
+    "offbeat_vs_midpoint_ms": 9.2,
+    "jitter_ms": 14.3,
+    "pairs": 11547,
+    "solos": 66
+   }
+  },
+  "register": {
+   "range_median": 17.0,
+   "choruses": 1179,
+   "new_high": 36.2,
+   "later_choruses": 779,
+   "centre_move_median_abs": 2.0,
+   "centre_move_mean": 0.3
+  },
+  "chords": {
+   "starts_near_change": 60.1,
+   "ends_near_change": 58.3,
+   "chance": 57.3,
+   "held_and_into_change": 62.5,
+   "held_and_into_bar_without_change": 60.2,
+   "ands_before_changes": 7139,
+   "ands_before_bars": 2763
+  },
+  "form": {
+   "section_bars": [
+    0.86,
+    1.01,
+    0.98,
+    1.0,
+    1.0,
+    1.13,
+    1.01,
+    0.96
+   ],
+   "turnaround": 0.74
+  },
+  "habits": {
+   "<140": {
+    "steps": 55.4,
+    "leaps": 13.1,
+    "in_runs": 59.8,
+    "thirds_in_runs": 27.3,
+    "intervals": 50510
+   },
+   "140-200": {
+    "steps": 56.1,
+    "leaps": 11.9,
+    "in_runs": 60.5,
+    "thirds_in_runs": 27.4,
+    "intervals": 34950
+   },
+   "200-260": {
+    "steps": 57.1,
+    "leaps": 12.0,
+    "in_runs": 61.8,
+    "thirds_in_runs": 26.0,
+    "intervals": 38031
+   },
+   ">260": {
+    "steps": 57.4,
+    "leaps": 12.4,
+    "in_runs": 63.1,
+    "thirds_in_runs": 24.6,
+    "intervals": 40841
+   }
+  },
+  "dynamics": {
+   "register": {
+    "low": -2.1,
+    "mid": 0.4,
+    "high": 1.4
+   },
+   "phrase": {
+    "first": 1.2,
+    "early": 0.7,
+    "middle": 0.0,
+    "late": -0.7,
+    "last": -2.2
+   },
+   "chorus": {
+    "1": -0.1,
+    "2": 0.1,
+    "3": 0.1,
+    "4+": 0.1
+   },
+   "notes": 173116
+  },
+  "articulation": {
+   "<140": {
+    "legato": 0.87,
+    "ghosted_offbeats": 10.3,
+    "offbeats": 35748
+   },
+   "140-200": {
+    "legato": 0.85,
+    "ghosted_offbeats": 10.6,
+    "offbeats": 23215
+   },
+   "200-260": {
+    "legato": 0.86,
+    "ghosted_offbeats": 10.4,
+    "offbeats": 24392
+   },
+   ">260": {
+    "legato": 0.87,
+    "ghosted_offbeats": 8.1,
+    "offbeats": 28102
+   }
+  }
+ }
+}

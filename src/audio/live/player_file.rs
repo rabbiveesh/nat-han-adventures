@@ -17,13 +17,24 @@
 //! intervals = 9.4 28.0 33.5 13.1 8.4 3.8 0.7 1.8 1.3   ; 0 1 2 3 4 5 6 7 8-12 semitones
 //! step_back = 0.24          ; and end_chord_tone, approach, from_below, enclosure,
 //!                           ; pentatonic, anticipation, falls, strong_chord_tone (shares)
+//! end_beats = 0.24 0.19 0.28 0.24 0.05   ; a phrase's target beat: 1 2 3 4, off the beat
+//! end_push = 0.49           ; an on-beat target anticipated (an 8th early, held over)
+//! end_tones = 0.27 0.19 0.19 0.13 0.10 0.08 0.04   ; its degree: R 3 5 7 9 11 13
+//! end_chromatic = 0.058 0.86   ; a half step off it, unresolved; the share from above
+//! start_place = 0.40 0.22 0.38   ; a phrase starts on the beat, on the "and", elsewhere
+//! start_on = 0.19 0.45 0.22 0.14 ; the beat of an on-beat start (1 2 3 4)
+//! start_and = 0.47 0.26 0.11 0.16; the beat an off-beat start is in (4: a pickup)
+//! start_tones = 0.20 0.14 0.12 0.13 0.21 0.07 0.11   ; its first note: R 3 5 7 9 11 13
+//! start_chromatic = 0.14    ; ...or a half step into a chord tone (`from_below` from below)
+//! start_up = 0.69           ; the line goes up from it
+//! sixteenths = 0.184 0.122 0.039 0.020   ; 16th-or-faster notes at <140, 140-200, 200-260, >260 bpm
 //!
 //! [dynamics]
 //! arch = -1.46 1.06 0.58 -0.83 -1.31   ; dB: first note, early, middle, late, last
 //! per_octave = 4.5          ; and ghost, accent, long, scatter
 //!
 //! [motifs]
-//! motif = 0.15              ; and sequence
+//! motif = 0.05              ; and sequence, carry
 //! moves = 0:7.7 -2:0.8      ; up to five transpositions, semitones:weight
 //!
 //! [licks]
@@ -32,7 +43,10 @@
 //! ```
 //!
 //! Every key of `[player]`, `[line]` and `[dynamics]` is required but `strong_chord_tone`
-//! and `falls` (0); `[motifs]` and `[licks]` are optional (none). A lick is written over C and
+//! and `falls` (0) and the `end_*` endings (none: a phrase ends anywhere, on a chord tone
+//! `end_chord_tone` of the time; `end_beats` turns them on, with `end_tones`) and the
+//! `start_*` starts (none: a phrase starts where its rest runs out; the four weight lists go
+//! together); `[motifs]` and `[licks]` are optional (none). A lick is written over C and
 //! played from the chord's root, notes only (2 to 16, any octave: the player moves it to the
 //! line's), exactly as written ([`super::soloist::Licks`]). The field meanings are on [`Profile`].
 
@@ -129,11 +143,12 @@ impl PlayerFile {
                 continue;
             }
             let key_sec = match key {
-                "name" | "lay_back" | "swing" | "legato" | "register" => "player",
+                "name" | "lay_back" | "swing" | "legato" | "register" | "reharm" => "player",
                 "phrase" | "rest" | "cells" | "intervals" | "step_back" | "end_chord_tone" | "approach" | "from_below" | "enclosure" | "pentatonic"
-                | "anticipation" | "falls" | "strong_chord_tone" => "line",
+                | "anticipation" | "falls" | "strong_chord_tone" | "end_beats" | "end_push" | "end_tones" | "end_chromatic" | "start_place" | "start_on" | "start_and" | "start_tones"
+                | "start_chromatic" | "start_up" | "sixteenths" | "sections" | "phrase_tempo" | "rest_tempo" | "resolve" | "blue" => "line",
                 "arch" | "per_octave" | "ghost" | "accent" | "long" | "scatter" => "dynamics",
-                "motif" | "sequence" | "moves" => "motifs",
+                "motif" | "sequence" | "carry" | "moves" => "motifs",
                 _ => return Err(err(n, format!("unknown key `{key}` in [{sec}]"))),
             };
             if key_sec != sec {
@@ -148,6 +163,9 @@ impl PlayerFile {
                 "lay_back" => lay_back = one()?,
                 "swing" => p.swing = one().and_then(|s| if (1.0..=3.0).contains(&s) { Ok(s) } else { Err(bad("swing is 1.0..3.0")) })?,
                 "legato" => p.legato = share()?,
+                "reharm" => {
+                    p.reharm = floats::<3>(v).filter(|w| w.iter().all(|x| (0.0..=3.0).contains(x)) && w[1] + w[2] > 0.0).ok_or_else(|| bad("expected a rate and two weights (tritone, ii-V), 0..3"))?
+                }
                 "register" => {
                     let [c, lo, hi] = floats::<3>(v).filter(|[c, lo, hi]| lo <= c && c <= hi).ok_or_else(|| bad("expected centre, floor, ceiling (MIDI)"))?;
                     p.register = (c as i32, lo as i32, hi as i32);
@@ -172,6 +190,54 @@ impl PlayerFile {
                 "anticipation" => p.anticipation = share()?,
                 "falls" => p.falls = share()?,
                 "strong_chord_tone" => p.strong_chord_tone = share()?,
+                "end_beats" => {
+                    p.end_beats = floats::<5>(v).filter(|w| w.iter().all(|x| *x >= 0.0) && w.iter().sum::<f32>() > 0.0).ok_or_else(|| bad("expected 5 weights >= 0 (beats 1 2 3 4, off the beat)"))?
+                }
+                "end_push" => p.end_push = share()?,
+                "end_tones" => {
+                    p.end_tones = floats::<7>(v).filter(|w| w.iter().all(|x| *x >= 0.0) && w[..4].iter().sum::<f32>() > 0.0).ok_or_else(|| bad("expected 7 weights >= 0 (R 3 5 7 9 11 13), some on R 3 5 7"))?
+                }
+                "start_place" | "start_on" | "start_and" | "start_tones" => {
+                    let w = |n: usize| -> Option<Vec<f32>> {
+                        let v: Vec<f32> = v.split_whitespace().map(|x| x.parse().ok().filter(|f: &f32| f.is_finite() && *f >= 0.0)).collect::<Option<_>>()?;
+                        (v.len() == n && v.iter().sum::<f32>() > 0.0).then_some(v)
+                    };
+                    let what = match key {
+                        "start_place" => "3 weights >= 0 (on the beat, the \"and\", elsewhere)",
+                        "start_tones" => "7 weights >= 0 (R 3 5 7 9 11 13)",
+                        _ => "4 weights >= 0 (beats 1 2 3 4)",
+                    };
+                    let n = match key {
+                        "start_place" => 3,
+                        "start_tones" => 7,
+                        _ => 4,
+                    };
+                    let got = w(n).ok_or_else(|| bad(&format!("expected {what}")))?;
+                    match key {
+                        "start_place" => p.start_place.copy_from_slice(&got),
+                        "start_on" => p.start_on.copy_from_slice(&got),
+                        "start_and" => p.start_and.copy_from_slice(&got),
+                        _ => p.start_tones.copy_from_slice(&got),
+                    }
+                }
+                "start_chromatic" => p.start_chromatic = share()?,
+                "start_up" => p.start_up = share()?,
+                "phrase_tempo" | "rest_tempo" => {
+                    let w = floats::<4>(v).filter(|w| w.iter().all(|x| (0.0..40.0).contains(x)) && w.iter().any(|x| *x > 0.0)).ok_or_else(|| bad("expected 4 median lengths in beats (<140, 140-200, 200-260, >260 bpm; 0: none)"))?;
+                    if key == "phrase_tempo" { p.phrase_tempo = w } else { p.rest_tempo = w }
+                }
+                "resolve" => p.resolve = share()?,
+                "blue" => p.blue = share()?,
+                "sections" => {
+                    p.sections = floats::<9>(v).filter(|w| w.iter().all(|x| (0.2..3.0).contains(x))).ok_or_else(|| bad("expected 9 ratios (bars 1-8 of a section, the turnaround)"))?
+                }
+                "sixteenths" => {
+                    p.sixteenths = floats::<4>(v).filter(|w| w.iter().all(|x| (0.0..1.0).contains(x) && *x > 0.0)).ok_or_else(|| bad("expected 4 shares 0..1 (<140, 140-200, 200-260, >260 bpm)"))?
+                }
+                "end_chromatic" => {
+                    let [c, a] = floats::<2>(v).filter(|w| w.iter().all(|x| (0.0..=1.0).contains(x))).ok_or_else(|| bad("expected two shares: unresolved, and from above"))?;
+                    (p.end_chromatic, p.end_above) = (c, a);
+                }
                 "arch" => p.arch = floats::<5>(v).ok_or_else(|| bad("expected 5 dB values (first, early, middle, late, last)"))?,
                 "per_octave" => p.per_octave = one()?,
                 "ghost" => p.ghost = share()?,
@@ -179,6 +245,7 @@ impl PlayerFile {
                 "long" => p.long = one()?,
                 "scatter" => p.scatter = one().and_then(|s| if s >= 0.0 { Ok(s) } else { Err(bad("scatter is >= 0")) })?,
                 "motif" => p.motif = share()?,
+                "carry" => p.carry = share()?,
                 "sequence" => p.sequence = share()?,
                 _ => {
                     // moves
@@ -197,6 +264,13 @@ impl PlayerFile {
         }
         if let Some(missing) = REQUIRED.iter().chain(&["long", "scatter"]).find(|k| !seen.contains(k)) {
             return Err(err(text.lines().count().max(1), format!("missing `{missing}`")));
+        }
+        if p.aims() != (p.end_tones.iter().sum::<f32>() > 0.0) {
+            return Err(err(text.lines().count().max(1), "`end_beats` and `end_tones` go together".into()));
+        }
+        let starts = [p.start_on.iter().sum::<f32>(), p.start_and.iter().sum(), p.start_tones.iter().sum()];
+        if p.starts() != starts.iter().all(|x| *x > 0.0) || !p.starts() && starts.iter().any(|x| *x > 0.0) {
+            return Err(err(text.lines().count().max(1), "`start_place`, `start_on`, `start_and` and `start_tones` go together".into()));
         }
         Ok(PlayerFile { name: name.unwrap_or_default(), lay_back, profile: p })
     }

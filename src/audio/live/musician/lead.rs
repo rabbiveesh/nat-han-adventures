@@ -20,12 +20,12 @@
 
 use super::{Ctx, Musician, PhrasePlan, Player, Role, fold_sound, musician_common, push, tidy, work};
 use crate::audio::chart::{Chord, Quality};
-use crate::audio::live::band::{Flourish, Trade};
+use crate::audio::live::band::{Fill, Flourish, HitKind, Trade};
 use crate::audio::live::chorus::{Chorus, EndKind, EndStep};
 use crate::audio::live::engine::Input;
 use crate::audio::live::feel::Feel;
 use crate::audio::live::ornament::{self, Harm, Orn, Orns, Plane, Scale};
-use crate::audio::live::soloist::{self, Changes, Line, Played, Soloist};
+use crate::audio::live::soloist::{self, Changes, Heard, Line, Played, Soloist};
 use crate::audio::live::voice::{NoteEvent, Sound};
 use crate::audio::mml::Arp;
 
@@ -49,11 +49,13 @@ pub struct Lead {
     /// The instrument a soloist keeps all through their solo (a persona doesn't switch), and
     /// whose it is: the next soloist steps up on another.
     persona_inst: Option<(Soloist, u8)>,
+    /// The soloist's thinking in the bar last committed (none when it didn't solo as a player).
+    thought: Option<soloist::Thought>,
 }
 
 impl Lead {
     pub(super) fn new(p: Player) -> Self {
-        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default(), persona_inst: None }
+        Lead { p, src: work(), dst: work(), last: None, end: 0, solo_note: None, line: Line::default(), persona_inst: None, thought: None }
     }
 }
 
@@ -88,6 +90,7 @@ impl Musician for Lead {
         let mut r = ctx.rng(Role::Lead, 3);
         self.dst.clear();
         let mut replaced = true;
+        self.thought = None;
         let f = self.p.freedom;
         let step = band.ending.map(|e| e.step());
         let solos =
@@ -138,7 +141,9 @@ impl Musician for Lead {
         if intent.answer && !replaced {
             self.answer(ctx, &tmpl, &mut fired);
         }
-        if phrase_last && (!replaced || fired.has(Orn::Solo)) {
+        // (A soloist who aims their endings has already picked the last note.)
+        let aimed = fired.has(Orn::Solo) && ctx.soloist.profile().is_some_and(|p| p.aims());
+        if phrase_last && (!replaced || fired.has(Orn::Solo)) && !aimed {
             self.resolve(ctx);
         }
         // An instrument for the phrase (or a solo / a fill on a loose night).
@@ -185,6 +190,10 @@ impl Musician for Lead {
         self.src.extend(self.dst.iter().copied());
         self.remember(ctx);
         fired
+    }
+
+    fn thought(&self) -> Option<soloist::Thought> {
+        self.thought
     }
 
     fn on_input(&mut self, input: &Input, next_bar: u64) {
@@ -830,6 +839,7 @@ impl Lead {
     fn improvise(&mut self, ctx: &Ctx, p: &soloist::Profile, t: &NoteEvent, r: &mut crate::audio::accomp::Rng, phrase_last: bool) {
         let mut notes = [Played::default(); 24];
         let n = self.line.bar(p, ctx, r, phrase_last, &mut notes);
+        self.thought = Some(self.line.thought());
         // Their swing on the offbeat 8ths (straight in a feel), the band's own if it's straighter.
         let s = if ctx.feel() == Feel::Swing && ctx.arrangement.swing > 0.0 {
             (((p.swing - 1.0) / (p.swing + 1.0)) as f64).min(ctx.arrangement.swing as f64)
@@ -847,12 +857,14 @@ impl Lead {
                 e.fx.fall = -3;
                 e.fx.fall_frames = 10;
             }
-            // A fast run (16ths, triplets) is slurred: each beat's group attacked once, the rest
-            // carried on the breath and a touch softer.
+            // A fast run (16ths, triplets) is slurred: attacked on the beat (and on the "and"),
+            // the rest carried on the breath and a touch softer.
+            // (The "and" is tongued too: two attacks a beat, so a 16th run doesn't smear.)
             if let Some((i, q)) = prev
                 && !q.last
                 && k.at - q.at <= 0.34 + 1e-6
                 && (k.at - k.at.round()).abs() > 1e-6
+                && ((k.at * 2.0).round() - k.at * 2.0).abs() > 1e-6
                 && i + 1 == self.dst.len()
             {
                 self.dst[i].end = e.start;
@@ -875,6 +887,34 @@ impl Changes for Ctx<'_> {
 
     fn harm(&self, beat: f64) -> Option<Harm> {
         if beat < self.bb() - 1e-9 { self.harm_at(beat) } else { self.plain_harm_at(beat) }
+    }
+
+    fn ahead(&self, beat: f64) -> Option<Harm> {
+        self.harm(beat)
+    }
+
+    fn form(&self) -> Option<(f64, f64)> {
+        Some((self.bar.song_bar as f64, self.shape.bars as f64))
+    }
+
+    fn bpm(&self) -> f32 {
+        self.shape.bpm
+    }
+
+    fn heard(&self) -> Heard {
+        let band = self.band;
+        let bb = self.bb();
+        Heard {
+            // (Stop-time's hits are the band's, the soloist plays through them.)
+            hits: if band.hit_kind == HitKind::Stop { 0 } else { band.hits },
+            crash: band.crash,
+            fill_from: match band.fill {
+                Fill::None => None,
+                Fill::Short => Some(bb - 1.0),
+                Fill::Full | Fill::PressRoll => Some(bb - 2.0),
+            },
+            comp: self.heard,
+        }
     }
 }
 

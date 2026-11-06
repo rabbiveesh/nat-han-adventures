@@ -140,6 +140,8 @@ pub struct Ctx<'a> {
     pub soloist: Soloist,
     /// The tune's own bassist, if it names one (else the soloist's: [`Soloist::bassist`]).
     pub bassist: Option<&'static super::walkers::Walker>,
+    /// The comp's figure in the bar before, as the soloist heard it.
+    pub heard: super::soloist::Figure,
 }
 
 impl Ctx<'_> {
@@ -625,6 +627,11 @@ pub trait Musician: Send {
     /// React to an input. `next_bar` is the first bar not committed yet: only bars from there on
     /// may be replanned.
     fn on_input(&mut self, input: &Input, next_bar: u64);
+
+    /// What it thought in the bar it last committed, for UIs (the lead's solo line).
+    fn thought(&self) -> Option<super::soloist::Thought> {
+        None
+    }
 }
 
 /// What every musician shares: a role, a dial, a plan.

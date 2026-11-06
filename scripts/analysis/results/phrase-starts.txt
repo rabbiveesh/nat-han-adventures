@@ -1,0 +1,185 @@
+Phrase starts in the Weimar Jazz Database v2.1: the first note of each phrase, by player (%
+of phrases). Pickup: starts in the bar's last two beats and runs over the bar line (notes:
+how many before it; 5 = five or more). Arrival: the phrase's first note on a beat (notes in:
+how many came before it). Before a change: an off-beat start against the coming chord.
+
+miles: 255 phrases from 10 solos (3 more dropped: no chord there)
+  where in the beat         on 40.0  and 22.4  other 37.6
+  beat (any)                1 34.5  2 32.5  3 17.6  4 15.3
+  beat (on the beat)        1 18.6  2 45.1  3 22.5  4 13.7
+  beat (on the and)         1 47.4  2 26.3  3 10.5  4 15.8
+  bar (of 4)                1 31.4  2 28.2  3 12.9  4 27.5
+  rest before (beats)       quartiles [1.93, 3.3, 4.89]
+  pickup into a bar         23.1
+  pickup notes              1 23.7  2 35.6  3 23.7  4 15.3  5  1.7
+  first note degree         R 20.0  3 13.7  5 11.8  7 13.3  9 21.2  11  6.7  13 11.4  other  2.0
+  first note kind           ct 52.2  tension 34.1  chromatic 13.7
+  before a change           phrases   34  ct 35.3  tension 47.1  chromatic 17.6
+  arrival beat              1 15.8  2 38.8  3 28.8  4 16.7
+  arrival degree            R 15.0  3 14.2  5 17.5  7 12.9  9 18.8  11  9.6  13 11.2  other  0.8
+  arrival notes in          0 42.5  1 20.0  2 12.5  3  9.6  4 15.4
+  first 1 or 3: beat        1 34.4  3 65.6
+  first 1 or 3: degree      R 16.3  3  9.8  5 17.2  7 10.7  9 21.4  11 10.2  13 13.0  other  1.4
+  first move                up 63.8  down 28.0  same  8.3
+  first note vs middle      high 39.8  middle 18.1  low 42.1
+
+trane: 808 phrases from 7 solos (2 more dropped: no chord there)
+  where in the beat         on 41.8  and 29.5  other 28.7
+  beat (any)                1 33.5  2 28.8  3 22.4  4 15.2
+  beat (on the beat)        1 35.2  2 22.5  3 35.2  4  7.1
+  beat (on the and)         1 34.9  2 29.4  3 12.2  4 23.5
+  bar (of 4)                1 30.1  2 21.9  3 24.0  4 24.0
+  rest before (beats)       quartiles [1.34, 1.79, 2.74]
+  pickup into a bar         21.0
+  pickup notes              1 45.9  2 28.8  3 17.6  4  5.3  5  2.4
+  first note degree         R 12.1  3 10.1  5 22.3  7  9.3  9  9.5  11 21.2  13 15.3  other  0.1
+  first note kind           ct 47.0  tension 33.7  chromatic 19.3
+  before a change           phrases   27  ct 29.6  tension 48.1  chromatic 22.2
+  arrival beat              1 39.2  2 20.2  3 28.1  4 12.5
+  arrival degree            R 12.2  3 13.9  5 20.5  7 12.1  9  9.7  11 15.7  13 15.7  other  0.1
+  arrival notes in          0 45.5  1 23.3  2 12.9  3  7.7  4 10.6
+  first 1 or 3: beat        1 55.3  3 44.7
+  first 1 or 3: degree      R 13.2  3 12.7  5 20.0  7 13.2  9  9.8  11 17.0  13 13.7  other  0.4
+  first move                up 60.1  down 36.9  same  3.0
+  first note vs middle      high 39.9  middle 14.1  low 45.9
+
+bird: 290 phrases from 16 solos (8 more dropped: no chord there)
+  where in the beat         on 19.3  and 32.4  other 48.3
+  beat (any)                1 22.8  2 34.1  3 26.2  4 16.9
+  beat (on the beat)        1 14.3  2 33.9  3 39.3  4 12.5
+  beat (on the and)         1 29.8  2 31.9  3 20.2  4 18.1
+  bar (of 4)                1 34.5  2 22.1  3 21.4  4 22.1
+  rest before (beats)       quartiles [0.97, 1.59, 2.75]
+  pickup into a bar         33.8
+  pickup notes              1 24.5  2 17.3  3 11.2  4 11.2  5 35.7
+  first note degree         R 13.8  3  7.9  5 16.2  7 15.2  9 19.3  11 13.1  13 13.1  other  1.4
+  first note kind           ct 43.4  tension 31.0  chromatic 25.5
+  before a change           phrases   72  ct 33.3  tension 47.2  chromatic 19.4
+  arrival beat              1 19.6  2 23.5  3 37.0  4 19.9
+  arrival degree            R 10.3  3 17.4  5 14.6  7 11.7  9 18.1  11 12.1  13 13.9  other  1.8
+  arrival notes in          0 19.9  1 27.8  2 12.1  3  6.4  4 33.8
+  first 1 or 3: beat        1 38.8  3 61.2
+  first 1 or 3: degree      R  9.2  3 16.5  5 14.6  7 13.1  9 19.2  11 13.5  13 11.9  other  1.9
+  first move                up 68.3  down 30.7  same  1.0
+  first note vs middle      high 45.9  middle  7.9  low 46.2
+
+sonny: 179 phrases from 7 solos (1 more dropped: no chord there)
+  where in the beat         on 28.5  and 30.7  other 40.8
+  beat (any)                1 29.6  2 22.9  3 26.8  4 20.7
+  beat (on the beat)        1 31.4  2 17.6  3 25.5  4 25.5
+  beat (on the and)         1 29.1  2 23.6  3 29.1  4 18.2
+  bar (of 4)                1 22.3  2 33.0  3 17.3  4 27.4
+  rest before (beats)       quartiles [1.99, 2.92, 3.9]
+  pickup into a bar         38.5
+  pickup notes              1 31.9  2 20.3  3 17.4  4 17.4  5 13.0
+  first note degree         R 11.2  3  9.5  5 24.0  7 16.2  9 15.6  11 11.7  13 11.2  other  0.6
+  first note kind           ct 53.1  tension 30.7  chromatic 16.2
+  before a change           phrases   21  ct 57.1  tension 28.6  chromatic 14.3
+  arrival beat              1 20.8  2 24.4  3 26.2  4 28.6
+  arrival degree            R 18.5  3 10.1  5 13.1  7 16.1  9 17.9  11 10.7  13 13.1  other  0.6
+  arrival notes in          0 30.4  1 32.7  2 13.7  3 10.1  4 13.1
+  first 1 or 3: beat        1 52.1  3 47.9
+  first 1 or 3: degree      R 13.9  3 14.6  5 12.5  7 13.9  9 21.5  11 12.5  13 11.1  other  0.0
+  first move                up 78.0  down 18.1  same  4.0
+  first note vs middle      high 37.9  middle 13.6  low 48.6
+
+wayne: 127 phrases from 7 solos (28 more dropped: no chord there)
+  where in the beat         on 37.8  and 29.9  other 32.3
+  beat (any)                1 32.3  2 24.4  3 24.4  4 18.9
+  beat (on the beat)        1 45.8  2 14.6  3 29.2  4 10.4
+  beat (on the and)         1 23.7  2 26.3  3 34.2  4 15.8
+  bar (of 4)                1 33.1  2 23.6  3 15.0  4 28.3
+  rest before (beats)       quartiles [1.46, 2.03, 3.68]
+  pickup into a bar         32.3
+  pickup notes              1 29.3  2 31.7  3 19.5  4 14.6  5  4.9
+  first note degree         R 17.3  3 14.2  5 12.6  7 13.4  9 18.1  11 11.8  13 12.6  other  0.0
+  first note kind           ct 48.0  tension 33.1  chromatic 18.9
+  before a change           phrases   16  ct 43.8  tension 25.0  chromatic 31.2
+  arrival beat              1 34.4  2 16.0  3 27.2  4 22.4
+  arrival degree            R 13.6  3 15.2  5 16.8  7 10.4  9 15.2  11 12.8  13 15.2  other  0.8
+  arrival notes in          0 38.4  1 24.0  2 12.8  3 10.4  4 14.4
+  first 1 or 3: beat        1 53.9  3 46.1
+  first 1 or 3: degree      R 12.2  3 15.7  5 13.9  7 13.0  9 15.7  11 15.7  13 13.0  other  0.9
+  first move                up 59.8  down 29.9  same 10.2
+  first note vs middle      high 39.4  middle 16.5  low 44.1
+
+pops: 86 phrases from 8 solos (4 more dropped: no chord there)
+  where in the beat         on 46.5  and 30.2  other 23.3
+  beat (any)                1 46.5  2 20.9  3 17.4  4 15.1
+  beat (on the beat)        1 52.5  2 17.5  3 22.5  4  7.5
+  beat (on the and)         1 50.0  2 11.5  3 11.5  4 26.9
+  bar (of 4)                1 20.9  2 31.4  3 16.3  4 31.4
+  rest before (beats)       quartiles [1.04, 1.31, 1.83]
+  pickup into a bar         22.1
+  pickup notes              1 36.8  2 42.1  3 15.8  4  0.0  5  5.3
+  first note degree         R 20.9  3 12.8  5 12.8  7  7.0  9 29.1  11  8.1  13  8.1  other  1.2
+  first note kind           ct 51.2  tension 32.6  chromatic 16.3
+  before a change           phrases    8  ct 25.0  tension 37.5  chromatic 37.5
+  arrival beat              1 41.9  2 22.1  3 27.9  4  8.1
+  arrival degree            R 15.1  3 18.6  5 12.8  7  9.3  9 22.1  11  4.7  13 15.1  other  2.3
+  arrival notes in          0 46.5  1 24.4  2 15.1  3  7.0  4  7.0
+  first 1 or 3: beat        1 53.5  3 46.5
+  first 1 or 3: degree      R 17.4  3 18.6  5 14.0  7 10.5  9 24.4  11  4.7  13  9.3  other  1.2
+  first move                up 58.1  down 30.2  same 11.6
+  first note vs middle      high 51.2  middle 15.1  low 33.7
+
+funk: 560 phrases from 18 solos (7 more dropped: no chord there)
+  where in the beat         on 36.8  and 26.1  other 37.1
+  beat (any)                1 32.5  2 23.2  3 27.5  4 16.8
+  beat (on the beat)        1 29.6  2 22.8  3 29.6  4 18.0
+  beat (on the and)         1 34.2  2 19.9  3 24.0  4 21.9
+  bar (of 4)                1 27.9  2 24.5  3 25.7  4 22.0
+  rest before (beats)       quartiles [0.89, 1.3, 2.5]
+  pickup into a bar         30.9
+  pickup notes              1 27.7  2 24.9  3 12.1  4 11.6  5 23.7
+  first note degree         R 18.8  3 11.4  5 10.0  7 12.5  9 19.1  11 15.4  13 10.9  other  2.0
+  first note kind           ct 43.2  tension 29.1  chromatic 27.7
+  before a change           phrases   40  ct 40.0  tension 17.5  chromatic 42.5
+  arrival beat              1 25.7  2 27.4  3 27.2  4 19.7
+  arrival degree            R 16.4  3 13.8  5 10.3  7 11.4  9 18.9  11 19.5  13  8.1  other  1.7
+  arrival notes in          0 37.9  1 20.4  2 13.2  3 10.5  4 18.0
+  first 1 or 3: beat        1 47.7  3 52.3
+  first 1 or 3: degree      R 17.5  3 12.9  5 11.0  7 11.7  9 16.0  11 19.4  13  9.4  other  2.1
+  first move                up 60.6  down 30.5  same  9.0
+  first note vs middle      high 40.0  middle 18.5  low 41.6
+
+latin: 560 phrases from 23 solos (16 more dropped: no chord there)
+  where in the beat         on 30.7  and 42.9  other 26.4
+  beat (any)                1 32.9  2 29.1  3 18.8  4 19.3
+  beat (on the beat)        1 41.9  2 20.3  3 22.1  4 15.7
+  beat (on the and)         1 26.7  2 35.4  3 18.3  4 19.6
+  bar (of 4)                1 28.2  2 25.4  3 20.2  4 26.2
+  rest before (beats)       quartiles [1.29, 1.88, 2.81]
+  pickup into a bar         29.5
+  pickup notes              1 30.9  2 27.3  3 17.6  4 11.5  5 12.7
+  first note degree         R 14.8  3 11.6  5 17.9  7 11.1  9 19.8  11 11.4  13 11.1  other  2.3
+  first note kind           ct 49.6  tension 32.7  chromatic 17.7
+  before a change           phrases   85  ct 32.9  tension 47.1  chromatic 20.0
+  arrival beat              1 27.7  2 24.7  3 28.9  4 18.7
+  arrival degree            R 14.8  3 17.8  5 14.3  7 12.1  9 19.8  11  9.3  13  9.7  other  2.2
+  arrival notes in          0 31.5  1 30.4  2 15.4  3  9.3  4 13.4
+  first 1 or 3: beat        1 46.7  3 53.3
+  first 1 or 3: degree      R 13.5  3 16.2  5 16.2  7 11.5  9 19.0  11 10.6  13 10.4  other  2.7
+  first move                up 61.2  down 33.1  same  5.8
+  first note vs middle      high 42.6  middle 12.9  low 44.4
+
+all: 9024 phrases from 402 solos (511 more dropped: no chord there)
+  where in the beat         on 34.6  and 30.7  other 34.6
+  beat (any)                1 30.2  2 25.0  3 25.3  4 19.6
+  beat (on the beat)        1 27.9  2 24.5  3 31.3  4 16.3
+  beat (on the and)         1 33.7  2 23.5  3 20.5  4 22.3
+  bar (of 4)                1 28.9  2 24.2  3 21.0  4 25.9
+  rest before (beats)       quartiles [1.18, 1.89, 3.02]
+  pickup into a bar         32.2
+  pickup notes              1 31.5  2 22.1  3 19.7  4 11.5  5 15.2
+  first note degree         R 14.8  3 11.1  5 17.3  7 12.6  9 17.5  11 13.3  13 12.4  other  1.0
+  first note kind           ct 50.2  tension 31.8  chromatic 17.9
+  before a change           phrases 1414  ct 45.6  tension 33.8  chromatic 20.6
+  arrival beat              1 26.0  2 25.6  3 27.9  4 20.5
+  arrival degree            R 13.9  3 13.2  5 15.1  7 13.3  9 17.7  11 12.1  13 13.6  other  1.2
+  arrival notes in          0 36.0  1 25.0  2 13.1  3  8.6  4 17.3
+  first 1 or 3: beat        1 47.2  3 52.8
+  first 1 or 3: degree      R 14.2  3 13.8  5 15.1  7 13.5  9 17.2  11 12.7  13 12.3  other  1.2
+  first move                up 64.1  down 30.7  same  5.2
+  first note vs middle      high 42.1  middle 11.8  low 46.1
+

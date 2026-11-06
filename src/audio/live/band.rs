@@ -108,6 +108,8 @@ pub enum SubKind {
     Tritone,
     /// A dominant into the tonic replaced by the backdoor ii-V (iv-7, bVII7).
     Backdoor,
+    /// A long dominant's first half played as its ii (a minor 7th a 5th above).
+    IiV,
     /// An intro's or an ending's own changes ([`super::chorus::harmony`]).
     Arranged,
 }
@@ -219,6 +221,9 @@ pub struct BandInput<'a> {
     /// The bar is in the tune's intro, or its ending.
     pub intro: Option<Intro>,
     pub ending: Option<EndBar>,
+    /// The reharm the soloist's lines ask for: rate against the dial's, and the weights of a
+    /// tritone sub and a ii-V ([`super::soloist::Profile::reharm`]).
+    pub reharm: [f32; 3],
 }
 
 impl BandInput<'_> {
@@ -469,7 +474,8 @@ impl BandPlan {
         // The band's reharmonization: comp and bass together, high freedom (a soli's lines
         // follow it too).
         if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet {
-            let p = 0.5 * high(comp);
+            let [rate, w_tri, w_iiv] = input.reharm;
+            let p = (0.5 * high(comp) * rate as f64).min(0.9);
             if let Some(h) = harm_now
                 && h.chord.family() == Family::Dominant
                 && r.chance(p)
@@ -484,7 +490,13 @@ impl BandPlan {
                     }
                 }
                 let resolves_home = harm_next.is_some_and(|x| x.chord.root == input.key && x.chord.family() == Family::Major);
-                if resolves_home && to >= bb - 1e-9 && r.chance(0.4) {
+                // A ii-V (the backdoor home, else the ii ahead of a whole-bar dominant) or a
+                // tritone sub, by what the soloist's lines imply.
+                let iiv = to >= bb - 1e-9 && r.chance((w_iiv / (w_tri + w_iiv).max(1e-6)) as f64);
+                if iiv && !resolves_home {
+                    let half = (bb / 2.0).floor();
+                    plan.subs[0] = Some(Sub { from: 0.0, to: half, chord: Chord::new((h.chord.root + 7) % 12, Quality::Minor7), kind: SubKind::IiV });
+                } else if iiv {
                     let (ii, v) = ornament::backdoor(input.key);
                     let half = (bb / 2.0).floor();
                     plan.subs = [
