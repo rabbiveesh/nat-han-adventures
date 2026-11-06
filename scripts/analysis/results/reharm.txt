@@ -1,0 +1,74 @@
+Implied reharmonisation in the Weimar Jazz Database v2.1, by player (% unless noted; each with its
+chance baseline). Strong: on beats 1 and 3. Chord scales: Mixolydian, Dorian, Ionian, Locrian, whole-half,
+whole-tone.
+
+miles: 10 solos
+  over dom7, all notes (n=1674)      plain 51.5  natural 20.9  altered 15.1  other 12.5   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=116)  plain 54.3  natural 20.7  altered 17.2  other 7.8
+  dom spans fitting the tritone sub better  6.2 of 193 (chance 18.8)
+  next chord anticipated: last beat 25.3 (n=716), last half beat 26.1 (n=349); chance 20.1 (n=468)
+  ii-V superimposed: over a long dom7 13.8 of 80 (chance 15); into the next chord 0 of 32 (chance 6.2)
+  bars with a side-slipped run              1.8 of 741 (chance 1.1)
+  static bars with M3rd-apart triad runs    0.4 of 256 spans (chance, other roots 3.6)
+  outside the scale: minor 7 13.2 (n=749), major 14 (n=392), #11 over major 4.3; chance outside 41.7, #11 8.3
+
+trane: 7 solos
+  over dom7, all notes (n=1054)      plain 58.4  natural 20.1  altered 11.7  other 9.8   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=65)  plain 70.8  natural 13.8  altered 7.7  other 7.7
+  dom spans fitting the tritone sub better  9 of 122 (chance 23.8)
+  next chord anticipated: last beat 22.9 (n=773), last half beat 25.5 (n=431); chance 18.1 (n=299)
+  ii-V superimposed: over a long dom7 15.8 of 38 (chance 10.5); into the next chord 1 of 99 (chance 1)
+  bars with a side-slipped run              9 of 2554 (chance 5.4)
+  static bars with M3rd-apart triad runs    24.9 of 185 spans (chance, other roots 30.1)
+  outside the scale: minor 7 21.9 (n=8445), major 11 (n=400), #11 over major 1; chance outside 41.7, #11 8.3
+
+bird: 16 solos
+  over dom7, all notes (n=2579)      plain 50.8  natural 17.6  altered 18  other 13.6   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=154)  plain 48.7  natural 20.1  altered 16.9  other 14.3
+  dom spans fitting the tritone sub better  12.9 of 278 (chance 22.2)
+  next chord anticipated: last beat 18.1 (n=1730), last half beat 19 (n=947); chance 17.8 (n=686)
+  ii-V superimposed: over a long dom7 21.4 of 103 (chance 9.7); into the next chord 1.8 of 110 (chance 4.5)
+  bars with a side-slipped run              6.4 of 729 (chance 4)
+  static bars with M3rd-apart triad runs    2.2 of 323 spans (chance, other roots 5.7)
+  outside the scale: minor 7 18.1 (n=1461), major 13.7 (n=1096), #11 over major 2.5; chance outside 41.7, #11 8.3
+
+sonny: 7 solos
+  over dom7, all notes (n=1816)      plain 49.7  natural 21.2  altered 17.5  other 11.6   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=116)  plain 47.4  natural 25.9  altered 16.4  other 10.3
+  dom spans fitting the tritone sub better  13.7 of 205 (chance 23.4)
+  next chord anticipated: last beat 24 (n=599), last half beat 20.7 (n=304); chance 21.2 (n=419)
+  ii-V superimposed: over a long dom7 14.6 of 96 (chance 10.4); into the next chord 7 of 43 (chance 7)
+  bars with a side-slipped run              4 of 494 (chance 1.8)
+  static bars with M3rd-apart triad runs    0.7 of 271 spans (chance, other roots 3.7)
+  outside the scale: minor 7 20.3 (n=433), major 13.6 (n=295), #11 over major 5.1; chance outside 41.7, #11 8.3
+
+wayne: 7 solos
+  over dom7, all notes (n=947)      plain 45.2  natural 18.8  altered 23.2  other 12.8   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=62)  plain 45.2  natural 27.4  altered 19.4  other 8.1
+  dom spans fitting the tritone sub better  23.9 of 92 (chance 29)
+  next chord anticipated: last beat 24.3 (n=510), last half beat 24.7 (n=275); chance 25.7 (n=304)
+  ii-V superimposed: over a long dom7 5.5 of 55 (chance 9.1); into the next chord 2 of 50 (chance 4)
+  bars with a side-slipped run              9.7 of 452 (chance 6.4)
+  static bars with M3rd-apart triad runs    6.2 of 178 spans (chance, other roots 8.1)
+  outside the scale: minor 7 22.5 (n=538), major 24.7 (n=328), #11 over major 13.1; chance outside 41.7, #11 8.3
+
+pops: 8 solos
+  over dom7, all notes (n=471)      plain 51.4  natural 25.1  altered 14.4  other 9.1   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=52)  plain 59.6  natural 28.8  altered 3.8  other 7.7
+  dom spans fitting the tritone sub better  5.9 of 51 (chance 22.2)
+  next chord anticipated: last beat 19.2 (n=224), last half beat 17.1 (n=140); chance 19.2 (n=177)
+  ii-V superimposed: over a long dom7 21.4 of 28 (chance 10.7); into the next chord 10.3 of 39 (chance 7.7)
+  bars with a side-slipped run              1.4 of 214 (chance 1.4)
+  static bars with M3rd-apart triad runs    0 of 111 spans (chance, other roots 3.8)
+  outside the scale: minor 7 15.9 (n=69), major 11.1 (n=577), #11 over major 2.4; chance outside 41.7, #11 8.3
+
+all: 402 solos
+  over dom7, all notes (n=78918)      plain 47.8  natural 18.6  altered 20.5  other 13   (chance 33.3 16.7 33.3 16.7)
+  over dom7, strong beats (n=5312)  plain 51.8  natural 18.6  altered 18.7  other 11
+  dom spans fitting the tritone sub better  14.3 of 8392 (chance 26.4)
+  next chord anticipated: last beat 22.4 (n=43242), last half beat 23.7 (n=23147); chance 20.5 (n=20269)
+  ii-V superimposed: over a long dom7 11.2 of 3512 (chance 8.7); into the next chord 4.7 of 3269 (chance 4.1)
+  bars with a side-slipped run              8.3 of 31998 (chance 4.8)
+  static bars with M3rd-apart triad runs    3.5 of 11159 spans (chance, other roots 6.4)
+  outside the scale: minor 7 21.2 (n=48780), major 18.6 (n=31191), #11 over major 4.2; chance outside 41.7, #11 8.3
+

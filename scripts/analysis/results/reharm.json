@@ -1,0 +1,457 @@
+{
+ "miles": {
+  "solos": 10,
+  "dominant": {
+   "notes": 1674,
+   "classes": {
+    "plain": 51.5,
+    "natural": 20.9,
+    "altered": 15.1,
+    "other": 12.5
+   },
+   "strong": 116,
+   "strong_classes": {
+    "plain": 54.3,
+    "natural": 20.7,
+    "altered": 17.2,
+    "other": 7.8
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 193,
+   "tritone_sub_fits_better": 6.2,
+   "tritone_chance": 18.8
+  },
+  "anticipation": {
+   "last_beat": 25.3,
+   "last_beat_n": 716,
+   "last_half": 26.1,
+   "last_half_n": 349,
+   "chance": 20.1,
+   "chance_n": 468
+  },
+  "ii_v": {
+   "over_dominant": 13.8,
+   "over_dominant_chance": 15.0,
+   "dominant_spans": 80,
+   "into_next": 0.0,
+   "into_next_chance": 6.2,
+   "other_spans": 32
+  },
+  "side_slip": {
+   "bars": 1.8,
+   "chance": 1.1,
+   "n_bars": 741
+  },
+  "multi_tonic": {
+   "static_bars": 0.4,
+   "chance": 3.6,
+   "n_spans": 256
+  },
+  "minor": {
+   "notes": 749,
+   "outside": 13.2,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 392,
+   "outside": 14.0,
+   "sharp11": 4.3,
+   "chance": 41.7
+  }
+ },
+ "trane": {
+  "solos": 7,
+  "dominant": {
+   "notes": 1054,
+   "classes": {
+    "plain": 58.4,
+    "natural": 20.1,
+    "altered": 11.7,
+    "other": 9.8
+   },
+   "strong": 65,
+   "strong_classes": {
+    "plain": 70.8,
+    "natural": 13.8,
+    "altered": 7.7,
+    "other": 7.7
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 122,
+   "tritone_sub_fits_better": 9.0,
+   "tritone_chance": 23.8
+  },
+  "anticipation": {
+   "last_beat": 22.9,
+   "last_beat_n": 773,
+   "last_half": 25.5,
+   "last_half_n": 431,
+   "chance": 18.1,
+   "chance_n": 299
+  },
+  "ii_v": {
+   "over_dominant": 15.8,
+   "over_dominant_chance": 10.5,
+   "dominant_spans": 38,
+   "into_next": 1.0,
+   "into_next_chance": 1.0,
+   "other_spans": 99
+  },
+  "side_slip": {
+   "bars": 9.0,
+   "chance": 5.4,
+   "n_bars": 2554
+  },
+  "multi_tonic": {
+   "static_bars": 24.9,
+   "chance": 30.1,
+   "n_spans": 185
+  },
+  "minor": {
+   "notes": 8445,
+   "outside": 21.9,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 400,
+   "outside": 11.0,
+   "sharp11": 1.0,
+   "chance": 41.7
+  }
+ },
+ "bird": {
+  "solos": 16,
+  "dominant": {
+   "notes": 2579,
+   "classes": {
+    "plain": 50.8,
+    "natural": 17.6,
+    "altered": 18.0,
+    "other": 13.6
+   },
+   "strong": 154,
+   "strong_classes": {
+    "plain": 48.7,
+    "natural": 20.1,
+    "altered": 16.9,
+    "other": 14.3
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 278,
+   "tritone_sub_fits_better": 12.9,
+   "tritone_chance": 22.2
+  },
+  "anticipation": {
+   "last_beat": 18.1,
+   "last_beat_n": 1730,
+   "last_half": 19.0,
+   "last_half_n": 947,
+   "chance": 17.8,
+   "chance_n": 686
+  },
+  "ii_v": {
+   "over_dominant": 21.4,
+   "over_dominant_chance": 9.7,
+   "dominant_spans": 103,
+   "into_next": 1.8,
+   "into_next_chance": 4.5,
+   "other_spans": 110
+  },
+  "side_slip": {
+   "bars": 6.4,
+   "chance": 4.0,
+   "n_bars": 729
+  },
+  "multi_tonic": {
+   "static_bars": 2.2,
+   "chance": 5.7,
+   "n_spans": 323
+  },
+  "minor": {
+   "notes": 1461,
+   "outside": 18.1,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 1096,
+   "outside": 13.7,
+   "sharp11": 2.5,
+   "chance": 41.7
+  }
+ },
+ "sonny": {
+  "solos": 7,
+  "dominant": {
+   "notes": 1816,
+   "classes": {
+    "plain": 49.7,
+    "natural": 21.2,
+    "altered": 17.5,
+    "other": 11.6
+   },
+   "strong": 116,
+   "strong_classes": {
+    "plain": 47.4,
+    "natural": 25.9,
+    "altered": 16.4,
+    "other": 10.3
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 205,
+   "tritone_sub_fits_better": 13.7,
+   "tritone_chance": 23.4
+  },
+  "anticipation": {
+   "last_beat": 24.0,
+   "last_beat_n": 599,
+   "last_half": 20.7,
+   "last_half_n": 304,
+   "chance": 21.2,
+   "chance_n": 419
+  },
+  "ii_v": {
+   "over_dominant": 14.6,
+   "over_dominant_chance": 10.4,
+   "dominant_spans": 96,
+   "into_next": 7.0,
+   "into_next_chance": 7.0,
+   "other_spans": 43
+  },
+  "side_slip": {
+   "bars": 4.0,
+   "chance": 1.8,
+   "n_bars": 494
+  },
+  "multi_tonic": {
+   "static_bars": 0.7,
+   "chance": 3.7,
+   "n_spans": 271
+  },
+  "minor": {
+   "notes": 433,
+   "outside": 20.3,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 295,
+   "outside": 13.6,
+   "sharp11": 5.1,
+   "chance": 41.7
+  }
+ },
+ "wayne": {
+  "solos": 7,
+  "dominant": {
+   "notes": 947,
+   "classes": {
+    "plain": 45.2,
+    "natural": 18.8,
+    "altered": 23.2,
+    "other": 12.8
+   },
+   "strong": 62,
+   "strong_classes": {
+    "plain": 45.2,
+    "natural": 27.4,
+    "altered": 19.4,
+    "other": 8.1
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 92,
+   "tritone_sub_fits_better": 23.9,
+   "tritone_chance": 29.0
+  },
+  "anticipation": {
+   "last_beat": 24.3,
+   "last_beat_n": 510,
+   "last_half": 24.7,
+   "last_half_n": 275,
+   "chance": 25.7,
+   "chance_n": 304
+  },
+  "ii_v": {
+   "over_dominant": 5.5,
+   "over_dominant_chance": 9.1,
+   "dominant_spans": 55,
+   "into_next": 2.0,
+   "into_next_chance": 4.0,
+   "other_spans": 50
+  },
+  "side_slip": {
+   "bars": 9.7,
+   "chance": 6.4,
+   "n_bars": 452
+  },
+  "multi_tonic": {
+   "static_bars": 6.2,
+   "chance": 8.1,
+   "n_spans": 178
+  },
+  "minor": {
+   "notes": 538,
+   "outside": 22.5,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 328,
+   "outside": 24.7,
+   "sharp11": 13.1,
+   "chance": 41.7
+  }
+ },
+ "pops": {
+  "solos": 8,
+  "dominant": {
+   "notes": 471,
+   "classes": {
+    "plain": 51.4,
+    "natural": 25.1,
+    "altered": 14.4,
+    "other": 9.1
+   },
+   "strong": 52,
+   "strong_classes": {
+    "plain": 59.6,
+    "natural": 28.8,
+    "altered": 3.8,
+    "other": 7.7
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 51,
+   "tritone_sub_fits_better": 5.9,
+   "tritone_chance": 22.2
+  },
+  "anticipation": {
+   "last_beat": 19.2,
+   "last_beat_n": 224,
+   "last_half": 17.1,
+   "last_half_n": 140,
+   "chance": 19.2,
+   "chance_n": 177
+  },
+  "ii_v": {
+   "over_dominant": 21.4,
+   "over_dominant_chance": 10.7,
+   "dominant_spans": 28,
+   "into_next": 10.3,
+   "into_next_chance": 7.7,
+   "other_spans": 39
+  },
+  "side_slip": {
+   "bars": 1.4,
+   "chance": 1.4,
+   "n_bars": 214
+  },
+  "multi_tonic": {
+   "static_bars": 0.0,
+   "chance": 3.8,
+   "n_spans": 111
+  },
+  "minor": {
+   "notes": 69,
+   "outside": 15.9,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 577,
+   "outside": 11.1,
+   "sharp11": 2.4,
+   "chance": 41.7
+  }
+ },
+ "all": {
+  "solos": 402,
+  "dominant": {
+   "notes": 78918,
+   "classes": {
+    "plain": 47.8,
+    "natural": 18.6,
+    "altered": 20.5,
+    "other": 13.0
+   },
+   "strong": 5312,
+   "strong_classes": {
+    "plain": 51.8,
+    "natural": 18.6,
+    "altered": 18.7,
+    "other": 11.0
+   },
+   "chance_classes": {
+    "plain": 33.3,
+    "natural": 16.7,
+    "altered": 33.3,
+    "other": 16.7
+   },
+   "spans": 8392,
+   "tritone_sub_fits_better": 14.3,
+   "tritone_chance": 26.4
+  },
+  "anticipation": {
+   "last_beat": 22.4,
+   "last_beat_n": 43242,
+   "last_half": 23.7,
+   "last_half_n": 23147,
+   "chance": 20.5,
+   "chance_n": 20269
+  },
+  "ii_v": {
+   "over_dominant": 11.2,
+   "over_dominant_chance": 8.7,
+   "dominant_spans": 3512,
+   "into_next": 4.7,
+   "into_next_chance": 4.1,
+   "other_spans": 3269
+  },
+  "side_slip": {
+   "bars": 8.3,
+   "chance": 4.8,
+   "n_bars": 31998
+  },
+  "multi_tonic": {
+   "static_bars": 3.5,
+   "chance": 6.4,
+   "n_spans": 11159
+  },
+  "minor": {
+   "notes": 48780,
+   "outside": 21.2,
+   "chance": 41.7
+  },
+  "major": {
+   "notes": 31191,
+   "outside": 18.6,
+   "sharp11": 4.2,
+   "chance": 41.7
+  }
+ }
+}
