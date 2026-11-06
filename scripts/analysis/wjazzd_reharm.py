@@ -119,7 +119,7 @@ def tally(c, s):
             continue
         root, fam, _ = ch
         x = pc(n[3], root)
-        strong = g.pos[s.beat[k]][1] in (1, 3) and s.pos(k) < 0.1
+        strong = n[5] in (1, 3) and n[6] in (None, 0, 1)  # the transcription's own beat and tatum
         if fam == "dom":
             c["dom_notes"] += 1
             c["dom_" + DOM_CLASS[x]] += 1
