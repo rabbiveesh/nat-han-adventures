@@ -304,8 +304,8 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
             vec!["WALTZING? HAN SWINGS FROM".into(), "THE CEILING. RIDE HIS CAP,".into(), "JUMP ON ONE: FLY FAR!".into()],
         ),
         Lesson::Trick(HanTrick::Raft) => (
-            "HAN'S TRICK: THE RAFT",
-            vec!["SPIKES OVER SEWAGE? STAND".into(), "STILL BY IT: HAN WADES IN".into(), "AND LEAVES A BIG RAFT.".into()],
+            "HAN'S TRICK: THE POOL FLOAT",
+            vec!["RUN UP TO A POOL: HAN DIVES".into(), "IN. HOP ON, LEFT/RIGHT ROW.".into(), "TEENY HOPS UNDER SPIKES!".into()],
         ),
         Lesson::Tip(t) => tip_text(t, touch),
     };

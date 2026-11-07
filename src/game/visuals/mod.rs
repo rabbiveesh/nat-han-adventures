@@ -58,6 +58,7 @@ pub(super) fn plugin(app: &mut App) {
     .init_resource::<MarkersDrawn>()
     .add_systems(Update, new_gate_markers.run_if(resource_exists::<Sprites>))
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
+    .add_systems(PostUpdate, float_kicks.in_set(VisualSet::Animate))
     .add_systems(PostUpdate, hide_nat.after(VisualSet::Animate).run_if(resource_exists::<crate::game::sideb::SideB>))
     .add_systems(
         PostUpdate,
@@ -789,6 +790,25 @@ fn update_sprays(
                     *vis = want;
                 }
             }
+        }
+    }
+}
+
+/// Han's float: his end segments bob as he kicks (faster when Nat paddles him), and low on
+/// kicks he shivers ([`FLOAT_LOW`](super::han::FLOAT_LOW)).
+fn float_kicks(time: Res<Time>, floats: Query<(&super::han::HanFloat, &Children)>, mut tf: Query<&mut Transform, Without<super::han::HanFloat>>) {
+    let t = time.elapsed_secs();
+    for (f, kids) in &floats {
+        let low = f.fuel < super::han::FLOAT_LOW;
+        let n = kids.len();
+        for (i, k) in kids.iter().enumerate() {
+            let Ok(mut k) = tf.get_mut(k) else { continue };
+            let end = i == 0 || i + 1 == n;
+            let rate = if f.vel.abs() > 1.0 { 14.0 } else { 6.0 };
+            let kick = if end { ((t * rate + i as f32).sin() > 0.0) as i32 as f32 } else { 0.0 };
+            let shiver = if low { (((t * 30.0) as i32 % 2) as f32 - 0.5) * 2.0 } else { 0.0 };
+            k.translation.y = kick;
+            k.translation.x = (i as f32 - (n as f32 - 1.0) / 2.0) * TILE + shiver;
         }
     }
 }

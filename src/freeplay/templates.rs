@@ -809,7 +809,7 @@ fn buddy_raft_pool(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bu
     }
     c.ground(HAN_TAIL, FLOOR);
     // No mid-room checkpoint: one near the pool would let Nat's own rafts bridge it.
-    Built { hint: Some((&[Topic::BuddyRaft], "Raft time!")), checkpoint: None }
+    Built { hint: Some((&[Topic::BuddyRaft], "All aboard!")), checkpoint: None }
 }
 
 /// A fired-up chasm room's rows: a throw stays well under the room's top (a ceiling).

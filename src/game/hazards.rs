@@ -126,9 +126,14 @@ pub(super) fn float_rafts(
     assists: Res<super::Assists>,
     mut rafts: RaftQuery,
     han_rafts: Query<(), With<HanRaft>>,
+    floats: Query<(), With<super::han::HanFloat>>,
 ) {
     let nat_life = life.secs();
     for (e, mut raft, platform, mut pos) in &mut rafts {
+        // (Han's float sinks when he runs out of kicks: `han::world::drift_floats`.)
+        if floats.contains(e) {
+            continue;
+        }
         // Han's big raft floats longer.
         let life = if han_rafts.contains(e) { super::han::han_raft_life(&assists) } else { nat_life };
         raft.age += time.delta_secs();

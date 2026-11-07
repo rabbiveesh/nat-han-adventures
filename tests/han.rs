@@ -554,35 +554,89 @@ const SEWER: &str = "name: Sewer
 ##########~~~~~~~~~~~~~~#####################################
 ";
 
-/// Stand facing a pool: Han wades in, splats, leaves a big raft, parachutes back. Not a death.
-#[test]
-fn han_makes_a_big_raft_in_sewage() {
-    let mut app = app(SEWER);
-    press(&mut app, RIGHT);
-    while nat(&mut app).x < 9.0 * TILE {
+fn float(app: &mut App) -> Option<(Entity, HanFloat, Vec2)> {
+    app.world_mut().query::<(Entity, &HanFloat, &Pos)>().iter(app.world()).next().map(|(e, f, p)| (e, *f, p.0))
+}
+
+/// Run Nat up to SEWER's pool (stopping at its edge): Han cannonballs in on the run-up, no
+/// waiting. Returns once the float is in the pool.
+fn run_up_to_the_pool(app: &mut App) -> (Entity, HanFloat, Vec2) {
+    press(app, RIGHT);
+    while nat(app).x < 8.0 * TILE {
         app.update();
-        trace(&mut app);
+        trace(app);
     }
-    release(&mut app, RIGHT);
-    let mut sank = false;
+    release(app, RIGHT);
     for _ in 0..240 {
         app.update();
-        trace(&mut app);
-        sank |= matches!(brain(&mut app).mode, HanMode::Sinking { .. });
-        if sank {
-            break;
+        trace(app);
+        if let Some(f) = float(app) {
+            return f;
         }
     }
-    assert!(sank, "Han waded in: {:?} at {}", brain(&mut app).mode, han(&mut app));
-    step(&mut app, 0.2);
+    panic!("no float: Han {:?} at {}", brain(app).mode, han(app));
+}
+
+/// Hop from the bank onto the float.
+fn board(app: &mut App, e: Entity) {
+    press(app, RIGHT);
+    tap(app);
+    for _ in 0..90 {
+        app.update();
+        trace(app);
+        if nat_body(app).riding == Some(e) {
+            release(app, RIGHT);
+            release(app, JUMP);
+            step(app, 0.3);
+            return;
+        }
+    }
+    panic!("Nat didn't board: nat {} float {:?}", nat(app), float(app));
+}
+
+/// Run up to a pool: Han cannonballs in and floats on his back, creeping across. Hop on and
+/// Left/Right paddle him like a boat (Nat stays put on him), nothing held and he stops; at the
+/// far bank hop off, and he climbs out and parachutes back. Not a death.
+#[test]
+fn han_floats_nat_across_the_pool() {
+    let mut app = app(SEWER);
+    let (e, f, at) = run_up_to_the_pool(&mut app);
+    assert_eq!(said(&app, CANNONBALL_LINE), 1);
+    assert_eq!(f.dir, 1.0);
     let rafts: Vec<MovingPlatform> =
         app.world_mut().query_filtered::<&MovingPlatform, With<HanRaft>>().iter(app.world()).cloned().collect();
-    assert_eq!(rafts.len(), 1, "one big raft");
+    assert_eq!(rafts.len(), 1, "one float");
     assert_eq!(rafts[0].width, HAN_RAFT_WIDTH);
-    assert!(rafts[0].base.x > 10.0 * TILE && rafts[0].base.x < 14.0 * TILE, "raft at {}", rafts[0].base);
-    assert_eq!(app.world().resource::<LevelRun>().deaths, 0, "not Nat's death");
-    assert_eq!(heard(&app).died, 0);
-    // Back a few seconds later, on his parachute.
+    assert!(at.x > 10.0 * TILE && at.x < 14.0 * TILE, "float at {at}");
+    board(&mut app, e);
+    // Paddling right: the float goes, Nat with it, standing still on it.
+    let x0 = float(&mut app).unwrap().2.x;
+    press(&mut app, RIGHT);
+    step(&mut app, 0.6);
+    let (_, f, at) = float(&mut app).unwrap();
+    assert!(f.vel > 0.8 * FLOAT_SPEED, "paddling: {f:?}");
+    assert!(at.x > x0 + 2.0 * TILE, "moved {} px", at.x - x0);
+    assert!((nat(&mut app).x - at.x).abs() < 1.5 * TILE, "Nat rides along: nat {} float {at}", nat(&mut app));
+    assert_eq!(nat_body(&mut app).riding, Some(e));
+    // Let go: he stops. Back-paddle: he goes back.
+    release(&mut app, RIGHT);
+    step(&mut app, 0.5);
+    assert_eq!(float(&mut app).unwrap().1.vel, 0.0);
+    press(&mut app, LEFT);
+    step(&mut app, 0.3);
+    assert!(float(&mut app).unwrap().1.vel < 0.0);
+    release(&mut app, LEFT);
+    // To the far bank, and off.
+    press(&mut app, RIGHT);
+    step(&mut app, 2.5);
+    let (_, f, at) = float(&mut app).unwrap();
+    assert!(at.x + 1.5 * TILE >= 23.9 * TILE, "at the bank: {at}");
+    assert!(f.fuel > 0.0, "{f:?}");
+    tap(&mut app);
+    step(&mut app, 0.8);
+    release(&mut app, RIGHT);
+    assert!(nat(&mut app).x > 24.0 * TILE && nat_body(&mut app).on_ground, "across: {}", nat(&mut app));
+    // He climbs out and parachutes back.
     let mut chute = false;
     for _ in 0..600 {
         app.update();
@@ -593,15 +647,50 @@ fn han_makes_a_big_raft_in_sewage() {
         }
     }
     assert!(chute, "parachuted back");
+    assert!(float(&mut app).is_none());
     assert_eq!(said(&app, PRO_LINE), 1);
-    // The raft holds Nat, and outlives a stain raft.
-    step(&mut app, RAFT_LIFE_FLOOR + 1.0);
-    let n = app.world_mut().query_filtered::<(), With<HanRaft>>().iter(app.world()).count();
-    assert!(n >= 1, "Han's raft floats longer than 12 s");
-    assert!(han_raft_life(&Assists::default()) >= HAN_RAFT_LIFE_FLOOR);
-    let mut a = Assists::default();
-    a.raft_life_mult = 2.0;
-    assert_eq!(han_raft_life(&a), 2.0 * HAN_RAFT_LIFE_FLOOR);
+    assert_eq!(app.world().resource::<LevelRun>().deaths, 0, "not Nat's death");
+    assert_eq!(heard(&app).died, 0);
+}
+
+/// Han kicks for [`FLOAT_FUEL`] s with Nat aboard; nuggets top him up; dry, he sinks (GLUB)
+/// and Nat goes in with him. No parking on Han.
+#[test]
+fn han_float_runs_on_nuggets() {
+    let mut app = app(SEWER);
+    let (e, _, _) = run_up_to_the_pool(&mut app);
+    board(&mut app, e);
+    step(&mut app, 3.0);
+    let before = float(&mut app).unwrap().1.fuel;
+    let pos = nat(&mut app);
+    app.world_mut().write_message(NuggetCollected { pos });
+    app.update();
+    let after = float(&mut app).unwrap().1.fuel;
+    assert!((after - before - FLOAT_REFUEL).abs() < 0.1, "{before} -> {after}");
+    step(&mut app, after - 0.3);
+    assert_eq!(heard(&app).died, 0, "still afloat");
+    step(&mut app, 2.0);
+    assert_eq!(said(&app, GLUB_LINE), 1);
+    assert_eq!(heard(&app).died, 1, "in he goes");
+}
+
+/// Han cannonballs in on the run-up, however eager he is (no waiting at a pool); his eagerness
+/// still sets how soon he goes ahead at the other hazards.
+#[test]
+fn han_cannonballs_without_waiting() {
+    for e in [0.0, 0.5, 1.0] {
+        let mut app = app(SEWER);
+        eagerness(&mut app, e);
+        press(&mut app, RIGHT);
+        let mut t = 0.0;
+        while !matches!(brain(&mut app).mode, HanMode::Ahead { .. }) {
+            app.update();
+            trace(&mut app);
+            t += DT;
+            assert!(t < 3.0, "eagerness {e}: Han never went");
+        }
+        assert!(nat_body(&mut app).vel.x > 20.0, "eagerness {e}: Nat still running when Han goes");
+    }
 }
 
 // --- The band zone: Han's boost is feeble near the band's gates --------------------------------
@@ -828,26 +917,6 @@ fn eagerness_scales_han() {
     assert!(go_ahead_delay(0.0) > go_ahead_delay(0.5));
     assert!(brace_range(1.0) > brace_range(0.0));
     assert!(intercept_range(1.0) > intercept_range(0.0));
-    // In the game: an eager Han goes ahead about twice as soon.
-    let wait = |e: f32| {
-        let mut app = self::app(SEWER);
-        eagerness(&mut app, e);
-        press(&mut app, RIGHT);
-        while nat(&mut app).x < 9.0 * TILE {
-            app.update();
-            trace(&mut app);
-        }
-        release(&mut app, RIGHT);
-        let t0 = app.world().resource::<SimClock>().time;
-        while !matches!(brain(&mut app).mode, HanMode::Ahead { .. } | HanMode::Sinking { .. }) {
-            app.update();
-            trace(&mut app);
-            assert!(app.world().resource::<SimClock>().time - t0 < 5.0);
-        }
-        app.world().resource::<SimClock>().time - t0
-    };
-    let (eager, neutral) = (wait(1.0), wait(0.5));
-    assert!(eager < neutral - 0.5, "eager {eager}s vs neutral {neutral}s");
 }
 
 // --- Per-mode physics --------------------------------------------------------------------------

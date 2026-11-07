@@ -265,6 +265,25 @@ fn doomed(level: &Level, pos: Vec2, vx: f32) -> bool {
     })
 }
 
+/// Nat this close (tiles) to a pool's edge, running or standing, and Han cannonballs in.
+pub const POOL_RUN_UP: i32 = 3;
+
+/// Sewage within `reach` tiles ahead of someone standing in `cell` facing `dir` (nothing solid
+/// in between).
+pub fn pool_ahead(level: &Level, cell: (i32, i32), dir: f32, reach: i32) -> bool {
+    let d = if dir < 0.0 { -1 } else { 1 };
+    for k in 1..=reach {
+        let c = cell.0 + k * d;
+        if level.tile(c, cell.1).is_solid() {
+            return false;
+        }
+        if level.tile(c, cell.1 + 1) == Tile::Liquid {
+            return true;
+        }
+    }
+    false
+}
+
 /// What's ahead of someone standing in `cell` facing `dir`, within [`LOOK_AHEAD`] tiles:
 /// sewage, a spray can, a fly swarm.
 pub fn hazard_ahead(level: &Level, cell: (i32, i32), dir: f32) -> bool {
@@ -670,17 +689,26 @@ pub(super) fn think(
     }
 
     // --- "Lemme check that": Nat standing still, facing a hazard.
-    if brain.mode == HanMode::Follow && !side_b && !nat_dead && nat.grounded && !nat_on_han && nbody.vel.x.abs() < 5.0 {
+    // (A pool: no waiting. As Nat runs up to it, Han cannonballs in and floats: `HanFloat`.)
+    let pool_cell = feet_cell(level, nat.pos);
+    let pool = brain.mode == HanMode::Follow
+        && !side_b
+        && !nat_dead
+        && nat.grounded
+        && !nat_on_han
+        && pool_ahead(level, pool_cell, nctl.facing, POOL_RUN_UP)
+        && (nbody.vel.x * nctl.facing > 20.0 || brain.still >= go_ahead_delay(e));
+    if brain.mode == HanMode::Follow && !side_b && !nat_dead && nat.grounded && !nat_on_han && (pool || nbody.vel.x.abs() < 5.0) {
         let cell = feet_cell(level, nat.pos);
         let behind = (pos.0.x - nat.pos.x) * nctl.facing <= 8.0;
         if hazard_ahead(level, cell, nctl.facing) && behind && body.on_ground && (pos.0 - nat.pos).length() < 6.0 * TILE && !in_zone {
             brain.still += dt;
-            if brain.still >= go_ahead_delay(e) {
+            if pool || brain.still >= go_ahead_delay(e) {
                 brain.mode = HanMode::Ahead { dir: nctl.facing.signum(), t: 0.0 };
                 brain.still = 0.0;
                 brain.exec = None;
                 brain.path.clear();
-                say(&mut says, LEMME_LINE);
+                say(&mut says, if pool { super::CANNONBALL_LINE } else { LEMME_LINE });
             }
         } else {
             brain.still = 0.0;
@@ -718,8 +746,15 @@ pub(super) fn think(
                 brain.replan = 0.0;
             } else {
                 brain.mode = HanMode::Ahead { dir, t };
-                let wait = lead > super::ESCORT_LEAD && !clear;
-                input = HanInput { dir: if wait { 0.0 } else { dir }, speed: super::HAN_MARCH_SPEED / phys.speed, ..default() };
+                // At a pool's edge he doesn't wait for Nat: he cannonballs in (a hop off the edge).
+                let edge = pool_ahead(level, me_cell, dir, 1);
+                let wait = lead > super::ESCORT_LEAD && !clear && !edge;
+                input = HanInput {
+                    dir: if wait { 0.0 } else { dir },
+                    speed: super::HAN_MARCH_SPEED / phys.speed,
+                    jump: edge && body.on_ground,
+                    ..default()
+                };
             }
         }
         HanMode::Intercept => {

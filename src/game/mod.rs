@@ -43,7 +43,7 @@ pub use hazards::{SideStain, SIDE_STAIN_LIFE, CAN_HEIGHT, CAN_WIDTH,
 pub use platforms::platform_pos;
 pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, stand_pos};
 pub use han::{
-    BACK_WARN_LINE, DEATH_LINES, FLY_LINE, FOLLOW_GAP, FlySpin, GRIP_LINE, GRUMBLE_LINES, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
+    BACK_WARN_LINE, CANNONBALL_LINE, DEATH_LINES, FLOAT_FUEL, FLOAT_REFUEL, FLOAT_SPEED, FLY_LINE, GLUB_LINE, HanFloat, FOLLOW_GAP, FlySpin, GRIP_LINE, GRUMBLE_LINES, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
     HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, HAN_TOOTS, HanAnim, HanBrain, HanMode, HanNav, HanPhys,
     HanPose, HanRaft, LEMME_LINE, NERVOUS_GAP, NERVOUS_LINE, PARACHUTE_FALL, PRO_LINE, SprayPlug, UNION_LINE, brace_range,
     breather, go_ahead_delay, grumble_line, grumble_lines, han_raft_life, intercept_range, overuse_limit,
