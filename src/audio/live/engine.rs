@@ -117,6 +117,15 @@ pub enum Input {
     /// Each channel's level (pulse 1, pulse 2, triangle, noise): 1 as written, 0 muted. A mixer
     /// (an editor's mute / solo / volume): it applies at once, not at a bar line.
     SetMix([f32; 4]),
+    /// The stereo balance, -1 hard left .. 1 hard right: it glides there
+    /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
+    SetBalance(f32),
+    /// What the steer sounds like ([`super::desk::Steer`]): the balance, or the record (its
+    /// [`Input::SetBalance`] the record's speed: 1 forward, 0 held, -1 back).
+    SetSteer(super::desk::Steer),
+    /// A hit (Side B's drum stab) on beat `beat` (0-based) of absolute bar `bar`: the band
+    /// stabs the chord sounding there ([`super::desk`]); at once if that's gone by.
+    Hit { bar: u64, beat: u32 },
 }
 
 /// Engine settings.
@@ -414,6 +423,7 @@ pub struct Engine {
     next_bar: u64,
     next_song_bar: usize,
     bank: VoiceBank,
+    desk: super::desk::Desk,
     scratch: Vec<NoteEvent>,
     seq: u64,
     instruments: Instruments,
@@ -467,6 +477,7 @@ impl Engine {
         Ok(Engine {
             title: song.title.clone(),
             bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley], &instruments),
+            desk: super::desk::Desk::new(sample_rate),
             medley,
             shape,
             waltz,
@@ -598,6 +609,7 @@ impl Engine {
             let seg = &mut out[pos..pos + n as usize];
             seg.fill(Frame::ZERO);
             self.bank.render(seg, self.t, span.start);
+            self.desk.process(seg, self.t);
             for f in seg.iter_mut() {
                 f.left = soft_clip(f.left);
                 f.right = soft_clip(f.right);
@@ -1005,6 +1017,29 @@ impl Engine {
                 for (ch, g) in gains.into_iter().enumerate() {
                     self.bank.set_channel_gain(ch, g);
                 }
+                None
+            }
+            Input::SetBalance(b) => {
+                self.desk.set_balance(b);
+                None
+            }
+            Input::SetSteer(s) => {
+                self.desk.set_steer(s);
+                None
+            }
+            Input::Hit { bar, beat } => {
+                let at = self
+                    .committed
+                    .iter()
+                    .find(|b| b.slot.index == bar)
+                    .map(|b| {
+                        let beats = self.shape_of(self.span_at(b.slot.start).waltz).bar_beats.max(1.0);
+                        b.slot.start + ((b.slot.end - b.slot.start) as f64 * beat as f64 / beats) as u64
+                    })
+                    .filter(|&at| at > self.t)
+                    .unwrap_or(self.t);
+                let notes = self.bank.notes_at(at);
+                self.desk.hit(at, notes);
                 None
             }
             Input::Jump { on_ground: false } | Input::Land { .. } => None,

@@ -384,7 +384,7 @@ fn track_rooms(
         let dr = super::course::COURSE_H - r.level.height;
         let at = |(c, row): (usize, usize)| (c + p.col0, row + dr);
         let room = AloneRoom { start: at(r.level.start), goal: at(r.level.goal), cols: (p.col0, p.col0 + p.width) };
-        let setlist = super::alone::setlist(r.plan.side_b as usize);
+        let setlist = super::alone::setlist();
         commands.queue(move |w: &mut World| sideb::start_room(w, next, room, setlist));
     }
     if !run.is_last(next) && run.planned.is_none() && run.rooms.len() == next + 1 {

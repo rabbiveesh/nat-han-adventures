@@ -32,14 +32,9 @@ pub const MELT: usize = 2;
 /// In a plan, `PICK + k` picks call `k` without calling it (as `tests/side_b.rs` writes it).
 pub const PICK: usize = 10;
 
-/// The set list for a room, with `cleared` Side B levels behind the player: Giant Steps and
-/// fired up, and melting once Spike Alley (B2, its drip pipe) is cleared. Always empty.
-pub fn setlist(cleared: usize) -> Vec<(SetCall, u32)> {
-    let mut out = vec![(SetCall::Mode(Harmony::Coltrane), 0), (SetCall::Mode(Harmony::Quartal), 0)];
-    if cleared >= 2 {
-        out.push((SetCall::Melt, 0));
-    }
-    out
+/// The set list for a room: all three calls, like every Side B level. Always empty.
+pub fn setlist() -> Vec<(SetCall, u32)> {
+    vec![(SetCall::Mode(Harmony::Coltrane), 0), (SetCall::Mode(Harmony::Quartal), 0), (SetCall::Melt, 0)]
 }
 
 /// One piece of a room, and the way over it that the room's nuggets pay for.

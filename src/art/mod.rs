@@ -36,6 +36,10 @@ pub enum SpriteId {
     HanBraced,
     /// Han intercepting: arms out like a goalkeeper. 2 frames.
     HanIntercept,
+    /// Han plunging (Side B's encore): cup down, raised then pushed. 16x20, 2 frames.
+    HanPlunge,
+    /// Han yanking his plunger out, cup up high (Side B's encore). 16x20, 1 frame.
+    HanYank,
     /// Han going ahead into a hazard: determined march, plunger levelled. 4 frames.
     HanMarch,
     /// Han floating down on his plunger. 16x24 (feet at the bottom), 2 frames.
@@ -109,6 +113,8 @@ pub enum SpriteId {
     IconHorn,
     IconNote,
     IconSweat,
+    /// The nervous band (Side B's set list). 8x8.
+    IconJitters,
     /// Breakable brick (a bar of old soap). 16x16.
     Brick,
     /// Crumbling platform (soggy cardboard), whole and cracking. 16x16, art in the top ~9px.
@@ -162,12 +168,12 @@ impl SpriteId {
         use SpriteId::*;
         let mut v = vec![
             PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, HanBraced, HanIntercept,
-            HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
+            HanPlunge, HanYank, HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
             WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
-            IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
+            IconLock, IconHorn, IconNote, IconSweat, IconJitters, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
             CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
         ];
         for w in tiles::WORLDS {
@@ -181,10 +187,10 @@ impl SpriteId {
         use SpriteId::*;
         match self {
             GoalFlag | Grate => (16, 32),
-            HanBraced => (16, 20),
+            HanBraced | HanPlunge | HanYank => (16, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
-            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
+            Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat | IconJitters => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
             Wisp => (4, 6),
@@ -209,6 +215,8 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         HanJump => characters::han_jump(),
         HanBraced => buddy::han_braced(),
         HanIntercept => buddy::han_intercept(),
+        HanPlunge => buddy::han_plunge(),
+        HanYank => buddy::han_yank(),
         HanMarch => buddy::han_march(),
         HanParachute => buddy::han_parachute(),
         HanWinded => buddy::han_winded(),
@@ -252,6 +260,7 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         IconHorn => items::icon_horn(),
         IconNote => items::icon_note(),
         IconSweat => items::icon_sweat(),
+        IconJitters => items::icon_jitters(),
         Brick => gadgets::brick(),
         Crumble => gadgets::crumble(),
         Trampoline => gadgets::trampoline(),

@@ -68,7 +68,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, side_b_desk, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -252,6 +252,11 @@ pub struct Director {
     /// until then (play time).
     pub melt_until: Option<f32>,
     melting: bool,
+    /// Side B's nervous call: the nervous band (its grip) until then (play time).
+    pub nervous_until: Option<f32>,
+    nervy: bool,
+    /// The band's own last decision, before Side B's melting and nervous calls color it.
+    own: Option<(Filters, &'static str)>,
 }
 
 /// The band's counters for the HUD strip (`ui::hud`), as of this frame: what each counter
@@ -387,6 +392,39 @@ fn side_b_rewind(
     if (restart.read().count() > 0 && side.is_some()) || room_starts {
         player.music = None;
     }
+}
+
+/// What Side B does to the music as a whole (`live::desk`): the balance Han follows, and the
+/// hits, each on the beat after the one it was heard on.
+fn side_b_desk(
+    side: Option<Res<crate::game::sideb::SideB>>,
+    clock: Res<LiveClock>,
+    player: Res<LivePlayer>,
+    mut audio: NonSendMut<Audio>,
+    mut sent: Local<(f32, u32, Option<Music>, super::live::desk::Steer)>,
+) {
+    let Some(h) = audio.handle.as_mut() else { return };
+    let steer = side.as_ref().map_or(Default::default(), |s| s.steer_sound);
+    let pan = side.as_ref().map_or(0.0, |s| s.pan_to);
+    // (A new tune is a new engine: it gets the steer afresh.)
+    if pan != sent.0 || player.music != sent.2 || steer != sent.3 {
+        h.post(Input::SetSteer(steer));
+        h.post(Input::SetBalance(pan));
+        (sent.0, sent.2, sent.3) = (pan, player.music, steer);
+    }
+    let Some(s) = side else { return };
+    if s.hits_played == sent.1 {
+        return;
+    }
+    let p = clock.clock.position;
+    let bpb = clock.clock.beats_per_bar.round().max(1.0) as u32;
+    let beat = clock.clock.beat_index + 1;
+    let (bar, beat) = if beat >= bpb { (p.bar + 1, 0) } else { (p.bar, beat) };
+    // (Several in a frame are one hit.)
+    if s.hits_played > sent.1 {
+        h.post(Input::Hit { bar, beat });
+    }
+    sent.1 = s.hits_played;
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -538,7 +576,10 @@ fn direct(
             SetCall::Mode(h) => {
                 ev.call_mode = Some(h);
                 director.band.hold_secs = Some(crate::game::sideb::HOLD_SECS);
+                director.nervous_until = None;
             }
+            // Side B's nervous band, called: its grip (in place of whatever's held).
+            SetCall::Nervous => director.nervous_until = Some(now_secs + crate::game::sideb::HOLD_SECS),
             // Side B's melting: the laughing band held on its melting phrase.
             SetCall::Melt => director.melt_until = Some(now_secs + crate::game::sideb::MELT_SECS),
         }
@@ -552,6 +593,7 @@ fn direct(
         // Level start: everything resets, the band plays it straight.
         decision = Some(d.band.start(now));
         d.melt_until = None;
+        d.nervous_until = None;
         level_start = !restarted;
     }
     d.was_playing = playing;
@@ -565,7 +607,7 @@ fn direct(
     let stats = d.band.stats;
     meters.set_if_neq(BandMeters(d.band.meters(now)));
     if let Some(g) = groove_for_grip.as_deref_mut() {
-        let nervous = stats.level_deaths >= director::NERVOUS_DEATHS;
+        let nervous = stats.level_deaths >= director::NERVOUS_DEATHS || d.nervous_until.is_some_and(|u| now < u);
         if g.nervous != nervous {
             g.nervous = nervous;
         }
@@ -579,16 +621,23 @@ fn direct(
     let melting = d.melt_until.is_some_and(|u| now < u);
     let melt_changed = melting != d.melting;
     d.melting = melting;
-    let decided = match decided {
-        Some((mut f, r)) => {
+    // And its nervous call: the nervous band's harmony over whatever the band decided.
+    let nervy = d.nervous_until.is_some_and(|u| now < u);
+    let nervy_changed = nervy != d.nervy;
+    d.nervy = nervy;
+    if decided.is_some() {
+        d.own = decided;
+    }
+    let decided = if decided.is_some() || melt_changed || nervy_changed {
+        d.own.map(|(mut f, r)| {
             f.just_intonation |= melting;
-            Some((f, r))
-        }
-        None if melt_changed => player.decided.map(|(mut f, r)| {
-            f.just_intonation = melting;
+            if nervy {
+                f.harmony = Harmony::MelodicMinor;
+            }
             (f, r)
-        }),
-        None => None,
+        })
+    } else {
+        None
     };
     if let Some(dec) = decided {
         player.decided = Some(dec);
@@ -634,7 +683,9 @@ fn encore_band(mut cues: MessageReader<EncoreCue>, mut audio: NonSendMut<Audio>)
             | EncoreCue::Flush { .. }
             | EncoreCue::Boing { .. }
             | EncoreCue::Through { .. }
-            | EncoreCue::Slam { .. } => {}
+            | EncoreCue::Slam { .. }
+            | EncoreCue::Plunge { .. }
+            | EncoreCue::Pop { .. } => {}
         }
     }
 }
@@ -854,6 +905,8 @@ fn play_sfx(
             EncoreCue::Knock { .. } | EncoreCue::Through { .. } => queue.push((Sfx::Crash, 0.0)),
             EncoreCue::Boing { .. } => queue.push((Sfx::Boing, 0.0)),
             EncoreCue::Slam { .. } => queue.push((Sfx::Land, 4.0)),
+            EncoreCue::Plunge { .. } => queue.push((Sfx::Splat, -2.0)),
+            EncoreCue::Pop { .. } => queue.push((Sfx::Boing, 0.0)),
             EncoreCue::Flush { .. } => {
                 queue.push((Sfx::Flush, 0.0));
                 *flushed = true;

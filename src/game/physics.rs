@@ -151,7 +151,7 @@ impl Default for PlayerControl {
 }
 
 /// Is any grease under the feet of a box centered at `pos` (half extents `half`)?
-pub(super) fn grease_underfoot(level: &Level, pos: Vec2, half: Vec2) -> bool {
+pub(crate) fn grease_underfoot(level: &Level, pos: Vec2, half: Vec2) -> bool {
     let j = idx(pos.y - half.y - 0.5);
     let (xs, _) = cells(pos - half, pos + half);
     xs.into_iter().any(|i| tile_at(level, i, j) == Tile::Grease)
@@ -600,6 +600,11 @@ pub struct HanHead {
     /// none): clinging to a wall (a cling shaft, nervous) [`KICK_CARRY`] away from it; on the
     /// trapeze (the waltz) his swing's speed.
     pub kick: f32,
+    /// The trapeze's fling, this step: Nat on his cap goes off with the boost and the kick,
+    /// jump or not.
+    pub fling: bool,
+    /// The trapeze before its fling: Nat's jumps off him wait for it (he holds on).
+    pub hold: bool,
 }
 
 /// Nat jumped off Han's head: the plunger boost (`weak`: the feeble one of a band zone;
@@ -702,6 +707,11 @@ fn player_step(
             GROUND_ACCEL * if slipping { GREASE_STEER } else { 1.0 }
         };
     body.vel.x = move_towards(body.vel.x, target, accel * dt);
+    // (Holding on to Han's trapeze for its fling: no walking off his cap.)
+    let holding = body.riding.and_then(|e| han.get(e).ok()).is_some_and(|(_, _, _, h)| h.hold);
+    if holding {
+        body.vel.x = 0.0;
+    }
 
     // --- Caught in a wall cushion: aiming it (Left/Right), and a jump fires it.
     let caught = body.pad != 0.0;
@@ -735,7 +745,9 @@ fn player_step(
         .riding
         .and_then(|e| han.get(e).ok())
         .map(|(_, _, _, head)| *head);
-    if ctl.buffer > 0.0 && ctl.coyote > 0.0 {
+    let fling = on_han.is_some_and(|h| h.fling && h.boost);
+    let held = on_han.is_some_and(|h| h.hold);
+    if (ctl.buffer > 0.0 && ctl.coyote > 0.0 && !held) || fling {
         // Off Han's head in a band zone (or just stepped off it): the weak boost, winded or not.
         let weak = on_han.map_or(!body.on_ground && ctl.weak_ground, |h| h.weak);
         if weak {
@@ -773,7 +785,8 @@ fn player_step(
         }
         ctl.buffer = 0.0;
         ctl.coyote = 0.0;
-        ctl.cut_armed = true;
+        // (Flung, jump or not: no letting go of jump to cut it short.)
+        ctl.cut_armed = !fling;
         ctl.uncut = 0.0;
         ctl.bouncing = false;
         // Still riding for this step: `step_body` carries the jump off with the platform and

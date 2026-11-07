@@ -701,6 +701,18 @@ impl VoiceBank {
         }
     }
 
+    /// The pitches sounding at sample `t` (playing or queued), the drums aside.
+    pub fn notes_at(&self, t: u64) -> Vec<u8> {
+        let mut out = Vec::new();
+        for v in &self.tones {
+            let evs = v.active.iter().map(|a| &a.ev).chain(v.queue.iter());
+            for ev in evs.filter(|e| e.start <= t && t < e.end) {
+                out.extend_from_slice(ev.sound.notes());
+            }
+        }
+        out
+    }
+
     /// Nothing queued or sounding.
     pub fn idle(&self) -> bool {
         self.tones.iter().all(|v| v.queue.is_empty() && v.active.is_none()) && self.drums.queue.is_empty() && self.drums.ringing.is_empty()

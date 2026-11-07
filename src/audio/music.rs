@@ -167,6 +167,8 @@ pub enum Sfx {
     Crash,
     /// A level's secret found (`game::secret`).
     Secret,
+    /// Side B's hit (`game::sideb`): a band stab.
+    Hit,
 }
 
 #[cfg(test)]

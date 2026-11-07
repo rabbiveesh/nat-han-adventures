@@ -19,11 +19,12 @@ fn level(sfx: Sfx) -> f32 {
         Sfx::Jump | Sfx::Land => 0.75,
         Sfx::Nugget | Sfx::Checkpoint | Sfx::MenuSelect | Sfx::Secret => 0.85,
         Sfx::Toot | Sfx::Splat | Sfx::Flush | Sfx::Boing | Sfx::Crash => 1.0,
+        Sfx::Hit => 0.9,
     }
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 13] = [
+    pub const ALL: [Sfx; 14] = [
         Sfx::Jump,
         Sfx::Toot,
         Sfx::Land,
@@ -37,6 +38,7 @@ impl Sfx {
         Sfx::Boing,
         Sfx::Crash,
         Sfx::Secret,
+        Sfx::Hit,
     ];
 }
 
@@ -59,6 +61,7 @@ pub fn render(sfx: Sfx) -> Rendered {
         Sfx::Boing => boing(),
         Sfx::Crash => crash(),
         Sfx::Secret => secret(),
+        Sfx::Hit => hit(),
     };
     finish(mono, level(sfx))
 }
@@ -212,6 +215,23 @@ fn crash() -> Vec<f32> {
             let wash = body.run(x, 5_000.0) * 0.35 * (-t * 6.0).exp();
             let boom = o.tri(exp_sweep(110.0, 38.0, (t * 6.0).min(1.0))) * 0.9 * (-t * 9.0).exp();
             (shimmer + wash + boom) * env_ar(i, n, 0.001, 0.2)
+        })
+        .collect()
+}
+
+/// Side B's hit: a band stab, kick and a short crash choked off.
+fn hit() -> Vec<f32> {
+    let n = secs(0.3);
+    let mut o = Osc::default();
+    let mut noise = Lfsr::with_seed(0xb1a5);
+    let mut lp = LowPass(0.0);
+    (0..n)
+        .map(|i| {
+            let t = i as f32 / n as f32;
+            let x = noise.next(40_000.0, false);
+            let splash = (x - lp.run(x, 2_500.0)) * 0.7 * (-t * 9.0).exp();
+            let kick = o.tri(exp_sweep(150.0, 45.0, (t * 5.0).min(1.0))) * (-t * 7.0).exp();
+            (splash + kick) * env_ar(i, n, 0.001, 0.05)
         })
         .collect()
 }

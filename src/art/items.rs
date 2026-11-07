@@ -166,6 +166,23 @@ pub fn icon_sweat() -> Vec<Pixels> {
     vec![grid(ICON_SWEAT, SWEAT_PAL)]
 }
 
+/// The nervous band on Side B's set list: a queasy green face with a wobbly mouth.
+const JITTERS_PAL: Palette = &[('k', OUTLINE), ('g', hex(0xc4e89a)), ('G', hex(0x86b85e))];
+const ICON_JITTERS: &[&str] = &[
+    "..kkkk..",
+    ".kggggk.",
+    "kgkggkgk",
+    "kggggggk",
+    "kgkgkggk",
+    "kGGkGkGk",
+    ".kGGGGk.",
+    "..kkkk..",
+];
+
+pub fn icon_jitters() -> Vec<Pixels> {
+    vec![grid(ICON_JITTERS, JITTERS_PAL)]
+}
+
 const LOCK_PAL: Palette = &[('k', hex(0x1b1420)), ('g', hex(0xc0c4d0)), ('G', hex(0x707488)), ('w', hex(0xffffff))];
 const ICON_LOCK: &[&str] = &[
     "..kkkk..",

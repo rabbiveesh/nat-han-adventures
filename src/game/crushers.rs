@@ -10,7 +10,7 @@
 //! - **Bricks** are smashed by whoever rises into them (`Contact::bricks`): [`smash`] empties
 //!   the tile and says so ([`BrickSmashed`]) for the art and the sound.
 //! - **Beat blocks** swap on the music's bar line ([`beat_blocks`]): red ones are there on even
-//!   bars, blue ones on odd ones. One coming back where someone stands waits until they've
+//!   bars, blue ones on odd ones (on Side B, on the player's hits instead). One coming back where someone stands waits until they've
 //!   moved.
 //!
 //! (Conveyor belts, fans and bumpers are all physics: `step_body`.)
@@ -277,6 +277,7 @@ pub(super) fn beat_blocks(
     mut active: ResMut<ActiveLevel>,
     bodies: Query<(&Pos, &Body), (Or<(With<Player>, With<Han>)>, Without<Dead>)>,
     mut cells: Local<Vec<usize>>,
+    side_b: Option<Res<super::sideb::SideB>>,
 ) {
     let level = &active.level;
     // (A scan is a few thousand compares: cheaper than keeping a list in step with level loads.)
@@ -285,7 +286,8 @@ pub(super) fn beat_blocks(
     if cells.is_empty() {
         return;
     }
-    let odd = groove.clock.bar % 2 == 1;
+    // (On Side B they answer the player's hits instead: `sideb::land_hits`.)
+    let odd = side_b.map_or(groove.clock.bar % 2 == 1, |s| s.hits % 2 == 1);
     let inside: Vec<(Vec2, Vec2)> = bodies.iter().map(|(p, b)| (p.0 - b.half, p.0 + b.half)).collect();
     let mut changes: Vec<(usize, Tile)> = Vec::new();
     for &i in cells.iter() {

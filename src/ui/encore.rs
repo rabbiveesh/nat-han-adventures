@@ -1,6 +1,6 @@
 //! The encore's words on screen (`game::encore`): ENCORE! and how to call the band in the lap,
-//! FLUSH! when Nat goes in (NAT ALONE: SLAM!), then TO BE CONTINUED... (NAT ALONE, with World 4
-//! still shut: how to open it).
+//! FLUSH! when Nat goes in (Side B: GLUG! as Han plunges, SPLOOSH! as the throne blows Nat upstairs;
+//! NAT ALONE: SLAM!), then TO BE CONTINUED... (Side B, with World 4 still shut: how to open it).
 
 use bevy::prelude::*;
 
@@ -26,7 +26,7 @@ struct Top;
 struct Hint;
 #[derive(Component)]
 struct Mid;
-/// Under the middle line: NAT ALONE's way into World 4, while it's shut.
+/// Under the middle line: the way into World 4 at Side B's end, while it's shut.
 #[derive(Component)]
 struct Sub;
 
@@ -86,6 +86,8 @@ fn show(
     if let Ok((mut text, mut font, mut color)) = mid.single_mut() {
         let (want, size, c) = match e.phase {
             EncorePhase::Flushing => ("FLUSH!", 24.0, Color::srgb(0.6, 0.85, 1.0)),
+            EncorePhase::Plunging if e.t >= crate::game::encore::side_b::PLUNGE_SECS => ("GLUG!", 24.0, Color::srgb(0.6, 0.85, 1.0)),
+            EncorePhase::Sucked => ("SPLOOSH!", 24.0, Color::srgb(0.6, 0.85, 1.0)),
             EncorePhase::Slam if e.t >= crate::game::encore::SHUT_SECS => ("SLAM!", 24.0, GOLD),
             EncorePhase::Continued => ("TO BE CONTINUED...", 16.0, CREAM),
             _ => ("", 24.0, CREAM),
@@ -98,7 +100,7 @@ fn show(
     }
     if let Ok(mut text) = sub.single_mut() {
         let shut = progress.is_some_and(|p| !p.world_4_unlocked());
-        let want = if e.gag == Gag::Grate && e.phase == EncorePhase::Continued && shut { "FIND ALL TEN GRATES" } else { "" };
+        let want = if e.gag == Gag::Plunge && e.phase == EncorePhase::Continued && shut { "FIND ALL TEN GRATES" } else { "" };
         if text.0 != want {
             text.0 = want.into();
         }

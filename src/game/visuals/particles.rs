@@ -82,6 +82,7 @@ fn spawn_fx(
     mut sprung: MessageReader<crate::game::crushers::Sprung>,
     mut thuds: MessageReader<crate::game::crushers::CrusherThud>,
     mut encore: MessageReader<EncoreCue>,
+    mut hits: MessageReader<crate::events::HitLanded>,
 ) {
     use std::f32::consts::PI;
     let mut budget = MAX_PARTICLES.saturating_sub(existing.iter().count());
@@ -152,6 +153,29 @@ fn spawn_fx(
             life: (0.4, 0.7),
             size: 2.0,
         });
+    }
+    for h in hits.read() {
+        // Side B's hit: a shock ring round Han, and a flash on every tile it changed.
+        burst(&mut commands, &mut rng, h.pos, Burst {
+            count: 24,
+            colors: &[Color::srgb(1.0, 0.95, 0.7), Color::srgb(1.0, 0.8, 0.25)],
+            speed: (150.0, 170.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 0.0,
+            life: (0.18, 0.22),
+            size: 3.0,
+        });
+        for &t in &h.tiles {
+            burst(&mut commands, &mut rng, t, Burst {
+                count: 4,
+                colors: &[Color::srgb(1.0, 1.0, 0.85)],
+                speed: (20.0, 50.0),
+                angle: (0.0, 2.0 * PI),
+                gravity: 0.0,
+                life: (0.15, 0.25),
+                size: 3.0,
+            });
+        }
     }
     for l in landed.read() {
         let n = if l.speed > 300.0 { 10 } else { 6 };
@@ -260,6 +284,24 @@ fn spawn_fx(
                 gravity: 0.0,
                 life: (0.3, 0.6),
                 size: 3.0,
+            }),
+            EncoreCue::Plunge { pos } => (pos, Burst {
+                count: 10,
+                colors: &[Color::srgb(0.45, 0.75, 1.0), Color::srgb(0.75, 0.9, 1.0)],
+                speed: (40.0, 90.0),
+                angle: (PI * 0.3, PI * 0.7),
+                gravity: 420.0,
+                life: (0.3, 0.6),
+                size: 2.0,
+            }),
+            EncoreCue::Pop { pos } => (pos + Vec2::new(0.0, 8.0), Burst {
+                count: 28,
+                colors: &[Color::srgb(0.45, 0.75, 1.0), Color::srgb(0.75, 0.9, 1.0), Color::WHITE],
+                speed: (70.0, 160.0),
+                angle: (PI * 0.2, PI * 0.8),
+                gravity: 420.0,
+                life: (0.5, 0.9),
+                size: 2.0,
             }),
             EncoreCue::Boing { pos } => (pos, Burst {
                 count: 24,

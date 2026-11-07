@@ -138,6 +138,12 @@ fn follow_player(
         match e.phase {
             EncorePhase::Knocked => 4.0 * (1.0 - e.t / 0.5).max(0.0),
             EncorePhase::Flushing => 1.5 * (1.0 - e.t / crate::game::encore::FLUSH_SECS).max(0.0),
+            // (Side B: every plunge thumps; the slurp rumbles.)
+            EncorePhase::Plunging => {
+                let p = crate::game::encore::side_b::PLUNGE_SECS;
+                2.0 * (1.0 - (e.t % p) / p * 3.0).max(0.0)
+            }
+            EncorePhase::Sucked => 1.5 * (1.0 - e.t / crate::game::encore::side_b::SUCK_SECS).max(0.0),
             EncorePhase::Slam if e.t >= crate::game::encore::SHUT_SECS => 4.0 * (1.0 - (e.t - crate::game::encore::SHUT_SECS) / 0.5).max(0.0),
             _ => 0.0,
         }
