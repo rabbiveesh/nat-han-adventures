@@ -68,7 +68,7 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
+        .add_systems(Update, (side_b_rewind, follow_state, side_b_desk, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -392,6 +392,39 @@ fn side_b_rewind(
     if (restart.read().count() > 0 && side.is_some()) || room_starts {
         player.music = None;
     }
+}
+
+/// What Side B does to the music as a whole (`live::desk`): the balance Han follows, and the
+/// hits, each on the beat after the one it was heard on.
+fn side_b_desk(
+    side: Option<Res<crate::game::sideb::SideB>>,
+    clock: Res<LiveClock>,
+    player: Res<LivePlayer>,
+    mut audio: NonSendMut<Audio>,
+    mut sent: Local<(f32, u32, Option<Music>, super::live::desk::Steer)>,
+) {
+    let Some(h) = audio.handle.as_mut() else { return };
+    let steer = side.as_ref().map_or(Default::default(), |s| s.steer_sound);
+    let pan = side.as_ref().map_or(0.0, |s| s.pan_to);
+    // (A new tune is a new engine: it gets the steer afresh.)
+    if pan != sent.0 || player.music != sent.2 || steer != sent.3 {
+        h.post(Input::SetSteer(steer));
+        h.post(Input::SetBalance(pan));
+        (sent.0, sent.2, sent.3) = (pan, player.music, steer);
+    }
+    let Some(s) = side else { return };
+    if s.hits_played == sent.1 {
+        return;
+    }
+    let p = clock.clock.position;
+    let bpb = clock.clock.beats_per_bar.round().max(1.0) as u32;
+    let beat = clock.clock.beat_index + 1;
+    let (bar, beat) = if beat >= bpb { (p.bar + 1, 0) } else { (p.bar, beat) };
+    // (Several in a frame are one hit.)
+    if s.hits_played > sent.1 {
+        h.post(Input::Hit { bar, beat });
+    }
+    sent.1 = s.hits_played;
 }
 
 #[allow(clippy::too_many_arguments)]

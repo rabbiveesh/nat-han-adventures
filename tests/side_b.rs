@@ -113,8 +113,9 @@ fn said(app: &App, line: &str) -> bool {
 }
 
 // Every level's routes are `play` plans, written as `try_a_plan` takes them: `col/k` calls
-// set-list call `k` (0 giant, 1 gap, 2 melt) once Han's past column `col`; `col/1k` only picks
-// it, for the nuggets ahead. The set lists start empty: every call is a nugget Han grabbed.
+// set-list call `k` (0 giant, 1 gap, 2 melt) once Han's past column `col`; `col/20` is a hit,
+// `col/30` and `col/31` lean the band left and right. (`col/1k`, the old pick for the nuggets
+// ahead, does nothing now: calls are free.)
 const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
     // Down the Drain: over the deck (its nuggets) or through the tunnel (one).
     &[("over", "7/0 52/0 75/11 95/10 106/1 136/0"), ("under", "5/11 7/0 106/1 136/0")],
@@ -246,12 +247,14 @@ fn set_lists_come_in_one_order() {
 }
 
 #[test]
-fn nuggets_add_to_the_picked_call() {
+fn nuggets_are_the_score_and_calls_are_free() {
     let mut app = app(8);
-    pick(&mut app, 2);
     until(&mut app, 5.0, |a| col(a) >= 13.0).unwrap();
-    assert_eq!(side(&app).refills, 2);
-    assert_eq!(side(&app).left, vec![0, 0, 2], "both runway nuggets to melting");
+    assert_eq!(side(&app).nuggets, 2, "both runway nuggets");
+    for _ in 0..3 {
+        tap(&mut app, KeyCode::Digit3);
+    }
+    assert_eq!(side(&app).calls, 3, "as many calls as you like");
 }
 
 #[test]
@@ -266,7 +269,7 @@ fn in_the_maze_drips_turn_han_round_unless_hes_melted() {
     let mut app = app(8);
     for (c, k) in plan("1/12 16/2") {
         until(&mut app, 10.0, |a| col(a) >= c).unwrap();
-        if k >= PICK { pick(&mut app, k - PICK) } else { call(&mut app, k) }
+        act(&mut app, k);
     }
     until(&mut app, 10.0, |a| col(a) >= 49.0).expect("through the door");
     assert_eq!(side(&app).dir, Some(1.0));
@@ -319,9 +322,8 @@ fn hans_closing_stretch_starts_the_shout() {
 fn jump_is_the_hit_on_the_next_beat() {
     let mut app = app(0);
     until(&mut app, 5.0, |a| col(a) >= 7.0).unwrap();
-    assert_eq!(side(&app).left, vec![2, 0, 0], "the runway's two nuggets");
     tap(&mut app, KeyCode::Space);
-    assert_eq!((side(&app).calls, side(&app).left.clone()), (0, vec![2, 0, 0]), "not a call");
+    assert_eq!(side(&app).calls, 0, "not a call");
     assert_eq!(side(&app).hits, 0, "not till the next beat");
     let beat = app.world().resource::<Groove>().clock.beat_secs;
     until(&mut app, beat + 0.1, |a| side(a).hits > 0).expect("the hit lands");
@@ -329,32 +331,53 @@ fn jump_is_the_hit_on_the_next_beat() {
 }
 
 #[test]
-fn a_number_picks_then_calls() {
+fn a_number_calls_at_once_and_down_calls_it_again() {
     // (On a phone, a tap on a third of the screen: index.html presses 1, 2 or 3.)
     let mut app = app(0);
-    until(&mut app, 5.0, |a| col(a) >= 7.0).unwrap();
-    assert_eq!(side(&app).left, vec![2, 0, 0]);
-    // Another call is only picked (for the nuggets to come), charged or not.
+    until(&mut app, 2.0, |a| col(a) >= 3.0).unwrap();
     tap(&mut app, KeyCode::Digit2);
-    assert_eq!((side(&app).selected, side(&app).calls), (1, 0));
-    tap(&mut app, KeyCode::Digit1);
-    assert_eq!((side(&app).selected, side(&app).calls, &side(&app).left[..]), (0, 0, &[2, 0, 0][..]));
-    // The picked one again: called.
-    tap(&mut app, KeyCode::Digit1);
-    assert_eq!((side(&app).selected, side(&app).calls), (0, 1));
-    assert_eq!(side(&app).left, vec![1, 0, 0]);
+    assert_eq!((side(&app).selected, side(&app).calls), (1, 1));
+    tap(&mut app, KeyCode::ArrowDown);
+    assert_eq!((side(&app).selected, side(&app).calls), (1, 2));
 }
 
 #[test]
-fn a_rewind_starts_the_tune_over() {
+fn the_balance_steers_han() {
+    let mut app = app(0);
+    until(&mut app, 2.0, |a| col(a) >= 4.0).unwrap();
+    // To the middle: he stops.
+    tap(&mut app, KeyCode::ArrowLeft);
+    assert_eq!(side(&app).pan_to, 0.0);
+    until(&mut app, 0.6, |_| false);
+    let at = col(&mut app);
+    until(&mut app, 1.0, |_| false);
+    assert!((col(&mut app) - at).abs() < 0.2, "stopped at {at}, now {}", col(&mut app));
+    // Over to the left: back he goes.
+    tap(&mut app, KeyCode::ArrowLeft);
+    until(&mut app, 1.0, |_| false);
+    assert!(col(&mut app) < at - 1.0, "heading back");
+    tap(&mut app, KeyCode::ArrowRight);
+    tap(&mut app, KeyCode::ArrowRight);
+    let back = col(&mut app);
+    until(&mut app, 1.0, |_| false);
+    assert!(col(&mut app) > back + 1.0, "and on again");
+}
+
+#[test]
+fn a_death_keeps_the_tune_playing_and_r_starts_it_over() {
     let mut app = app(0);
     app.init_resource::<Started>()
         .add_systems(Last, |mut n: ResMut<Started>, mut s: MessageReader<nat_han_adventures::audio::MusicStarted>| n.0 += s.read().count());
-    until(&mut app, 10.0, rewound).unwrap();
+    let (f, _) = died(play_in_app(&mut app, &plan("5/11 7/0 136/0")));
+    assert_eq!(f, Fate::Pit);
     let before = app.world().resource::<Started>().0;
-    until(&mut app, 4.0, |a| side(a).rewinds == 1).unwrap();
+    until(&mut app, 4.0, |a| side(a).phase == Phase::Playing).unwrap();
     until(&mut app, 0.2, |_| false);
-    assert_eq!(app.world().resource::<Started>().0, before + 1, "the tune starts over");
+    assert_eq!(side(&app).rewinds, 1);
+    assert_eq!(app.world().resource::<Started>().0, before, "the tune plays on");
+    tap(&mut app, KeyCode::KeyR);
+    until(&mut app, 0.5, |_| false);
+    assert_eq!(app.world().resource::<Started>().0, before + 1, "R: from the top");
 }
 
 #[derive(Resource, Default)]
@@ -371,14 +394,13 @@ fn every_route_of_every_level() {
 }
 
 #[test]
-fn with_no_music_han_charges_the_wall_and_knocks_himself_out() {
+fn with_no_music_han_keeps_at_the_wall() {
     let mut app = app(0);
-    until(&mut app, 10.0, rewound).expect("Han charges the giant wall and comes off worst");
-    assert_eq!(fate(&app), Some(Fate::Bonk));
-    assert!(said(&app, sideb::CLIMB_LINE));
-    assert!(said(&app, Fate::Bonk.line()));
-    until(&mut app, 3.0, |a| side(a).rewinds == 1).expect("the level rewinds");
-    assert!(col(&mut app) < 5.0, "Han's back at the start");
+    until(&mut app, 10.0, |a| said(a, sideb::CLIMB_LINE)).expect("Han charges the giant wall");
+    let at = col(&mut app);
+    until(&mut app, 8.0, |_| false);
+    assert_eq!(side(&app).phase, Phase::Playing, "no knocking himself out: call the band or turn him round");
+    assert!((col(&mut app) - at).abs() < 3.0, "still at it");
 }
 
 #[test]
@@ -389,10 +411,12 @@ fn no_fired_up_for_the_gap_is_a_long_way_down() {
 }
 
 #[test]
-fn han_hops_spike_alley_then_bonks_the_wall() {
-    let (f, c) = died(play(1, &[]));
-    assert_eq!(f, Fate::Bonk, "through the spikes, then the wall");
-    assert!((64.0..73.0).contains(&c), "at the wall, not {c}");
+fn han_hops_spike_alley_then_keeps_at_the_wall() {
+    let mut app = app(1);
+    until(&mut app, 20.0, |_| false);
+    assert_eq!(side(&app).phase, Phase::Playing, "through the spikes");
+    let c = col(&mut app);
+    assert!((60.0..73.0).contains(&c), "at the wall, not {c}");
 }
 
 #[test]
@@ -407,7 +431,6 @@ fn giant_steps_in_spike_alley_floats_han_into_the_ceiling() {
 fn spikes_kill_han_and_the_level_rewinds() {
     let mut app = app(1);
     until(&mut app, 5.0, |a| col(a) >= 8.0).unwrap();
-    assert_eq!(side(&app).calls_left(), 2, "the runway's nuggets");
     // Drop him on the first pit's spikes.
     let level = app.world().resource::<nat_han_adventures::game::ActiveLevel>().level.clone();
     let spot = level.tile_center(23, 10);
@@ -416,10 +439,8 @@ fn spikes_kill_han_and_the_level_rewinds() {
     (p.0, pp.0, body.vel) = (spot, spot, Vec2::new(0.0, -200.0));
     until(&mut app, 0.5, rewound).expect("spikes are deadly on Side B");
     assert_eq!(fate(&app), Some(Fate::Spikes));
-    until(&mut app, 3.0, |a| side(a).rewinds == 1).expect("the level rewinds");
-    assert_eq!(side(&app).calls_left(), 0, "the nuggets go back where they were");
-    until(&mut app, 5.0, |a| col(a) >= 8.0).unwrap();
-    assert_eq!(side(&app).calls_left(), 2, "to be grabbed again");
+    until(&mut app, 3.0, |a| side(a).rewinds == 1).expect("back he comes");
+    assert!(col(&mut app) < 5.0, "at the start: no checkpoint passed");
 }
 
 #[test]
@@ -434,7 +455,7 @@ fn full_size_han_loses_his_cap_in_the_drip_pipe() {
 fn melting_too_late_is_too_late() {
     // Drip Pipe's leap, melting for the last pipe called as he reaches it: the bar line's too
     // far off.
-    let (f, c) = died(play(2, &plan("5/11 9/0 38/12 45/1 92/0 120/1 162/2")));
+    let (f, c) = died(play(2, &plan("5/11 9/0 38/12 45/1 92/0 120/1 167/2")));
     assert_eq!(f, Fate::Spikes);
     assert!(c > 165.0, "at the last pipe, not {c}");
 }
@@ -444,17 +465,12 @@ fn a_cleared_level_goes_on_to_the_next() {
     let mut app = app(0);
     for (c, k) in plan(ROUTES[0][1].1) {
         until(&mut app, 30.0, |a| col(a) >= c).unwrap();
-        if k >= PICK {
-            pick(&mut app, k - PICK);
-        } else {
-            call(&mut app, k);
-        }
+        act(&mut app, k);
     }
     until(&mut app, 30.0, |a| matches!(side(a).phase, Phase::Cleared { .. })).expect("cleared");
     until(&mut app, 6.0, |a| side(a).level == 1).expect("on to Spike Alley");
     until(&mut app, 0.1, |_| false);
     assert_eq!(side(&app).phase, Phase::Playing);
-    assert_eq!(side(&app).left, vec![0, 0, 0], "Spike Alley's set list, empty");
     assert!(col(&mut app) < 5.0, "Han's at its start");
     let progress = app.world().resource::<Progress>();
     assert_eq!((progress.side_b_unlocked, progress.side_b_rewinds[0]), (2, Some(0)), "saved: B2 open");
@@ -470,11 +486,7 @@ fn the_last_level_ends_in_hans_encore_gone_wrong() {
     let mut app = app(n);
     for (c, k) in plan(ROUTES[n][0].1) {
         until(&mut app, 60.0, |a| col(a) >= c).unwrap();
-        if k >= PICK {
-            pick(&mut app, k - PICK);
-        } else {
-            call(&mut app, k);
-        }
+        act(&mut app, k);
     }
     until(&mut app, 30.0, |a| a.world().get_resource::<Encore>().is_some()).expect("an encore at the goal");
     let e = app.world().resource::<Encore>().clone();
@@ -511,26 +523,28 @@ fn the_last_level_ends_in_hans_encore_gone_wrong() {
     assert_eq!(*app.world().resource::<Shelf>(), Shelf::SideB);
 }
 
-/// Pick set-list call `k` (Left/Right) and call it (Down).
+/// Call set-list call `k` (1, 2, 3).
 fn call(app: &mut App, k: usize) {
-    pick(app, k);
-    tap(app, KeyCode::ArrowDown);
+    tap(app, [KeyCode::Digit1, KeyCode::Digit2, KeyCode::Digit3][k]);
 }
 
-/// Pick set-list call `k` (Left/Right), not calling it: the call Han's next nugget adds to.
-fn pick(app: &mut App, k: usize) {
-    while side(app).selected < k {
-        tap(app, KeyCode::ArrowRight);
-    }
-    while side(app).selected > k {
-        tap(app, KeyCode::ArrowLeft);
-    }
-}
-
-/// In a plan, `(col, PICK + k)` only picks call `k` ([`pick`]).
+/// In a plan, `(col, PICK + k)` was a pick (nothing now: the calls are free).
 const PICK: usize = 10;
-/// In a plan, `(col, HIT)` (`col/20`) plays the hit (Jump).
+/// In a plan, `(col, HIT)` (`col/20`) plays the hit (Jump); `col/30`, `col/31` lean the band.
 const HIT: usize = 20;
+const LEFT: usize = 30;
+const RIGHT: usize = 31;
+
+/// Do plan step `k`.
+fn act(app: &mut App, k: usize) {
+    match k {
+        HIT => tap(app, KeyCode::Space),
+        LEFT => tap(app, KeyCode::ArrowLeft),
+        RIGHT => tap(app, KeyCode::ArrowRight),
+        PICK.. => {}
+        k => call(app, k),
+    }
+}
 
 /// Play Side B level `level`, calling set-list call `k` once Han's past column `col`, for each
 /// `(col, k)` in turn: cleared, or how Han met his end (and where).
@@ -553,15 +567,9 @@ fn play_in_app(app: &mut App, plan: &[(f32, usize)]) -> Result<(), (Option<Fate>
         }
         if std::env::var("SIDE_B_TIMES").is_ok() {
             let t = app.world().resource::<nat_han_adventures::game::LevelRun>().time;
-            eprintln!("call {k} at t={t:.2} col={:.1} left={:?}", col(app), side(app).left);
+            eprintln!("call {k} at t={t:.2} col={:.1}", col(app));
         }
-        if k == HIT {
-            tap(app, KeyCode::Space);
-        } else if k >= PICK {
-            pick(app, k - PICK);
-        } else {
-            call(app, k);
-        }
+        act(app, k);
     }
     until(app, 90.0, |a| side(a).phase != Phase::Playing);
     match side(app).phase {
@@ -604,12 +612,46 @@ fn try_a_file() {
     let src = std::fs::read_to_string(std::env::var("SIDE_B_FILE").unwrap()).unwrap();
     let b = SideBLevel::parse(&src).unwrap();
     let slot: usize = std::env::var("SIDE_B_SLOT").ok().and_then(|v| v.parse().ok()).unwrap_or(1) - 1;
-    let p = plan(&std::env::var("SIDE_B_PLAN").unwrap_or_default());
+    let p = std::env::var("SIDE_B_PLAN").unwrap_or_default();
     let mut app = app_starting(move |c| sideb::start_level(c, slot, b));
-    let r = play_in_app(&mut app, &p);
+    let r = play_steps(&mut app, &p);
     let t = app.world().resource::<nat_han_adventures::game::LevelRun>().time;
     let bar = app.world().resource::<Groove>().clock.bar;
-    eprintln!("{r:?} at {t:.1}s bar {bar}");
+    eprintln!("{r:?} at {t:.1}s bar {bar}, {} deaths ({:?})", side(&app).rewinds, side(&app).fate);
+}
+
+/// Play a route as the game's `NATHAN_SIDE_B_PLAN` does ([`sideb::parse_plan`]: steps at a
+/// column Han crosses, either way, or `+secs` after the last; a death doesn't stop it): cleared
+/// (and how long it took), or where Han got to.
+fn play_steps(app: &mut App, text: &str) -> Result<f32, f32> {
+    let steps = sideb::parse_plan(text);
+    let (mut i, mut prev, mut secs) = (0, col(app), 0.0f32);
+    let n = (120.0 / DT) as usize;
+    for f in 0..n {
+        app.update();
+        let x = col(app);
+        if side(app).phase == Phase::Playing && i < steps.len() {
+            secs += DT as f32;
+            if sideb::plan_due(steps[i], prev, x, secs) {
+                if let Some(k) = steps[i].act() {
+                    if std::env::var("SIDE_B_TIMES").is_ok() {
+                        eprintln!("step {i} ({k}) at t={:.2} col={x:.1}", f as f64 * DT);
+                    }
+                    act(app, k);
+                }
+                i += 1;
+                secs = 0.0;
+            }
+        }
+        prev = x;
+        if f % 15 == 0 {
+            trace(app, f as f32 * DT as f32);
+        }
+        if matches!(side(app).phase, Phase::Cleared { .. }) {
+            return Ok(f as f32 * DT as f32);
+        }
+    }
+    Err(col(app))
 }
 
 /// How much slack each call of a level's routes has: the shifts (in columns) that still clear
@@ -657,12 +699,10 @@ fn route_report() {
             let mut calls = Vec::new();
             for &(c, k) in &plan(p) {
                 until(&mut app, 30.0, |a| col(a) >= c || side(a).phase != Phase::Playing);
-                if k >= PICK {
-                    pick(&mut app, k - PICK);
-                } else {
+                if k < PICK {
                     calls.push(format!("{}@{c} {}", ["giant", "gap", "melt"][k], clock(&app)));
-                    call(&mut app, k);
                 }
+                act(&mut app, k);
             }
             until(&mut app, 40.0, |a| side(a).phase != Phase::Playing);
             let end = clock(&app);
@@ -803,18 +843,21 @@ fn free_play_mixes_in_a_side_b_room() {
         let cols = s.room.expect("a free play Side B room").cols;
         assert_eq!(cols, (placed.col0, placed.col0 + placed.width));
         assert_eq!(s.setlist, alone::setlist());
-        assert!(s.left.iter().all(|&n| n == 0), "the set list starts empty");
         assert!(col(&mut app) < (placed.col0 + 4) as f32, "Han comes in through the pipe");
-        let nuggets = nuggets_in(&mut app, cols);
 
-        // No calls: Han's done for, and only the room rewinds.
+        // No calls: Han's stuck (or done for, and back at the room's start); never through.
         until(&mut app, 30.0, rewound);
-        assert!(rewound(&mut app), "Han dies without the band");
-        until(&mut app, 5.0, |a| side(a).phase == Phase::Playing);
-        assert_eq!(side(&app).rewinds, 1);
-        assert!(col(&mut app) < (placed.col0 + 4) as f32, "back at the room's start");
-        assert_eq!(nuggets_in(&mut app, cols), nuggets, "the room's nuggets are back");
+        if rewound(&mut app) {
+            until(&mut app, 5.0, |a| side(a).phase == Phase::Playing);
+            assert_eq!(side(&app).rewinds, 1);
+            assert!(col(&mut app) < (placed.col0 + 4) as f32, "back at the room's start");
+        } else {
+            assert_eq!(side(&app).phase, Phase::Playing, "not through without the band");
+        }
         assert_eq!(run(&app).current, Some(k), "the run's where it was");
+        // (Back to the room's start, as a death would.)
+        app.world_mut().resource_mut::<SideB>().phase = Phase::Rewind { t: 0.01 };
+        until(&mut app, 1.0, |a| side(a).phase == Phase::Playing);
 
         // The plan it was drawn with clears it.
         let mut c = Canvas::with_height(alone::ALONE_H);
@@ -826,11 +869,7 @@ fn free_play_mixes_in_a_side_b_room() {
             until(&mut app, 30.0, |a| col(a) >= at(c) || side(a).phase != Phase::Playing);
             let now = col(&mut app);
             assert_eq!(side(&app).phase, Phase::Playing, "Han died at {now:.1} ({:?}), plan {plan:?}", fate(&app));
-            if k >= PICK {
-                pick(&mut app, k - PICK);
-            } else {
-                call(&mut app, k);
-            }
+            act(&mut app, k);
         }
         until(&mut app, 40.0, |a| a.world().get_resource::<SideB>().is_none());
         assert!(app.world().get_resource::<SideB>().is_none(), "Han clears the room");

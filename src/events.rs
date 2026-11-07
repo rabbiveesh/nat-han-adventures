@@ -11,6 +11,7 @@ pub fn plugin(app: &mut App) {
         .add_message::<PlayerDied>()
         .add_message::<PlayerRespawned>()
         .add_message::<CheckpointReached>()
+        .add_message::<HitLanded>()
         .add_message::<LevelCompleted>()
         .add_message::<HanSays>()
         .add_message::<HintRepeated>()
@@ -80,6 +81,13 @@ pub enum DeathCause {
 #[derive(Message, Debug, Clone, Copy)]
 pub struct PlayerRespawned {
     pub pos: Vec2,
+}
+
+/// Side B: a hit landed (on the beat), Han at `pos`, and the tiles it changed (centres).
+#[derive(Message, Debug, Clone)]
+pub struct HitLanded {
+    pub pos: Vec2,
+    pub tiles: Vec<Vec2>,
 }
 
 /// First touch of checkpoint number `index` (0-based, in level order) at `pos`.

@@ -1103,6 +1103,10 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, on_plat: bool, m
         level.tile(c, r)
     };
     // (In a maze he won't walk into drips unless he's melted small enough to fit under.)
+    // (The band in the middle: he stands and listens.)
+    if dir == 0.0 {
+        return HanInput { dir: 0.0, speed: 1.0, ..default() };
+    }
     let drips = maze && half.y > HALF.y * 0.8 && tile_at(dir * (half.x + DRIP_BERTH), 0.0) == Tile::SpikesDown;
     if drips && body.on_ground {
         // (He stops short: `game::sideb` turns him round.)

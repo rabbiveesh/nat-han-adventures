@@ -1,9 +1,10 @@
 //! Side B's set list strip (in place of the band's counter strip): one cell per call, the
-//! horn for Giant Steps, the nugget for fired up, with the calls left; the picked one in a gold
-//! frame with "CALL" under it (Down or Jump calls; 1/2/3 pick, and call the picked one); the playing mode's
-//! timer drains under its cell. On a phone the strip sits along the bottom, a cell over each
-//! third of the screen: a tap on a third picks its cell, a second tap calls it (index.html). And the banner:
-//! REWIND! when Han's done for, CLEAR! at the goal.
+//! horn for Giant Steps, the nugget for fired up, with its key (1/2/3: the calls are free); the
+//! last one called in a gold frame, its timer draining under it. Under the strip, the band's
+//! balance (where Han's heading: he follows the sound) and the bar's beats, the one a hit
+//! will land on in gold, flashing as it lands. On a phone the strip sits along the bottom, a
+//! cell over each third of the screen: a tap on one calls it (index.html). And the banner:
+//! OOPS! when Han's done for, CLEAR! at the goal.
 
 use bevy::prelude::*;
 
@@ -83,16 +84,25 @@ fn respawn(
 struct CallCell(usize);
 
 #[derive(Component)]
-struct CallCount(usize);
+struct CallCount(#[allow(dead_code)] usize);
 
 #[derive(Component)]
 struct CallTimer(usize);
 
-#[derive(Component)]
-struct CallPick(usize);
 
 #[derive(Component)]
 struct Banner;
+
+/// The balance meter's knob.
+#[derive(Component)]
+struct PanKnob;
+
+/// The bar's beat `.0`.
+#[derive(Component)]
+struct BeatDot(u8);
+
+/// Width of the balance meter (px).
+const PAN_WIDTH: f32 = 56.0;
 
 fn icon_of(c: SetCall) -> SpriteId {
     match c {
@@ -165,20 +175,26 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                     .with_children(|cell| {
                         cell.spawn(Node { column_gap: px(3.0), align_items: AlignItems::Center, ..default() }).with_children(|line| {
                             line.spawn(icon(sprites, icon_of(*h), size, size));
-                            line.spawn((CallCount(k), label(&font, "", size, CREAM)));
+                            let key = if phone { String::new() } else { format!("{}", k + 1) };
+                            line.spawn((CallCount(k), label(&font, &key, size, CREAM)));
                         });
                         cell.spawn((Node { width: px(26.0 * size / 8.0), height: px(2.0), ..default() }, BackgroundColor(DARK_BROWN)))
                             .with_child((CallTimer(k), Node { width: percent(0.0), height: percent(100.0), ..default() }, BackgroundColor(GOLD)));
                     });
                 }
             });
-            // (A phone calls with a tap, no pick-then-call.)
-            if phone {
-                return;
-            }
-            root.spawn(Node { column_gap: px(4.0), ..default() }).with_children(|row| {
-                for k in 0..side.setlist.len() {
-                    row.spawn((CallPick(k), label(&font, "CALL", 8.0, GOLD), Visibility::Hidden));
+            // The balance (L, the meter, R) and the beats.
+            root.spawn(Node { column_gap: px(6.0), align_items: AlignItems::Center, ..default() }).with_children(|row| {
+                row.spawn(label(&font, "L", 8.0, DIM_CREAM));
+                row.spawn((Node { width: px(PAN_WIDTH), height: px(4.0), ..default() }, BackgroundColor(DARK_BROWN))).with_child((
+                    PanKnob,
+                    Node { position_type: PositionType::Absolute, left: px(PAN_WIDTH - 4.0), top: px(-2.0), width: px(4.0), height: px(8.0), ..default() },
+                    BackgroundColor(GOLD),
+                ));
+                row.spawn(label(&font, "R", 8.0, DIM_CREAM));
+                row.spawn(Node { width: px(6.0), ..default() });
+                for b in 0..4 {
+                    row.spawn((BeatDot(b), Node { width: px(5.0), height: px(5.0), ..default() }, BackgroundColor(DARK_BROWN)));
                 }
             });
         });
@@ -200,25 +216,15 @@ fn update(
     director: Option<Res<crate::audio::plugin::Director>>,
     run: Option<Res<crate::game::LevelRun>>,
     mut cells: Query<(&CallCell, &mut BorderColor, &mut BackgroundColor)>,
-    mut counts: Query<(&CallCount, &mut Text, &mut TextColor)>,
-    mut timers: Query<(&CallTimer, &mut Node)>,
-    mut picks: Query<(&CallPick, &mut Visibility), Without<Banner>>,
+    mut timers: Query<(&CallTimer, &mut Node), (Without<PanKnob>, Without<BeatDot>)>,
     mut banner: Query<(&mut Visibility, &Children), With<Banner>>,
     mut texts: Query<&mut Text, Without<CallCount>>,
+    mut knob: Query<&mut Node, (With<PanKnob>, Without<CallTimer>, Without<BeatDot>)>,
+    mut dots: Query<(&BeatDot, &mut Node, &mut BackgroundColor), (Without<CallCell>, Without<PanKnob>, Without<CallTimer>)>,
+    groove: Option<Res<crate::game::Groove>>,
+    (time, mut landed, mut flash): (Res<Time>, MessageReader<crate::events::HitLanded>, Local<f32>),
 ) {
-    for (c, mut border, mut bg) in &mut cells {
-        let picked = c.0 == side.selected;
-        border.set_if_neq(BorderColor::all(if picked { GOLD } else { Color::NONE }));
-        bg.set_if_neq(BackgroundColor(if picked { Color::srgb(0.35, 0.24, 0.08) } else { Color::NONE }));
-    }
-    for (c, mut text, mut color) in &mut counts {
-        let left = side.left[c.0];
-        let s = format!("x{left}");
-        if text.0 != s {
-            text.0 = s;
-        }
-        color.set_if_neq(TextColor(if left > 0 { CREAM } else { DIM_CREAM }));
-    }
+    let mut playing = [false; 3];
     for (c, mut node) in &mut timers {
         let share = match side.setlist[c.0].0 {
             SetCall::Mode(h) => meters
@@ -238,14 +244,51 @@ fn update(
         if node.width != w {
             node.width = w;
         }
+        if let Some(p) = playing.get_mut(c.0) {
+            *p = share > 0.0;
+        }
     }
-    for (p, mut v) in &mut picks {
-        let show = p.0 == side.selected && side.left[p.0] > 0 && side.phase == Phase::Playing;
-        v.set_if_neq(if show { Visibility::Inherited } else { Visibility::Hidden });
+    for (c, mut border, mut bg) in &mut cells {
+        let on = playing.get(c.0).copied().unwrap_or(false) && c.0 == side.selected;
+        border.set_if_neq(BorderColor::all(if on { GOLD } else { Color::NONE }));
+        bg.set_if_neq(BackgroundColor(if on { Color::srgb(0.35, 0.24, 0.08) } else { Color::NONE }));
+    }
+    if let Ok(mut node) = knob.single_mut() {
+        let x = px((side.pan + 1.0) / 2.0 * (PAN_WIDTH - 4.0));
+        if node.left != x {
+            node.left = x;
+        }
+    }
+    if landed.read().count() > 0 {
+        *flash = 0.2;
+    }
+    *flash = (*flash - time.delta_secs()).max(0.0);
+    if let Some(g) = groove {
+        let c = g.clock;
+        let bpb = c.beats_per_bar.max(1);
+        // (The hit lands on the beat after the one it was played on.)
+        let target = side.hit_on.map(|(_, b)| (b + 1) % bpb);
+        for (d, mut node, mut bg) in &mut dots {
+            let shown = d.0 < bpb;
+            let display = if shown { Display::Flex } else { Display::None };
+            if node.display != display {
+                node.display = display;
+            }
+            let color = if *flash > 0.0 && d.0 == c.beat {
+                CREAM
+            } else if Some(d.0) == target {
+                GOLD
+            } else if d.0 == c.beat {
+                DIM_CREAM
+            } else {
+                DARK_BROWN
+            };
+            bg.set_if_neq(BackgroundColor(color));
+        }
     }
     let Ok((mut v, children)) = banner.single_mut() else { return };
     let text = match side.phase {
-        Phase::Rewind { .. } => Some("REWIND!"),
+        Phase::Rewind { .. } => Some("OOPS!"),
         Phase::Cleared { .. } => Some("CLEAR!"),
         Phase::Playing => None,
     };
