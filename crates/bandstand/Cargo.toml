@@ -3,7 +3,11 @@ name = "bandstand"
 version = "0.1.0"
 edition = "2024"
 description = "The live jazz band behind Nat Han Adventures: an NES-style synth, MML songs and a band that follows play"
-publish = false
+license = "MIT"
+repository = "https://github.com/rabbiveesh/nat-han-adventures"
+readme = "README.md"
+keywords = ["music", "synth", "chiptune", "jazz", "gamedev"]
+categories = ["multimedia::audio", "game-development"]
 
 [dependencies]
 # `kira`: the kira `Sound` that plays engines on the audio thread (`live::playback`).

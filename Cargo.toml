@@ -2,6 +2,7 @@
 name = "nat-han-adventures"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 # `cargo run` is the game; the music editor is `cargo run --bin editor`.
 default-run = "nat-han-adventures"
 
