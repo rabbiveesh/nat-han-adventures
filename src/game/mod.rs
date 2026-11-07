@@ -12,11 +12,17 @@ use crate::level::{Level, PlatformKind};
 use crate::state::PlayState;
 
 pub mod adaptive;
+pub mod boom;
 pub mod crushers;
+pub mod code;
+pub mod diapers;
 pub mod encore;
 mod groove;
 mod han;
 mod hazards;
+pub mod helper;
+pub mod houses;
+pub mod police;
 mod lifecycle;
 mod physics;
 mod pickups;
@@ -24,6 +30,8 @@ mod platforms;
 pub mod secret;
 pub mod sideb;
 pub mod solo;
+pub mod toybox;
+pub mod toys;
 mod visuals;
 
 pub mod assist;
@@ -36,7 +44,7 @@ pub use groove::{
     WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
     WALTZ_ONE_LINE_EVERY, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW, WALTZ_SPRAY_BARS,
 };
-pub use hazards::{SideStain, SIDE_STAIN_LIFE, CAN_HEIGHT, CAN_WIDTH,
+pub use hazards::{Doomed, SideStain, SIDE_STAIN_LIFE, CAN_HEIGHT, CAN_WIDTH,
     FLY_PERIOD, FORGIVE, RAFT_LIFE_FLOOR, RAFT_SINK, RAFT_SINK_DEPTH, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, RaftLife, raft_sink,
     spray_on,
 };
@@ -127,8 +135,11 @@ pub fn plugin(app: &mut App) {
             solo::plugin,
             secret::plugin,
             crushers::plugin,
+            boom::plugin,
+            diapers::plugin,
             encore::plugin,
-        ));
+        ))
+        .add_plugins((helper::plugin, houses::plugin, toys::plugin, toybox::plugin, police::plugin, code::plugin));
 }
 
 /// Order of the fixed-step simulation. Everything only runs while [`PlayState::Running`].

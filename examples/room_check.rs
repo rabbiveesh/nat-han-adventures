@@ -6,7 +6,7 @@ use nat_han_adventures::adapt::{AssistLevers, RoomRequest};
 use nat_han_adventures::freeplay::generate::{RoomPlan, draw, draw_text, physics, validate};
 use nat_han_adventures::freeplay::templates::TEMPLATES;
 use nat_han_adventures::level::validate::{Options, check_with};
-use nat_han_adventures::level::{Level, ThingKind, Tile};
+use nat_han_adventures::level::{Cook, Level, ThingKind, Tile};
 
 fn main() {
     let a: Vec<String> = std::env::args().skip(1).collect();
@@ -80,6 +80,20 @@ pub fn text(l: &Level) -> String {
             ThingKind::Checkpoint => 'C',
             ThingKind::Fly => 'F',
             ThingKind::Spray => 'S',
+            ThingKind::Boom => 'B',
+            ThingKind::Bean => ':',
+            ThingKind::Diaper => 'D',
+            ThingKind::Helper => 'H',
+            ThingKind::Blaster => 'M',
+            ThingKind::StopSign => '@',
+            ThingKind::House(Cook::Never) => 'A',
+            ThingKind::House(Cook::Always) => 'K',
+            ThingKind::House(Cook::Sometimes) => 'a',
+            ThingKind::Police => 'Q',
+            ThingKind::PoliceSpikes => 'y',
+            ThingKind::CodePaper => '?',
+            ThingKind::CodeDoor => '&',
+            ThingKind::SecretRoom => '$',
         };
     }
     g[l.start.1][l.start.0] = 'P';

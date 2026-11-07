@@ -11,6 +11,7 @@ use crate::input::Action;
 use crate::level::{LEVEL_COUNT, Levels};
 use crate::game::sideb::{self, SIDE_B_COUNT, SideBLevel};
 use crate::game::solo::{self, SOLO_COUNT};
+use crate::game::toybox::{self, TOY_COUNT};
 use crate::save::Progress;
 use crate::state::{AppState, CurrentLevel, Shelf};
 
@@ -51,6 +52,7 @@ fn count(shelf: Shelf) -> usize {
         Shelf::Story => LEVEL_COUNT,
         Shelf::SideB => SIDE_B_COUNT,
         Shelf::Solo => SOLO_COUNT,
+        Shelf::Toybox => TOY_COUNT,
     }
 }
 
@@ -59,6 +61,7 @@ fn unlocked(shelf: Shelf, progress: &Progress, i: usize) -> bool {
         Shelf::Story => progress.is_unlocked(i),
         Shelf::SideB => i < progress.side_b_unlocked,
         Shelf::Solo => i < progress.solo_unlocked,
+        Shelf::Toybox => true,
     }
 }
 
@@ -69,6 +72,7 @@ fn init_cursor(mut commands: Commands, current: Res<CurrentLevel>, progress: Res
         Shelf::Story => progress.unlocked - 1,
         Shelf::SideB => progress.side_b_unlocked - 1,
         Shelf::Solo => progress.solo_unlocked - 1,
+        Shelf::Toybox => 0,
     };
     commands.insert_resource(Cursor(i.min(count(*shelf) - 1)));
 }
@@ -96,6 +100,7 @@ fn spawn(
                 Shelf::Story => "PICK A PIPE",
                 Shelf::SideB => "SIDE B",
                 Shelf::Solo => "NAT ALONE",
+                Shelf::Toybox => "SHHH! A SECRET",
             };
             root.spawn((label(f, title, 16.0, GOLD), Node { margin: UiRect::bottom(px(6.0)), ..default() }));
             root.spawn((label(f, "", 8.0, DIM_CREAM), Detail::World, Node { margin: UiRect::bottom(px(8.0)), ..default() }));
@@ -133,6 +138,8 @@ fn spawn(
                                 Some(r) => cell.spawn(label(f, format!("R{r}"), 8.0, if r == 0 { GOLD } else { CREAM })),
                                 None => cell.spawn(label(f, "NEW", 8.0, GREEN)),
                             };
+                        } else if shelf == Shelf::Toybox {
+                            cell.spawn(label(f, "TOY", 8.0, GREEN));
                         } else if shelf == Shelf::Solo {
                             match progress.solo_nuggets[i] {
                                 Some(best) => {
@@ -189,6 +196,7 @@ fn input(
             }
             Shelf::SideB => sideb::start(&mut commands, cursor.0),
             Shelf::Solo => solo::start(&mut commands, cursor.0),
+            Shelf::Toybox => toybox::start(&mut commands, cursor.0),
         }
     } else if action.just_pressed(&Action::Back) {
         sfx(&mut sfx_w, Sfx::MenuMove);
@@ -249,6 +257,8 @@ fn highlight(
             side_b_detail(d, &progress, i)
         } else if *shelf == Shelf::Solo {
             solo_detail(d, &progress, i)
+        } else if *shelf == Shelf::Toybox {
+            toy_detail(d, i)
         } else {
             match d {
             Detail::World => {
@@ -297,6 +307,14 @@ fn solo_detail(d: &Detail, progress: &Progress, i: usize) -> String {
             (Some(n), Some(t)) => format!("BEST: {n}/{} NUGGETS  {}", solo::load(i).nugget_count(), format_time(t)),
             _ => "NOT FLUSHED YET".to_string(),
         },
+    }
+}
+
+fn toy_detail(d: &Detail, i: usize) -> String {
+    match d {
+        Detail::World => "THE SECRET PLAYGROUND".to_string(),
+        Detail::Name => format!("{}. {}", i + 1, toybox::name(i).to_uppercase()),
+        Detail::Best => "THE SILLIEST IDEAS EVER".to_string(),
     }
 }
 

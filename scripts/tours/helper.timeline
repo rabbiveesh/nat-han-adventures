@@ -1,0 +1,25 @@
+# Help! Help! (levels/toybox/helper.txt). Stop to hear him call; up to his rope: he drops
+# Nat ("OOPS!"); again: he flings him over the brushes. On to the second helper: a fling,
+# back the way he came; again: the honest one, up onto the plateau. Along it (two hops over
+# the brushes), down to the shore, a jump over the sewage to the third helper's rope: up
+# and onto the goal's ledge.
+t=0.5 press Right
+t=1.2 release Right
+t=2.4 press Right
+t=3.05 release Right
+t=3.2 tap Space 150ms
+t=7.0 tap Space 150ms
+t=12.0 press Right
+t=13.55 release Right
+t=13.7 tap Space 150ms
+t=18.3 press Right
+t=19.95 release Right
+t=20.1 tap Space 150ms
+t=23.0 press Right
+t=23.75 press Space
+t=24.0 release Space
+t=24.8 press Space
+t=25.05 release Space
+t=27.0 press Space
+t=27.3 release Space
+t=31.0 release Right

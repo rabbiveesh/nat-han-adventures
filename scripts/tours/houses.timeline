@@ -1,0 +1,16 @@
+# Schnitzel Street (levels/toybox/houses.txt).
+t=0.5 press Right
+t=1.27 release Right
+t=1.8 tap Up 100ms
+t=3.8 press Right
+t=5.38 release Right
+t=5.8 tap Up 100ms
+t=6.85 press Right
+t=8.79 release Right
+t=12.1 tap Up 100ms
+t=13.15 press Right
+t=14.5 tap Space 350ms
+t=16.99 release Right
+t=17.4 tap Up 100ms
+t=18.0 press Right
+t=21.5 release Right

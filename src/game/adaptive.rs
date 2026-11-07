@@ -109,11 +109,11 @@ impl EasySkills {
 /// The skill a gate (or a hint topic) exercises.
 pub fn skill_of(topic: Topic) -> Option<Skill> {
     Some(match topic {
-        Topic::Toot | Topic::OneWay | Topic::Brick | Topic::Crumble | Topic::Spring | Topic::Belt | Topic::Fan | Topic::Bumper | Topic::Wind | Topic::Fling => {
+        Topic::Toot | Topic::OneWay | Topic::Brick | Topic::Crumble | Topic::Spring | Topic::Belt | Topic::Fan | Topic::Bumper | Topic::Wind | Topic::Fling | Topic::Boom | Topic::Helper | Topic::Blast | Topic::Stop | Topic::Code => {
             Skill::Precision
         }
         Topic::Platform => Skill::MovingPlatforms,
-        Topic::Fly | Topic::Spray | Topic::Crusher | Topic::Beat => Skill::HazardTiming,
+        Topic::Fly | Topic::Spray | Topic::Crusher | Topic::Beat | Topic::Diaper | Topic::House | Topic::Police => Skill::HazardTiming,
         Topic::Giant => Skill::GiantSteps,
         Topic::Gap => Skill::FiredUp,
         Topic::Waltz => Skill::Waltz,
@@ -595,7 +595,10 @@ fn decide_music(
     profile: Res<AdaptiveProfile>,
     side: Option<Res<super::sideb::SideB>>,
     solo: Option<Res<super::solo::SoloRun>>,
+    toy: Option<Res<super::toybox::ToyRun>>,
     mut secret: MessageReader<super::secret::SecretFound>,
+    mut blast: MessageReader<super::toys::BlastMusic>,
+    blasting: Res<super::toys::Blasting>,
     mut was_side: Local<Option<(u32, u32)>>,
     mut t: ResMut<Tracker>,
     mut out: MessageWriter<BandFreedom>,
@@ -603,7 +606,7 @@ fn decide_music(
     let Some(run) = run else { return };
     // A secret found sets the band loose at once (the instant feedback); the next decision
     // (a death, a checkpoint, or [`MUSIC_CHECK_SECS`] on) brings it back to following play.
-    if secret.read().count() > 0 {
+    if secret.read().count() > 0 || blast.read().filter(|b| b.0).count() > 0 {
         t.decide = false;
         t.last_decision = run.time;
         out.write(band_freedom(BandMood { freedom: 1.0, intensity: 1.0 }));
@@ -623,11 +626,16 @@ fn decide_music(
     }
     t.decide = false;
     t.last_decision = run.time;
+    // The blast button: flat out while it blasts.
+    if blasting.0 > 0.0 {
+        out.write(band_freedom(BandMood { freedom: 1.0, intensity: 1.0 }));
+        return;
+    }
     if let Some(s) = side {
         out.write(band_freedom(side_b_mood(s.rewinds, s.calls)));
         return;
     }
-    if solo.is_some() {
+    if solo.is_some() || toy.is_some() {
         out.write(band_freedom(solo_mood(t.deaths_in_segment)));
         return;
     }

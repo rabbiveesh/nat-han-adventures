@@ -127,7 +127,7 @@ fn levels_are_valid_and_beatable() {
                 topic.word(),
                 lesson.hint
             )),
-            None if !Topic::GADGETS.contains(&topic) => failures.push(format!("no level has {} at all", topic.word())),
+            None if !Topic::GADGETS.contains(&topic) && !Topic::TOYS.contains(&topic) => failures.push(format!("no level has {} at all", topic.word())),
             _ => {}
         }
     }

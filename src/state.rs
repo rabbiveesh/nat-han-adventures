@@ -46,6 +46,8 @@ pub enum Shelf {
     Story,
     SideB,
     Solo,
+    /// The secret playground (`game::toybox`).
+    Toybox,
 }
 
 /// Index (0-based) into [`crate::level::LEVELS`] of the level being played / selected.

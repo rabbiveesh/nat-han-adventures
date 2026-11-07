@@ -1,0 +1,16 @@
+# Listen to the Police! (levels/toybox/police.txt).
+t=0.5 press Right
+t=0.7 release Right
+t=2.5 press Right
+t=4.75 release Right
+t=6.6 press Right
+t=7.45 release Right
+t=8.0 tap Space 250ms
+t=9.3 press Right
+t=9.65 release Right
+t=11.25 press Right
+t=12.35 tap Space 300ms
+t=13.95 tap Space 300ms
+t=15.0 release Right
+t=16.6 press Right
+t=21 release Right

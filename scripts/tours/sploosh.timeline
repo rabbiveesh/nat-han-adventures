@@ -1,0 +1,14 @@
+# Sploosh Skies (levels/toybox/sploosh.txt).
+t=0.5 press Right
+t=1.09 release Right
+t=1.8 press Right
+t=3.1 tap Space 300ms
+t=4.95 release Right
+t=5.65 press Right
+t=6.45 tap Space 250ms
+t=6.97 tap Space 250ms
+t=9.55 release Right
+t=10.25 press Right
+t=10.55 release Right
+t=11.25 press Right
+t=14.0 release Right
