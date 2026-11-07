@@ -57,6 +57,11 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   blocks, sfx, the director, `live/`), re-exported as `crate::audio::*` so game paths are unchanged;
   its `music/` holds the songs, `.player` files and bass lines (inside the crate so it can be
   published). Below, `src/audio/live/` and `music/` mean those under `crates/bandstand/`.
+  Releasing it: bump `version` in `crates/bandstand/Cargo.toml` (and Cargo.lock) and add a
+  `## v<version> — <date>` section to `crates/bandstand/CHANGELOG.md`; merging to main tags
+  `bandstand-v<version>`, publishes to crates.io and makes the GitHub Release from that section
+  (`.github/workflows/release-bandstand.yml`; `scripts/bandstand/check-version.sh`,
+  `scripts/bandstand/release-notes.sh v<version>` previews the notes).
 - `src/audio/` the Bevy side: the plugin (`audio::plugin`: music + sfx on one kira manager;
   `AudioOutput::Headless` for tests) and capture.
 - `src/audio/live/` the real-time music engine (game-free): the game's music, generated a few
