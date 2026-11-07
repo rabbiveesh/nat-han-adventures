@@ -187,6 +187,10 @@ pub struct HanBrain {
     /// Side B (`game::sideb`): no route on, so he charges this way regardless, jumping (and
     /// tooting at the top) at whatever's in front of him. Brave, and often fatal.
     pub charge: Option<f32>,
+    /// Side B: how fast he goes at it (1 flat out; the record held back slows him), and the
+    /// way he faces whichever way he goes (on the record: scratched back, he moonwalks).
+    pub pace: f32,
+    pub face: Option<f32>,
     /// Side B: jumped for a moving platform (steering for it till he lands).
     pub boarding: bool,
     /// Side B: in the air from a jump (toots are for jumps: off a ledge he just drops).
@@ -226,6 +230,8 @@ impl Default for HanBrain {
             behind: 0.0,
             gap: 0.0,
             charge: None,
+            pace: 1.0,
+            face: None,
             boarding: false,
             leapt: false,
             maze: false,
@@ -865,6 +871,7 @@ pub(super) fn think(
         // (Where each platform will be as he lands on it: a ferry pulling away is no ferry yet.)
         let soon: Vec<Vec2> = plats.iter().map(|(_, m)| platform_pos(m, clock.platform_time + BOARD_LEAD * groove.platform_rate())).collect();
         input = charge(level, &pos.0, &body, &brain.ctl, on_plat, brain.maze, leaps, (impatient, climbs), dir, (&plats, &soon), &mut brain.boarding);
+        input.speed = if input.speed == 0.0 { 1.0 } else { input.speed } * brain.pace;
         if body.on_ground {
             brain.leapt = input.jump;
         } else if !brain.leapt && !{
@@ -996,7 +1003,9 @@ pub(super) fn think(
         HanMode::Follow if running => HanPose::Run,
         HanMode::Follow => HanPose::Idle,
     };
-    let facing_left = if brain.braced || pose == HanPose::Idle {
+    let facing_left = if let Some(f) = brain.face {
+        f < 0.0
+    } else if brain.braced || pose == HanPose::Idle {
         dx_nat < 0.0
     } else if body.vel.x.abs() > 1.0 {
         body.vel.x < 0.0

@@ -331,19 +331,48 @@ fn jump_is_the_hit_on_the_next_beat() {
 }
 
 #[test]
-fn a_number_calls_at_once_and_down_calls_it_again() {
+fn a_number_calls_at_once_as_often_as_you_like() {
     // (On a phone, a tap on a third of the screen: index.html presses 1, 2 or 3.)
     let mut app = app(0);
     until(&mut app, 2.0, |a| col(a) >= 3.0).unwrap();
     tap(&mut app, KeyCode::Digit2);
     assert_eq!((side(&app).selected, side(&app).calls), (1, 1));
-    tap(&mut app, KeyCode::ArrowDown);
+    tap(&mut app, KeyCode::Digit2);
     assert_eq!((side(&app).selected, side(&app).calls), (1, 2));
+    // (Down is a hand on the record, not a call.)
+    tap(&mut app, KeyCode::ArrowDown);
+    assert_eq!(side(&app).calls, 2);
+}
+
+#[test]
+fn a_hand_on_the_record_holds_han_and_pulls_him_back() {
+    let mut app = app(0);
+    assert!(side(&app).on_record(), "the record is the steer");
+    until(&mut app, 2.0, |a| col(a) >= 4.0).unwrap();
+    // Down held: the record drags to a stop, and Han waits.
+    KeyCode::ArrowDown.press(app.world_mut());
+    until(&mut app, 0.5, |_| false);
+    let at = col(&mut app);
+    until(&mut app, 1.0, |_| false);
+    assert!((col(&mut app) - at).abs() < 0.2, "held at {at}, now {}", col(&mut app));
+    KeyCode::ArrowDown.release(app.world_mut());
+    // Left held: scratched back, he moonwalks (still facing the goal).
+    KeyCode::ArrowLeft.press(app.world_mut());
+    until(&mut app, 1.0, |_| false);
+    assert!(col(&mut app) < at - 1.0, "back he goes");
+    let left = app.world_mut().query_filtered::<&nat_han_adventures::game::HanAnim, With<Han>>().single(app.world()).unwrap().facing_left;
+    assert!(!left, "a moonwalk: still facing the goal");
+    KeyCode::ArrowLeft.release(app.world_mut());
+    // Let go: on he runs.
+    let back = col(&mut app);
+    until(&mut app, 1.0, |_| false);
+    assert!(col(&mut app) > back + 1.0, "and on again");
 }
 
 #[test]
 fn the_balance_steers_han() {
     let mut app = app(0);
+    app.world_mut().resource_mut::<SideB>().steer_sound = nat_han_adventures::audio::live::desk::Steer::Balance;
     until(&mut app, 2.0, |a| col(a) >= 4.0).unwrap();
     // To the middle: he stops.
     tap(&mut app, KeyCode::ArrowLeft);
@@ -539,8 +568,10 @@ const RIGHT: usize = 31;
 fn act(app: &mut App, k: usize) {
     match k {
         HIT => tap(app, KeyCode::Space),
-        LEFT => tap(app, KeyCode::ArrowLeft),
-        RIGHT => tap(app, KeyCode::ArrowRight),
+        // (A step of where the steer rests, as the game's own plans do: on the record a key is
+        // a hand held on it.)
+        LEFT => app.world_mut().resource_mut::<SideB>().lean(-1.0),
+        RIGHT => app.world_mut().resource_mut::<SideB>().lean(1.0),
         PICK.. => {}
         k => call(app, k),
     }

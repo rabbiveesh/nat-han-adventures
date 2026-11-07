@@ -52,7 +52,7 @@ pub enum Steer {
 /// The record's memory (s) of what the band played: as far back as a scratch goes.
 const RECORD_SECS: f32 = 4.0;
 /// How fast the record's speed changes (speed per s: a hand on the platter).
-const RECORD_HAND: f32 = 7.0;
+pub const RECORD_HAND: f32 = 7.0;
 /// Let go, the needle spins forward onto the band as it is in this long (s).
 const ZIP_SECS: f32 = 0.07;
 

@@ -236,8 +236,10 @@ pub struct SideB {
     /// The balance (-1 hard left .. 1 right) and where it's gliding to: Han follows it.
     pub pan: f32,
     pub pan_to: f32,
-    /// What the steer sounds like: the balance, or the record (scratched back, Han moonwalks).
-    /// `NATHAN_STEER=record`, `?steer=record` on the web.
+    /// Where the steer rests with no hand on it (the balance's taps, a plan's steps).
+    pub pan_rest: f32,
+    /// What the steer sounds like: the record (held: Han waits; scratched back: he moonwalks
+    /// back), or the balance (`NATHAN_STEER=balance`, `?steer=balance` on the web).
     #[reflect(ignore)]
     pub steer_sound: crate::audio::live::desk::Steer,
     pub phase: Phase,
@@ -311,6 +313,7 @@ impl SideB {
             selected: 0,
             pan: 1.0,
             pan_to: 1.0,
+            pan_rest: 1.0,
             steer_sound: Self::steer_sound(),
             phase: Phase::Playing,
             target: None,
@@ -366,6 +369,8 @@ impl SideB {
             selected: self.selected,
             pan: m.as_ref().map_or(1.0, |m| m.pan),
             pan_to: m.as_ref().map_or(1.0, |m| m.pan),
+            pan_rest: m.as_ref().map_or(1.0, |m| m.pan),
+            steer_sound: self.steer_sound,
             dir: m.as_ref().and_then(|m| m.dir),
             hits: m.as_ref().map_or(0, |m| m.hits),
             hits_played: self.hits_played,
@@ -374,7 +379,7 @@ impl SideB {
         };
     }
 
-    /// `NATHAN_STEER=record` (native) / `?steer=record` (web): the steer is the record.
+    /// The steer is the record, unless `NATHAN_STEER=balance` (native) / `?steer=balance` (web).
 pub fn steer_sound() -> crate::audio::live::desk::Steer {
     use crate::audio::live::desk::Steer;
     #[cfg(not(target_arch = "wasm32"))]
@@ -383,7 +388,12 @@ pub fn steer_sound() -> crate::audio::live::desk::Steer {
     let v = web_sys::window()
         .and_then(|w| w.location().search().ok())
         .and_then(|s| s.trim_start_matches('?').split('&').find_map(|kv| kv.strip_prefix("steer=").map(str::to_string)));
-    if v.as_deref() == Some("record") { Steer::Record } else { Steer::Balance }
+    if v.as_deref() == Some("balance") { Steer::Balance } else { Steer::Record }
+}
+
+/// Is the steer the record?
+pub fn on_record(&self) -> bool {
+    self.steer_sound == crate::audio::live::desk::Steer::Record
 }
 
 /// Which way the balance sends Han: -1, 0 (he stops) or 1.
@@ -567,7 +577,7 @@ fn han_passes_checkpoints(
             continue;
         }
         cp.active = true;
-        side.mouth = Some(Mouth { at: floor, pan: side.pan_to, dir: side.dir, hits: side.hits });
+        side.mouth = Some(Mouth { at: floor, pan: side.pan_rest, dir: side.dir, hits: side.hits });
         reached.write(crate::events::CheckpointReached { index: cp.index, pos: floor });
     }
 }
@@ -740,16 +750,31 @@ fn choose_and_call(
     if side.phase != Phase::Playing {
         return;
     }
-    if input.just_pressed(&Action::Left) {
-        side.lean(-1.0);
-    }
-    if input.just_pressed(&Action::Right) {
-        side.lean(1.0);
+    if side.on_record() {
+        // A hand on the record: held (Down), pulled back (Left), or a thumb on the phone's
+        // turntable (index.html: how fast it's dragged back); let go, it plays.
+        let held = if input.pressed(&Action::Left) {
+            Some(-1.0)
+        } else if input.pressed(&Action::Down) {
+            Some(0.0)
+        } else {
+            None
+        };
+        side.pan_to = scratch_touch().or(held).unwrap_or(side.pan_rest);
+    } else {
+        if input.just_pressed(&Action::Left) {
+            side.lean(-1.0);
+        }
+        if input.just_pressed(&Action::Right) {
+            side.lean(1.0);
+        }
+        side.pan_to = side.pan_rest;
+        if input.just_pressed(&Action::Down) {
+            let k = side.selected;
+            side.call(k, &mut calls);
+        }
     }
     if let Some(k) = Action::CALLS.iter().take(n).position(|a| input.just_pressed(a)) {
-        side.call(k, &mut calls);
-    } else if input.just_pressed(&Action::Down) {
-        let k = side.selected;
         side.call(k, &mut calls);
     }
     if input.just_pressed(&Action::Jump) || input.just_pressed(&Action::Up) {
@@ -758,9 +783,10 @@ fn choose_and_call(
 }
 
 impl SideB {
-    /// A step of the balance that way (-1 left, 1 right).
+    /// A step of the steer's resting place that way (-1 left / back, 1 right / forward).
     pub fn lean(&mut self, way: f32) {
-        self.pan_to = (self.pan_to + way).clamp(-1.0, 1.0);
+        self.pan_rest = (self.pan_rest + way).clamp(-1.0, 1.0);
+        self.pan_to = self.pan_rest;
     }
 
     /// The hit, played now: it lands on the next beat.
@@ -768,6 +794,20 @@ impl SideB {
         self.hit_on = Some((groove.clock.bar, groove.clock.beat));
         self.hits_played += 1;
     }
+}
+
+/// The phone's turntable (index.html sets `window.nathanScratch` while a thumb's on it: 0
+/// held, down to -1 dragged back fast).
+#[cfg(target_arch = "wasm32")]
+fn scratch_touch() -> Option<f32> {
+    let w = web_sys::window()?;
+    let v = js_sys::Reflect::get(w.as_ref(), &"nathanScratch".into()).ok()?.as_f64()?;
+    v.is_finite().then_some(v.clamp(-1.0, 1.0) as f32)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn scratch_touch() -> Option<f32> {
+    None
 }
 
 fn refill_on_restart(mut commands: Commands, mut restarts: MessageReader<RestartLevel>, mut side: ResMut<SideB>) {
@@ -812,10 +852,26 @@ fn beacon(
     let goal = (goal.0 as i32, goal.1 as i32);
     // The balance glides (as the music's does), and Han follows it; in a maze he turns at walls
     // himself, and the band swings round with him.
-    let step = 2.0 / PAN_GLIDE_SECS * time.delta_secs();
-    side.pan = crate::game::move_towards(side.pan, side.pan_to, step);
+    let rate = if side.on_record() { crate::audio::live::desk::RECORD_HAND } else { 2.0 / PAN_GLIDE_SECS };
+    side.pan = crate::game::move_towards(side.pan, side.pan_to, rate * time.delta_secs());
     let mut dir = side.steer();
-    if side.turns && dir != 0.0 && side.phase == Phase::Playing {
+    // On the record he keeps his heading (toward the goal, or the way a maze turned him) and
+    // the record runs him along it, holds him, or pulls him back along it: a moonwalk, as fast
+    // as it's scratched.
+    let toward = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
+    let heading = *side.dir.get_or_insert(toward);
+    brain.pace = 1.0;
+    brain.face = None;
+    if side.on_record() {
+        let mut h = heading;
+        if side.turns && dir > 0.0 && side.phase == Phase::Playing {
+            h = turn_at_walls(level, &mut side, hpos.0, hbody, heading);
+        }
+        side.dir = Some(h);
+        dir *= h;
+        brain.pace = side.pan.abs().clamp(0.35, 1.0);
+        brain.face = Some(h);
+    } else if side.turns && dir != 0.0 && side.phase == Phase::Playing {
         side.dir = Some(dir);
         let d = turn_at_walls(level, &mut side, hpos.0, hbody, dir);
         if d != dir {
@@ -824,7 +880,7 @@ fn beacon(
             dir = d;
         }
     }
-    if dir != 0.0 {
+    if dir != 0.0 && !side.on_record() {
         side.dir = Some(dir);
     }
     // Re-plan from where he stands (mid-air he's carrying out a move already).
@@ -879,8 +935,9 @@ fn beacon(
     body.on_ground = true;
     body.riding = None;
     // (Scratched back he moonwalks: still facing the way he was going.)
-    let moonwalk = side.steer_sound == crate::audio::live::desk::Steer::Record && dir < 0.0 && !side.turns;
-    if dir != 0.0 && !moonwalk {
+    if side.on_record() {
+        ctl.facing = side.dir.unwrap_or(1.0);
+    } else if dir != 0.0 {
         ctl.facing = dir;
     }
 }

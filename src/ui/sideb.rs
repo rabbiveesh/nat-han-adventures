@@ -97,9 +97,18 @@ struct Banner;
 #[derive(Component)]
 struct PanKnob;
 
+/// The record's state: playing, held, scratched back.
+#[derive(Component)]
+struct RecordLabel;
+
 /// The bar's beat `.0`.
 #[derive(Component)]
 struct BeatDot(u8);
+
+/// The record's states, on the strip.
+const RECORD_PLAY: &str = "> PLAY";
+const RECORD_HOLD: &str = "|| HOLD";
+const RECORD_BACK: &str = "<< BACK";
 
 /// Width of the balance meter (px).
 const PAN_WIDTH: f32 = 56.0;
@@ -185,13 +194,17 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             });
             // The balance (L, the meter, R) and the beats.
             root.spawn(Node { column_gap: px(6.0), align_items: AlignItems::Center, ..default() }).with_children(|row| {
-                row.spawn(label(&font, "L", 8.0, DIM_CREAM));
-                row.spawn((Node { width: px(PAN_WIDTH), height: px(4.0), ..default() }, BackgroundColor(DARK_BROWN))).with_child((
-                    PanKnob,
-                    Node { position_type: PositionType::Absolute, left: px(PAN_WIDTH - 4.0), top: px(-2.0), width: px(4.0), height: px(8.0), ..default() },
-                    BackgroundColor(GOLD),
-                ));
-                row.spawn(label(&font, "R", 8.0, DIM_CREAM));
+                if side.on_record() {
+                    row.spawn((RecordLabel, label(&font, RECORD_PLAY, 8.0, CREAM), Node { width: px(PAN_WIDTH + 24.0), ..default() }));
+                } else {
+                    row.spawn(label(&font, "L", 8.0, DIM_CREAM));
+                    row.spawn((Node { width: px(PAN_WIDTH), height: px(4.0), ..default() }, BackgroundColor(DARK_BROWN))).with_child((
+                        PanKnob,
+                        Node { position_type: PositionType::Absolute, left: px(PAN_WIDTH - 4.0), top: px(-2.0), width: px(4.0), height: px(8.0), ..default() },
+                        BackgroundColor(GOLD),
+                    ));
+                    row.spawn(label(&font, "R", 8.0, DIM_CREAM));
+                }
                 row.spawn(Node { width: px(6.0), ..default() });
                 for b in 0..4 {
                     row.spawn((BeatDot(b), Node { width: px(5.0), height: px(5.0), ..default() }, BackgroundColor(DARK_BROWN)));
@@ -218,7 +231,8 @@ fn update(
     mut cells: Query<(&CallCell, &mut BorderColor, &mut BackgroundColor)>,
     mut timers: Query<(&CallTimer, &mut Node), (Without<PanKnob>, Without<BeatDot>)>,
     mut banner: Query<(&mut Visibility, &Children), With<Banner>>,
-    mut texts: Query<&mut Text, Without<CallCount>>,
+    mut texts: Query<&mut Text, (Without<CallCount>, Without<RecordLabel>)>,
+    mut record: Query<(&mut Text, &mut TextColor), With<RecordLabel>>,
     mut knob: Query<&mut Node, (With<PanKnob>, Without<CallTimer>, Without<BeatDot>)>,
     mut dots: Query<(&BeatDot, &mut Node, &mut BackgroundColor), (Without<CallCell>, Without<PanKnob>, Without<CallTimer>)>,
     groove: Option<Res<crate::game::Groove>>,
@@ -252,6 +266,17 @@ fn update(
         let on = playing.get(c.0).copied().unwrap_or(false) && c.0 == side.selected;
         border.set_if_neq(BorderColor::all(if on { GOLD } else { Color::NONE }));
         bg.set_if_neq(BackgroundColor(if on { Color::srgb(0.35, 0.24, 0.08) } else { Color::NONE }));
+    }
+    if let Ok((mut text, mut color)) = record.single_mut() {
+        let (t, c) = match side.pan_to {
+            p if p > 0.5 => (RECORD_PLAY, CREAM),
+            p if p < -0.25 => (RECORD_BACK, GOLD),
+            _ => (RECORD_HOLD, GOLD),
+        };
+        if text.0 != t {
+            text.0 = t.to_string();
+        }
+        color.set_if_neq(TextColor(c));
     }
     if let Ok(mut node) = knob.single_mut() {
         let x = px((side.pan + 1.0) / 2.0 * (PAN_WIDTH - 4.0));
