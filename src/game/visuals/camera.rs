@@ -90,6 +90,7 @@ fn follow_player(
     han: Query<(&Transform, &crate::game::Body), (With<crate::game::Han>, Without<GameCamera>, Without<Player>)>,
     side_b: Option<Res<crate::game::sideb::SideB>>,
     encore: Option<Res<crate::game::encore::Encore>>,
+    robot: Option<Res<crate::game::robot::RobotRoom>>,
     mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
 ) {
     let (Some(active), Ok((ptf, ctl, added))) = (active, player.single()) else { return };
@@ -107,12 +108,30 @@ fn follow_player(
     let dt = time.delta_secs();
     let k = |rate: f32| if snap { 1.0 } else { 1.0 - (-dt * rate).exp() };
 
+    // The robot pit's wrong game: a cut to Sparky's meadow, kept on screen around Nat.
+    if let Some(room) = robot.filter(|r| r.phase != crate::game::robot::RoomPhase::Falling) {
+        let (lo, size) = (room.origin, crate::game::robot::RobotRoom::size());
+        let fit = |v: f32, half: f32, lo: f32, size: f32| {
+            if size <= half * 2.0 { lo + size / 2.0 } else { v.clamp(lo + half, lo + size - half) }
+        };
+        let p = ptf.translation.truncate();
+        tf.translation.x = fit(p.x, half.x, lo.x, size.x);
+        tf.translation.y = fit(p.y, half.y, lo.y, size.y);
+        tf.rotation = Quat::IDENTITY;
+        gc.wobble = Vec2::ZERO;
+        return;
+    }
+
     gc.look += (facing * LOOK_AHEAD - gc.look) * k(2.5);
     let touch = touch.is_some_and(|t| t.0);
     let lift = if touch { 16.0 + TOUCH_LIFT } else { 16.0 };
     // (NAT ALONE's encore gag: upstairs and down at once.)
     let target = encore.as_ref().and_then(|e| e.focus()).unwrap_or(ptf.translation.truncate() + Vec2::new(gc.look, lift));
     let mut p = tf.translation.truncate() - gc.wobble;
+    // (Back from far away, the robot pit's wrong game: a cut, not a pan.)
+    if (target - p).length() > 4.0 * VIEW_HEIGHT {
+        p = target;
+    }
     p.x += (target.x - p.x) * k(6.0);
     p.y += (target.y - p.y) * k(4.0);
 

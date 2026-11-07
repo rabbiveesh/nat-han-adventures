@@ -7,9 +7,11 @@ use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 mod backdrops;
 mod buddy;
 mod characters;
+mod crutches;
 mod gadgets;
 mod items;
 pub mod palette;
+mod robot;
 mod tiles;
 
 pub use palette::Pixels;
@@ -133,6 +135,34 @@ pub enum SpriteId {
     BeatBlue,
     /// The secret's grate: bars over a hole in the wall (Han behind it). 16x32.
     Grate,
+    /// The robot pit's wrong game (`game::robot`), in Robot Buddy Adventure's colours: its
+    /// meadow's tiles (grass, sandy path, flowers, trees, the house's roof, wall, window and
+    /// door, fence, water), the chest (shut, open with a Dum Dum), the whirlpool home (4
+    /// frames), the answer pads (fresh, used). 16x16.
+    RobotGrass,
+    RobotPath,
+    RobotFlowers,
+    RobotTree,
+    RobotRoof,
+    RobotWall,
+    RobotWindow,
+    RobotDoor,
+    RobotFence,
+    RobotWater,
+    RobotChest,
+    Whirlpool,
+    AnswerPad,
+    /// Sparky the robot, blinking. 16x24 (feet at the bottom).
+    Sparky,
+    /// Sparky's antenna at the bottom of a robot pit, blinking. 16x16.
+    PitAntenna,
+    /// The crutch pit (`game::crutches`): the WET FLOOR sign at its bottom, Han's plunger (cup at
+    /// the bottom, its rope goes on up), Nat's crutches and casts drawn over him (planted, swung),
+    /// and Nat on crutches for the hospital card. 16x16.
+    WetFloor,
+    RescuePlunger,
+    Crutches,
+    NatOnCrutches,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -168,7 +198,10 @@ impl SpriteId {
             StainRaft, Fly, SprayCan,
             SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
             IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
-            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
+            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate, RobotGrass, RobotPath,
+            RobotFlowers, RobotTree, RobotRoof, RobotWall, RobotWindow, RobotDoor, RobotFence, RobotWater,
+            RobotChest, Whirlpool, AnswerPad, Sparky, PitAntenna, WetFloor, RescuePlunger, Crutches,
+            NatOnCrutches,
         ];
         for w in tiles::WORLDS {
             v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
@@ -182,6 +215,7 @@ impl SpriteId {
         match self {
             GoalFlag | Grate => (16, 32),
             HanBraced => (16, 20),
+            Sparky => (16, 24),
             HanParachute => (16, 24),
                 Throne => (32, 32),
             Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
@@ -265,6 +299,25 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         BeatRed => gadgets::beat_red(),
         BeatBlue => gadgets::beat_blue(),
         Grate => gadgets::grate(),
+        RobotGrass => robot::grass(),
+        RobotPath => robot::path(),
+        RobotFlowers => robot::flowers(),
+        RobotTree => robot::tree(),
+        RobotRoof => robot::roof(),
+        RobotWall => robot::wall(),
+        RobotWindow => robot::window(),
+        RobotDoor => robot::door(),
+        RobotFence => robot::fence(),
+        RobotWater => robot::water(),
+        RobotChest => robot::chest(),
+        Whirlpool => robot::whirlpool(),
+        AnswerPad => robot::answer_pad(),
+        Sparky => robot::sparky(),
+        PitAntenna => robot::pit_antenna(),
+        WetFloor => crutches::wet_floor(),
+        RescuePlunger => crutches::plunger(),
+        Crutches => crutches::crutches(),
+        NatOnCrutches => crutches::nat_on_crutches(),
     }
 }
 
@@ -350,7 +403,7 @@ mod tests {
 
     #[test]
     fn grids_are_rectangular_and_use_only_palette_chars() {
-        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids()).chain(buddy::grids()).chain(gadgets::grids());
+        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids()).chain(buddy::grids()).chain(gadgets::grids()).chain(robot::grids()).chain(crutches::grids());
         for (name, rows, pal) in all {
             if let Err(e) = palette::try_grid(&rows, pal) {
                 panic!("grid {name}: {e:?}");

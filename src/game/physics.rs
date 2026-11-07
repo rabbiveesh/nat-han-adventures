@@ -662,7 +662,7 @@ fn player_step(
     assists: Res<super::Assists>,
     input: Single<&ActionState<Action>>,
     mut player: Query<
-        (&mut Pos, &mut Body, &mut PlayerControl),
+        (&mut Pos, &mut Body, &mut PlayerControl, Has<super::crutches::OnCrutches>),
         (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>),
     >,
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), Without<Player>>,
@@ -680,7 +680,9 @@ fn player_step(
         return;
     }
     let level = &active.level;
-    let Ok((mut pos, mut body, mut ctl)) = player.single_mut() else { return };
+    let Ok((mut pos, mut body, mut ctl, crutches)) = player.single_mut() else { return };
+    // On crutches (the crutch pit, `crutches`): slow, small jumps, no toot.
+    let (crutch_run, crutch_jump) = if crutches { (super::crutches::CRUTCH_RUN, super::crutches::CRUTCH_JUMP) } else { (1.0, 1.0) };
 
     // --- Input -> horizontal velocity.
     let axis = input.pressed(&Action::Right) as i32 as f32 - input.pressed(&Action::Left) as i32 as f32;
@@ -688,7 +690,7 @@ fn player_step(
         ctl.facing = axis;
     }
     let run = groove.run_scale();
-    let target = axis * RUN_SPEED * run;
+    let target = axis * RUN_SPEED * run * crutch_run;
     // Slipping on grease (no sweaty grip): can't brake, steers weakly, can't jump.
     let slipping = body.on_ground && ctl.on_grease && !groove.grip();
     ctl.since_landing += dt;
@@ -762,7 +764,7 @@ fn player_step(
             ctl.weak_toot = false;
             boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false, boing: false });
         } else {
-            body.vel.y = JUMP_SPEED * groove.jump_scale();
+            body.vel.y = JUMP_SPEED * groove.jump_scale() * crutch_jump;
             if groove.on_the_one() {
                 // A waltz step on ONE: higher, golden, and its toot is a weak one.
                 body.vel.y *= WALTZ_ONE_BOOST;
@@ -779,7 +781,7 @@ fn player_step(
         // Still riding for this step: `step_body` carries the jump off with the platform and
         // hands over its speed.
         body.on_ground = false;
-    } else if pressed && ctl.has_toot && !slipping {
+    } else if pressed && ctl.has_toot && !slipping && !crutches {
         let base = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
         // Letting go of jump to toot cut the rise: the overtones count the rise he'd have had
         // (with the heaviest gravity there could have been, so never more).

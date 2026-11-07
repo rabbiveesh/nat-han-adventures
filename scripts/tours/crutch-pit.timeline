@@ -1,0 +1,33 @@
+# The crutch pit (`game::crutches`) in level 1, for `scripts/record-run --capture` (format:
+# src/capture/timeline.rs). Start just before the gap past the robot pit, its WET FLOOR sign at the bottom:
+#   NATHAN_START=102 scripts/record-run --capture crutch-pit.mp4 scripts/tours/crutch-pit.timeline 1
+# Walk in: CRACK! Han's plunger comes down, SCHLORP, up onto the ledge; St. Plunger's Hospital;
+# then Nat hobbles, tries to toot (nothing), tries to hop the gap on crutches, and doesn't make
+# it: in again, and out again. ~26 s.
+
+# The level's intro line; a look at the sign.
+wait 2.5
+
+# In.
+hold Right 0.6
+
+# CRACK, the plunger, the haul, the hospital.
+wait 8.0
+
+# Hobbling about.
+hold Left 0.8
+wait 0.3
+hold Right 0.5
+wait 0.3
+
+# Up... and a toot that doesn't come.
+hold Space 250ms
+wait 0.1
+tap Space
+wait 0.8
+
+# Try to hop the gap (too small a hop: in again).
+hold Right 0.4
+hold Right Space 0.5
+hold Right 0.3
+wait 8.5
