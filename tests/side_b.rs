@@ -153,8 +153,8 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
     // gap), then a blue bridge over the drop to the low road: over it (a hit) up to the high
     // road's bridges, or down to the low road's walls; a red door, and four bridges to drum.
     &[
-        ("high road", "20/20 32/20 62/30 +0.05/1 +1.4/31 85/20 97/0 110/20 125/20 144/0 152/2 177/0 207/20 219/20 231/20 240/1"),
-        ("low road", "20/20 32/20 62/30 +0.05/1 +1.4/31 83/0 127/0 144/0 152/2 177/0 189/20 207/20 219/20 231/20 240/1"),
+        ("high road", "21/20 35/20 66/30 +0.05/1 +1.4/31 89/20 101/0 114/20 129/20 148/0 156/2 181/0 212/20 226/20 240/20 244/1"),
+        ("low road", "21/20 35/20 66/30 +0.05/1 +1.4/31 87/0 131/0 148/0 156/2 181/0 193/20 212/20 226/20 240/20 244/1"),
     ],
     // Double Trouble (nervous in place of Giant Steps): a tower (its door and bridge on top), the
     // cliff over a drip pipe (up its face, nervous, or under, melted), the second tower (held on
