@@ -3,14 +3,16 @@
 //! Han walks the level on his own AI, heading for the goal (his nav graph, `level::nav`, with
 //! Nat's physics: [`HanPhys::side_b`], one toot). The player never moves him: each level has a
 //! *set list* of calls (`setlist: giant gap melt` in the level header), all free: 1/2/3 (on a
-//! phone, a tap on its cell) calls one ([`CallMode`]), Down calls the last again; the band
+//! phone, a tap on its cell) calls one ([`CallMode`]); the band
 //! plays that mode as it does when Nat calls it. Han takes whatever route is quickest under the
 //! physics now, so calling a mode steers him, and the levels fork: over a pipe or under it, on
 //! the deck for its nuggets or through the tunnel.
-//! - **The balance steers him** (Left/Right; on a phone, a swipe above the set list): the band
-//!   slides across the stereo field ([`SideB::pan`], gliding like the music's,
-//!   `audio::live::desk`) and Han follows the sound: right of the middle he runs right, left
-//!   of it left, in the middle he stops. So he can be turned back from what he can't cross yet.
+//! - **The record steers him** ([`SideB::pan`], `audio::live::desk`): a hand on it (Down; on a
+//!   phone, a thumb on the turntable, the left half above the set list) drags the band to a
+//!   tape stop and Han waits; pulled back (Left; the thumb dragged left) it scratches back over
+//!   the band's last seconds and he moonwalks back; let go, the needle zips forward and on he
+//!   runs. So he can be held for the music to turn, or backed off what he can't cross yet.
+//!   (`NATHAN_STEER=balance`: the stereo balance instead, Left/Right a step across.)
 //!
 //! - **Han heads for the goal**, or, when no route gets there, for the reachable cell nearest
 //!   it (the *frontier*), and from there he **charges**: runs on, jumping at walls and edges,
@@ -18,7 +20,7 @@
 //! - **Han can die**: spikes, sewage, the pit. A death puts him back at the last checkpoint he
 //!   passed (`C`), or the top of the level, as the story's checkpoints do: the tune plays on
 //!   ([`Mouth`]). R starts the level over, the tune too.
-//! - **The hit** (Jump, Up; on a phone, a tap above the set list): a stab the band plays any
+//! - **The hit** (Jump, Up; on a phone, the right half above the set list): a stab the band plays any
 //!   time, free, landing on the next beat ([`land_hits`]; the band drops out under it,
 //!   `audio::live::desk`). Beat blocks answer it on
 //!   Side B instead of the bars (each hit swaps red and blue), and trapdoors (crumbling
@@ -1043,6 +1045,18 @@ fn han_grabs_nuggets(
 }
 
 /// Is a box at `pos` (half extents `half`) in a spike tile's deadly half?
+/// Whether Han's in the sewage, or standing on it (the pocket a ferry leaves): his middle in
+/// it, or nothing but sewage under his feet.
+fn in_sewage(level: &Level, pos: Vec2, half: Vec2) -> bool {
+    let liquid = |p: Vec2| {
+        let (c, r) = level.cell_at(p);
+        c >= 0 && r >= 0 && level.tile(c, r) == Tile::Liquid
+    };
+    let x = half.x - super::FORGIVE;
+    let feet = pos.y - half.y - 2.0;
+    liquid(pos) || (liquid(Vec2::new(pos.x - x, feet)) && liquid(Vec2::new(pos.x + x, feet)))
+}
+
 fn on_spikes(level: &Level, pos: Vec2, half: Vec2) -> bool {
     let shrink = Vec2::splat(super::FORGIVE);
     let (min, max) = (pos - half + shrink, pos + half - shrink);
@@ -1084,6 +1098,7 @@ fn han_fate(
     mut next: ResMut<NextState<AppState>>,
     progress: Option<ResMut<crate::save::Progress>>,
     (run, encore, mut cues): (Res<super::LevelRun>, Option<Res<super::encore::Encore>>, MessageWriter<crate::events::EncoreCue>),
+    plats: Query<(&super::MovingPlatform, &Pos), Without<Han>>,
 ) {
     let dt = time.delta_secs();
     let level = &active.level;
@@ -1170,11 +1185,17 @@ fn han_fate(
         Some(Fate::Pit)
     } else if on_spikes(level, pos.0, body.half) {
         Some(Fate::Spikes)
+    } else if in_sewage(level, pos.0, body.half) && !plats.iter().any(|(m, p)| {
+        // (A ferry rides in the sewage's top row: on it, he's fine.)
+        (pos.0.x - p.0.x).abs() < m.width as f32 * TILE / 2.0 + body.half.x && (pos.0.y - body.half.y - (p.0.y + TILE / 2.0)).abs() < 4.0
+    }) {
+        // (In over his head: at once, not when his brain gets round to sinking.)
+        Some(Fate::Sewage)
     } else {
         None
     };
     if let Some(f) = fate {
-        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped | Fate::Squashed) {
+        if matches!(f, Fate::Spikes | Fate::Sewage | Fate::Bonk | Fate::Pooped | Fate::Squashed) {
             brain.mode = HanMode::Sinking { t: 30.0 };
         }
         brain.charge = None;

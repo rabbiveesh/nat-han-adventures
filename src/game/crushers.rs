@@ -278,6 +278,7 @@ pub(super) fn beat_blocks(
     bodies: Query<(&Pos, &Body), (Or<(With<Player>, With<Han>)>, Without<Dead>)>,
     mut cells: Local<Vec<usize>>,
     side_b: Option<Res<super::sideb::SideB>>,
+    mut navs: Query<&mut super::han::HanNav>,
 ) {
     let level = &active.level;
     // (A scan is a few thousand compares: cheaper than keeping a list in step with level loads.)
@@ -287,7 +288,7 @@ pub(super) fn beat_blocks(
         return;
     }
     // (On Side B they answer the player's hits instead: `sideb::land_hits`.)
-    let odd = side_b.map_or(groove.clock.bar % 2 == 1, |s| s.hits % 2 == 1);
+    let odd = side_b.as_ref().map_or(groove.clock.bar % 2 == 1, |s| s.hits % 2 == 1);
     let inside: Vec<(Vec2, Vec2)> = bodies.iter().map(|(p, b)| (p.0 - b.half, p.0 + b.half)).collect();
     let mut changes: Vec<(usize, Tile)> = Vec::new();
     for &i in cells.iter() {
@@ -308,6 +309,12 @@ pub(super) fn beat_blocks(
     if !changes.is_empty() {
         for (i, t) in changes {
             active.level.tiles[i] = t;
+        }
+        // (Side B: Han's routes go by the blocks as they are now: a hit opens a door.)
+        if side_b.is_some() {
+            for mut nav in &mut navs {
+                nav.invalidate();
+            }
         }
     }
 }

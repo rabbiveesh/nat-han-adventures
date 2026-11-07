@@ -66,7 +66,7 @@ impl HanNav {
         if self.side_b { HanPhys::side_b(groove) } else { HanPhys::of(groove) }
     }
 
-    fn invalidate(&mut self) {
+    pub fn invalidate(&mut self) {
         self.normal.invalidate();
         for n in [&mut self.giant, &mut self.fired].into_iter().flatten() {
             n.invalidate();
