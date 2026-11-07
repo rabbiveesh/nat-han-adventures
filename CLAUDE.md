@@ -14,7 +14,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   (Bevy 0.17+ calls buffered events *messages*: `#[derive(Message)]`, `add_message`, `MessageReader/Writer`.)
 - **No asset files** except the font (`assets/fonts/PressStart2P-Regular.ttf`, OFL, loaded via
   `include_bytes!`). Sprites are generated from ASCII pixel grids (`src/art`), music/sfx from a synth
-  (`src/audio`), levels are `include_str!`'d text (`levels/`). The web build loads nothing at runtime.
+  (`crates/bandstand`), levels are `include_str!`'d text (`levels/`). The web build loads nothing at runtime.
 - **Never use xdotool or anything that grabs the user's screen/focus/keyboard.** The user works on this
   machine. Avoid `trunk build --release` (slow fat-LTO) unless asked; CI does that.
 - Builds use `kache` as rustc-wrapper (machine-local `.cargo/config.local.toml`, gitignored).
@@ -49,8 +49,21 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   at a skill the profile finds easy is a *slip*, and only slips set the band laughing
   (`EasySkills`). `AssistMode` picks story / free play / manual (tests). Never shown on screen.
 - `src/art/` `Sprites` resource + `SpriteId`: pixel art built at startup.
-- `src/audio/` MML parser, NES-style synth blocks, sfx, the director, and the Bevy plugin
-  (`audio::plugin`: music + sfx on one kira manager; `AudioOutput::Headless` for tests).
+- `crates/bandstand/` the music engine as its own crate (workspace member, no Bevy, no audio
+  backend, builds for wasm; `kira` feature: `live::playback`, `reflect` feature: Reflect derives;
+  renders its own `Frame`; `soundfont` feature: `live::font`, channels played through a General
+  MIDI `.sf2` via rustysynth, live, per channel, for the ear-training game, never in Nat Han;
+  `cargo run --release -p bandstand --features soundfont --example font_render` renders chip vs font). Its `src/` holds what was `src/audio/` (MML parser, NES-style synth
+  blocks, sfx, the director, `live/`), re-exported as `crate::audio::*` so game paths are unchanged;
+  its `music/` holds the songs, `.player` files and bass lines (inside the crate so it can be
+  published). Below, `src/audio/live/` and `music/` mean those under `crates/bandstand/`.
+  Releasing it: bump `version` in `crates/bandstand/Cargo.toml` (and Cargo.lock) and add a
+  `## v<version> — <date>` section to `crates/bandstand/CHANGELOG.md`; merging to main tags
+  `bandstand-v<version>`, publishes to crates.io and makes the GitHub Release from that section
+  (`.github/workflows/release-bandstand.yml`; `scripts/bandstand/check-version.sh`,
+  `scripts/bandstand/release-notes.sh v<version>` previews the notes).
+- `src/audio/` the Bevy side: the plugin (`audio::plugin`: music + sfx on one kira manager;
+  `AudioOutput::Headless` for tests) and capture.
 - `src/audio/live/` the real-time music engine (game-free): the game's music, generated a few
   ms ahead of the speaker so the band follows play (filters land on the next bar line; the
   waltz switches meter at a shared bar line). Songs are `music/*.song` (with FamiTracker-style

@@ -1,7 +1,7 @@
 //! Instruments (`[instruments]`, `@i`): the format, the macros' timing frame by frame, the
 //! kits, and the built-in defaults playing exactly what every song played before instruments.
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony, Music,
     live::{Engine, EngineConfig, Input, instrument, library, song::SongFile, syntax},

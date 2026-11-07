@@ -21,7 +21,7 @@
 
 use std::{fmt::Write as _, path::Path};
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony,
     live::{

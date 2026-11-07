@@ -38,7 +38,7 @@ use nat_han_adventures::level::{GateMark, LEVEL_SOURCES, Level, TILE, ThingKind,
 
 /// What the deep checks depend on (besides `levels/*.txt`): a change to any reruns them.
 const SOURCES: &[&str] = &[
-    "src/audio/director.rs",
+    "crates/bandstand/src/director.rs",
     "src/audio/plugin.rs",
     "src/game/groove.rs",
     "src/game/physics.rs",
