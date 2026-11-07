@@ -2,6 +2,7 @@
 name = "bandstand"
 version = "0.1.0"
 edition = "2024"
+authors = ["Avishai \"Veesh\" Goldman"]
 description = "The live jazz band behind Nat Han Adventures: an NES-style synth, MML songs and a band that follows play"
 license = "MIT"
 repository = "https://github.com/rabbiveesh/nat-han-adventures"
