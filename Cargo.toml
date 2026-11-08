@@ -2,10 +2,18 @@
 name = "nat-han-adventures"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
 # `cargo run` is the game; the music editor is `cargo run --bin editor`.
 default-run = "nat-han-adventures"
 
+[workspace]
+members = ["crates/bandstand"]
+# `cargo build`, `cargo test` and `cargo nextest run` cover the engine crate too.
+default-members = [".", "crates/bandstand"]
+
 [dependencies]
+# The music engine (game-free; see crates/bandstand).
+bandstand = { path = "crates/bandstand", features = ["kira", "reflect"] }
 # bevy_audio is off: our chiptune synth plays straight through kira (one manager: the live
 # music engine is a custom `Sound`, the sfx are static sounds). Inputs reach the audio thread
 # over a lock-free ring buffer.

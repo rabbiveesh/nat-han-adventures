@@ -1,0 +1,541 @@
+{
+ "miles": {
+  "solos": 10,
+  "blue": {
+   "b3": 4.7,
+   "b5": 3.5,
+   "chance": 8.3,
+   "b3_up_to_3": 28.9,
+   "notes": 2066
+  },
+  "resolution": {
+   "after_tension": 32.2,
+   "n": 242,
+   "after_chord_tone": 11.6
+  },
+  "displacement": {
+   "hemiola": 0.4,
+   "contour_every_3": 1.3,
+   "contour_every_4": 0.9,
+   "phrases": 231
+  },
+  "bass": {
+   "n": 568,
+   "classes": {
+    "unison/8ve": 12.3,
+    "3rd/6th": 26.4,
+    "5th/4th": 23.6,
+    "2nd/7th": 32.2,
+    "tritone": 5.5
+   },
+   "chance": {
+    "unison/8ve": 7.9,
+    "3rd/6th": 31.7,
+    "5th/4th": 19.0,
+    "2nd/7th": 33.5,
+    "tritone": 7.9
+   }
+  },
+  "long_notes": {
+   "n": 304,
+   "long": {
+    "ct": 57.9,
+    "tension": 29.3,
+    "chromatic": 12.8
+   },
+   "all": {
+    "ct": 50.9,
+    "tension": 34.6,
+    "chromatic": 14.5
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 9,
+    "beats": 6.6,
+    "rest": 3.3,
+    "phrases": 77
+   },
+   "140-200": {
+    "notes": 7,
+    "beats": 5.2,
+    "rest": 3.2,
+    "phrases": 63
+   },
+   "200-260": {
+    "notes": 10,
+    "beats": 7.7,
+    "rest": 2.5,
+    "phrases": 39
+   },
+   ">260": {
+    "notes": 12.0,
+    "beats": 9.8,
+    "rest": 4.5,
+    "phrases": 52
+   }
+  }
+ },
+ "trane": {
+  "solos": 7,
+  "blue": {
+   "b3": 2.5,
+   "b5": 2.5,
+   "chance": 8.3,
+   "b3_up_to_3": 27.0,
+   "notes": 1454
+  },
+  "resolution": {
+   "after_tension": 30.5,
+   "n": 961,
+   "after_chord_tone": 4.2
+  },
+  "displacement": {
+   "hemiola": 0.0,
+   "contour_every_3": 3.2,
+   "contour_every_4": 4.1,
+   "phrases": 712
+  },
+  "bass": {
+   "n": 1099,
+   "classes": {
+    "unison/8ve": 9.2,
+    "3rd/6th": 30.7,
+    "5th/4th": 20.9,
+    "2nd/7th": 32.1,
+    "tritone": 7.1
+   },
+   "chance": {
+    "unison/8ve": 9.6,
+    "3rd/6th": 32.3,
+    "5th/4th": 20.3,
+    "2nd/7th": 31.2,
+    "tritone": 6.6
+   }
+  },
+  "long_notes": {
+   "n": 686,
+   "long": {
+    "ct": 53.8,
+    "tension": 36.0,
+    "chromatic": 10.2
+   },
+   "all": {
+    "ct": 49.4,
+    "tension": 29.8,
+    "chromatic": 20.9
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 13.5,
+    "beats": 8.8,
+    "rest": 1.6,
+    "phrases": 24
+   },
+   "140-200": {
+    "notes": 12,
+    "beats": 6.2,
+    "rest": 1.3,
+    "phrases": 193
+   },
+   "200-260": {
+    "notes": null,
+    "beats": null,
+    "rest": null,
+    "phrases": 0
+   },
+   ">260": {
+    "notes": 9,
+    "beats": 5.4,
+    "rest": 2.3,
+    "phrases": 495
+   }
+  }
+ },
+ "bird": {
+  "solos": 16,
+  "blue": {
+   "b3": 4.0,
+   "b5": 3.0,
+   "chance": 8.3,
+   "b3_up_to_3": 32.2,
+   "notes": 3675
+  },
+  "resolution": {
+   "after_tension": 39.6,
+   "n": 356,
+   "after_chord_tone": 9.7
+  },
+  "displacement": {
+   "hemiola": 0.0,
+   "contour_every_3": 3.4,
+   "contour_every_4": 3.1,
+   "phrases": 292
+  },
+  "bass": {
+   "n": 671,
+   "classes": {
+    "unison/8ve": 9.1,
+    "3rd/6th": 33.5,
+    "5th/4th": 19.7,
+    "2nd/7th": 30.4,
+    "tritone": 7.3
+   },
+   "chance": {
+    "unison/8ve": 11.6,
+    "3rd/6th": 32.2,
+    "5th/4th": 17.4,
+    "2nd/7th": 32.6,
+    "tritone": 6.1
+   }
+  },
+  "long_notes": {
+   "n": 186,
+   "long": {
+    "ct": 59.7,
+    "tension": 32.3,
+    "chromatic": 8.1
+   },
+   "all": {
+    "ct": 52.5,
+    "tension": 29.7,
+    "chromatic": 17.8
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 15,
+    "beats": 4.2,
+    "rest": 1.1,
+    "phrases": 129
+   },
+   "140-200": {
+    "notes": 18.5,
+    "beats": 8.7,
+    "rest": 2.2,
+    "phrases": 56
+   },
+   "200-260": {
+    "notes": 14.5,
+    "beats": 7.9,
+    "rest": 2.1,
+    "phrases": 84
+   },
+   ">260": {
+    "notes": 22,
+    "beats": 11.9,
+    "rest": 3.0,
+    "phrases": 23
+   }
+  }
+ },
+ "sonny": {
+  "solos": 7,
+  "blue": {
+   "b3": 4.3,
+   "b5": 5.1,
+   "chance": 8.3,
+   "b3_up_to_3": 26.4,
+   "notes": 2111
+  },
+  "resolution": {
+   "after_tension": 33.0,
+   "n": 206,
+   "after_chord_tone": 7.3
+  },
+  "displacement": {
+   "hemiola": 0.0,
+   "contour_every_3": 2.4,
+   "contour_every_4": 1.8,
+   "phrases": 164
+  },
+  "bass": {
+   "n": 428,
+   "classes": {
+    "unison/8ve": 12.1,
+    "3rd/6th": 29.4,
+    "5th/4th": 20.1,
+    "2nd/7th": 30.6,
+    "tritone": 7.7
+   },
+   "chance": {
+    "unison/8ve": 10.3,
+    "3rd/6th": 33.9,
+    "5th/4th": 15.7,
+    "2nd/7th": 34.1,
+    "tritone": 6.1
+   }
+  },
+  "long_notes": {
+   "n": 98,
+   "long": {
+    "ct": 55.1,
+    "tension": 37.8,
+    "chromatic": 7.1
+   },
+   "all": {
+    "ct": 51.4,
+    "tension": 34.3,
+    "chromatic": 14.3
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 9,
+    "beats": 4.7,
+    "rest": 2.9,
+    "phrases": 77
+   },
+   "140-200": {
+    "notes": 10.0,
+    "beats": 5.5,
+    "rest": 2.8,
+    "phrases": 38
+   },
+   "200-260": {
+    "notes": 14,
+    "beats": 9.0,
+    "rest": 2.8,
+    "phrases": 31
+   },
+   ">260": {
+    "notes": 20.5,
+    "beats": 11.9,
+    "rest": 3.9,
+    "phrases": 18
+   }
+  }
+ },
+ "wayne": {
+  "solos": 7,
+  "blue": {
+   "b3": 4.9,
+   "b5": 8.5,
+   "chance": 8.3,
+   "b3_up_to_3": 17.5,
+   "notes": 1275
+  },
+  "resolution": {
+   "after_tension": 35.5,
+   "n": 183,
+   "after_chord_tone": 13.9
+  },
+  "displacement": {
+   "hemiola": 0.7,
+   "contour_every_3": 3.4,
+   "contour_every_4": 4.8,
+   "phrases": 145
+  },
+  "bass": {
+   "n": 322,
+   "classes": {
+    "unison/8ve": 10.9,
+    "3rd/6th": 32.0,
+    "5th/4th": 22.0,
+    "2nd/7th": 28.3,
+    "tritone": 6.8
+   },
+   "chance": {
+    "unison/8ve": 9.0,
+    "3rd/6th": 30.1,
+    "5th/4th": 19.9,
+    "2nd/7th": 32.6,
+    "tritone": 8.4
+   }
+  },
+  "long_notes": {
+   "n": 110,
+   "long": {
+    "ct": 52.7,
+    "tension": 28.2,
+    "chromatic": 19.1
+   },
+   "all": {
+    "ct": 46.3,
+    "tension": 35.5,
+    "chromatic": 18.2
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 10.5,
+    "beats": 6.3,
+    "rest": 1.6,
+    "phrases": 42
+   },
+   "140-200": {
+    "notes": 15.0,
+    "beats": 7.4,
+    "rest": 2.9,
+    "phrases": 44
+   },
+   "200-260": {
+    "notes": null,
+    "beats": null,
+    "rest": null,
+    "phrases": 0
+   },
+   ">260": {
+    "notes": 13,
+    "beats": 9.7,
+    "rest": 2.6,
+    "phrases": 59
+   }
+  }
+ },
+ "pops": {
+  "solos": 8,
+  "blue": {
+   "b3": 4.2,
+   "b5": 2.5,
+   "chance": 8.3,
+   "b3_up_to_3": 61.4,
+   "notes": 1048
+  },
+  "resolution": {
+   "after_tension": 37.4,
+   "n": 107,
+   "after_chord_tone": 3.4
+  },
+  "displacement": {
+   "hemiola": 0.0,
+   "contour_every_3": 1.1,
+   "contour_every_4": 0.0,
+   "phrases": 89
+  },
+  "bass": {
+   "n": 258,
+   "classes": {
+    "unison/8ve": 11.6,
+    "3rd/6th": 32.2,
+    "5th/4th": 15.5,
+    "2nd/7th": 35.3,
+    "tritone": 5.4
+   },
+   "chance": {
+    "unison/8ve": 9.7,
+    "3rd/6th": 32.6,
+    "5th/4th": 14.7,
+    "2nd/7th": 36.0,
+    "tritone": 7.0
+   }
+  },
+  "long_notes": {
+   "n": 49,
+   "long": {
+    "ct": 49.0,
+    "tension": 38.8,
+    "chromatic": 12.2
+   },
+   "all": {
+    "ct": 54.7,
+    "tension": 30.3,
+    "chromatic": 14.9
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 11.5,
+    "beats": 5.8,
+    "rest": 1.6,
+    "phrases": 26
+   },
+   "140-200": {
+    "notes": 11,
+    "beats": 6.7,
+    "rest": 1.3,
+    "phrases": 63
+   },
+   "200-260": {
+    "notes": null,
+    "beats": null,
+    "rest": null,
+    "phrases": 0
+   },
+   ">260": {
+    "notes": null,
+    "beats": null,
+    "rest": null,
+    "phrases": 0
+   }
+  }
+ },
+ "all": {
+  "solos": 402,
+  "blue": {
+   "b3": 5.2,
+   "b5": 4.5,
+   "chance": 8.3,
+   "b3_up_to_3": 26.3,
+   "notes": 110109
+  },
+  "resolution": {
+   "after_tension": 34.1,
+   "n": 13829,
+   "after_chord_tone": 10.0
+  },
+  "displacement": {
+   "hemiola": 0.1,
+   "contour_every_3": 4.1,
+   "contour_every_4": 3.8,
+   "phrases": 8933
+  },
+  "bass": {
+   "n": 26510,
+   "classes": {
+    "unison/8ve": 11.6,
+    "3rd/6th": 32.6,
+    "5th/4th": 19.0,
+    "2nd/7th": 29.9,
+    "tritone": 6.9
+   },
+   "chance": {
+    "unison/8ve": 10.2,
+    "3rd/6th": 33.6,
+    "5th/4th": 17.3,
+    "2nd/7th": 31.4,
+    "tritone": 7.5
+   }
+  },
+  "long_notes": {
+   "n": 8214,
+   "long": {
+    "ct": 57.4,
+    "tension": 29.6,
+    "chromatic": 13.0
+   },
+   "all": {
+    "ct": 49.2,
+    "tension": 32.4,
+    "chromatic": 18.4
+   }
+  },
+  "phrase_length": {
+   "<140": {
+    "notes": 14,
+    "beats": 5.5,
+    "rest": 1.3,
+    "phrases": 2985
+   },
+   "140-200": {
+    "notes": 14,
+    "beats": 7.7,
+    "rest": 1.9,
+    "phrases": 2031
+   },
+   "200-260": {
+    "notes": 17,
+    "beats": 11.0,
+    "rest": 2.4,
+    "phrases": 1891
+   },
+   ">260": {
+    "notes": 15.0,
+    "beats": 10.3,
+    "rest": 2.6,
+    "phrases": 2026
+   }
+  }
+ }
+}

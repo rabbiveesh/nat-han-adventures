@@ -21,7 +21,7 @@
 
 use std::{fmt::Write as _, path::Path, time::Instant};
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::live::{Engine, EngineConfig, Input, library, song::SongFile};
 
 const RATE: u32 = 32_000;

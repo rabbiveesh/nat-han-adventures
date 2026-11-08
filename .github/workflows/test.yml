@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # A bandstand version bump that misses Cargo.lock fails here, before it can
+      # merge and release (.github/workflows/release-bandstand.yml).
+      - name: bandstand version strings agree
+        run: scripts/bandstand/check-version.sh
       - name: System deps
         run: sudo apt-get update && sudo apt-get install -y libudev-dev libasound2-dev libwayland-dev libxkbcommon-dev
       # Installs exactly what rust-toolchain.toml pins (rustup no longer auto-installs).

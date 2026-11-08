@@ -1,0 +1,29 @@
+[package]
+name = "bandstand"
+version = "0.1.0"
+edition = "2024"
+authors = ["Avishai \"Veesh\" Goldman"]
+description = "The live jazz band behind Nat Han Adventures: an NES-style synth, MML songs and a band that follows play"
+license = "MIT"
+repository = "https://github.com/rabbiveesh/nat-han-adventures"
+readme = "README.md"
+keywords = ["music", "synth", "chiptune", "jazz", "gamedev"]
+categories = ["multimedia::audio", "game-development"]
+
+[dependencies]
+# `kira`: the kira `Sound` that plays engines on the audio thread (`live::playback`).
+kira = { version = "0.12", default-features = false, optional = true }
+rtrb = { version = "0.4", optional = true }
+# `reflect`: `bevy_reflect::Reflect` on the music types (a Bevy game's inspector, debug dumps).
+bevy_reflect = { version = "0.19.1", default-features = false, optional = true }
+# `soundfont`: channels can play through a General MIDI SoundFont (`live::font`).
+rustysynth = { version = "1.3", optional = true }
+
+[features]
+kira = ["dep:kira", "dep:rtrb"]
+reflect = ["dep:bevy_reflect"]
+soundfont = ["dep:rustysynth"]
+
+[[example]]
+name = "font_render"
+required-features = ["soundfont"]

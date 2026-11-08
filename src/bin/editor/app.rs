@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 
 use nat_han_adventures::audio::live::song::CHANNELS;
 use nat_han_adventures::audio::live::feel::Feel;
+use nat_han_adventures::audio::live::engine::CommittedBar;
 use nat_han_adventures::audio::live::{Input, SongFile, library};
 use nat_han_adventures::audio::mml::{self, Options};
 use nat_han_adventures::audio::{AudioOutput, Harmony};
@@ -19,6 +20,8 @@ pub enum View {
     Piano,
     Text,
     Instruments,
+    /// The band's thinking: each musician's decisions bar by bar as it plays.
+    Thinking,
 }
 
 impl View {
@@ -28,6 +31,7 @@ impl View {
             "piano" | "piano-roll" => Some(View::Piano),
             "text" => Some(View::Text),
             "instruments" | "inst" => Some(View::Instruments),
+            "thinking" | "think" => Some(View::Thinking),
             _ => None,
         }
     }
@@ -161,11 +165,13 @@ pub struct Editor {
     pub now: f64,
     /// The feel each bar of the edited song was last committed in (the bottom strip's lane).
     pub feels: Vec<Feel>,
+    /// Every bar committed lately, by absolute engine bar (the Thinking view).
+    pub thinking: std::collections::BTreeMap<u64, CommittedBar>,
 }
 
-/// The repository root (where `music/` is).
+/// Where `music/` is: the engine crate's folder (`crates/bandstand`).
 pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/crates/bandstand"))
 }
 
 /// The songs in `music/` (stem, title), or the built-in ones if there's no such directory.
@@ -238,6 +244,7 @@ impl Editor {
             played: None,
             now: 0.0,
             feels: Vec::new(),
+            thinking: Default::default(),
         }
     }
 
@@ -381,7 +388,7 @@ impl Editor {
     pub fn cursor_bar(&self) -> usize {
         match self.view {
             View::Tracker | View::Instruments => self.tracker.row / self.rows_per_bar().max(1),
-            View::Piano => self.piano.first_bar,
+            View::Piano | View::Thinking => self.piano.first_bar,
             View::Text => self.text_cursor_beat().map_or(0, |b| (b / self.bar_beats()).floor() as usize),
         }
         .min(self.bars().saturating_sub(1))
@@ -567,6 +574,19 @@ impl Editor {
         self.feels.resize(bars, Feel::Swing);
         if !self.player.playing {
             return;
+        }
+        // (A new engine counts its bars from its own start: forget the old one's.)
+        let newest = self.thinking.keys().next_back().copied();
+        if let (Some(first), Some(newest)) = (self.player.published.state.upcoming.first(), newest)
+            && first.slot.index + 4 < newest
+        {
+            self.thinking.clear();
+        }
+        for b in &self.player.published.state.upcoming {
+            self.thinking.insert(b.slot.index, *b);
+        }
+        while self.thinking.len() > 96 {
+            self.thinking.pop_first();
         }
         for b in &self.player.published.state.upcoming {
             let bar = if b.harmony == Harmony::Waltz { b.slot.song_bar / 2 } else { b.slot.song_bar } + self.player.offset;

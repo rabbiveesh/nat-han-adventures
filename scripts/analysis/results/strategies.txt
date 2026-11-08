@@ -1,0 +1,214 @@
+Soloist strategies in the Weimar Jazz Database v2.1, by player (hand-marked phrases; a gap is
+onset to onset inside a phrase, 16th-or-faster under 0.29 beat). Arc rows: each solo's (or
+chorus's) fifths against its own mean (x for ratios, semitones for pitch), averaged over solos.
+
+miles: 10 solos
+  arc by chorus notes/bar x   0.97   0.89   0.97   1.07   1.09
+  arc by chorus pitch +st      0.9   0.05  -0.73   -0.2  -0.02
+  arc by chorus phrase len x  0.98   0.88      1   1.22   0.92
+  arc by chorus rest x        1.12   1.03   0.85   1.07   0.92
+  arc by chorus 16ths x       1.03   0.89    0.9   0.93   1.25
+  arc by solo   notes/bar x   0.96   1.04   1.03   0.94   1.04
+  arc by solo   pitch +st    -0.36  -0.64   1.04  -0.42   0.39
+  arc by solo   phrase len x  0.91   1.16   0.92    0.9   1.12
+  arc by solo   rest x        0.99   1.06   1.07   0.96   0.92
+  arc by solo   16ths x       1.24   0.87   1.14   1.02   0.74
+  solo shapes (n=10)      builds 20  arch 60  front-loaded 20  flat 0
+  top note, chorus          median 0.3, by quarter [30.0, 30.0, 20.0, 20.0]
+  top note, solo            median 0.6, by quarter [20.0, 20.0, 30.0, 30.0]
+  first chorus / later (n=10)  notes/bar x0.94  phrase x0.88  16ths x1.04  pitch -0.41 st
+  restates the last phrase   5.1% of 197 (chance 6.6%); again after a restatement 11.1%, after a new one 5.1%
+  restatement chains          1: 8  2: 1  3: 0  4+: 0;  head only 60%, nearly all 40%; notes matched median 5.5
+  moved, on a new chord (n=8) with the root 12.5%, not moved 25%, other 62.5%; same chord (n=2) not moved 0%
+  ideas carried (n=184 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   4.3% (two back 4.6%, chance 3.5%; carry 0.008); again after one 14.3%; chains 1:6 2:1 3:0 4+:0
+    head rhythm      0.5% (two back 0.6%, chance 2.1%; carry 0); again after one 0%; chains 1:1 2:0 3:0 4+:0
+    head contour     7.1% (two back 6.9%, chance 3.5%; carry 0.037); again after one 9.1%; chains 1:11 2:1 3:0 4+:0
+    a cell anywhere  44.6% (two back 40.8%, chance 34.7%; carry 0.152); again after one 57.3%; chains 1:21 2:10 3:3 4+:5
+    shaped cells shared (n=74): where, by fifths of the phrase [35.1, 25.7, 13.5, 16.2, 9.5]; rhythm kept 5.4%
+    moved: new chord with the root 8.1%, not moved 20.3%, other 54.1%; same chord moved 12.2%, not moved 5.4%; no chord 0%
+  on changes at 1 and 3 (n=445)  3 9.7  7 13.7  5 15.3  R 15.7  9 19.8  other 25.8;  move median 3 st, 2 or less 43.9%
+  contours (n=231)          arch 39.8  up 13.4  down 35.1  flat 3  other 8.7
+  by tempo                   0-140: 16ths 18.4% 4.2/bar  140-200: 16ths 12.2% 3.7/bar  200-260: 16ths 3.9% 3.92/bar  >260: 16ths 2% 3.75/bar
+  starts within a beat after an 8-bar line 9.3% (chance 4%); in a bar's first beat 36.8% (chance 25)
+
+trane: 7 solos
+  arc by chorus notes/bar x   0.94   0.99   1.04   1.03      1
+  arc by chorus pitch +st     1.03   0.19   0.07  -0.93  -0.38
+  arc by chorus phrase len x  1.05      1   1.03      1   0.92
+  arc by chorus rest x        1.08   0.97   1.01   0.96   0.99
+  arc by chorus 16ths x       0.96   1.01   0.83      1   1.21
+  arc by solo   notes/bar x   0.88   1.05   1.03   1.07   0.97
+  arc by solo   pitch +st     0.52   0.13  -0.33   0.59  -0.91
+  arc by solo   phrase len x  1.05   0.93   0.98   0.96   1.08
+  arc by solo   rest x        0.96   1.03   1.07   0.98   0.97
+  arc by solo   16ths x        0.7   0.87   1.02   1.16   1.25
+  solo shapes (n=7)      builds 28.6  arch 57.1  front-loaded 14.3  flat 0
+  top note, chorus          median 0.66, by quarter [0.0, 14.3, 57.1, 28.6]
+  top note, solo            median 0.34, by quarter [28.6, 28.6, 14.3, 28.6]
+  first chorus / later (n=6)  notes/bar x1.07  phrase x0.98  16ths x0.61  pitch 1 st
+  restates the last phrase   3.7% of 649 (chance 1.8%); again after a restatement 20.8%, after a new one 3.1%
+  restatement chains          1: 14  2: 5  3: 0  4+: 0;  head only 37.5%, nearly all 62.5%; notes matched median 5
+  moved, on a new chord (n=5) with the root 20%, not moved 0%, other 80%; same chord (n=19) not moved 52.6%
+  ideas carried (n=579 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   3.5% (two back 2.8%, chance 0.7%; carry 0.028); again after one 30%; chains 1:10 2:3 3:0 4+:1
+    head rhythm      0.9% (two back 0.7%, chance 0.5%; carry 0.004); again after one 20%; chains 1:3 2:1 3:0 4+:0
+    head contour     6.4% (two back 5.1%, chance 2%; carry 0.045); again after one 16.2%; chains 1:25 2:6 3:0 4+:0
+    a cell anywhere  36.1% (two back 32.3%, chance 24.3%; carry 0.156); again after one 47.1%; chains 1:60 2:28 3:14 4+:9
+    shaped cells shared (n=202): where, by fifths of the phrase [38.1, 16.3, 15.3, 13.9, 16.3]; rhythm kept 3.5%
+    moved: new chord with the root 5.4%, not moved 4.5%, other 24.8%; same chord moved 41.6%, not moved 23.8%; no chord 0%
+  on changes at 1 and 3 (n=401)  3 19.7  7 10  5 15.7  R 15.5  9 17.5  other 21.7;  move median 4 st, 2 or less 38.2%
+  contours (n=712)          arch 50.3  up 14.2  down 29.2  flat 0.7  other 5.6
+  by tempo                   0-140: 16ths 53.7% 6.48/bar  140-200: 16ths 27.5% 5.91/bar  200-260: 16ths -% -/bar  >260: 16ths 8.2% 4.82/bar
+  starts within a beat after an 8-bar line 4.9% (chance 4.2%); in a bar's first beat 31.2% (chance 25)
+
+bird: 16 solos
+  arc by chorus notes/bar x   1.12   0.85   0.97   1.07   0.99
+  arc by chorus pitch +st    -0.39   0.42  -0.05    0.9  -0.88
+  arc by chorus phrase len x  0.96   1.04   0.95   1.02   1.02
+  arc by chorus rest x        1.03   1.07   0.99   1.03   0.88
+  arc by chorus 16ths x       1.04   0.86   0.94   1.17   0.99
+  arc by solo   notes/bar x   1.02   1.01   0.96   0.97   1.03
+  arc by solo   pitch +st    -0.19   0.33   0.11    0.3  -0.54
+  arc by solo   phrase len x  0.97   1.07   0.99   0.96   1.01
+  arc by solo   rest x        1.03   0.99   1.06   0.97   0.95
+  arc by solo   16ths x        1.1   0.94   1.04   0.98   0.94
+  solo shapes (n=16)      builds 12.5  arch 62.5  front-loaded 25  flat 0
+  top note, chorus          median 0.36, by quarter [35.7, 28.6, 14.3, 21.4]
+  top note, solo            median 0.45, by quarter [31.2, 18.8, 37.5, 12.5]
+  first chorus / later (n=11)  notes/bar x1.06  phrase x1.02  16ths x1.39  pitch 0.83 st
+  restates the last phrase   4.4% of 273 (chance 2.7%); again after a restatement 16.7%, after a new one 3.3%
+  restatement chains          1: 8  2: 2  3: 0  4+: 0;  head only 100%, nearly all 0%; notes matched median 6
+  moved, on a new chord (n=10) with the root 30%, not moved 20%, other 50%; same chord (n=2) not moved 50%
+  ideas carried (n=264 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   4.5% (two back 3.2%, chance 4.5%; carry 0); again after one 16.7%; chains 1:8 2:2 3:0 4+:0
+    head rhythm      1.9% (two back 2.4%, chance 1%; carry 0.009); again after one 0%; chains 1:5 2:0 3:0 4+:0
+    head contour     9.5% (two back 6.5%, chance 7.5%; carry 0.022); again after one 4.3%; chains 1:23 2:1 3:0 4+:0
+    a cell anywhere  62.1% (two back 63.7%, chance 62.5%; carry 0); again after one 64.1%; chains 1:21 2:20 3:13 4+:12
+    shaped cells shared (n=153): where, by fifths of the phrase [36.6, 20.3, 14.4, 15.0, 13.7]; rhythm kept 9.8%
+    moved: new chord with the root 6.5%, not moved 11.8%, other 67.3%; same chord moved 10.5%, not moved 2.6%; no chord 1.3%
+  on changes at 1 and 3 (n=640)  3 11.4  7 12.3  5 17.3  R 12.5  9 18  other 28.4;  move median 5 st, 2 or less 30.9%
+  contours (n=292)          arch 55.8  up 11.3  down 29.1  flat 0  other 3.8
+  by tempo                   0-140: 16ths 76.4% 11.9/bar  140-200: 16ths 37.5% 6.78/bar  200-260: 16ths 12.6% 5.53/bar  >260: 16ths 6.6% 5.49/bar
+  starts within a beat after an 8-bar line 5.4% (chance 3.9%); in a bar's first beat 23.5% (chance 25)
+
+sonny: 7 solos
+  arc by chorus notes/bar x   0.96   0.84      1   1.26   0.95
+  arc by chorus pitch +st    -0.59  -0.35   1.02    0.8  -0.88
+  arc by chorus phrase len x  0.84   1.05   1.25   0.98   0.91
+  arc by chorus rest x         0.8   1.08   1.17    0.9   1.04
+  arc by chorus 16ths x        1.1   0.76   0.99   0.92   1.24
+  arc by solo   notes/bar x   0.98   1.01      1   1.14   0.87
+  arc by solo   pitch +st    -1.82   0.92   1.23   0.37   -0.7
+  arc by solo   phrase len x  1.24   1.04   0.87   1.01   0.84
+  arc by solo   rest x        1.11   1.11   0.93   0.87   0.98
+  arc by solo   16ths x       0.93   1.01   1.24   0.94   0.89
+  solo shapes (n=7)      builds 42.9  arch 42.9  front-loaded 14.3  flat 0
+  top note, chorus          median 0.43, by quarter [28.6, 28.6, 14.3, 28.6]
+  top note, solo            median 0.36, by quarter [28.6, 57.1, 14.3, 0.0]
+  first chorus / later (n=7)  notes/bar x1.03  phrase x1.51  16ths x0.8  pitch -1.25 st
+  restates the last phrase   4.2% of 143 (chance 1.6%); again after a restatement 0%, after a new one 4.6%
+  restatement chains          1: 6  2: 0  3: 0  4+: 0;  head only 50%, nearly all 50%; notes matched median 6.5
+  moved, on a new chord (n=5) with the root 40%, not moved 0%, other 60%; same chord (n=1) not moved 100%
+  ideas carried (n=127 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   4.7% (two back 2.5%, chance 1%; carry 0.037); again after one 0%; chains 1:6 2:0 3:0 4+:0
+    head rhythm      0.8% (two back 0.8%, chance 0%; carry 0.008); again after one -%; chains 1:1 2:0 3:0 4+:0
+    head contour     7.9% (two back 4.2%, chance 2%; carry 0.06); again after one 22.2%; chains 1:6 2:2 3:0 4+:0
+    a cell anywhere  48% (two back 38.3%, chance 33.3%; carry 0.22); again after one 61.8%; chains 1:13 2:5 3:4 4+:5
+    shaped cells shared (n=56): where, by fifths of the phrase [30.4, 17.9, 17.9, 23.2, 10.7]; rhythm kept 5.4%
+    moved: new chord with the root 17.9%, not moved 7.1%, other 66.1%; same chord moved 7.1%, not moved 1.8%; no chord 0%
+  on changes at 1 and 3 (n=284)  3 12.7  7 11.3  5 16.2  R 12.7  9 18  other 29.2;  move median 5 st, 2 or less 22.1%
+  contours (n=164)          arch 53  up 10.4  down 31.7  flat 0  other 4.9
+  by tempo                   0-140: 16ths 49.2% 5.86/bar  140-200: 16ths 12.4% 5.21/bar  200-260: 16ths 6.5% 5.1/bar  >260: 16ths 4.3% 4.73/bar
+  starts within a beat after an 8-bar line 5% (chance 4%); in a bar's first beat 28.3% (chance 25)
+
+wayne: 7 solos
+  arc by chorus notes/bar x   0.96   0.95   0.95   1.01   1.13
+  arc by chorus pitch +st     0.25   1.62  -1.04   0.92  -1.76
+  arc by chorus phrase len x  1.02   1.04   1.03   1.01    0.9
+  arc by chorus rest x        1.06   1.02   0.91   1.11   0.89
+  arc by chorus 16ths x       0.94   1.01   0.59   0.96    1.5
+  arc by solo   notes/bar x   0.97   1.06   1.09   0.86   1.02
+  arc by solo   pitch +st     0.56   -0.9  -0.77   1.08   0.03
+  arc by solo   phrase len x  0.84   1.14   1.13      1   0.89
+  arc by solo   rest x        1.11   0.94   1.15   1.04   0.77
+  arc by solo   16ths x       1.04   1.28   0.93   0.92   0.83
+  solo shapes (n=7)      builds 14.3  arch 28.6  front-loaded 28.6  flat 28.6
+  top note, chorus          median 0.4, by quarter [14.3, 57.1, 14.3, 14.3]
+  top note, solo            median 0.4, by quarter [14.3, 42.9, 42.9, 0.0]
+  first chorus / later (n=5)  notes/bar x0.89  phrase x0.87  16ths x1.06  pitch 1.28 st
+  restates the last phrase   5.3% of 132 (chance 3.6%); again after a restatement 0%, after a new one 5%
+  restatement chains          1: 7  2: 0  3: 0  4+: 0;  head only 85.7%, nearly all 14.3%; notes matched median 5
+  moved, on a new chord (n=4) with the root 25%, not moved 0%, other 75%; same chord (n=1) not moved 100%
+  ideas carried (n=126 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   5.6% (two back 2.5%, chance 2%; carry 0.037); again after one 0%; chains 1:7 2:0 3:0 4+:0
+    head rhythm      0.8% (two back 0%, chance 0%; carry 0.008); again after one 0%; chains 1:1 2:0 3:0 4+:0
+    head contour     0.8% (two back 5%, chance 2%; carry 0); again after one 0%; chains 1:1 2:0 3:0 4+:0
+    a cell anywhere  44.4% (two back 39.5%, chance 39.8%; carry 0.076); again after one 52.8%; chains 1:13 2:9 3:3 4+:3
+    shaped cells shared (n=44): where, by fifths of the phrase [45.5, 18.2, 20.5, 6.8, 9.1]; rhythm kept 4.5%
+    moved: new chord with the root 2.3%, not moved 9.1%, other 54.5%; same chord moved 11.4%, not moved 2.3%; no chord 20.5%
+  on changes at 1 and 3 (n=237)  3 14.8  7 15.2  5 12.2  R 12.7  9 16  other 29.1;  move median 4 st, 2 or less 36.2%
+  contours (n=145)          arch 41.4  up 21.4  down 28.3  flat 2.8  other 6.2
+  by tempo                   0-140: 16ths 41.3% 5.71/bar  140-200: 16ths 38.1% 5.52/bar  200-260: 16ths -% -/bar  >260: 16ths 5% 4.63/bar
+  starts within a beat after an 8-bar line 8.4% (chance 3.8%); in a bar's first beat 31.6% (chance 25)
+
+pops: 8 solos
+  arc by chorus notes/bar x   1.01   1.02   0.98   0.93   1.05
+  arc by chorus pitch +st     0.97   0.57  -1.85   0.73  -0.42
+  arc by chorus phrase len x  1.23   1.03   0.89   0.94   0.92
+  arc by chorus rest x         1.1   1.09   0.93   1.07   0.81
+  arc by chorus 16ths x       1.06   0.84   1.18   0.62   1.29
+  arc by solo   notes/bar x   1.02   0.97   1.02   0.94   1.05
+  arc by solo   pitch +st     0.63  -0.43   0.62   0.17     -1
+  arc by solo   phrase len x  0.99   0.98   0.98   1.08   0.96
+  arc by solo   rest x        1.01   1.12   0.88   1.02   0.95
+  arc by solo   16ths x       1.61   0.57   1.51   0.44   0.87
+  solo shapes (n=8)      builds 37.5  arch 12.5  front-loaded 50  flat 0
+  top note, chorus          median 0.21, by quarter [50.0, 12.5, 12.5, 25.0]
+  top note, solo            median 0.2, by quarter [62.5, 12.5, 12.5, 12.5]
+  first chorus / later (n=3)  notes/bar x1.06  phrase x0.6  16ths x0.87  pitch -1.42 st
+  restates the last phrase   2.5% of 79 (chance 1.8%); again after a restatement 0%, after a new one 2.9%
+  restatement chains          1: 2  2: 0  3: 0  4+: 0;  head only 50%, nearly all 50%; notes matched median 5.5
+  moved, on a new chord (n=2) with the root 0%, not moved 50%, other 50%; same chord (n=0) not moved -%
+  ideas carried (n=76 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   2.6% (two back 1.5%, chance 0%; carry 0.026); again after one 0%; chains 1:2 2:0 3:0 4+:0
+    head rhythm      1.3% (two back 0%, chance 0%; carry 0.013); again after one 0%; chains 1:1 2:0 3:0 4+:0
+    head contour     2.6% (two back 1.5%, chance 2.3%; carry 0.003); again after one 0%; chains 1:2 2:0 3:0 4+:0
+    a cell anywhere  26.3% (two back 23.5%, chance 22.7%; carry 0.047); again after one 33.3%; chains 1:8 2:6 3:0 4+:0
+    shaped cells shared (n=18): where, by fifths of the phrase [38.9, 16.7, 11.1, 11.1, 22.2]; rhythm kept 5.6%
+    moved: new chord with the root 5.6%, not moved 11.1%, other 72.2%; same chord moved 0%, not moved 5.6%; no chord 5.6%
+  on changes at 1 and 3 (n=131)  3 16  7 9.2  5 16.8  R 15.3  9 22.1  other 20.6;  move median 3.5 st, 2 or less 35.2%
+  contours (n=89)          arch 49.4  up 10.1  down 32.6  flat 2.2  other 5.6
+  by tempo                   0-140: 16ths 26.1% 6.49/bar  140-200: 16ths 9.1% 5.12/bar  200-260: 16ths -% -/bar  >260: 16ths -% -/bar
+  starts within a beat after an 8-bar line 5.6% (chance 4.4%); in a bar's first beat 41.1% (chance 25)
+
+all: 402 solos
+  arc by chorus notes/bar x   0.99   0.98      1   1.04      1
+  arc by chorus pitch +st     0.42    0.1  -0.13  -0.01  -0.38
+  arc by chorus phrase len x  0.95   1.01   1.03   1.03   0.98
+  arc by chorus rest x        1.01   1.03   1.02   0.98   0.96
+  arc by chorus 16ths x       0.98   0.99   0.99   1.02   1.03
+  arc by solo   notes/bar x   0.96   1.01   1.01      1   1.02
+  arc by solo   pitch +st    -0.61  -0.21    0.4   0.64  -0.22
+  arc by solo   phrase len x  1.01   1.02   0.99   1.02   0.96
+  arc by solo   rest x        1.03   1.04   1.03   1.01   0.88
+  arc by solo   16ths x       0.85   0.97   1.04   1.06   1.08
+  solo shapes (n=402)      builds 31.1  arch 49  front-loaded 18.2  flat 1.7
+  top note, chorus          median 0.44, by quarter [26.6, 30.4, 23.8, 19.2]
+  top note, solo            median 0.51, by quarter [17.9, 29.9, 31.3, 20.9]
+  first chorus / later (n=273)  notes/bar x0.94  phrase x1.02  16ths x0.92  pitch -0.5 st
+  restates the last phrase   4.5% of 8210 (chance 2.3%); again after a restatement 16%, after a new one 3.9%
+  restatement chains          1: 267  2: 39  3: 4  4+: 3;  head only 61.5%, nearly all 38.5%; notes matched median 6
+  moved, on a new chord (n=249) with the root 12.4%, not moved 30.9%, other 56.6%; same chord (n=101) not moved 57.4%
+  ideas carried (n=7794 pairs of 6+ note phrases): the next phrase repeats the last one's
+    head intervals   4.4% (two back 2.9%, chance 2.3%; carry 0.021); again after one 15.9%; chains 1:248 2:35 3:2 4+:4
+    head rhythm      1.6% (two back 1.5%, chance 1%; carry 0.006); again after one 6%; chains 1:112 2:5 3:1 4+:0
+    head contour     6.3% (two back 5.1%, chance 4.4%; carry 0.02); again after one 13.9%; chains 1:372 2:51 3:2 4+:3
+    a cell anywhere  53.8% (two back 50.9%, chance 47.3%; carry 0.123); again after one 66%; chains 1:624 2:377 3:221 4+:355
+    shaped cells shared (n=3908): where, by fifths of the phrase [34.5, 19.4, 17.2, 16.2, 12.7]; rhythm kept 7.2%
+    moved: new chord with the root 7.7%, not moved 10.9%, other 55.4%; same chord moved 16.5%, not moved 5.5%; no chord 4.1%
+  on changes at 1 and 3 (n=19411)  3 13.6  7 13.6  5 14.7  R 14.2  9 17.8  other 26.1;  move median 4 st, 2 or less 31.8%
+  contours (n=8933)          arch 52.3  up 15.1  down 26.1  flat 0.8  other 5.8
+  by tempo                   0-140: 16ths 57.5% 8.42/bar  140-200: 16ths 26.9% 5.83/bar  200-260: 16ths 10.9% 5.1/bar  >260: 16ths 5.6% 4.99/bar
+  starts within a beat after an 8-bar line 5.9% (chance 4%); in a bar's first beat 31.1% (chance 25)
+

@@ -321,7 +321,7 @@ impl Audio {
 
 /// Rendered frames as a kira static sound.
 fn to_static(r: synth::Rendered) -> StaticSoundData {
-    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into(), settings: StaticSoundSettings::new(), slice: None }
+    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into_iter().map(Into::into).collect(), settings: StaticSoundSettings::new(), slice: None }
 }
 
 fn setup(world: &mut World) {

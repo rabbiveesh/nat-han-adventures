@@ -92,6 +92,8 @@ pub struct Player {
     handle: Option<LiveHandle>,
     sfx: Vec<(Sfx, StaticSoundData)>,
     pub published: Published,
+    /// Headless: everything rendered, kept (`--capture`: written to a WAV at the end).
+    pub tape: Option<Vec<[f32; 2]>>,
     /// Chunks seen, and when (seconds).
     seen: (u64, f64),
     /// Playing (or about to).
@@ -108,7 +110,7 @@ pub struct Player {
 }
 
 fn to_static(r: synth::Rendered) -> StaticSoundData {
-    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into(), settings: StaticSoundSettings::new(), slice: None }
+    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into_iter().map(Into::into).collect(), settings: StaticSoundSettings::new(), slice: None }
 }
 
 impl Player {
@@ -133,6 +135,7 @@ impl Player {
             handle,
             sfx: Sfx::ALL.into_iter().map(|s| (s, to_static(sfx::render(s)))).collect(),
             published: Published::default(),
+            tape: None,
             seen: (0, 0.0),
             playing: false,
             offset: 0,
@@ -230,6 +233,9 @@ impl Player {
             while left > 0 {
                 let k = left.min(buf.len());
                 sound.process(&mut buf[..k], 1.0 / RATE, &info);
+                if let Some(tape) = self.tape.as_mut() {
+                    tape.extend(buf[..k].iter().map(|f| [f.left, f.right]));
+                }
                 left -= k;
             }
         }
