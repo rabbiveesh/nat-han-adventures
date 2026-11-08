@@ -224,6 +224,7 @@ pub fn draw(c: &mut Canvas, d: &mut Dice, band: Band, cleared: usize) -> Drawn {
     let picks: Vec<u32> = (0..64).map(|_| d.int(0, 1 << 20) as u32).collect();
     let mut b = Builder::new(ALONE_H, f, ENTRY as i32, picks);
     b.auto_space = true;
+    b.cautious = true;
     b.checkpoints = false;
     let n = (3.0 + 3.0 * t(band)).round() as usize + d.int(0, 1) as usize;
     let room = (10.0 - 6.0 * t(band)).round() as i32;

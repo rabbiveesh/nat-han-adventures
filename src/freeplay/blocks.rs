@@ -90,6 +90,8 @@ struct Group {
 const HIT_LEAD: i32 = 5;
 /// A call's mode lasts about this many columns of Han's run.
 const MODE_COLS: i32 = 36;
+/// Fired up (and quicker) lasts about this many columns of Han's run.
+const FIRED_COLS: i32 = 90;
 /// Melting lasts about this many columns of Han's run.
 const MELT_COLS: i32 = 46;
 /// A hold on the record: long enough for the call that goes in to take.
@@ -153,6 +155,9 @@ pub struct Builder {
     /// Run on where a call would come too soon after the last (a room, built for one way
     /// through); a level, whose routes share a grid, notes it in `tight` instead.
     pub auto_space: bool,
+    /// Wider margins round the melting (free play's rooms, drawn at random): every call waits
+    /// for it to wear off, and a melt after a leap goes in sooner.
+    pub cautious: bool,
     pub tight: Vec<String>,
     /// The first column a step can be at (Han's start, and a little way on).
     pub first_col: i32,
@@ -181,6 +186,7 @@ impl Builder {
             calls: Vec::new(),
             checkpoints: true,
             auto_space: false,
+            cautious: false,
             tight: Vec::new(),
             first_col: x + 3,
         }
@@ -255,16 +261,14 @@ impl Builder {
             self.clear_after = self.clear_after.max(self.x + x1);
             return;
         }
-        // (Fired up, he's quick: the melting wants a longer lead after a leap.)
-        let lead = match (c, self.mode) {
-            (Call::Melt, Some((Call::Gap, at))) if self.x + x0 < at + MODE_COLS + 10 => c.lead() + 8,
-            _ => c.lead(),
-        };
+        let lead = self.lead(c, self.x + x0);
         let want = self.x + x0 - lead;
-        // A leap's no good melted (small, he falls short): fired up waits for the melting to
-        // wear off.
+        // Melted (small) he can't leap or climb: the next call waits for the melting to wear
+        // off.
         let clear = match (c, self.melt_at) {
+            (Call::Melt, _) | (_, None) => self.clear_after,
             (Call::Gap, Some(m)) => self.clear_after.max(m + MELT_COLS),
+            (_, Some(m)) if self.cautious => self.clear_after.max(m + MELT_COLS),
             _ => self.clear_after,
         };
         if want < clear + 1 {
@@ -279,6 +283,19 @@ impl Builder {
         self.step_at(col, Act::Call(c));
         self.called(c, col);
         self.clear_after = self.x + x1;
+    }
+
+    /// How far before column `at` call `c` goes in. (Fired up, he's quick: the melting wants a
+    /// longer lead after a leap.)
+    fn lead(&self, c: Call, at: i32) -> i32 {
+        match (c, self.mode) {
+            (Call::Melt, Some((Call::Gap, m)))
+                if at < m + MODE_COLS + if self.cautious { 24 } else { 10 } =>
+            {
+                c.lead() + 8
+            }
+            _ => c.lead(),
+        }
     }
 
     /// The plan's made call `c` at column `col`.
@@ -301,6 +318,20 @@ impl Builder {
             ],
         );
         self.called(c, col);
+    }
+
+    /// Cautious: a hit's timed for Han at his own pace, so what wants one waits for a leap's
+    /// fired-up rush to wear off, or for him to be down off a trapeze and running (going
+    /// meanwhile).
+    fn calm(&mut self) {
+        let until = match (self.cautious, self.mode) {
+            (true, Some((Call::Gap, m))) => m + FIRED_COLS,
+            (true, Some((Call::Waltz, m))) => m + MODE_COLS + 24,
+            _ => return,
+        };
+        if self.x < until {
+            self.filler(until - self.x, 0);
+        }
     }
 
     /// A hit to land as Han reaches column `col`.
@@ -563,6 +594,7 @@ impl Builder {
 
     /// A beat-block door `h` tall (red: there until the first hit).
     pub fn door(&mut self, beat: Beat, h: i32) {
+        self.calm();
         let x = self.x;
         if beat.there(self.hits) {
             self.hit_before(x);
@@ -575,6 +607,7 @@ impl Builder {
 
     /// A pit `w` wide with a beat-block bridge across at floor level.
     pub fn bridge(&mut self, beat: Beat, w: i32) {
+        self.calm();
         let x = self.x;
         if !beat.there(self.hits) {
             self.hit_before(x - 1);
@@ -619,7 +652,8 @@ impl Builder {
             self.hits += 1;
             if drips {
                 // (Melted before the drop, for the drips in the pipe.)
-                self.call_at(t0 + 12 - Call::Melt.lead(), Call::Melt);
+                let lead = self.lead(Call::Melt, t0 + 12);
+                self.call_at(t0 + 12 - lead, Call::Melt);
             }
         }
         self.trapdoor_drawn(10, 6);
@@ -733,6 +767,7 @@ impl Builder {
         if low == Low::Drips && !up {
             self.need(Call::Melt, 9, 4 + n - 1);
         }
+        self.calm();
         let (x, t) = (self.x, self.top);
         // Up: the lid has to be off as he gets there; under: on.
         if beat.there(self.hits) == up {
