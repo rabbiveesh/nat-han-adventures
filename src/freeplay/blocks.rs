@@ -266,7 +266,7 @@ impl Builder {
             let more = clear + 1 - want;
             self.tight.push(format!("{} call for column {} +{more}", c.word(), self.x + x0));
             if self.auto_space {
-                self.filler(more);
+                self.filler(more, c.lead() - x0);
             }
         }
         // (Not before Han's on his way: he starts a few columns in.)
@@ -381,22 +381,21 @@ impl Builder {
         self.x += n;
     }
 
-    /// `n` columns of going with no call in them: floor, with a hop (spikes or a little pit)
-    /// in it when there's room, and nuggets.
-    pub fn filler(&mut self, n: i32) {
-        if n < 12 {
+    /// `n` columns of going, the last `approach` of them Han's run-up to what's next: floor,
+    /// with a hop (spikes or a little pit) before the run-up when there's room, and nuggets.
+    pub fn filler(&mut self, n: i32, approach: i32) {
+        if n - approach < 8 {
             self.run(n, &[n / 2]);
             return;
         }
-        let a = (n - 3) / 2;
-        self.run(a, &[a / 2]);
+        self.run(2, &[]);
         if (self.x / 7) % 2 == 0 {
             self.spikes(2);
             self.run(1, &[]);
         } else {
             self.hop(3);
         }
-        let b = n - a - 3;
+        let b = n - 5;
         self.run(b, &[b / 2]);
     }
 
@@ -777,13 +776,14 @@ impl Builder {
         let up = self.pick(2) == 0;
         if up {
             // (Giant Steps has to be on well before the step: he jumps from a run.)
-            self.need(Call::Giant, -8, n + 2);
+            self.need(Call::Giant, -10, n + 2);
         } else {
             self.need(Call::Melt, 6, n - 2);
         }
         let (x, t) = (self.x, self.top);
         self.ground(x, x + n + 2, t);
         self.set(x, t - 1, b'#');
+        self.gate("giant", x + 1, t - 6, x + 2, t - 2);
         let s = x + 2;
         self.fill(s..s + n, t - 6..t - 4, b'#');
         for &d in hops {

@@ -925,7 +925,12 @@ fn beacon(
     // He always just goes for it (`han::brain::charge`); the charge at the frontier is when he
     // yells about it, and how long he keeps it up.
     // (In the middle he stands: `han::brain::charge` with no way to go.)
-    brain.charge = (side.phase == Phase::Playing).then_some(dir);
+    // (A room cleared, he stands at its goal for the tag.)
+    brain.charge = match side.phase {
+        Phase::Playing => Some(dir),
+        Phase::Cleared { .. } if side.room.is_some() => Some(0.0),
+        _ => None,
+    };
     brain.maze = side.turns;
     if hbody.on_ground && !side.was_grounded && side.charging.is_some() {
         side.charge_landings += 1;
@@ -1159,8 +1164,10 @@ fn han_fate(
     if let Some(floor) = floor {
         let (min, max) = (floor - Vec2::new(5.0, 0.0), floor + Vec2::new(5.0, 2.0 * TILE));
         if pos.0.x + HALF.x > min.x && pos.0.x - HALF.x < max.x && pos.0.y + HALF.y > min.y && pos.0.y - HALF.y < max.y {
-            if side.room.is_some() {
+            if let Some(r) = side.room {
                 side.phase = Phase::Cleared { t: ROOM_CLEARED_SECS };
+                // (Nat waits at the goal for the tag, and Han stays there with him.)
+                side.target = Some((r.goal.0 as i32, r.goal.1 as i32));
                 say(&mut says, ROOM_CLEARED_LINE);
                 return;
             }

@@ -759,27 +759,32 @@ fn route_report() {
 
 /// Free play's Side B room `seed` (band, Side B levels cleared) on its own, as a Side B level,
 /// with the plan it was drawn with.
-fn alone_room(seed: u64, band: u8, cleared: usize) -> (SideBLevel, Vec<(f32, usize)>) {
+fn alone_room(seed: u64, band: u8, cleared: usize) -> (SideBLevel, String) {
     use nat_han_adventures::freeplay::{alone, canvas::Canvas, dice::Dice};
     let mut c = Canvas::with_height(alone::ALONE_H);
     let drawn = alone::draw(&mut c, &mut Dice::new(seed), band, cleared);
-    (SideBLevel { level: c.finish_with(2, "Go!", 0), setlist: alone::setlist(), turns: false }, drawn.solution)
+    let level = c.finish_with(2, "Go!", 0);
+    let setlist = alone::setlist_for(&level);
+    (SideBLevel { level, setlist, turns: false }, drawn.solution)
 }
 
-/// Every Side B room free play draws clears with the plan it was drawn with: every band, with
-/// each set of Side B pieces (B1's, B2's, B3's). `SIDE_B_ROOMS=n` plays n seeds of each.
+/// Every Side B room free play draws clears with the plan it was drawn with, and no deaths:
+/// every band, with the building blocks of each stage of Side B (B1's, B3's, B5's, all).
+/// `SIDE_B_ROOMS=n` plays n seeds of each.
 #[test]
 fn free_play_side_b_rooms_clear_with_their_plans() {
     let n: u64 = std::env::var("SIDE_B_ROOMS").ok().and_then(|v| v.parse().ok()).unwrap_or(2);
     let mut failed = Vec::new();
-    for cleared in [1, 2, 3] {
+    for cleared in [1, 3, 5, 10] {
         for band in [1, 4, 7, 10] {
             for seed in 0..n {
                 let seed = seed * 7919 + band as u64 * 31 + cleared as u64;
                 let (b, plan) = alone_room(seed, band, cleared);
-                let text: Vec<String> = plan.iter().map(|(c, k)| format!("{c}/{k}")).collect();
-                if let Err(e) = play_in(app_starting(move |c| sideb::start_level(c, 0, b)), &plan) {
-                    failed.push(format!("seed {seed} band {band} cleared {cleared}: {e:?}, plan {}", text.join(" ")));
+                let mut app = app_starting(move |c| sideb::start_level(c, 0, b));
+                let r = play_steps(&mut app, &plan);
+                if r.is_err() || side(&app).rewinds > 0 {
+                    let fate = side(&app).fate;
+                    failed.push(format!("SIDE_B_ROOM=\"{seed} {band} {cleared}\": {r:?}, {fate:?} at {:.1}", col(&mut app)));
                 }
             }
         }
@@ -807,8 +812,9 @@ fn try_a_room() {
             .collect();
         eprintln!("{row}");
     }
-    eprintln!("{plan:?}");
-    eprintln!("{:?}", play_in(app_starting(move |c| sideb::start_level(c, 0, b)), &plan));
+    eprintln!("{plan}");
+    let mut app = app_starting(move |c| sideb::start_level(c, 0, b));
+    eprintln!("{:?} rewinds {}", play_steps(&mut app, &plan), side(&app).rewinds);
 }
 
 /// Free play, once Side B's been played: now and then the run hands a room to Han. Nat waits
@@ -883,7 +889,7 @@ fn free_play_mixes_in_a_side_b_room() {
         let s = side(&app).clone();
         let cols = s.room.expect("a free play Side B room").cols;
         assert_eq!(cols, (placed.col0, placed.col0 + placed.width));
-        assert_eq!(s.setlist, alone::setlist());
+        assert_eq!(s.setlist, alone::setlist_for(&room.level));
         assert!(col(&mut app) < (placed.col0 + 4) as f32, "Han comes in through the pipe");
 
         // No calls: Han's stuck (or done for, and back at the room's start); never through.
@@ -905,12 +911,34 @@ fn free_play_mixes_in_a_side_b_room() {
         let mut d = dice::Dice::new(dice::stream(seed, ROOM_STREAM, room.plan.index as u64 * 1024 + room.attempts as u64 - 1));
         let plan = alone::draw(&mut c, &mut d, room.plan.request.band, room.plan.side_b as usize).solution;
         // (Han starts back at the pipe each try: the plan's columns are the room's.)
-        let at = |c: f32| c + placed.col0 as f32;
-        for &(c, k) in &plan {
-            until(&mut app, 30.0, |a| col(a) >= at(c) || side(a).phase != Phase::Playing);
-            let now = col(&mut app);
-            assert_eq!(side(&app).phase, Phase::Playing, "Han died at {now:.1} ({:?}), plan {plan:?}", fate(&app));
-            act(&mut app, k);
+        let off = placed.col0 as f32;
+        let steps: Vec<sideb::PlanStep> = sideb::parse_plan(&plan)
+            .into_iter()
+            .map(|s| match s {
+                sideb::PlanStep::At(c, k) => sideb::PlanStep::At(c + off, k),
+                s => s,
+            })
+            .collect();
+        let (mut i, mut prev, mut secs) = (0, col(&mut app), 0.0f32);
+        let rewinds = side(&app).rewinds;
+        for _ in 0..(60.0 / DT) as usize {
+            app.update();
+            if app.world().get_resource::<SideB>().is_none() {
+                break;
+            }
+            let x = col(&mut app);
+            assert_eq!(side(&app).rewinds, rewinds, "Han died at {x:.1} ({:?}), plan {plan}", fate(&app));
+            if i < steps.len() {
+                secs += DT as f32;
+                if sideb::plan_due(steps[i], prev, x, secs) {
+                    if let Some(k) = steps[i].act() {
+                        act(&mut app, k);
+                    }
+                    i += 1;
+                    secs = 0.0;
+                }
+            }
+            prev = x;
         }
         until(&mut app, 40.0, |a| a.world().get_resource::<SideB>().is_none());
         assert!(app.world().get_resource::<SideB>().is_none(), "Han clears the room");
@@ -919,7 +947,7 @@ fn free_play_mixes_in_a_side_b_room() {
         // Nat's back, out of the room's exit, and the run carries on.
         let nat = app.world_mut().query_filtered::<(&Pos, Option<&Visibility>), With<Player>>().single(app.world()).map(|(p, v)| (p.0, v.copied())).unwrap();
         assert_ne!(nat.1, Some(Visibility::Hidden));
-        assert!(nat.0.x > (cols.1 - 8) as f32 * TILE && nat.0.x < cols.1 as f32 * TILE, "Nat at the exit: {}", nat.0.x / TILE);
+        assert!(nat.0.x > (cols.1 - 8) as f32 * TILE && nat.0.x < cols.1 as f32 * TILE, "Nat at the exit: {} (the room's columns {cols:?}, plan {plan})", nat.0.x / TILE);
         KeyCode::ArrowRight.press(app.world_mut());
         let before = nat.0.x;
         for _ in 0..30 {

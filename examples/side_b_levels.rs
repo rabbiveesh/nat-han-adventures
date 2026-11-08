@@ -315,7 +315,23 @@ fn b7(b: &mut Builder) {
 }
 
 fn main() {
-    let dir = std::env::args().nth(1).unwrap_or_else(|| "levels/side-b".into());
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // `--room <seed> <band> <cleared> <file>`: a free play Side B room as a Side B level file,
+    // and its plan (for a recording: `NATHAN_SIDE_B_FILE`, `NATHAN_SIDE_B_PLAN`).
+    if args.first().map(String::as_str) == Some("--room") {
+        use nat_han_adventures::freeplay::{alone, canvas::Canvas, dice::Dice};
+        let n = |i: usize| args[i].parse::<u64>().unwrap();
+        let mut c = Canvas::with_height(alone::ALONE_H);
+        let drawn = alone::draw(&mut c, &mut Dice::new(n(1)), n(2) as u8, n(3) as usize);
+        let text = c.finish_text(2, "Go!", 0);
+        let level = nat_han_adventures::level::Level::parse(&text).unwrap();
+        let words: Vec<&str> = alone::calls_for(&level).iter().map(|c| c.word()).collect();
+        let text = text.replacen("world: 2\n", &format!("world: 2\nsetlist: {}\n", words.join(" ")), 1);
+        std::fs::write(&args[4], text).unwrap();
+        println!("{}", drawn.solution);
+        return;
+    }
+    let dir = args.first().cloned().unwrap_or_else(|| "levels/side-b".into());
     let mut routes = String::new();
     for d in LEVELS {
         let mut text = None;
