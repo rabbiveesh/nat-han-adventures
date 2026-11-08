@@ -255,7 +255,12 @@ impl Builder {
             self.clear_after = self.clear_after.max(self.x + x1);
             return;
         }
-        let want = self.x + x0 - c.lead();
+        // (Fired up, he's quick: the melting wants a longer lead after a leap.)
+        let lead = match (c, self.mode) {
+            (Call::Melt, Some((Call::Gap, at))) if self.x + x0 < at + MODE_COLS + 10 => c.lead() + 8,
+            _ => c.lead(),
+        };
+        let want = self.x + x0 - lead;
         // A leap's no good melted (small, he falls short): fired up waits for the melting to
         // wear off.
         let clear = match (c, self.melt_at) {
@@ -266,11 +271,11 @@ impl Builder {
             let more = clear + 1 - want;
             self.tight.push(format!("{} call for column {} +{more}", c.word(), self.x + x0));
             if self.auto_space {
-                self.filler(more, c.lead() - x0);
+                self.filler(more, lead - x0);
             }
         }
         // (Not before Han's on his way: he starts a few columns in.)
-        let col = (self.x + x0 - c.lead()).max(self.first_col);
+        let col = (self.x + x0 - lead).max(self.first_col);
         self.step_at(col, Act::Call(c));
         self.called(c, col);
         self.clear_after = self.x + x1;
