@@ -4,7 +4,7 @@
 //! itself above the game's calm end, a level's tune starts with an intro, and a song ends with
 //! an ending (the jingle with a Basie ending).
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     Music,
     live::{

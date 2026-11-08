@@ -2,7 +2,7 @@
 //! written parts exactly; above it the ornaments stay in range, follow the harmony, resolve
 //! at phrase ends, line up across the band, and are deterministic per seed.
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     Filters, Harmony, Music,
     chart::Family,

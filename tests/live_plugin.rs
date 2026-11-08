@@ -27,7 +27,7 @@ fn the_sound_plays_engines() {
         sound.process(chunk, 1.0 / ENGINE_RATE as f64, &info);
     }
     let mut direct = engine("tiger_rag");
-    let mut want = vec![Frame::ZERO; n];
+    let mut want = vec![nat_han_adventures::audio::Frame::ZERO; n];
     direct.fill(&mut want);
     assert!(out[3..].iter().zip(&want).all(|(a, b)| a.left == b.left && a.right == b.right), "not a passthrough");
     let p = handle.published();
@@ -40,9 +40,11 @@ fn the_sound_plays_engines() {
     for chunk in hi.chunks_mut(128) {
         sound.process(chunk, 1.0 / 48_000.0, &info);
     }
-    let rms = |x: &[Frame]| (x.iter().map(|f| (f.left as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
+    let rms = |x: &[f32]| (x.iter().map(|&l| (l as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
+    let left = |x: &[_]| x.iter().map(|f: &nat_han_adventures::audio::Frame| f.left).collect::<Vec<f32>>();
+    let hi_left: Vec<f32> = hi.iter().map(|f| f.left).collect();
     assert!(hi.iter().all(|f| f.left.is_finite() && f.left.abs() <= 1.05));
-    assert!(rms(&hi) > 0.3 * rms(&want) && rms(&hi) < 3.0 * rms(&want));
+    assert!(rms(&hi_left) > 0.3 * rms(&left(&want)) && rms(&hi_left) < 3.0 * rms(&left(&want)));
 
     // Crossfade to another song, then stop.
     handle.play(engine("when_the_saints"), 0.25, 0.45);

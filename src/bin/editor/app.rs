@@ -169,9 +169,9 @@ pub struct Editor {
     pub thinking: std::collections::BTreeMap<u64, CommittedBar>,
 }
 
-/// The repository root (where `music/` is).
+/// Where `music/` is: the engine crate's folder (`crates/bandstand`).
 pub fn repo_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/crates/bandstand"))
 }
 
 /// The songs in `music/` (stem, title), or the built-in ones if there's no such directory.

@@ -13,7 +13,7 @@
 
 use std::collections::BTreeMap;
 
-use kira::Frame;
+use nat_han_adventures::audio::Frame;
 use nat_han_adventures::audio::{
     live::{
         Engine, EngineConfig, Input,
