@@ -34,20 +34,23 @@
 use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
-use super::groove::{
-    BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
-};
 use super::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
+use super::groove::{
+    BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, JumpedOnOne, WALTZ_ONE_BOOST,
+    WALTZ_ONE_TOOT_SPEED,
+};
 use super::{ActiveLevel, GameSet, Groove, MovingPlatform, Player, Pos, PrevPos, tuning::*};
 use crate::events::{Jumped, Landed};
 use crate::input::Action;
 use crate::level::{
-    BUMPER_LIFT, BUMPER_SPEED, CUSHION_HOLD, cushion_shot, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
-    Level, SPRING_SPEED, TILE, Tile, WALTZ_SPRING_BOOST, WIND_SPEED,
+    BUMPER_LIFT, BUMPER_SPEED, CUSHION_HOLD, FAN_LIFT, FAN_REACH, FAN_RISE, FIRED_UP_TILES,
+    GIANT_CUSHION_BAT, GIANT_FAN_REACH, Level, SPRING_SPEED, TILE, Tile, WALTZ_SPRING_BOOST,
+    WIND_SPEED, cushion_shot,
 };
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_message::<HanBoosted>().add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
+    app.add_message::<HanBoosted>()
+        .add_systems(FixedUpdate, player_step.in_set(GameSet::Player));
 }
 
 /// Landing faster than this (px/s) writes [`Landed`].
@@ -178,8 +181,14 @@ fn idx(v: f32) -> i32 {
 }
 
 /// Inclusive tile index ranges covered by the box [min, max] (touching edges don't count).
-pub(super) fn cells(min: Vec2, max: Vec2) -> (std::ops::RangeInclusive<i32>, std::ops::RangeInclusive<i32>) {
-    (idx(min.x + EPS)..=idx(max.x - EPS), idx(min.y + EPS)..=idx(max.y - EPS))
+pub(super) fn cells(
+    min: Vec2,
+    max: Vec2,
+) -> (std::ops::RangeInclusive<i32>, std::ops::RangeInclusive<i32>) {
+    (
+        idx(min.x + EPS)..=idx(max.x - EPS),
+        idx(min.y + EPS)..=idx(max.y - EPS),
+    )
 }
 
 /// Tile at world-space tile indices (column, vertical index from the bottom).
@@ -232,7 +241,11 @@ pub struct Fall {
 impl Fall {
     /// Nat's gravity under `groove`.
     pub fn of(groove: &Groove) -> Self {
-        Fall { gravity: GRAVITY * groove.gravity_now(), max_fall: MAX_FALL * groove.fall_scale(), tiles: TileMood::of(groove) }
+        Fall {
+            gravity: GRAVITY * groove.gravity_now(),
+            max_fall: MAX_FALL * groove.fall_scale(),
+            tiles: TileMood::of(groove),
+        }
     }
 }
 
@@ -259,20 +272,43 @@ pub struct TileMood {
 
 impl Default for TileMood {
     fn default() -> Self {
-        TileMood { belt: 1.0, gust: 1.0, reach: FAN_REACH, catch: false, spring: 1.0, bat: 1.0 }
+        TileMood {
+            belt: 1.0,
+            gust: 1.0,
+            reach: FAN_REACH,
+            catch: false,
+            spring: 1.0,
+            bat: 1.0,
+        }
     }
 }
 
 impl TileMood {
     pub fn of(groove: &Groove) -> Self {
-        let fired = if groove.fired_up() { FIRED_UP_TILES } else { 1.0 };
+        let fired = if groove.fired_up() {
+            FIRED_UP_TILES
+        } else {
+            1.0
+        };
         TileMood {
             belt: fired,
             gust: fired,
-            reach: if groove.giant_steps() { GIANT_FAN_REACH } else { FAN_REACH },
+            reach: if groove.giant_steps() {
+                GIANT_FAN_REACH
+            } else {
+                FAN_REACH
+            },
             catch: groove.waltz(),
-            spring: if groove.on_the_one() { WALTZ_SPRING_BOOST } else { 1.0 },
-            bat: if groove.giant_steps() { GIANT_CUSHION_BAT } else { 1.0 },
+            spring: if groove.on_the_one() {
+                WALTZ_SPRING_BOOST
+            } else {
+                1.0
+            },
+            bat: if groove.giant_steps() {
+                GIANT_CUSHION_BAT
+            } else {
+                1.0
+            },
         }
     }
 }
@@ -368,13 +404,20 @@ pub fn step_body(
     let mut slung = false;
     if body.pad != 0.0 {
         body.hold -= dt;
-        let ready = if mood.catch { mood.spring > 1.0 } else { body.hold <= 0.0 };
+        let ready = if mood.catch {
+            mood.spring > 1.0
+        } else {
+            body.hold <= 0.0
+        };
         if !ready && !body.fire {
             body.vel = Vec2::ZERO;
             body.launch = 0.0;
             body.on_ground = false;
             body.riding = None;
-            return Contact { fall_speed: 0.0, ..Contact::default() };
+            return Contact {
+                fall_speed: 0.0,
+                ..Contact::default()
+            };
         }
         let (away, up) = cushion_shot(body.aim * body.pad);
         body.launch = body.pad * away * mood.spring;
@@ -397,13 +440,19 @@ pub fn step_body(
     let gust = wind.0 as f32 * WIND_SPEED * mood.gust;
 
     // --- Carried by what we stood on.
-    let carrier = body.riding.and_then(|e| carriers.iter().find(|c| c.id == e));
+    let carrier = body
+        .riding
+        .and_then(|e| carriers.iter().find(|c| c.id == e));
     let carry = carrier.map_or(Vec2::ZERO, |c| c.carry);
 
     let half = body.half;
     let was_on_ground = body.on_ground;
     // A conveyor belt underfoot (just jumped off it too: its speed comes along).
-    let belt = if body.riding.is_none() && (body.vel.y >= 0.0 || was_on_ground) { belt_underfoot(level, *pos, half) * mood.belt } else { 0.0 };
+    let belt = if body.riding.is_none() && (body.vel.y >= 0.0 || was_on_ground) {
+        belt_underfoot(level, *pos, half) * mood.belt
+    } else {
+        0.0
+    };
     let fall_speed = -body.vel.y;
     let mut blocked_x = false;
 
@@ -445,7 +494,11 @@ pub fn step_body(
             if !y_overlaps || overlaps(x_before) || !overlaps(pos.x) {
                 continue;
             }
-            pos.x = if dx > 0.0 { min.x - half.x } else { max.x + half.x };
+            pos.x = if dx > 0.0 {
+                min.x - half.x
+            } else {
+                max.x + half.x
+            };
             body.vel.x = 0.0;
             body.launch = 0.0;
             blocked_x = true;
@@ -465,7 +518,13 @@ pub fn step_body(
         body.launch = 0.0;
         body.on_ground = false;
         body.riding = None;
-        return Contact { was_on_ground, fall_speed, blocked_x, caught: true, ..Contact::default() };
+        return Contact {
+            was_on_ground,
+            fall_speed,
+            blocked_x,
+            caught: true,
+            ..Contact::default()
+        };
     }
     // A ceiling cushion bumped into: back down.
     let mut bonked = false;
@@ -534,13 +593,22 @@ pub fn step_body(
         body.vel.y = -SPRING_SPEED * mood.spring * mood.bat;
     }
     // A trampoline underfoot: up we go (in the waltz, it holds you till ONE).
-    let sprung = ground && springs(landed.iter().flatten().copied(), idx(pos.x)) && (!mood.catch || mood.spring > 1.0);
+    let sprung = ground
+        && springs(landed.iter().flatten().copied(), idx(pos.x))
+        && (!mood.catch || mood.spring > 1.0);
     if sprung {
         body.vel.y = SPRING_SPEED * mood.spring;
         body.launch = 0.0;
         body.on_ground = false;
         body.riding = None;
-        return Contact { was_on_ground, fall_speed, blocked_x, sprung, bricks, ..Contact::default() };
+        return Contact {
+            was_on_ground,
+            fall_speed,
+            blocked_x,
+            sprung,
+            bricks,
+            ..Contact::default()
+        };
     }
     // Carriers (one-way).
     if body.vel.y <= 0.0 {
@@ -549,7 +617,11 @@ pub fn step_body(
                 continue;
             }
             let feet = pos.y - half.y;
-            let before = if body.riding == Some(c.id) { bottom_before } else { bottom_before - carry.y };
+            let before = if body.riding == Some(c.id) {
+                bottom_before
+            } else {
+                bottom_before - carry.y
+            };
             if before >= c.top.min(c.prev_top) - ONE_WAY_SLACK && feet <= c.top + EPS {
                 pos.y = c.top + half.y;
                 ground = true;
@@ -663,7 +735,12 @@ fn player_step(
     input: Single<&ActionState<Action>>,
     mut player: Query<
         (&mut Pos, &mut Body, &mut PlayerControl),
-        (With<Player>, Without<Dead>, Without<Finished>, Without<MovingPlatform>),
+        (
+            With<Player>,
+            Without<Dead>,
+            Without<Finished>,
+            Without<MovingPlatform>,
+        ),
     >,
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), Without<Player>>,
     han: Query<(Entity, &Pos, &PrevPos, &HanHead), (Without<Player>, Without<MovingPlatform>)>,
@@ -671,7 +748,10 @@ fn player_step(
     mut landed: MessageWriter<Landed>,
     mut on_one: MessageWriter<JumpedOnOne>,
     mut boosted: MessageWriter<HanBoosted>,
-    crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Player>, Without<MovingPlatform>)>,
+    crushers: Query<
+        (Entity, &CrusherBlock, &Pos, &PrevPos),
+        (Without<Player>, Without<MovingPlatform>),
+    >,
     mut smashed: MessageWriter<BrickSmashed>,
     mut sprung: MessageWriter<Sprung>,
     floats: Query<(), With<super::han::HanFloat>>,
@@ -681,17 +761,24 @@ fn player_step(
         return;
     }
     let level = &active.level;
-    let Ok((mut pos, mut body, mut ctl)) = player.single_mut() else { return };
+    let Ok((mut pos, mut body, mut ctl)) = player.single_mut() else {
+        return;
+    };
 
     // --- Input -> horizontal velocity.
-    let axis = input.pressed(&Action::Right) as i32 as f32 - input.pressed(&Action::Left) as i32 as f32;
+    let axis =
+        input.pressed(&Action::Right) as i32 as f32 - input.pressed(&Action::Left) as i32 as f32;
     if axis != 0.0 {
         ctl.facing = axis;
     }
     let run = groove.run_scale();
     // Aboard Han's float, Left/Right paddle the float (`han::world::drift_floats`): Nat stays put.
     let paddling = body.on_ground && body.riding.is_some_and(|e| floats.contains(e));
-    let target = if paddling { 0.0 } else { axis * RUN_SPEED * run };
+    let target = if paddling {
+        0.0
+    } else {
+        axis * RUN_SPEED * run
+    };
     // Slipping on grease (no sweaty grip): can't brake, steers weakly, can't jump.
     let slipping = body.on_ground && ctl.on_grease && !groove.grip();
     ctl.since_landing += dt;
@@ -700,7 +787,12 @@ fn player_step(
         * if !body.on_ground {
             AIR_ACCEL
         } else if axis == 0.0 || axis * body.vel.x < 0.0 {
-            GROUND_DECEL * if slipping { GREASE_DECEL } else { groove.landing_decel(ctl.since_landing) }
+            GROUND_DECEL
+                * if slipping {
+                    GREASE_DECEL
+                } else {
+                    groove.landing_decel(ctl.since_landing)
+                }
         } else {
             GROUND_ACCEL * if slipping { GREASE_STEER } else { 1.0 }
         };
@@ -745,14 +837,24 @@ fn player_step(
             body.vel.y = WEAK_BOOST_SPEED;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: true, throw: false, boing: false });
+            boosted.write(HanBoosted {
+                pos: pos.0,
+                weak: true,
+                throw: false,
+                boing: false,
+            });
         } else if on_han.is_some_and(|h| h.boost) && groove.fired_up() {
             // The running throw: flat and far, and the toot's fresh again.
             body.vel.y = THROW_SPEED;
             body.launch = ctl.facing * THROW_CARRY;
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: true, boing: false });
+            boosted.write(HanBoosted {
+                pos: pos.0,
+                weak: false,
+                throw: true,
+                boing: false,
+            });
         } else if on_han.is_some_and(|h| h.boost) {
             // The plunger boost: way up, and the toot's fresh again (off Han clinging to a wall,
             // a kick away from it too; off his trapeze, his swing).
@@ -763,7 +865,12 @@ fn player_step(
             }
             ctl.has_toot = true;
             ctl.weak_toot = false;
-            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false, boing: false });
+            boosted.write(HanBoosted {
+                pos: pos.0,
+                weak: false,
+                throw: false,
+                boing: false,
+            });
         } else {
             body.vel.y = JUMP_SPEED * groove.jump_scale();
             if groove.on_the_one() {
@@ -772,7 +879,10 @@ fn player_step(
                 ctl.weak_toot = true;
                 on_one.write(JumpedOnOne { pos: pos.0 });
             }
-            jumped.write(Jumped { pos: pos.0, double: false });
+            jumped.write(Jumped {
+                pos: pos.0,
+                double: false,
+            });
         }
         ctl.buffer = 0.0;
         ctl.coyote = 0.0;
@@ -783,7 +893,11 @@ fn player_step(
         // hands over its speed.
         body.on_ground = false;
     } else if pressed && ctl.has_toot && !slipping {
-        let base = if ctl.weak_toot { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED };
+        let base = if ctl.weak_toot {
+            WALTZ_ONE_TOOT_SPEED
+        } else {
+            DOUBLE_JUMP_SPEED
+        };
         // Letting go of jump to toot cut the rise: the overtones count the rise he'd have had
         // (with the heaviest gravity there could have been, so never more).
         let heaviest = GRAVITY * groove.gravity_scale * (1.0 + super::groove::ALIEN_PULSE);
@@ -794,7 +908,10 @@ fn player_step(
         ctl.weak_toot = false;
         ctl.buffer = 0.0;
         ctl.cut_armed = true;
-        jumped.write(Jumped { pos: pos.0, double: true });
+        jumped.write(Jumped {
+            pos: pos.0,
+            double: true,
+        });
     }
     if ctl.cut_armed && !input.pressed(&Action::Jump) && body.vel.y > 0.0 {
         ctl.uncut = body.vel.y;
@@ -807,8 +924,10 @@ fn player_step(
     }
 
     // --- Move: gravity, carriers, collisions.
-    let mut carriers: Vec<Carrier> =
-        platforms.iter().map(|(e, p, prev, plat)| Carrier::platform(e, p.0, prev.0, plat.width)).collect();
+    let mut carriers: Vec<Carrier> = platforms
+        .iter()
+        .map(|(e, p, prev, plat)| Carrier::platform(e, p.0, prev.0, plat.width))
+        .collect();
     // (A hop off Han's float keeps none of his speed: Han kicks to stay under Nat instead.)
     for c in &mut carriers {
         c.launches &= !floats.contains(c.id);
@@ -826,7 +945,16 @@ fn player_step(
         carriers.push(block.carrier(e, p.0, prev.0));
         solids.push(block.bounds(p.0));
     }
-    let contact = step_body(level, &mut pos.0, &mut body, Fall::of(&groove), &carriers, &blockers, &solids, dt);
+    let contact = step_body(
+        level,
+        &mut pos.0,
+        &mut body,
+        Fall::of(&groove),
+        &carriers,
+        &blockers,
+        &solids,
+        dt,
+    );
     if contact.bricks.iter().any(Option::is_some) {
         smash(&mut active, contact.smashed(), &mut smashed);
     }
@@ -838,7 +966,10 @@ fn player_step(
         ctl.cut_armed = false;
         ctl.bouncing = false;
         ctl.coyote = 0.0;
-        sprung.write(Sprung { pos: pos.0, han: false });
+        sprung.write(Sprung {
+            pos: pos.0,
+            han: false,
+        });
     }
     if let Some(v) = contact.launch {
         body.launch = v.clamp(-LAUNCH_MAX, LAUNCH_MAX);
@@ -848,7 +979,10 @@ fn player_step(
     ctl.on_grease = on_grease;
     if ground {
         if !contact.was_on_ground && contact.fall_speed > LAND_EVENT_SPEED {
-            landed.write(Landed { pos: pos.0, speed: contact.fall_speed });
+            landed.write(Landed {
+                pos: pos.0,
+                speed: contact.fall_speed,
+            });
         }
         if !contact.was_on_ground {
             ctl.since_landing = 0.0;
@@ -857,11 +991,18 @@ fn player_step(
         ctl.weak_toot = false;
         let was_bouncing = ctl.bouncing;
         ctl.bouncing = false;
-        ctl.weak_ground = contact.riding.and_then(|e| han.get(e).ok()).is_some_and(|(_, _, _, h)| h.weak);
+        ctl.weak_ground = contact
+            .riding
+            .and_then(|e| han.get(e).ok())
+            .is_some_and(|(_, _, _, h)| h.weak);
         // The laughing band's boing: dropping onto Han's head (where he'd boost) springs Nat
         // off it at the full boost, no jump needed (fired up, a jump off him is the throw).
         // Once: coming back down from a bounce, it's the plain bounce.
-        let springy = contact.riding.and_then(|e| han.get(e).ok()).map(|(_, _, _, h)| *h).filter(|h| h.boost && !h.weak);
+        let springy = contact
+            .riding
+            .and_then(|e| han.get(e).ok())
+            .map(|(_, _, _, h)| *h)
+            .filter(|h| h.boost && !h.weak);
         if let Some(h) = springy
             && groove.bouncy()
             && !groove.fired_up()
@@ -874,7 +1015,12 @@ fn player_step(
                 body.launch = h.kick;
             }
             ctl.bouncing = true;
-            boosted.write(HanBoosted { pos: pos.0, weak: false, throw: false, boing: true });
+            boosted.write(HanBoosted {
+                pos: pos.0,
+                weak: false,
+                throw: false,
+                boing: true,
+            });
             body.on_ground = false;
             body.riding = None;
             return;
@@ -900,5 +1046,9 @@ fn player_step(
 }
 
 pub fn move_towards(v: f32, target: f32, max_delta: f32) -> f32 {
-    if (target - v).abs() <= max_delta { target } else { v + (target - v).signum() * max_delta }
+    if (target - v).abs() <= max_delta {
+        target
+    } else {
+        v + (target - v).signum() * max_delta
+    }
 }

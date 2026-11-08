@@ -15,7 +15,9 @@ use nat_han_adventures::freeplay::generate::{Job, RoomPlan, draw, generate, phys
 use nat_han_adventures::freeplay::run::begin;
 use nat_han_adventures::freeplay::templates::{TEMPLATES, Unlocks, unlocked_skills};
 use nat_han_adventures::freeplay::{FIXED_ROOMS, FreePlayRun, FreePlaySettings, StartFreePlay};
-use nat_han_adventures::game::{ActiveLevel, AdaptiveProfile, AssistMode, LevelTile, Player, Pos, PrevPos, stand_pos};
+use nat_han_adventures::game::{
+    ActiveLevel, AdaptiveProfile, AssistMode, LevelTile, Player, Pos, PrevPos, stand_pos,
+};
 use nat_han_adventures::level::{ThingKind, Tile};
 use nat_han_adventures::state::AppState;
 
@@ -23,8 +25,16 @@ const SEEDS: u32 = 50;
 const BANDS: [u8; 3] = [1, 5, 10];
 
 fn plan(template: usize, band: u8, seed: u32, hint: bool) -> RoomPlan {
-    let request = RoomRequest { skill: TEMPLATES[template].skill, band, assists: AssistLevers::NONE };
-    RoomPlan { template, hint, ..RoomPlan::new(seed, 3, request, 1 + (seed % 5) as u8, false, false, 10) }
+    let request = RoomRequest {
+        skill: TEMPLATES[template].skill,
+        band,
+        assists: AssistLevers::NONE,
+    };
+    RoomPlan {
+        template,
+        hint,
+        ..RoomPlan::new(seed, 3, request, 1 + (seed % 5) as u8, false, false, 10)
+    }
 }
 
 #[test]
@@ -39,7 +49,8 @@ fn every_template_validates_at_every_band() {
             .flat_map(|t| BANDS.map(|b| (t, b)))
             .map(|(t, b)| {
                 s.spawn(move || {
-                    let (mut first, mut attempts, mut fallbacks, mut worst, mut total) = (0, 0, 0, 0u64, 0u64);
+                    let (mut first, mut attempts, mut fallbacks, mut worst, mut total) =
+                        (0, 0, 0, 0u64, 0u64);
                     let mut deaths = Vec::new();
                     for seed in 0..SEEDS {
                         let room = Job::new(seed, plan(t, b, seed, seed % 2 == 0)).run();
@@ -50,7 +61,12 @@ fn every_template_validates_at_every_band() {
                         total += room.micros;
                         // Reachable start to goal, every checkpoint, the room's own checkpoint line.
                         let report = validate(&room.level);
-                        assert!(report.errs.is_empty(), "{} band {b} seed {seed}: {:?}", TEMPLATES[t].name, report.errs);
+                        assert!(
+                            report.errs.is_empty(),
+                            "{} band {b} seed {seed}: {:?}",
+                            TEMPLATES[t].name,
+                            report.errs
+                        );
                         if !room.fallback {
                             deaths.push(room.expected_deaths);
                         }
@@ -61,7 +77,11 @@ fn every_template_validates_at_every_band() {
             .collect();
         handles.into_iter().map(|h| h.join().unwrap()).collect()
     });
-    eprintln!("{} rooms in {:.1?} (threaded)", results.len() * SEEDS as usize, t0.elapsed());
+    eprintln!(
+        "{} rooms in {:.1?} (threaded)",
+        results.len() * SEEDS as usize,
+        t0.elapsed()
+    );
     for (t, b, first, attempts, fallbacks, worst, total, deaths) in &results {
         let tpl = &TEMPLATES[*t];
         eprintln!(
@@ -73,14 +93,24 @@ fn every_template_validates_at_every_band() {
             deaths.iter().min(),
             deaths.iter().max(),
         );
-        assert_eq!(*fallbacks, 0, "{} band {b} needed the fallback room", tpl.name);
-        assert!(*first * 10 >= SEEDS * 8, "{} band {b}: only {first}/{SEEDS} valid on the first try", tpl.name);
+        assert_eq!(
+            *fallbacks, 0,
+            "{} band {b} needed the fallback room",
+            tpl.name
+        );
+        assert!(
+            *first * 10 >= SEEDS * 8,
+            "{} band {b}: only {first}/{SEEDS} valid on the first try",
+            tpl.name
+        );
         // Expected deaths come from the template: stain pits need splats, chutes the nervous band.
         match tpl.skill {
             Skill::Stains => assert!(deaths.iter().all(|&d| d >= 1), "{}: {deaths:?}", tpl.name),
             Skill::Grease => assert!(deaths.iter().all(|&d| d == 3), "{}: {deaths:?}", tpl.name),
             // A cling shaft: the splats that make the band nervous (Han's grip).
-            _ if tpl.name == "cling shaft" => assert!(deaths.iter().all(|&d| d == 3), "{}: {deaths:?}", tpl.name),
+            _ if tpl.name == "cling shaft" => {
+                assert!(deaths.iter().all(|&d| d == 3), "{}: {deaths:?}", tpl.name)
+            }
             _ => assert!(deaths.iter().all(|&d| d == 0), "{}: {deaths:?}", tpl.name),
         }
     }
@@ -90,15 +120,29 @@ fn every_template_validates_at_every_band() {
 #[test]
 fn waltz_rooms_are_glide_launches() {
     use nat_han_adventures::level::validate::Gate;
-    let t = TEMPLATES.iter().position(|t| t.skill == Skill::Waltz).unwrap();
+    let t = TEMPLATES
+        .iter()
+        .position(|t| t.skill == Skill::Waltz)
+        .unwrap();
     for b in BANDS {
         for seed in 0..10 {
             let room = Job::new(seed, plan(t, b, seed, false)).run();
             assert!(!room.fallback, "band {b} seed {seed}");
-            assert!(!room.level.platforms.is_empty(), "band {b} seed {seed}: a platform to launch from");
+            assert!(
+                !room.level.platforms.is_empty(),
+                "band {b} seed {seed}: a platform to launch from"
+            );
             let report = validate(&room.level);
-            assert!(report.errs.is_empty(), "band {b} seed {seed}: {:?}", report.errs);
-            assert!(report.gates.iter().any(|g| g.0 == Gate::GlideLaunch), "band {b} seed {seed}: {:?}", report.gates);
+            assert!(
+                report.errs.is_empty(),
+                "band {b} seed {seed}: {:?}",
+                report.errs
+            );
+            assert!(
+                report.gates.iter().any(|g| g.0 == Gate::GlideLaunch),
+                "band {b} seed {seed}: {:?}",
+                report.gates
+            );
         }
     }
 }
@@ -109,7 +153,10 @@ fn the_fallback_room_always_validates() {
         let p = nat_han_adventures::freeplay::generate::fallback_plan(&plan(0, 7, seed, false));
         for attempt in 0..3 {
             let l = draw(seed, &p, attempt);
-            assert!(validate(&l).errs.is_empty(), "fallback seed {seed} attempt {attempt}");
+            assert!(
+                validate(&l).errs.is_empty(),
+                "fallback seed {seed} attempt {attempt}"
+            );
         }
     }
 }
@@ -134,7 +181,10 @@ fn generation_is_deterministic_per_seed() {
     let (r1, l1) = begin(424_242, false, &mut p1, 10);
     let (r2, l2) = begin(424_242, false, &mut p2, 10);
     assert_eq!(l1, l2);
-    assert_eq!((r1.world, r1.rooms[0].plan.clone()), (r2.world, r2.rooms[0].plan.clone()));
+    assert_eq!(
+        (r1.world, r1.rooms[0].plan.clone()),
+        (r2.world, r2.rooms[0].plan.clone())
+    );
 }
 
 #[test]
@@ -159,13 +209,21 @@ fn rooms_generate_within_budget() {
     let draw_mean = times.iter().map(|t| t.0).sum::<Duration>() / n as u32;
     eprintln!(
         "room generation + validation ({}): {n} rooms, mean {mean:.2?} (drawing {draw_mean:.2?}), median {:.2?}, p95 {:.2?}, max {:.2?}",
-        if cfg!(debug_assertions) { "debug" } else { "release" },
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        },
         times[n / 2].1,
         times[n * 95 / 100].1,
         times[n - 1].1,
     );
     // One attempt runs off the main thread (natively) or between frames (web); keep it short.
-    let budget = if cfg!(debug_assertions) { Duration::from_millis(400) } else { Duration::from_millis(60) };
+    let budget = if cfg!(debug_assertions) {
+        Duration::from_millis(400)
+    } else {
+        Duration::from_millis(60)
+    };
     assert!(mean < budget, "mean {mean:?} over {budget:?}");
 }
 
@@ -179,22 +237,48 @@ fn seeds_round_trip() {
 
 #[test]
 fn unlocks_follow_the_story() {
-    assert_eq!(unlocked_skills(1), vec![Skill::Precision, Skill::HazardTiming, Skill::MovingPlatforms, Skill::GiantSteps]);
+    assert_eq!(
+        unlocked_skills(1),
+        vec![
+            Skill::Precision,
+            Skill::HazardTiming,
+            Skill::MovingPlatforms,
+            Skill::GiantSteps
+        ]
+    );
     assert_eq!(unlocked_skills(10).len(), Skill::COUNT);
     // Han's gates share a skill: each is served once its own story level is unlocked.
     assert!(!unlocked_skills(2).contains(&Skill::Buddy));
     assert!(unlocked_skills(3).contains(&Skill::Buddy));
-    let request = RoomRequest { skill: Skill::Buddy, band: 5, assists: AssistLevers::NONE };
+    let request = RoomRequest {
+        skill: Skill::Buddy,
+        band: 5,
+        assists: AssistLevers::NONE,
+    };
     let served = |levels: usize| -> Vec<&str> {
-        let mut names: Vec<&str> =
-            (0..200).map(|seed| RoomPlan::new(seed, 0, request, 1, false, false, levels).template().name).collect();
+        let mut names: Vec<&str> = (0..200)
+            .map(|seed| {
+                RoomPlan::new(seed, 0, request, 1, false, false, levels)
+                    .template()
+                    .name
+            })
+            .collect();
         names.sort();
         names.dedup();
         names
     };
     assert_eq!(served(3), ["mega wall"]);
     assert_eq!(served(5), ["buddy raft pool", "mega wall"]);
-    assert_eq!(served(10), ["buddy raft pool", "cling shaft", "fired-up chasm", "mega wall", "trapeze"]);
+    assert_eq!(
+        served(10),
+        [
+            "buddy raft pool",
+            "cling shaft",
+            "fired-up chasm",
+            "mega wall",
+            "trapeze"
+        ]
+    );
 }
 
 /// The gadget world room (NAT ALONE's sideways and upside-down tiles) waits for NAT ALONE, and
@@ -202,21 +286,43 @@ fn unlocks_follow_the_story() {
 #[test]
 fn the_gadget_world_room_waits_for_nat_alone() {
     use nat_han_adventures::game::solo::teaches;
-    let world = TEMPLATES.iter().position(|t| t.name == "gadget world").unwrap();
-    let unlocks = |solo| Unlocks { levels: 10, side_b: 10, solo };
+    let world = TEMPLATES
+        .iter()
+        .position(|t| t.name == "gadget world")
+        .unwrap();
+    let unlocks = |solo| Unlocks {
+        levels: 10,
+        side_b: 10,
+        solo,
+    };
     assert!(!TEMPLATES[world].unlocked(unlocks(0)));
     assert!(TEMPLATES[world].unlocked(unlocks(1)));
-    let request = RoomRequest { skill: Skill::Precision, band: 5, assists: AssistLevers::NONE };
+    let request = RoomRequest {
+        skill: Skill::Precision,
+        band: 5,
+        assists: AssistLevers::NONE,
+    };
     let first = teaches('e').unwrap() + 1;
-    let later: Vec<Tile> = [('w', Tile::FanLeft), ('!', Tile::FanDown), ('b', Tile::CushionRight), ('m', Tile::CushionDown)]
-        .into_iter()
-        .filter(|(c, _)| teaches(*c).unwrap() >= first)
-        .map(|(_, t)| t)
-        .collect();
+    let later: Vec<Tile> = [
+        ('w', Tile::FanLeft),
+        ('!', Tile::FanDown),
+        ('b', Tile::CushionRight),
+        ('m', Tile::CushionDown),
+    ]
+    .into_iter()
+    .filter(|(c, _)| teaches(*c).unwrap() >= first)
+    .map(|(_, t)| t)
+    .collect();
     for seed in 0..20 {
-        let p = RoomPlan { template: world, ..RoomPlan::new(seed, 0, request, 1, false, false, unlocks(first)) };
+        let p = RoomPlan {
+            template: world,
+            ..RoomPlan::new(seed, 0, request, 1, false, false, unlocks(first))
+        };
         let level = draw(seed, &p, 0);
-        assert!(!level.tiles.iter().any(|t| later.contains(t)), "seed {seed}: a tile from a level not cleared");
+        assert!(
+            !level.tiles.iter().any(|t| later.contains(t)),
+            "seed {seed}: a tile from a level not cleared"
+        );
     }
 }
 
@@ -226,7 +332,10 @@ fn the_gadget_world_room_waits_for_nat_alone() {
 #[test]
 fn tall_rooms_stitch_on_the_course_floor() {
     use nat_han_adventures::freeplay::course::{COURSE_H, Course};
-    let climb = TEMPLATES.iter().position(|t| t.name == "shelf climb").unwrap();
+    let climb = TEMPLATES
+        .iter()
+        .position(|t| t.name == "shelf climb")
+        .unwrap();
     let flat = draw(1, &plan(0, 1, 1, true), 0);
     let tall = draw(1, &plan(climb, 5, 1, true), 0);
     assert!(tall.height > flat.height);
@@ -237,30 +346,56 @@ fn tall_rooms_stitch_on_the_course_floor() {
     let (c, _) = course.add(&mut level, &flat, true);
     for seam in [b.col0, c.col0] {
         for col in seam - 2..seam + 2 {
-            assert!(!level.tile(col as i32, STAND as i32).is_solid(), "the pipes line up at column {col}");
-            assert!(level.tile(col as i32, STAND as i32 + 1).is_solid(), "pipe floor at column {col}");
+            assert!(
+                !level.tile(col as i32, STAND as i32).is_solid(),
+                "the pipes line up at column {col}"
+            );
+            assert!(
+                level.tile(col as i32, STAND as i32 + 1).is_solid(),
+                "pipe floor at column {col}"
+            );
         }
     }
     let dr = COURSE_H - flat.height;
     // Over a short room the course is solid: its ceiling, as at the top of its own grid.
     for col in a.cols().chain(c.cols()) {
-        assert!((0..dr).all(|r| level.tile(col as i32, r as i32).is_solid()), "ceiling over column {col}");
+        assert!(
+            (0..dr).all(|r| level.tile(col as i32, r as i32).is_solid()),
+            "ceiling over column {col}"
+        );
     }
     assert_eq!(level.start, (flat.start.0, flat.start.1 + dr));
     assert_eq!(level.goal.1, STAND);
     let say = &level.say_at[0];
-    assert_eq!((say.col, say.row), (flat.say_at[0].col + a.col0, flat.say_at[0].row + dr));
+    assert_eq!(
+        (say.col, say.row),
+        (flat.say_at[0].col + a.col0, flat.say_at[0].row + dr)
+    );
     let hint = &level.hints[0];
-    assert_eq!((hint.col, hint.row), (tall.hints[0].col + b.col0, tall.hints[0].row));
+    assert_eq!(
+        (hint.col, hint.row),
+        (tall.hints[0].col + b.col0, tall.hints[0].row)
+    );
     let n = |l: &nat_han_adventures::level::Level, cols: std::ops::Range<usize>| {
-        let mut v: Vec<_> = l.things.iter().filter(|t| cols.contains(&t.col)).map(|t| (t.col, t.row)).collect();
+        let mut v: Vec<_> = l
+            .things
+            .iter()
+            .filter(|t| cols.contains(&t.col))
+            .map(|t| (t.col, t.row))
+            .collect();
         v.sort();
         v
     };
-    let mut shifted: Vec<_> = n(&flat, 0..flat.width).into_iter().map(|(x, y)| (x + c.col0, y + dr)).collect();
+    let mut shifted: Vec<_> = n(&flat, 0..flat.width)
+        .into_iter()
+        .map(|(x, y)| (x + c.col0, y + dr))
+        .collect();
     shifted.sort();
     assert_eq!(n(&level, c.cols()), shifted);
-    let mut climbed: Vec<_> = n(&tall, 0..tall.width).into_iter().map(|(x, y)| (x + b.col0, y)).collect();
+    let mut climbed: Vec<_> = n(&tall, 0..tall.width)
+        .into_iter()
+        .map(|(x, y)| (x + b.col0, y))
+        .collect();
     climbed.sort();
     assert_eq!(n(&level, b.cols()), climbed);
 }
@@ -270,13 +405,17 @@ fn tall_rooms_stitch_on_the_course_floor() {
 fn app() -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / 60.0)))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            1.0 / 60.0,
+        )))
         .add_plugins(nat_han_adventures::gameplay);
     app.finish();
     app.cleanup();
     app.update();
     // Everything unlocked: every template can come up.
-    app.world_mut().resource_mut::<nat_han_adventures::save::Progress>().unlocked = 10;
+    app.world_mut()
+        .resource_mut::<nat_han_adventures::save::Progress>()
+        .unlocked = 10;
     app
 }
 
@@ -289,7 +428,9 @@ fn teleport(app: &mut App, col: usize) {
         let level = &app.world().resource::<ActiveLevel>().level;
         stand_pos(level, col, STAND)
     };
-    let mut q = app.world_mut().query_filtered::<(&mut Pos, &mut PrevPos), With<Player>>();
+    let mut q = app
+        .world_mut()
+        .query_filtered::<(&mut Pos, &mut PrevPos), With<Player>>();
     for (mut p, mut pp) in q.iter_mut(app.world_mut()) {
         p.0 = at;
         pp.0 = at;
@@ -304,13 +445,19 @@ fn run(app: &App) -> FreePlayRun {
 fn a_fixed_run_plays_through_to_the_goal() {
     let mut app = app();
     let seed = 31_337;
-    app.world_mut().write_message(StartFreePlay { seed, endless: false });
+    app.world_mut().write_message(StartFreePlay {
+        seed,
+        endless: false,
+    });
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(state(&app), AppState::Playing);
     assert_eq!(*app.world().resource::<AssistMode>(), AssistMode::FreePlay);
-    assert_eq!(app.world().resource::<FreePlaySettings>().last_seed, Some(seed));
+    assert_eq!(
+        app.world().resource::<FreePlaySettings>().last_seed,
+        Some(seed)
+    );
 
     for k in 0..FIXED_ROOMS as usize {
         // Wait for room k to be generated and streamed in.
@@ -335,9 +482,17 @@ fn a_fixed_run_plays_through_to_the_goal() {
         assert!(r.room_label().starts_with(&format!("ROOM {}/8", k + 1)));
         // The room's tiles are in (streamed) and its checkpoint is where the course says.
         let level = &app.world().resource::<ActiveLevel>().level;
-        let cp = level.checkpoints().nth(r.course.rooms[k].checkpoint).unwrap();
+        let cp = level
+            .checkpoints()
+            .nth(r.course.rooms[k].checkpoint)
+            .unwrap();
         assert_eq!(cp.col, col);
-        let tiles = app.world_mut().query::<&LevelTile>().iter(app.world()).filter(|t| t.col == col).count();
+        let tiles = app
+            .world_mut()
+            .query::<&LevelTile>()
+            .iter(app.world())
+            .filter(|t| t.col == col)
+            .count();
         assert!(tiles > 0, "room {k} is drawn");
     }
     // Walk into the last room's goal.
@@ -350,9 +505,20 @@ fn a_fixed_run_plays_through_to_the_goal() {
     let r = run(&app);
     assert!(r.finished);
     assert_eq!(r.cleared, FIXED_ROOMS);
-    let started = r.events.iter().filter(|e| matches!(e, AdaptEvent::RoomStarted { .. })).count();
-    let finished = r.events.iter().filter(|e| matches!(e, AdaptEvent::RoomFinished(_))).count();
-    assert_eq!((started, finished), (FIXED_ROOMS as usize, FIXED_ROOMS as usize));
+    let started = r
+        .events
+        .iter()
+        .filter(|e| matches!(e, AdaptEvent::RoomStarted { .. }))
+        .count();
+    let finished = r
+        .events
+        .iter()
+        .filter(|e| matches!(e, AdaptEvent::RoomFinished(_)))
+        .count();
+    assert_eq!(
+        (started, finished),
+        (FIXED_ROOMS as usize, FIXED_ROOMS as usize)
+    );
     let profile = &app.world().resource::<AdaptiveProfile>().0;
     assert_eq!(profile.rooms_played, FIXED_ROOMS);
     assert!(!profile.calibrating(), "the first rooms placed the player");
@@ -360,11 +526,22 @@ fn a_fixed_run_plays_through_to_the_goal() {
     let level = &app.world().resource::<ActiveLevel>().level;
     let cols: Vec<usize> = level.checkpoints().map(|c| c.col).collect();
     assert!(cols.windows(2).all(|w| w[0] < w[1]));
-    let nuggets = level.things.iter().filter(|t| t.kind == ThingKind::Nugget).count() as u32;
-    assert_eq!(app.world().resource::<nat_han_adventures::game::LevelRun>().nuggets_total, nuggets);
+    let nuggets = level
+        .things
+        .iter()
+        .filter(|t| t.kind == ThingKind::Nugget)
+        .count() as u32;
+    assert_eq!(
+        app.world()
+            .resource::<nat_han_adventures::game::LevelRun>()
+            .nuggets_total,
+        nuggets
+    );
 
     // Back to the setup screen: story mode gets its level source and assists back.
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::FreePlaySetup);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::FreePlaySetup);
     app.update();
     app.update();
     assert!(app.world().get_resource::<FreePlayRun>().is_none());
@@ -374,7 +551,10 @@ fn a_fixed_run_plays_through_to_the_goal() {
 #[test]
 fn an_endless_run_unloads_rooms_behind() {
     let mut app = app();
-    app.world_mut().write_message(StartFreePlay { seed: 5, endless: true });
+    app.world_mut().write_message(StartFreePlay {
+        seed: 5,
+        endless: true,
+    });
     for _ in 0..3 {
         app.update();
     }
@@ -397,8 +577,17 @@ fn an_endless_run_unloads_rooms_behind() {
     assert_eq!(r.room_label(), "ROOM 6");
     // Rooms 0..=2 are gone (sealed off), 3.. are drawn.
     let first_kept = r.course.rooms[3].col0;
-    let min_col = app.world_mut().query::<&LevelTile>().iter(app.world()).map(|t| t.col).min().unwrap();
+    let min_col = app
+        .world_mut()
+        .query::<&LevelTile>()
+        .iter(app.world())
+        .map(|t| t.col)
+        .min()
+        .unwrap();
     assert_eq!(min_col, first_kept);
     let level = &app.world().resource::<ActiveLevel>().level;
-    assert!(level.tile(first_kept as i32, STAND as i32).is_solid(), "sealed");
+    assert!(
+        level.tile(first_kept as i32, STAND as i32).is_solid(),
+        "sealed"
+    );
 }

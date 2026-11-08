@@ -54,7 +54,11 @@ fn rate<'a>(it: impl Iterator<Item = &'a WindowEntry>) -> (Option<f32>, usize) {
             clean += 1;
         }
     }
-    if n == 0 { (None, 0) } else { (Some(clean as f32 / n as f32), n) }
+    if n == 0 {
+        (None, 0)
+    } else {
+        (Some(clean as f32 / n as f32), n)
+    }
 }
 
 impl RollingWindow {
@@ -74,7 +78,12 @@ impl RollingWindow {
 
     /// Clean rate at the current center in the current epoch. `unassisted_only` keeps only
     /// rooms played with assists ≤ [`super::profile::ASSIST_EPS`].
-    pub fn at_center(&self, center: Band, epoch: u32, unassisted_only: bool) -> (Option<f32>, usize) {
+    pub fn at_center(
+        &self,
+        center: Band,
+        epoch: u32,
+        unassisted_only: bool,
+    ) -> (Option<f32>, usize) {
         rate(self.entries.iter().filter(|e| {
             e.epoch == epoch
                 && e.band == center
@@ -89,6 +98,10 @@ impl RollingWindow {
 
     /// Clean rate of stretch rooms (above the center) in the current epoch.
     pub fn above_center(&self, center: Band, epoch: u32) -> (Option<f32>, usize) {
-        rate(self.entries.iter().filter(|e| e.epoch == epoch && e.band > center))
+        rate(
+            self.entries
+                .iter()
+                .filter(|e| e.epoch == epoch && e.band > center),
+        )
     }
 }

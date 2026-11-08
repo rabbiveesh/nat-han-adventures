@@ -8,7 +8,10 @@ use std::time::Duration;
 
 use bevy::{prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
-    audio::{AudioOutput, Filters, Harmony, LivePlayer, Music, MusicChanged, director, live::library, waltz},
+    audio::{
+        AudioOutput, Filters, Harmony, LivePlayer, Music, MusicChanged, director, live::library,
+        waltz,
+    },
     events::{CallBand, Jumped, NuggetCollected, PlayerDied},
     game::{Groove, LevelRun},
     state::{AppState, CurrentLevel},
@@ -18,7 +21,12 @@ use nat_han_adventures::{
 #[derive(Resource, Default)]
 struct Heard(Vec<(f64, MusicChanged, Groove)>);
 
-fn listen(time: Res<Time<Real>>, groove: Res<Groove>, mut heard: ResMut<Heard>, mut c: MessageReader<MusicChanged>) {
+fn listen(
+    time: Res<Time<Real>>,
+    groove: Res<Groove>,
+    mut heard: ResMut<Heard>,
+    mut c: MessageReader<MusicChanged>,
+) {
     let now = time.elapsed_secs_f64();
     heard.0.extend(c.read().map(|m| (now, m.clone(), *groove)));
 }
@@ -33,12 +41,16 @@ fn app(level: usize) -> App {
         nat_han_adventures::audio::plugin,
     ))
     .insert_resource(AudioOutput::Headless)
-    .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / 60.0)))
+    .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+        1.0 / 60.0,
+    )))
     .init_resource::<Heard>()
     .add_systems(Last, listen);
     app.update();
     app.world_mut().resource_mut::<CurrentLevel>().0 = level;
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::Playing);
     app.update();
     app.update();
     // Let the level-start decision settle (it's plain, like what's playing: no switch).
@@ -52,7 +64,10 @@ fn bar_secs(app: &App) -> f64 {
     let music = app.world().resource::<LivePlayer>().now_playing().unwrap();
     assert!(matches!(music, Music::World(_)));
     let (_, song) = library::song(music).unwrap();
-    assert!(song.chart.is_some(), "every level song needs a chart, or its gates can't open");
+    assert!(
+        song.chart.is_some(),
+        "every level song needs a chart, or its gates can't open"
+    );
     4.0 * 60.0 / song.bpm as f64
 }
 
@@ -64,7 +79,11 @@ fn now(app: &App) -> f64 {
 fn until_switch(app: &mut App, from: f64) -> (f64, MusicChanged, Groove) {
     let mut frames = 0;
     while app.world().resource::<Heard>().0.is_empty() {
-        assert_eq!(*app.world().resource::<Groove>(), Groove::default(), "groove changed before the music");
+        assert_eq!(
+            *app.world().resource::<Groove>(),
+            Groove::default(),
+            "groove changed before the music"
+        );
         app.update();
         frames += 1;
         assert!(frames < 60 * 10, "no switch after 10s");
@@ -80,7 +99,10 @@ fn call(app: &mut App) {
 }
 
 fn toot(app: &mut App) {
-    app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: true });
+    app.world_mut().write_message(Jumped {
+        pos: Vec2::ZERO,
+        double: true,
+    });
     app.update();
 }
 
@@ -94,19 +116,35 @@ fn five_toots_summon_giant_steps_at_the_next_bar() {
         toot(&mut app);
         app.update();
     }
-    assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "4 toots: nothing yet");
+    assert_eq!(
+        app.world().resource::<LivePlayer>().pending_filters(),
+        None,
+        "4 toots: nothing yet"
+    );
     toot(&mut app);
-    assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "5 toots: charged, not playing");
+    assert_eq!(
+        app.world().resource::<LivePlayer>().pending_filters(),
+        None,
+        "5 toots: charged, not playing"
+    );
     call(&mut app);
     let player = app.world().resource::<LivePlayer>();
-    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Coltrane), "decided at once");
+    assert_eq!(
+        player.pending_filters().map(|f| f.harmony),
+        Some(Harmony::Coltrane),
+        "decided at once"
+    );
     let decided = now(&app);
     let (after, change, groove) = until_switch(&mut app, decided);
     println!("Giant Steps came in {after:.2}s after the 5th toot (a bar is {bar:.2}s)");
     assert!(after <= 2.0 * bar + 0.5, "took {after:.2}s");
     assert_eq!(change.now.filters.harmony, Harmony::Coltrane);
     assert_eq!(change.now.reason, director::REASON_GIANT_STEPS);
-    assert_eq!(groove, Groove::of(Harmony::Coltrane), "physics follow at the switch");
+    assert_eq!(
+        groove,
+        Groove::of(Harmony::Coltrane),
+        "physics follow at the switch"
+    );
     assert!(groove.giant_steps() && groove.gravity_scale < 1.0);
 
     // Toots while it plays keep it going through the periodic check...
@@ -117,7 +155,11 @@ fn five_toots_summon_giant_steps_at_the_next_bar() {
         }
         toot(&mut app);
     }
-    assert_eq!(app.world().resource::<Heard>().0.len(), 1, "still Giant Steps");
+    assert_eq!(
+        app.world().resource::<Heard>().0.len(),
+        1,
+        "still Giant Steps"
+    );
     assert!(app.world().resource::<Groove>().giant_steps());
     // ...and without toots it ends when its timer runs out, physics back to normal.
     let mut frames = 0;
@@ -141,13 +183,19 @@ fn giant_steps_beats_a_nervous_band() {
         app.update();
     }
     let player = app.world().resource::<LivePlayer>();
-    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::MelodicMinor));
+    assert_eq!(
+        player.pending_filters().map(|f| f.harmony),
+        Some(Harmony::MelodicMinor)
+    );
     for _ in 0..director::GIANT_STEPS_TOOTS {
         toot(&mut app);
     }
     call(&mut app);
     let player = app.world().resource::<LivePlayer>();
-    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Coltrane));
+    assert_eq!(
+        player.pending_filters().map(|f| f.harmony),
+        Some(Harmony::Coltrane)
+    );
     let (_, change, groove) = until_switch(&mut app, 0.0);
     assert_eq!(change.now.filters.harmony, Harmony::Coltrane);
     assert!(groove.giant_steps());
@@ -163,16 +211,24 @@ fn quick_nuggets_fire_up_the_band_at_once() {
         if k == director::FIRED_UP_NUGGETS - 1 {
             assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None);
         }
-        app.world_mut().write_message(NuggetCollected { pos: Vec2::ZERO });
+        app.world_mut()
+            .write_message(NuggetCollected { pos: Vec2::ZERO });
         app.update();
         for _ in 0..20 {
             app.update();
         }
     }
-    assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "charged, not playing");
+    assert_eq!(
+        app.world().resource::<LivePlayer>().pending_filters(),
+        None,
+        "charged, not playing"
+    );
     call(&mut app);
     let player = app.world().resource::<LivePlayer>();
-    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Quartal));
+    assert_eq!(
+        player.pending_filters().map(|f| f.harmony),
+        Some(Harmony::Quartal)
+    );
     let decided = now(&app);
     let (after, change, groove) = until_switch(&mut app, decided);
     assert!(after <= 2.0 * bar + 0.8, "took {after:.2}s");
@@ -186,7 +242,10 @@ fn quick_nuggets_fire_up_the_band_at_once() {
 fn groove_follows_every_filter() {
     for harmony in Harmony::ALL {
         for just_intonation in [false, true] {
-            let g = Groove::new(Filters { harmony, just_intonation });
+            let g = Groove::new(Filters {
+                harmony,
+                just_intonation,
+            });
             assert_eq!(g.harmony, harmony);
             assert_eq!(g.bounce, just_intonation);
             assert_eq!(g.giant_steps(), harmony == Harmony::Coltrane);
@@ -194,11 +253,22 @@ fn groove_follows_every_filter() {
     }
     assert_eq!(Groove::default(), Groove::of(Harmony::Original));
     let plain = Groove::default();
-    assert_eq!((plain.gravity_scale, plain.speed_scale, plain.time_scale, plain.bounce), (1.0, 1.0, 1.0, false));
+    assert_eq!(
+        (
+            plain.gravity_scale,
+            plain.speed_scale,
+            plain.time_scale,
+            plain.bounce
+        ),
+        (1.0, 1.0, 1.0, false)
+    );
 }
 
 fn ground_jump(app: &mut App) {
-    app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: false });
+    app.world_mut().write_message(Jumped {
+        pos: Vec2::ZERO,
+        double: false,
+    });
     app.update();
 }
 
@@ -211,7 +281,11 @@ fn jumping_in_threes_waltzes_at_the_next_bar() {
     let bar = bar_secs(&app);
     // 0.6s apart (36 frames).
     for k in 0..3 {
-        assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None, "{k} jumps: nothing yet");
+        assert_eq!(
+            app.world().resource::<LivePlayer>().pending_filters(),
+            None,
+            "{k} jumps: nothing yet"
+        );
         ground_jump(&mut app);
         if k < 2 {
             for _ in 0..35 {
@@ -221,7 +295,11 @@ fn jumping_in_threes_waltzes_at_the_next_bar() {
     }
     call(&mut app);
     let player = app.world().resource::<LivePlayer>();
-    assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Waltz), "decided at the call");
+    assert_eq!(
+        player.pending_filters().map(|f| f.harmony),
+        Some(Harmony::Waltz),
+        "decided at the call"
+    );
     let decided = now(&app);
     let (after, change, groove) = until_switch(&mut app, decided);
     println!("the waltz came in {after:.2}s after the 3rd jump (a 4/4 bar is {bar:.2}s)");
@@ -229,14 +307,25 @@ fn jumping_in_threes_waltzes_at_the_next_bar() {
     assert_eq!(change.now.filters.harmony, Harmony::Waltz);
     assert_eq!(change.now.reason, director::REASON_WALTZ);
     assert_eq!(change.now.toast(), "THE BAND WALTZES - JAZZ WALTZ");
-    assert_eq!(groove, Groove::of(Harmony::Waltz), "physics follow at the switch");
+    assert_eq!(
+        groove,
+        Groove::of(Harmony::Waltz),
+        "physics follow at the switch"
+    );
     assert!(groove.waltz());
     // On a waltz bar line: the first of a pair (a 4/4 bar line, warped).
     let pair = 2.0 * 3.0 * 60.0 / waltz::WALTZ_BPM as f64;
     let pairs = change.at_secs / pair;
-    assert!((pairs - pairs.round()).abs() < 1e-6, "switched mid-bar: {}s = {pairs} waltz bar pairs", change.at_secs);
+    assert!(
+        (pairs - pairs.round()).abs() < 1e-6,
+        "switched mid-bar: {}s = {pairs} waltz bar pairs",
+        change.at_secs
+    );
     // The world's clock is the waltz's: 3 beats of 0.5s, on the downbeat of the switch.
-    assert_eq!((groove.clock.beats_per_bar, groove.clock.beat_secs), (3, 0.5));
+    assert_eq!(
+        (groove.clock.beats_per_bar, groove.clock.beat_secs),
+        (3, 0.5)
+    );
     assert_eq!(groove.clock.bar % 2, 0);
     assert_eq!(groove.clock.beat, 0);
     // The clock keeps following the waltz: 45 frames (0.75 s) on, a beat and a half further.
@@ -246,8 +335,12 @@ fn jumping_in_threes_waltzes_at_the_next_bar() {
     }
     let c = app.world().resource::<Groove>().clock;
     assert_eq!(c.beats_per_bar, 3);
-    let beats = |c: nat_han_adventures::game::BeatClock| (c.bar * 3 + c.beat as u32) as f32 + c.phase;
-    assert!((beats(c) - beats(was) - 1.5).abs() < 0.1, "{was:?} -> {c:?}");
+    let beats =
+        |c: nat_han_adventures::game::BeatClock| (c.bar * 3 + c.beat as u32) as f32 + c.phase;
+    assert!(
+        (beats(c) - beats(was) - 1.5).abs() < 0.1,
+        "{was:?} -> {c:?}"
+    );
 
     // Waltzing on (every 0.6s) keeps it going through the periodic check...
     let t0 = app.world().resource::<LevelRun>().time;
@@ -270,7 +363,11 @@ fn jumping_in_threes_waltzes_at_the_next_bar() {
     assert_eq!(back.now.filters.harmony, Harmony::Original);
     assert_eq!(groove, Groove::default());
     let bars = back.at_secs / bar;
-    assert!((bars - bars.round()).abs() < 1e-6, "back on a 4/4 bar line: {}s", back.at_secs);
+    assert!(
+        (bars - bars.round()).abs() < 1e-6,
+        "back on a 4/4 bar line: {}s",
+        back.at_secs
+    );
     assert_eq!(groove.clock.beats_per_bar, 4);
 }
 
@@ -301,13 +398,21 @@ fn quick_deaths_bring_grip_even_while_laughing() {
             app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
         }
         if frame % 150 > 60 && frame % 150 <= 64 && frame < 150 * 5 {
-            app.world_mut().write_message(NuggetCollected { pos: Vec2::ZERO });
+            app.world_mut()
+                .write_message(NuggetCollected { pos: Vec2::ZERO });
         }
         app.update();
         let g = *app.world().resource::<Groove>();
         if frame % 60 == 0 {
             let p = app.world().resource::<LivePlayer>();
-            println!("t={:.1}s groove {:?} bounce {} grip {} pending {:?}", frame as f32 / 60.0, g.harmony, g.bounce, g.grip(), p.pending_filters());
+            println!(
+                "t={:.1}s groove {:?} bounce {} grip {} pending {:?}",
+                frame as f32 / 60.0,
+                g.harmony,
+                g.bounce,
+                g.grip(),
+                p.pending_filters()
+            );
         }
         if g.grip() && grip_at.is_none() {
             grip_at = Some(frame);

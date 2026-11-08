@@ -41,48 +41,16 @@ const EYE_Y: i32 = 5;
 
 /// Cape poses, drawn behind the body.
 const CAPE_HANG: &[&str] = &[
-    "....",
-    "....",
-    "....",
-    "...r",
-    "..rr",
-    ".rrR",
-    ".rRR",
-    "rrRR",
-    "rRR.",
-    "rRR.",
-    "rR..",
-    "R...",
+    "....", "....", "....", "...r", "..rr", ".rrR", ".rRR", "rrRR", "rRR.", "rRR.", "rR..", "R...",
 ];
 const CAPE_BLOW: &[&str] = &[
-    "....",
-    "....",
-    "....",
-    "..rr",
-    "rrrr",
-    "rRRR",
-    "RrRR",
-    ".RR.",
+    "....", "....", "....", "..rr", "rrrr", "rRRR", "RrRR", ".RR.",
 ];
 const CAPE_BLOW2: &[&str] = &[
-    "....",
-    "....",
-    "....",
-    "...r",
-    ".rrr",
-    "rrRR",
-    "RRRR",
-    "..R.",
+    "....", "....", "....", "...r", ".rrr", "rrRR", "RRRR", "..R.",
 ];
 /// Cape flying upward (falling).
-const CAPE_UP: &[&str] = &[
-    "....",
-    "R...",
-    "rR..",
-    "rrR.",
-    ".rrr",
-    "..rr",
-];
+const CAPE_UP: &[&str] = &["....", "R...", "rR..", "rrR.", ".rrr", "..rr"];
 
 /// Little feet that poke out under the body while running / jumping.
 const FEET_A: &[&str] = &["...kBk....kBk..."];
@@ -167,8 +135,14 @@ struct PooPose {
     squash: bool,
 }
 
-const BASE_POSE: PooPose =
-    PooPose { bob: 0, cape: CAPE_HANG, eyes: Eyes::Right, feet: None, open_mouth: false, squash: false };
+const BASE_POSE: PooPose = PooPose {
+    bob: 0,
+    cape: CAPE_HANG,
+    eyes: Eyes::Right,
+    feet: None,
+    open_mouth: false,
+    squash: false,
+};
 
 fn poo(p: PooPose) -> Pixels {
     // Body with face, unshifted.
@@ -201,34 +175,80 @@ fn poo(p: PooPose) -> Pixels {
 }
 
 pub fn poo_idle() -> Vec<Pixels> {
-    vec![poo(BASE_POSE), poo(PooPose { squash: true, ..BASE_POSE })]
+    vec![
+        poo(BASE_POSE),
+        poo(PooPose {
+            squash: true,
+            ..BASE_POSE
+        }),
+    ]
 }
 
 /// A blink frame, for anyone who wants to sprinkle it into the idle loop.
 #[allow(dead_code)]
 pub fn poo_blink() -> Pixels {
-    poo(PooPose { eyes: Eyes::Blink, ..BASE_POSE })
+    poo(PooPose {
+        eyes: Eyes::Blink,
+        ..BASE_POSE
+    })
 }
 
 pub fn poo_run() -> Vec<Pixels> {
     vec![
-        poo(PooPose { bob: 1, cape: CAPE_BLOW, feet: Some(FEET_A), ..BASE_POSE }),
-        poo(PooPose { bob: 1, cape: CAPE_BLOW2, feet: Some(FEET_B), ..BASE_POSE }),
-        poo(PooPose { bob: 1, cape: CAPE_BLOW, feet: Some(FEET_C), ..BASE_POSE }),
-        poo(PooPose { bob: 1, cape: CAPE_BLOW2, feet: Some(FEET_D), ..BASE_POSE }),
+        poo(PooPose {
+            bob: 1,
+            cape: CAPE_BLOW,
+            feet: Some(FEET_A),
+            ..BASE_POSE
+        }),
+        poo(PooPose {
+            bob: 1,
+            cape: CAPE_BLOW2,
+            feet: Some(FEET_B),
+            ..BASE_POSE
+        }),
+        poo(PooPose {
+            bob: 1,
+            cape: CAPE_BLOW,
+            feet: Some(FEET_C),
+            ..BASE_POSE
+        }),
+        poo(PooPose {
+            bob: 1,
+            cape: CAPE_BLOW2,
+            feet: Some(FEET_D),
+            ..BASE_POSE
+        }),
     ]
 }
 
 pub fn poo_jump() -> Vec<Pixels> {
-    vec![poo(PooPose { bob: 1, cape: CAPE_HANG, eyes: Eyes::Up, feet: Some(FEET_B), ..BASE_POSE })]
+    vec![poo(PooPose {
+        bob: 1,
+        cape: CAPE_HANG,
+        eyes: Eyes::Up,
+        feet: Some(FEET_B),
+        ..BASE_POSE
+    })]
 }
 
 pub fn poo_fall() -> Vec<Pixels> {
-    vec![poo(PooPose { bob: 1, cape: CAPE_UP, eyes: Eyes::Up, feet: Some(FEET_A), open_mouth: true, ..BASE_POSE })]
+    vec![poo(PooPose {
+        bob: 1,
+        cape: CAPE_UP,
+        eyes: Eyes::Up,
+        feet: Some(FEET_A),
+        open_mouth: true,
+        ..BASE_POSE
+    })]
 }
 
 pub fn poo_splat() -> Vec<Pixels> {
-    vec![grid(SPLAT_1, POO_PAL), grid(SPLAT_2, POO_PAL), grid(SPLAT_3, POO_PAL)]
+    vec![
+        grid(SPLAT_1, POO_PAL),
+        grid(SPLAT_2, POO_PAL),
+        grid(SPLAT_3, POO_PAL),
+    ]
 }
 
 // ---------------------------------------------------------------- Han
@@ -296,7 +316,11 @@ pub fn han_idle() -> Vec<Pixels> {
 }
 
 pub fn han_run() -> Vec<Pixels> {
-    HAN_LEGS_RUN.iter().enumerate().map(|(i, l)| han(l, i % 2 == 1)).collect()
+    HAN_LEGS_RUN
+        .iter()
+        .enumerate()
+        .map(|(i, l)| han(l, i % 2 == 1))
+        .collect()
 }
 
 pub fn han_jump() -> Vec<Pixels> {

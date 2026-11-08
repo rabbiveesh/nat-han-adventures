@@ -16,8 +16,11 @@ pub fn plugin(app: &mut App) {
     app.add_systems(
         Update,
         (
-            spawn.run_if(in_state(AppState::Title).and_then(not(any_with_component::<TitleScreen>))),
-            (bob, input, highlight).chain().run_if(in_state(AppState::Title)),
+            spawn
+                .run_if(in_state(AppState::Title).and_then(not(any_with_component::<TitleScreen>))),
+            (bob, input, highlight)
+                .chain()
+                .run_if(in_state(AppState::Title)),
         ),
     );
 }
@@ -55,15 +58,34 @@ struct Bob {
     phase: f32,
 }
 
-fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, progress: Option<Res<Progress>>) {
+fn spawn(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    sprites: Option<Res<Sprites>>,
+    progress: Option<Res<Progress>>,
+) {
     let sprites = sprites.as_deref();
     let f = &*font;
     commands
-        .spawn((Name::new("TitleScreen"), TitleScreen, DespawnOnExit(AppState::Title), fullscreen()))
+        .spawn((
+            Name::new("TitleScreen"),
+            TitleScreen,
+            DespawnOnExit(AppState::Title),
+            fullscreen(),
+        ))
         .with_children(|root| {
-            root.spawn(Node { flex_grow: 1.0, ..default() });
+            root.spawn(Node {
+                flex_grow: 1.0,
+                ..default()
+            });
             root.spawn(label(f, GAME_TITLE, 24.0, GOLD));
-            root.spawn((label(f, GAME_SUBTITLE, 16.0, GOLD), Node { margin: UiRect::top(px(8.0)), ..default() }));
+            root.spawn((
+                label(f, GAME_SUBTITLE, 16.0, GOLD),
+                Node {
+                    margin: UiRect::top(px(8.0)),
+                    ..default()
+                },
+            ));
             // The stars, bobbing on a little stage.
             root.spawn(Node {
                 margin: UiRect::vertical(px(12.0)),
@@ -72,9 +94,10 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                 ..default()
             })
             .with_children(|row| {
-                for (id, name, phase) in
-                    [(SpriteId::PooIdle, HERO_NAME, 0.0), (SpriteId::HanIdle, SIDEKICK_NAME, 0.5)]
-                {
+                for (id, name, phase) in [
+                    (SpriteId::PooIdle, HERO_NAME, 0.0),
+                    (SpriteId::HanIdle, SIDEKICK_NAME, 0.5),
+                ] {
                     row.spawn(Node {
                         flex_direction: FlexDirection::Column,
                         align_items: AlignItems::Center,
@@ -90,16 +113,32 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
             root.spawn(label(f, GAME_TAGLINE, 8.0, DIM_CREAM));
             root.spawn((
                 label(f, "PRESS ENTER", 8.0, GOLD),
-                Node { margin: UiRect::top(px(12.0)), ..default() },
+                Node {
+                    margin: UiRect::top(px(12.0)),
+                    ..default()
+                },
                 Blink(1.0),
             ));
             for (i, o) in OPTIONS.iter().enumerate().take(shown(progress.as_deref())) {
-                root.spawn((label(f, *o, 8.0, CREAM), TitleOption(i), Node { margin: UiRect::top(px(4.0)), ..default() }));
+                root.spawn((
+                    label(f, *o, 8.0, CREAM),
+                    TitleOption(i),
+                    Node {
+                        margin: UiRect::top(px(4.0)),
+                        ..default()
+                    },
+                ));
             }
-            root.spawn(Node { flex_grow: 1.0, ..default() });
+            root.spawn(Node {
+                flex_grow: 1.0,
+                ..default()
+            });
             root.spawn((
                 label(f, "a game by their #2 fan", 8.0, DIM_CREAM),
-                Node { margin: UiRect::bottom(px(8.0)), ..default() },
+                Node {
+                    margin: UiRect::bottom(px(8.0)),
+                    ..default()
+                },
             ));
         });
 }
@@ -167,11 +206,18 @@ fn input(
     }
 }
 
-fn highlight(cursor: Option<Res<TitleCursor>>, mut q: Query<(&TitleOption, &mut Text, &mut TextColor)>) {
+fn highlight(
+    cursor: Option<Res<TitleCursor>>,
+    mut q: Query<(&TitleOption, &mut Text, &mut TextColor)>,
+) {
     let at = cursor.map_or(0, |c| c.0);
     for (o, mut text, mut color) in &mut q {
         let on = o.0 == at;
-        let s = if on { format!("> {} <", OPTIONS[o.0]) } else { OPTIONS[o.0].to_string() };
+        let s = if on {
+            format!("> {} <", OPTIONS[o.0])
+        } else {
+            OPTIONS[o.0].to_string()
+        };
         if text.0 != s {
             text.0 = s;
         }

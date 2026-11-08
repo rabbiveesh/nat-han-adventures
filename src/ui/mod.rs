@@ -6,7 +6,7 @@
 //! window height, like the game camera. Text is Press Start 2P at multiples of 8px.
 
 use bevy::prelude::*;
-use bevy::text::{FontSmoothing, FontSize};
+use bevy::text::{FontSize, FontSmoothing};
 use bevy::window::PrimaryWindow;
 
 use crate::art::{SpriteId, Sprites};
@@ -25,7 +25,7 @@ mod strip;
 mod title;
 mod victory;
 
-pub use lesson::{Lesson, Lessons, LessonsOff};
+pub use lesson::{HINT_SECS, Hint, Lesson, Lessons, LessonsOff};
 
 /// The game's name ("Nat Han Adventures"), shown on the title screen and in the credits,
 /// split in two lines so it fits the 24px title font.
@@ -40,10 +40,19 @@ pub const SIDEKICK_NAME: &str = "Han";
 pub const VIRTUAL_HEIGHT: f32 = 216.0;
 
 /// World names, by world number - 1.
-pub const WORLD_NAMES: [&str; 5] = ["BATHROOM", "PIPES", "SEWER", "SEPTIC FEST", "TREATMENT PLANT"];
+pub const WORLD_NAMES: [&str; 5] = [
+    "BATHROOM",
+    "PIPES",
+    "SEWER",
+    "SEPTIC FEST",
+    "TREATMENT PLANT",
+];
 
 pub fn world_name(world: u8) -> &'static str {
-    WORLD_NAMES.get((world as usize).wrapping_sub(1)).copied().unwrap_or("???")
+    WORLD_NAMES
+        .get((world as usize).wrapping_sub(1))
+        .copied()
+        .unwrap_or("???")
 }
 
 /// The 8-bit palette: warm browns, gold accents, cream text, dark outlines.
@@ -117,7 +126,10 @@ pub fn label(ui: &UiFont, text: impl Into<String>, size: f32, color: Color) -> i
         Text::new(text),
         font(ui, size),
         TextColor(color),
-        TextShadow { offset: Vec2::splat((size / 8.0).max(1.0)), color: palette::SHADOW },
+        TextShadow {
+            offset: Vec2::splat((size / 8.0).max(1.0)),
+            color: palette::SHADOW,
+        },
     )
 }
 
@@ -125,14 +137,21 @@ pub fn label(ui: &UiFont, text: impl Into<String>, size: f32, color: Color) -> i
 pub fn icon(sprites: Option<&Sprites>, id: SpriteId, w: f32, h: f32) -> impl Bundle {
     (
         ImageNode::new(sprites.map(|s| s.get(id)).unwrap_or_default()),
-        Node { width: px(w), height: px(h), ..default() },
+        Node {
+            width: px(w),
+            height: px(h),
+            ..default()
+        },
     )
 }
 
 /// A bordered panel (dark outline, brown fill, gold inner rim) around `node`.
 pub fn panel(node: Node) -> impl Bundle {
     (
-        Node { border: UiRect::all(px(2.0)), ..node },
+        Node {
+            border: UiRect::all(px(2.0)),
+            ..node
+        },
         BackgroundColor(palette::PANEL),
         BorderColor::all(palette::DARK_GOLD),
         Outline::new(px(2.0), px(0.0), palette::INK),
@@ -167,7 +186,11 @@ pub fn fullscreen() -> Node {
 pub fn format_time(secs: f32) -> String {
     let t = secs.max(0.0) as u32;
     let (h, m, s) = (t / 3600, t / 60 % 60, t % 60);
-    if h > 0 { format!("{h}:{m:02}:{s:02}") } else { format!("{m:02}:{s:02}") }
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m:02}:{s:02}")
+    }
 }
 
 /// Blinks (toggles visibility) with the given period in seconds.
@@ -177,13 +200,19 @@ pub struct Blink(pub f32);
 fn blink(time: Res<Time>, mut q: Query<(&Blink, &mut Visibility)>) {
     for (b, mut v) in &mut q {
         let on = (time.elapsed_secs() / b.0).fract() < 0.6;
-        v.set_if_neq(if on { Visibility::Inherited } else { Visibility::Hidden });
+        v.set_if_neq(if on {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
     }
 }
 
 /// 216 virtual px tall, whatever the window.
 fn scale_ui(window: Option<Single<&Window, With<PrimaryWindow>>>, scale: Option<ResMut<UiScale>>) {
-    let (Some(w), Some(mut scale)) = (window, scale) else { return };
+    let (Some(w), Some(mut scale)) = (window, scale) else {
+        return;
+    };
     let h = w.resolution.height();
     if h > 0.0 {
         let s = h / VIRTUAL_HEIGHT;
@@ -238,8 +267,11 @@ pub fn spawn_toast(commands: &mut Commands, ui: &UiFont, text: impl Into<String>
             GlobalZIndex(20),
         ))
         .with_children(|t| {
-            t.spawn(panel(Node { padding: UiRect::axes(px(8.0), px(4.0)), ..default() }))
-                .with_child(label(ui, text, 8.0, palette::GOLD));
+            t.spawn(panel(Node {
+                padding: UiRect::axes(px(8.0), px(4.0)),
+                ..default()
+            }))
+            .with_child(label(ui, text, 8.0, palette::GOLD));
         });
 }
 

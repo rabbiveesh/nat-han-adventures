@@ -23,7 +23,11 @@ pub struct Pixels {
 
 impl Pixels {
     pub fn new(w: u32, h: u32) -> Self {
-        Self { w, h, data: vec![0; (w * h * 4) as usize] }
+        Self {
+            w,
+            h,
+            data: vec![0; (w * h * 4) as usize],
+        }
     }
 
     pub fn get(&self, x: i32, y: i32) -> Rgba {
@@ -31,7 +35,12 @@ impl Pixels {
             return CLEAR;
         }
         let i = ((y as u32 * self.w + x as u32) * 4) as usize;
-        [self.data[i], self.data[i + 1], self.data[i + 2], self.data[i + 3]]
+        [
+            self.data[i],
+            self.data[i + 1],
+            self.data[i + 2],
+            self.data[i + 3],
+        ]
     }
 
     /// Set a pixel; out-of-bounds writes are ignored.
@@ -135,8 +144,16 @@ impl Pixels {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GridError {
     Empty,
-    Ragged { row: usize, len: usize, expected: usize },
-    UnknownChar { row: usize, col: usize, ch: char },
+    Ragged {
+        row: usize,
+        len: usize,
+        expected: usize,
+    },
+    UnknownChar {
+        row: usize,
+        col: usize,
+        ch: char,
+    },
 }
 
 /// Decode an ASCII grid (one char per pixel) through a palette.
@@ -150,7 +167,11 @@ pub fn try_grid(rows: &[&str], pal: &[(char, Rgba)]) -> Result<Pixels, GridError
     for (y, row) in rows.iter().enumerate() {
         let len = row.chars().count();
         if len != w {
-            return Err(GridError::Ragged { row: y, len, expected: w });
+            return Err(GridError::Ragged {
+                row: y,
+                len,
+                expected: w,
+            });
         }
         for (x, ch) in row.chars().enumerate() {
             if ch == '.' {
@@ -172,7 +193,9 @@ pub fn grid(rows: &[&str], pal: &[(char, Rgba)]) -> Pixels {
 
 /// Tiny deterministic hash for procedural noise (stable across platforms).
 pub fn hash2(x: i32, y: i32, seed: u32) -> u32 {
-    let mut h = (x as u32).wrapping_mul(0x9E37_79B1) ^ (y as u32).wrapping_mul(0x85EB_CA77) ^ seed.wrapping_mul(0xC2B2_AE3D);
+    let mut h = (x as u32).wrapping_mul(0x9E37_79B1)
+        ^ (y as u32).wrapping_mul(0x85EB_CA77)
+        ^ seed.wrapping_mul(0xC2B2_AE3D);
     h ^= h >> 15;
     h = h.wrapping_mul(0x2C1B_3C6D);
     h ^= h >> 12;
@@ -203,8 +226,22 @@ mod tests {
 
     #[test]
     fn grid_errors() {
-        assert_eq!(try_grid(&["a.", "a"], P), Err(GridError::Ragged { row: 1, len: 1, expected: 2 }));
-        assert_eq!(try_grid(&["ab"], P), Err(GridError::UnknownChar { row: 0, col: 1, ch: 'b' }));
+        assert_eq!(
+            try_grid(&["a.", "a"], P),
+            Err(GridError::Ragged {
+                row: 1,
+                len: 1,
+                expected: 2
+            })
+        );
+        assert_eq!(
+            try_grid(&["ab"], P),
+            Err(GridError::UnknownChar {
+                row: 0,
+                col: 1,
+                ch: 'b'
+            })
+        );
         assert_eq!(try_grid(&[], P), Err(GridError::Empty));
     }
 }

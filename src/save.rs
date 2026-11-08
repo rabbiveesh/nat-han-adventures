@@ -24,7 +24,8 @@ pub fn plugin(app: &mut App) {
 
 /// Load progress at startup and save it on every change. Only for the real game.
 pub fn persistence_plugin(app: &mut App) {
-    app.add_systems(PreStartup, load_progress).add_systems(Last, save_progress);
+    app.add_systems(PreStartup, load_progress)
+        .add_systems(Last, save_progress);
 }
 
 #[derive(Resource, Debug, Clone, PartialEq, Reflect)]
@@ -82,7 +83,13 @@ pub enum HanTrick {
 }
 
 impl HanTrick {
-    pub const ALL: [HanTrick; 5] = [HanTrick::Throw, HanTrick::Mega, HanTrick::Cling, HanTrick::Trapeze, HanTrick::Raft];
+    pub const ALL: [HanTrick; 5] = [
+        HanTrick::Throw,
+        HanTrick::Mega,
+        HanTrick::Cling,
+        HanTrick::Trapeze,
+        HanTrick::Raft,
+    ];
 
     /// Its word in the save file.
     pub fn name(self) -> &'static str {
@@ -111,7 +118,12 @@ pub enum BandCounter {
 }
 
 impl BandCounter {
-    pub const ALL: [BandCounter; 4] = [BandCounter::Horn, BandCounter::Nugget, BandCounter::Note, BandCounter::Sweat];
+    pub const ALL: [BandCounter; 4] = [
+        BandCounter::Horn,
+        BandCounter::Nugget,
+        BandCounter::Note,
+        BandCounter::Sweat,
+    ];
 
     /// Its word in the save file.
     pub fn name(self) -> &'static str {
@@ -298,18 +310,30 @@ impl Progress {
         if self.audio_delay_ms > 0 {
             s.push_str(&format!("audio-delay {}\n", self.audio_delay_ms));
         }
-        let taught: Vec<&str> = BandCounter::ALL.iter().filter(|c| self.taught[c.index()]).map(|c| c.name()).collect();
+        let taught: Vec<&str> = BandCounter::ALL
+            .iter()
+            .filter(|c| self.taught[c.index()])
+            .map(|c| c.name())
+            .collect();
         if !taught.is_empty() {
             s.push_str(&format!("taught {}\n", taught.join(" ")));
         }
         if self.taught_call {
             s.push_str("taught-call\n");
         }
-        let tricks: Vec<&str> = HanTrick::ALL.iter().filter(|t| self.taught_tricks[t.index()]).map(|t| t.name()).collect();
+        let tricks: Vec<&str> = HanTrick::ALL
+            .iter()
+            .filter(|t| self.taught_tricks[t.index()])
+            .map(|t| t.name())
+            .collect();
         if !tricks.is_empty() {
             s.push_str(&format!("tricks {}\n", tricks.join(" ")));
         }
-        let tips: Vec<&str> = Topic::ALL.iter().filter(|t| self.taught_tips[t.index()]).map(|t| t.word()).collect();
+        let tips: Vec<&str> = Topic::ALL
+            .iter()
+            .filter(|t| self.taught_tips[t.index()])
+            .map(|t| t.word())
+            .collect();
         if !tips.is_empty() {
             s.push_str(&format!("tips {}\n", tips.join(" ")));
         }
@@ -329,7 +353,10 @@ impl Progress {
                 s.push_str(&format!("solo-level {i} {n} {t:.3}\n"));
             }
         }
-        let secrets: Vec<String> = (0..SOLO_COUNT).filter(|&i| self.solo_secrets[i]).map(|i| i.to_string()).collect();
+        let secrets: Vec<String> = (0..SOLO_COUNT)
+            .filter(|&i| self.solo_secrets[i])
+            .map(|i| i.to_string())
+            .collect();
         if !secrets.is_empty() {
             s.push_str(&format!("solo-secrets {}\n", secrets.join(" ")));
         }
@@ -362,7 +389,9 @@ impl Progress {
                     }
                 }
                 ["freeplay-seed", seed] => p.last_seed = seed.parse().ok(),
-                ["audio-delay", ms] => p.audio_delay_ms = ms.parse::<u32>().map_or(0, |ms| ms.min(MAX_AUDIO_DELAY_MS)),
+                ["audio-delay", ms] => {
+                    p.audio_delay_ms = ms.parse::<u32>().map_or(0, |ms| ms.min(MAX_AUDIO_DELAY_MS))
+                }
                 ["taught", words @ ..] => {
                     for w in words {
                         if let Some(c) = BandCounter::ALL.iter().find(|c| c.name() == *w) {
@@ -398,7 +427,11 @@ impl Progress {
                     }
                 }
                 ["solo-secrets", levels @ ..] => {
-                    for i in levels.iter().filter_map(|i| i.parse::<usize>().ok()).filter(|&i| i < SOLO_COUNT) {
+                    for i in levels
+                        .iter()
+                        .filter_map(|i| i.parse::<usize>().ok())
+                        .filter(|&i| i < SOLO_COUNT)
+                    {
                         p.solo_secrets[i] = true;
                     }
                 }
@@ -494,20 +527,30 @@ pub fn adaptive_to_text(story_dial: f32, p: &PlayerProfile) -> String {
     let opt = |v: Option<String>| v.unwrap_or_else(|| "-".into());
     for probe in &p.calibration.probes {
         let ratio = opt(probe.time_ratio.map(|r| r.to_string()));
-        s.push_str(&format!("profile-probe {} {} {ratio}\n", probe.band, u8::from(probe.clean)));
+        s.push_str(&format!(
+            "profile-probe {} {} {ratio}\n",
+            probe.band,
+            u8::from(probe.clean)
+        ));
     }
     for skill in Skill::ALL {
         let st = p.skill(skill);
         let name = skill.name();
         let fell = opt(st.fell_from.map(|b| b.to_string()));
-        s.push_str(&format!("profile-skill {name} {} {} {} {fell}\n", st.center, st.spread, st.epoch));
+        s.push_str(&format!(
+            "profile-skill {name} {} {} {} {fell}\n",
+            st.center, st.spread, st.epoch
+        ));
         for e in &st.window.entries {
             let o = match e.outcome {
                 Outcome::Clean => 'C',
                 Outcome::Struggle => 'S',
                 Outcome::Careless => 'K',
             };
-            s.push_str(&format!("profile-window {name} {o} {} {} {} {}\n", e.band, e.center, e.epoch, e.assists));
+            s.push_str(&format!(
+                "profile-window {name} {o} {} {} {} {}\n",
+                e.band, e.center, e.epoch, e.assists
+            ));
         }
     }
     s
@@ -518,8 +561,17 @@ pub fn adaptive_to_text(story_dial: f32, p: &PlayerProfile) -> String {
 /// [`Progress::from_text`]: broken lines are skipped, values clamped.
 pub fn adaptive_from_text(src: &str) -> (f32, PlayerProfile) {
     use crate::adapt::skill::{MAX_BAND, MIN_BAND};
-    let unit = |v: &str| v.parse::<f32>().ok().filter(|v| v.is_finite()).map(|v| v.clamp(0.0, 1.0));
-    let band = |v: &str| v.parse::<u8>().ok().filter(|b| (MIN_BAND..=MAX_BAND).contains(b));
+    let unit = |v: &str| {
+        v.parse::<f32>()
+            .ok()
+            .filter(|v| v.is_finite())
+            .map(|v| v.clamp(0.0, 1.0))
+    };
+    let band = |v: &str| {
+        v.parse::<u8>()
+            .ok()
+            .filter(|b| (MIN_BAND..=MAX_BAND).contains(b))
+    };
     let skill_of = |n: &str| Skill::ALL.into_iter().find(|s| s.name() == n);
     let mut dial = 0.0;
     let mut p = PlayerProfile::new();
@@ -535,14 +587,24 @@ pub fn adaptive_from_text(src: &str) -> (f32, PlayerProfile) {
             ["profile-calibrated", v] => calibrated = *v == "1",
             ["profile-probe", b, clean, ratio] => {
                 if let Some(b) = band(b) {
-                    let time_ratio = ratio.parse::<f32>().ok().filter(|r| r.is_finite() && *r >= 0.0);
-                    probes.push(Probe { band: b, clean: *clean == "1", time_ratio });
+                    let time_ratio = ratio
+                        .parse::<f32>()
+                        .ok()
+                        .filter(|r| r.is_finite() && *r >= 0.0);
+                    probes.push(Probe {
+                        band: b,
+                        clean: *clean == "1",
+                        time_ratio,
+                    });
                 }
             }
             ["profile-skill", name, center, spread, epoch, fell] => {
-                if let (Some(skill), Some(center), Some(spread), Ok(epoch)) =
-                    (skill_of(name), band(center), unit(spread), epoch.parse::<u32>())
-                {
+                if let (Some(skill), Some(center), Some(spread), Ok(epoch)) = (
+                    skill_of(name),
+                    band(center),
+                    unit(spread),
+                    epoch.parse::<u32>(),
+                ) {
                     let st = &mut p.skills[skill.index()];
                     st.center = center;
                     st.spread = spread;
@@ -557,17 +619,38 @@ pub fn adaptive_from_text(src: &str) -> (f32, PlayerProfile) {
                     "K" => Some(Outcome::Careless),
                     _ => None,
                 };
-                if let (Some(skill), Some(outcome), Some(b), Some(center), Ok(epoch), Some(assists)) =
-                    (skill_of(name), outcome, band(b), band(center), epoch.parse::<u32>(), unit(assists))
-                {
+                if let (
+                    Some(skill),
+                    Some(outcome),
+                    Some(b),
+                    Some(center),
+                    Ok(epoch),
+                    Some(assists),
+                ) = (
+                    skill_of(name),
+                    outcome,
+                    band(b),
+                    band(center),
+                    epoch.parse::<u32>(),
+                    unit(assists),
+                ) {
                     let st = &mut p.skills[skill.index()];
-                    st.window = st.window.push(WindowEntry { outcome, band: b, center, epoch, assists });
+                    st.window = st.window.push(WindowEntry {
+                        outcome,
+                        band: b,
+                        center,
+                        epoch,
+                        assists,
+                    });
                 }
             }
             _ => {}
         }
     }
-    p.calibration = Calibration { probes, done: calibrated };
+    p.calibration = Calibration {
+        probes,
+        done: calibrated,
+    };
     (dial, p)
 }
 
@@ -597,7 +680,11 @@ pub(crate) mod storage {
     /// `$XDG_DATA_HOME/nat-han-adventures/progress.txt` (or `~/.local/share/...`, `%APPDATA%\...`),
     /// falling back to next to the executable.
     pub fn path() -> PathBuf {
-        let env = |k: &str| std::env::var_os(k).filter(|v| !v.is_empty()).map(PathBuf::from);
+        let env = |k: &str| {
+            std::env::var_os(k)
+                .filter(|v| !v.is_empty())
+                .map(PathBuf::from)
+        };
         if let Some(p) = env("NATHAN_SAVE") {
             return p;
         }
@@ -636,15 +723,35 @@ mod tests {
         let back = Progress::from_text(&p.to_text()).unwrap();
         assert_eq!(back, p);
         assert_eq!(back.unlocked, 4);
-        assert_eq!(Progress::from_text(&Progress::default().to_text()), Some(Progress::default()));
-        let seeded = Progress { last_seed: Some(424242), ..Progress::default() };
+        assert_eq!(
+            Progress::from_text(&Progress::default().to_text()),
+            Some(Progress::default())
+        );
+        let seeded = Progress {
+            last_seed: Some(424242),
+            ..Progress::default()
+        };
         assert_eq!(Progress::from_text(&seeded.to_text()), Some(seeded));
-        let delayed = Progress { audio_delay_ms: 180, ..Progress::default() };
+        let delayed = Progress {
+            audio_delay_ms: 180,
+            ..Progress::default()
+        };
         assert_eq!(Progress::from_text(&delayed.to_text()), Some(delayed));
-        let taught = Progress { taught: [true, false, true, false], taught_call: true, taught_tricks: [true, false, false, false, true], ..Progress::default() };
+        let taught = Progress {
+            taught: [true, false, true, false],
+            taught_call: true,
+            taught_tricks: [true, false, false, false, true],
+            ..Progress::default()
+        };
         let mut taught = taught;
         taught.taught_tips[Topic::OneWay.index()] = true;
-        assert!(taught.to_text().contains("taught horn note\ntaught-call\ntricks throw raft\ntips oneway\n"), "{}", taught.to_text());
+        assert!(
+            taught
+                .to_text()
+                .contains("taught horn note\ntaught-call\ntricks throw raft\ntips oneway\n"),
+            "{}",
+            taught.to_text()
+        );
         assert_eq!(Progress::from_text(&taught.to_text()), Some(taught));
     }
 
@@ -675,7 +782,10 @@ mod tests {
         assert!(!p.side_b_unlocked(), "playable is not cleared");
         p.record(LEVEL_COUNT - 1, 0, 1.0);
         assert!(p.side_b_unlocked());
-        assert!(Progress::from_text(&p.to_text()).unwrap().side_b_unlocked(), "it survives a save");
+        assert!(
+            Progress::from_text(&p.to_text()).unwrap().side_b_unlocked(),
+            "it survives a save"
+        );
     }
 
     #[test]
@@ -689,7 +799,12 @@ mod tests {
         p.solo_secrets[SOLO_COUNT - 1] = true;
         assert_eq!(p.secrets_found(), SOLO_COUNT);
         assert!(p.world_4_unlocked());
-        assert!(Progress::from_text(&p.to_text()).unwrap().world_4_unlocked(), "it survives a save");
+        assert!(
+            Progress::from_text(&p.to_text())
+                .unwrap()
+                .world_4_unlocked(),
+            "it survives a save"
+        );
     }
 
     #[test]
@@ -697,10 +812,20 @@ mod tests {
         let mut p = Progress::default();
         let first = p.record_solo(0, 20, 11.5);
         assert!(first.first_clear && first.unlocked_next);
-        assert!(!p.record_solo(0, 18, 12.0).new_best_nuggets, "fewer nuggets is no best");
+        assert!(
+            !p.record_solo(0, 18, 12.0).new_best_nuggets,
+            "fewer nuggets is no best"
+        );
         assert!(p.record_solo(0, 18, 9.0).new_best_time);
-        assert_eq!((p.solo_unlocked, p.solo_nuggets[0], p.solo_time[0]), (2, Some(20), Some(9.0)));
-        assert_eq!((p.unlocked, p.best_nuggets[0]), (1, None), "the story's untouched");
+        assert_eq!(
+            (p.solo_unlocked, p.solo_nuggets[0], p.solo_time[0]),
+            (2, Some(20), Some(9.0))
+        );
+        assert_eq!(
+            (p.unlocked, p.best_nuggets[0]),
+            (1, None),
+            "the story's untouched"
+        );
         p.record_solo(SOLO_COUNT - 1, 30, 20.0);
         assert_eq!(p.solo_unlocked, SOLO_COUNT);
         p.solo_secrets[0] = true;
@@ -721,7 +846,11 @@ mod tests {
         assert_eq!(p.side_b_unlocked, SIDE_B_COUNT);
         assert!(p.solo_world_unlocked(), "clearing Side B opens NAT ALONE");
         assert_eq!(p.unlocked, 1, "the story's untouched");
-        assert_eq!(Progress::from_text(&p.to_text()).unwrap(), p, "it survives a save");
+        assert_eq!(
+            Progress::from_text(&p.to_text()).unwrap(),
+            p,
+            "it survives a save"
+        );
     }
 
     #[test]
@@ -760,14 +889,24 @@ mod tests {
         use crate::adapt::{AdaptEvent, RoomResult, reduce};
         let mut p = PlayerProfile::new();
         for i in 0..14u64 {
-            p = reduce(p, AdaptEvent::RoomStarted {
-                room_id: i,
-                skills: vec![(Skill::Precision, 3), (Skill::Grease, 2)],
-                expected_deaths: 1,
-                par_secs: Some(30.0),
-            });
+            p = reduce(
+                p,
+                AdaptEvent::RoomStarted {
+                    room_id: i,
+                    skills: vec![(Skill::Precision, 3), (Skill::Grease, 2)],
+                    expected_deaths: 1,
+                    par_secs: Some(30.0),
+                },
+            );
             let deaths = [0, 0, 3, 1, 0, 5][i as usize % 6];
-            p = reduce(p, AdaptEvent::RoomFinished(RoomResult { deaths, time_secs: 21.5 + i as f32, ..default() }));
+            p = reduce(
+                p,
+                AdaptEvent::RoomFinished(RoomResult {
+                    deaths,
+                    time_secs: 21.5 + i as f32,
+                    ..default()
+                }),
+            );
         }
         p
     }
@@ -788,12 +927,20 @@ mod tests {
         assert_eq!((back.rooms_played, back.streak), (p.rooms_played, p.streak));
         assert_eq!(back.skills, p.skills);
         // Saving what was loaded writes the same file.
-        assert_eq!(save_text(&Progress::from_text(&text).unwrap(), &StoryAssist::new(dial), &back), text);
+        assert_eq!(
+            save_text(
+                &Progress::from_text(&text).unwrap(),
+                &StoryAssist::new(dial),
+                &back
+            ),
+            text
+        );
     }
 
     #[test]
     fn old_saves_load_with_a_fresh_adaptive_state() {
-        let old = "nat-han-adventures-progress 1\nunlocked 3\nlevel 0 12 63.250\nlevel 1 4 20.000\n";
+        let old =
+            "nat-han-adventures-progress 1\nunlocked 3\nlevel 0 12 63.250\nlevel 1 4 20.000\n";
         let p = Progress::from_text(old).unwrap();
         assert_eq!(p.unlocked, 3);
         assert_eq!(p.best_nuggets[1], Some(4));
@@ -809,6 +956,9 @@ mod tests {
         assert_eq!(profile.center(Skill::Grease), 1);
         assert!(profile.skill(Skill::Grease).window.entries.is_empty());
         let w = profile.skill(Skill::Waltz);
-        assert_eq!((w.center, w.spread, w.epoch, w.fell_from), (4, 1.0, 1, Some(5)));
+        assert_eq!(
+            (w.center, w.spread, w.epoch, w.fell_from),
+            (4, 1.0, 1, Some(5))
+        );
     }
 }

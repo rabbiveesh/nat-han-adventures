@@ -59,7 +59,12 @@ pub struct PlayerDied {
 impl PlayerDied {
     /// A plain fall into the pit (tests, tools).
     pub fn at(pos: Vec2) -> Self {
-        PlayerDied { pos, cause: DeathCause::Pit, skill: Skill::Precision, slip: false }
+        PlayerDied {
+            pos,
+            cause: DeathCause::Pit,
+            skill: Skill::Precision,
+            slip: false,
+        }
     }
 }
 

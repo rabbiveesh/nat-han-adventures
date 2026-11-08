@@ -39,12 +39,18 @@ pub struct SoloRun(pub usize);
 
 /// Level `n`'s name, from its header.
 pub fn name(n: usize) -> &'static str {
-    SOLO_SOURCES[n].lines().find_map(|l| l.strip_prefix("name:")).map_or("???", str::trim)
+    SOLO_SOURCES[n]
+        .lines()
+        .find_map(|l| l.strip_prefix("name:"))
+        .map_or("???", str::trim)
 }
 
 /// The first NAT ALONE level (0-based) whose map has `tile` in it: the one that teaches it.
 pub fn teaches(tile: char) -> Option<usize> {
-    SOLO_SOURCES.iter().position(|src| src.split_once("\n---\n").is_some_and(|(_, map)| map.contains(tile)))
+    SOLO_SOURCES.iter().position(|src| {
+        src.split_once("\n---\n")
+            .is_some_and(|(_, map)| map.contains(tile))
+    })
 }
 
 /// Level `n`, parsed.
@@ -59,12 +65,19 @@ pub fn start(commands: &mut Commands, n: usize) {
     commands.insert_resource(GeneratedLevel(load(n)));
     commands.insert_resource(AssistMode::Manual);
     commands.insert_resource(Shelf::Solo);
-    commands.queue(|w: &mut World| w.resource_mut::<NextState<AppState>>().set(AppState::Playing));
+    commands.queue(|w: &mut World| {
+        w.resource_mut::<NextState<AppState>>()
+            .set(AppState::Playing)
+    });
 }
 
 pub(super) fn plugin(app: &mut App) {
     app.register_type::<SoloRun>();
-    for s in [AppState::Title, AppState::LevelSelect, AppState::FreePlaySetup] {
+    for s in [
+        AppState::Title,
+        AppState::LevelSelect,
+        AppState::FreePlaySetup,
+    ] {
         app.add_systems(OnEnter(s), leave);
     }
     app.add_systems(Startup, dev_start);
@@ -94,7 +107,10 @@ fn asked_for() -> Option<usize> {
 #[cfg(target_arch = "wasm32")]
 fn asked_for() -> Option<usize> {
     let search = web_sys::window()?.location().search().ok()?;
-    search.trim_start_matches('?').split('&').find_map(|kv| kv.strip_prefix("solo=")?.parse().ok())
+    search
+        .trim_start_matches('?')
+        .split('&')
+        .find_map(|kv| kv.strip_prefix("solo=")?.parse().ok())
 }
 
 #[cfg(test)]
@@ -115,6 +131,10 @@ mod tests {
         for tile in ['e', 'w', '!', 'b', 'd', 'm', '|'] {
             assert!(teaches(tile).is_some(), "no NAT ALONE level has {tile}");
         }
-        assert_eq!(teaches('e'), Some(0), "Breezy Does It opens with the wall fans");
+        assert_eq!(
+            teaches('e'),
+            Some(0),
+            "Breezy Does It opens with the wall fans"
+        );
     }
 }

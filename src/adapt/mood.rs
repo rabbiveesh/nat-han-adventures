@@ -14,7 +14,10 @@ pub struct BandMood {
 }
 
 impl BandMood {
-    pub const NEUTRAL: BandMood = BandMood { intensity: 0.5, freedom: 0.5 };
+    pub const NEUTRAL: BandMood = BandMood {
+        intensity: 0.5,
+        freedom: 0.5,
+    };
 }
 
 /// Recency weight per room back (the latest room counts most).
@@ -52,7 +55,11 @@ pub fn band_mood_from(profile: &PlayerProfile, recent: &[RecentRoom]) -> BandMoo
     let clean = clean / wsum;
     let toots = toots / wsum;
     let pace = if psum > 0.0 { pace / psum } else { 0.5 };
-    let spread = Skill::ALL.iter().map(|s| profile.skill(*s).spread).sum::<f32>() / Skill::COUNT as f32;
+    let spread = Skill::ALL
+        .iter()
+        .map(|s| profile.skill(*s).spread)
+        .sum::<f32>()
+        / Skill::COUNT as f32;
     let calm = profile.assists + if profile.frustrated() { 0.2 } else { 0.0 };
     BandMood {
         intensity: (0.1 + 0.5 * clean + 0.3 * pace + 0.1 * toots - 0.3 * calm).clamp(0.0, 1.0),

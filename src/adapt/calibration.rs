@@ -53,7 +53,10 @@ pub struct Calibration {
 impl Calibration {
     /// Calibration that's already over (for profiles set up directly, e.g. in tests).
     pub fn finished() -> Self {
-        Calibration { probes: Vec::new(), done: true }
+        Calibration {
+            probes: Vec::new(),
+            done: true,
+        }
     }
 
     /// Band of the next probe room.
@@ -67,7 +70,10 @@ impl Calibration {
     pub fn record(&self, probe: Probe) -> Self {
         let mut probes = self.probes.clone();
         probes.push(probe);
-        Calibration { probes, done: self.done }
+        Calibration {
+            probes,
+            done: self.done,
+        }
     }
 
     /// Enough probes to place the player.
@@ -89,17 +95,32 @@ impl Calibration {
     /// Starting dials from the probes so far.
     pub fn placement(&self) -> Placement {
         let cleans: Vec<&Probe> = self.probes.iter().filter(|p| p.clean).collect();
-        let lowest_struggle = self.probes.iter().filter(|p| !p.clean).map(|p| p.band).min();
+        let lowest_struggle = self
+            .probes
+            .iter()
+            .filter(|p| !p.clean)
+            .map(|p| p.band)
+            .min();
         let mut band = cleans.iter().map(|p| p.band).max().unwrap_or(MIN_BAND);
         let ratios: Vec<f32> = cleans.iter().filter_map(|p| p.time_ratio).collect();
-        let avg_ratio = if ratios.is_empty() { None } else { Some(ratios.iter().sum::<f32>() / ratios.len() as f32) };
+        let avg_ratio = if ratios.is_empty() {
+            None
+        } else {
+            Some(ratios.iter().sum::<f32>() / ratios.len() as f32)
+        };
         let fast = avg_ratio.is_some_and(|r| r < FAST_RATIO);
         let slow = avg_ratio.is_some_and(|r| r > SLOW_RATIO);
         // Flying through: start one higher, but never at or above a band they struggled at.
         if fast && band < MAX_BAND && lowest_struggle.is_none_or(|s| band + 1 < s) {
             band += 1;
         }
-        let spread = if fast { 0.6 } else if slow { 0.35 } else { 0.5 };
+        let spread = if fast {
+            0.6
+        } else if slow {
+            0.35
+        } else {
+            0.5
+        };
         let assists = if cleans.is_empty() {
             NO_CLEAN_ASSISTS
         } else if lowest_struggle.is_some() {
@@ -107,7 +128,11 @@ impl Calibration {
         } else {
             0.0
         };
-        Placement { band, spread, assists }
+        Placement {
+            band,
+            spread,
+            assists,
+        }
     }
 }
 
@@ -116,7 +141,11 @@ mod tests {
     use super::*;
 
     fn probe(band: Band, clean: bool) -> Probe {
-        Probe { band, clean, time_ratio: Some(1.0) }
+        Probe {
+            band,
+            clean,
+            time_ratio: Some(1.0),
+        }
     }
 
     #[test]

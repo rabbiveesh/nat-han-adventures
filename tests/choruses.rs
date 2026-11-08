@@ -37,21 +37,38 @@ impl Bar {
     }
 
     fn notes(&self, ch: u8) -> Vec<u8> {
-        self.ch(ch).flat_map(|e| e.sound.notes().iter().copied()).collect()
+        self.ch(ch)
+            .flat_map(|e| e.sound.notes().iter().copied())
+            .collect()
     }
 }
 
 fn freedom(f: f32) -> Input {
-    Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: 0.0 }
+    Input::SetFreedom {
+        lead: f,
+        comp: f,
+        bass: f,
+        drums: f,
+        dynamics: 0.0,
+    }
 }
 
 fn force(chorus: Chorus) -> Input {
-    Input::ForceChorus(Some(Call { chorus, key_up: false }))
+    Input::ForceChorus(Some(Call {
+        chorus,
+        key_up: false,
+    }))
 }
 
 /// Play `song` (with `config`) for up to `bars` bars, `at(k)` posted as bar `k` is about to be
 /// decided; every bar as it's committed, until the song ends.
-fn play_with(song: &SongFile, config: EngineConfig, setup: &[Input], at: impl Fn(u64) -> Vec<Input>, bars: u64) -> (Engine, Vec<Bar>) {
+fn play_with(
+    song: &SongFile,
+    config: EngineConfig,
+    setup: &[Input],
+    at: impl Fn(u64) -> Vec<Input>,
+    bars: u64,
+) -> (Engine, Vec<Bar>) {
     let mut e = Engine::with_config(song, synth::SAMPLE_RATE, config).unwrap();
     for i in setup {
         e.post(*i);
@@ -65,7 +82,11 @@ fn play_with(song: &SongFile, config: EngineConfig, setup: &[Input], at: impl Fn
         let s = e.state();
         let have = out.len() as u64;
         for c in s.upcoming.iter().filter(|c| c.slot.index >= have) {
-            let ev = e.pending_events().filter(|x| x.bar == c.slot.index).copied().collect();
+            let ev = e
+                .pending_events()
+                .filter(|x| x.bar == c.slot.index)
+                .copied()
+                .collect();
             out.push(Bar { c: *c, ev });
             for i in at(c.slot.index + 1) {
                 e.post(i);
@@ -76,14 +97,32 @@ fn play_with(song: &SongFile, config: EngineConfig, setup: &[Input], at: impl Fn
 }
 
 fn play(song: &SongFile, seed: u64, setup: &[Input], bars: u64) -> Vec<Bar> {
-    play_with(song, EngineConfig { seed, ..EngineConfig::on_grid() }, setup, |_| vec![], bars).1
+    play_with(
+        song,
+        EngineConfig {
+            seed,
+            ..EngineConfig::on_grid()
+        },
+        setup,
+        |_| vec![],
+        bars,
+    )
+    .1
 }
 
 fn song(m: Music) -> &'static SongFile {
     library::song(m).unwrap().1
 }
 
-const LOOPING: [Music; 7] = [Music::Title, Music::World(1), Music::World(2), Music::World(3), Music::World(4), Music::World(5), Music::Victory];
+const LOOPING: [Music; 7] = [
+    Music::Title,
+    Music::World(1),
+    Music::World(2),
+    Music::World(3),
+    Music::World(4),
+    Music::World(5),
+    Music::Victory,
+];
 
 /// Below the arranger's dial every pass is the head; above it the band arranges whole passes
 /// itself, the first a head (in two or not), deterministically.
@@ -93,19 +132,29 @@ fn the_band_arranges_whole_passes() {
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
         let bars = 4 * s.bars() as u64;
-        assert!(play(s, k as u64, &[freedom(0.2)], bars).iter().all(|b| b.c.band.chorus == Chorus::Head && !b.c.band.arranged()));
+        assert!(
+            play(s, k as u64, &[freedom(0.2)], bars)
+                .iter()
+                .all(|b| b.c.band.chorus == Chorus::Head && !b.c.band.arranged())
+        );
         for f in [0.35, 0.7] {
             let a = play(s, k as u64, &[freedom(f)], bars);
             assert!(matches!(a[0].c.band.chorus, Chorus::Head | Chorus::TwoFeel));
             // One chorus per pass.
             for w in a.windows(2) {
                 if w[0].c.slot.pass == w[1].c.slot.pass {
-                    assert_eq!(w[0].c.band.chorus, w[1].c.band.chorus, "{m:?} at {f}: the chorus changed mid-pass");
+                    assert_eq!(
+                        w[0].c.band.chorus, w[1].c.band.chorus,
+                        "{m:?} at {f}: the chorus changed mid-pass"
+                    );
                 }
             }
             kinds.extend(a.iter().map(|b| b.c.band.chorus));
             let b = play(s, k as u64, &[freedom(f)], bars);
-            assert!(a.iter().zip(&b).all(|(x, y)| x.c.band == y.c.band), "{m:?}: not deterministic");
+            assert!(
+                a.iter().zip(&b).all(|(x, y)| x.c.band == y.c.band),
+                "{m:?}: not deterministic"
+            );
         }
     }
     assert!(kinds.len() >= 6, "only {kinds:?}");
@@ -123,7 +172,12 @@ fn stop_time_hits_on_one_and_lays_out() {
             // (From the second bar: the first started before the harness saw it.)
             for b in &bars[1..] {
                 let stop = chorus::stop_bar(b.c.slot.song_bar, song(m).bars());
-                assert_eq!(b.c.band.hit_kind == HitKind::Stop, stop, "{m:?} bar {}", b.c.slot.song_bar);
+                assert_eq!(
+                    b.c.band.hit_kind == HitKind::Stop,
+                    stop,
+                    "{m:?} bar {}",
+                    b.c.slot.song_bar
+                );
                 if !stop {
                     continue;
                 }
@@ -131,14 +185,30 @@ fn stop_time_hits_on_one_and_lays_out() {
                 let last = b.c.band.hit_beats().last().unwrap();
                 assert!(b.c.band.hits & 1 == 1, "a hit on ONE");
                 for ch in [1, 2] {
-                    assert!(b.ch(ch).all(|e| b.rel(e) <= last + 1e-6), "{m:?} at {f}: ch {ch} plays through the stop");
-                    assert!(b.ch(ch).any(|e| b.rel(e).abs() < 1e-6), "{m:?}: ch {ch} misses the hit");
+                    assert!(
+                        b.ch(ch).all(|e| b.rel(e) <= last + 1e-6),
+                        "{m:?} at {f}: ch {ch} plays through the stop"
+                    );
+                    assert!(
+                        b.ch(ch).any(|e| b.rel(e).abs() < 1e-6),
+                        "{m:?}: ch {ch} misses the hit"
+                    );
                 }
-                assert!(b.ch(3).filter(|e| b.rel(e) > last + 0.3).all(|e| e.sound == Sound::Drum(Drum::ClosedHat)));
-                assert!(b.ch(3).any(|e| b.rel(e).abs() < 1e-6 && e.sound == Sound::Drum(Drum::Kick)));
+                assert!(
+                    b.ch(3)
+                        .filter(|e| b.rel(e) > last + 0.3)
+                        .all(|e| e.sound == Sound::Drum(Drum::ClosedHat))
+                );
+                assert!(
+                    b.ch(3)
+                        .any(|e| b.rel(e).abs() < 1e-6 && e.sound == Sound::Drum(Drum::Kick))
+                );
             }
             assert!(stops >= 19, "{m:?}: {stops} stop bars");
-            assert!(bars.iter().filter(|b| b.ch(0).next().is_some()).count() >= 24, "{m:?}: the lead stopped too");
+            assert!(
+                bars.iter().filter(|b| b.ch(0).next().is_some()).count() >= 24,
+                "{m:?}: the lead stopped too"
+            );
         }
     }
 }
@@ -156,9 +226,19 @@ fn breaks_leave_the_lead_alone() {
                 continue;
             }
             seen += 1;
-            assert!(a.c.band.hit_kind == HitKind::Stop && a.c.band.solo_break, "{m:?}: no stop before the break");
-            assert!(b.ch(1).next().is_none() && b.ch(2).next().is_none() && b.ch(3).next().is_none(), "{m:?}: the band played in the break");
-            assert!(b.ch(0).count() >= 4 && b.c.orns[0].has(Orn::Break), "{m:?}: no break from the lead ({})", b.c.orns[0].names());
+            assert!(
+                a.c.band.hit_kind == HitKind::Stop && a.c.band.solo_break,
+                "{m:?}: no stop before the break"
+            );
+            assert!(
+                b.ch(1).next().is_none() && b.ch(2).next().is_none() && b.ch(3).next().is_none(),
+                "{m:?}: the band played in the break"
+            );
+            assert!(
+                b.ch(0).count() >= 4 && b.c.orns[0].has(Orn::Break),
+                "{m:?}: no break from the lead ({})",
+                b.c.orns[0].names()
+            );
         }
         assert!(seen >= 3, "{m:?}: {seen} breaks");
         for w in bars.windows(2) {
@@ -174,13 +254,34 @@ fn breaks_leave_the_lead_alone() {
 fn strolling_and_two_feel() {
     for m in [Music::World(1), Music::World(5)] {
         let bars = play(song(m), 2, &[freedom(0.5), force(Chorus::Strolling)], 16);
-        assert!(bars.iter().all(|b| b.ch(1).next().is_none()), "{m:?}: the comp strolled in");
-        assert!(bars.iter().all(|b| b.c.orns[0].has(Orn::Solo) || b.c.orns[0].has(Orn::WahWah)), "{m:?}: the lead should solo");
+        assert!(
+            bars.iter().all(|b| b.ch(1).next().is_none()),
+            "{m:?}: the comp strolled in"
+        );
+        assert!(
+            bars.iter()
+                .all(|b| b.c.orns[0].has(Orn::Solo) || b.c.orns[0].has(Orn::WahWah)),
+            "{m:?}: the lead should solo"
+        );
         let bars = play(song(m), 2, &[freedom(0.5), force(Chorus::TwoFeel)], 16);
         for b in &bars {
-            assert!(b.c.orns[2].has(Orn::TwoFeel), "{m:?}: {}", b.c.orns[2].names());
-            let fresh: Vec<f64> = b.ch(2).filter(|e| !e.tie).map(|e| b.rel(e)).filter(|&x| x < 3.9).collect();
-            assert!(fresh.iter().all(|x| (x - 0.0).abs() < 1e-6 || (x - 2.0).abs() < 1e-6 || b.c.band.hits != 0), "{m:?}: the bass isn't in two: {fresh:?}");
+            assert!(
+                b.c.orns[2].has(Orn::TwoFeel),
+                "{m:?}: {}",
+                b.c.orns[2].names()
+            );
+            let fresh: Vec<f64> = b
+                .ch(2)
+                .filter(|e| !e.tie)
+                .map(|e| b.rel(e))
+                .filter(|&x| x < 3.9)
+                .collect();
+            assert!(
+                fresh.iter().all(|x| (x - 0.0).abs() < 1e-6
+                    || (x - 2.0).abs() < 1e-6
+                    || b.c.band.hits != 0),
+                "{m:?}: the bass isn't in two: {fresh:?}"
+            );
         }
     }
 }
@@ -204,13 +305,18 @@ fn soli_is_four_independent_voices() {
             let spb = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
             let at = |ch: u8, x: f64| {
                 let t = b.c.slot.start + (x * spb) as u64;
-                b.ch(ch).filter(|e| e.start <= t && t < e.end).find_map(|e| match e.sound {
-                    Sound::Note(n) => Some(n as i32),
-                    _ => None,
-                })
+                b.ch(ch)
+                    .filter(|e| e.start <= t && t < e.end)
+                    .find_map(|e| match e.sound {
+                        Sound::Note(n) => Some(n as i32),
+                        _ => None,
+                    })
             };
             let tenor = b.ch(4).count();
-            assert!(s.tenor || tenor == 0, "{m:?}: the tenor waits for the second section");
+            assert!(
+                s.tenor || tenor == 0,
+                "{m:?}: the tenor waits for the second section"
+            );
             tenor_notes += tenor;
             if s.texture != Texture::Locked {
                 for l in b.ch(0) {
@@ -232,24 +338,40 @@ fn soli_is_four_independent_voices() {
             for (p, q) in pairs {
                 for k in 0..7 {
                     let (x, y) = (k as f64 * 0.5, k as f64 * 0.5 + 0.5);
-                    let (Some(a0), Some(b0), Some(a1), Some(b1)) = (at(p, x), at(q, x), at(p, y), at(q, y)) else { continue };
+                    let (Some(a0), Some(b0), Some(a1), Some(b1)) =
+                        (at(p, x), at(q, x), at(p, y), at(q, y))
+                    else {
+                        continue;
+                    };
                     let (da, db) = (a1 - a0, b1 - b0);
                     if da == 0 || db == 0 {
                         continue;
                     }
                     moves += 1;
                     let (i0, i1) = ((a0 - b0).rem_euclid(12), (a1 - b1).rem_euclid(12));
-                    parallels += (da.signum() == db.signum() && i0 == i1 && (i0 == 0 || i0 == 7)) as usize;
+                    parallels +=
+                        (da.signum() == db.signum() && i0 == i1 && (i0 == 0 || i0 == 7)) as usize;
                 }
             }
         }
-        eprintln!("{m:?}: shadowed {shadowed}/{lead_notes}, parallels {parallels}/{moves}, clarinet off {off}/{alto_attacks}, tenor {tenor_notes}");
+        eprintln!(
+            "{m:?}: shadowed {shadowed}/{lead_notes}, parallels {parallels}/{moves}, clarinet off {off}/{alto_attacks}, tenor {tenor_notes}"
+        );
         assert!(textures.len() >= 3, "{m:?}: textures {textures:?}");
         assert!(tenor_notes > 0, "{m:?}: the tenor plays");
-        assert!(shadowed * 10 < lead_notes * 5, "{m:?}: {shadowed}/{lead_notes} tune notes shadowed a third to a sixth below");
-        assert!(parallels * 100 <= moves * 6, "{m:?}: {parallels} parallel fifths or octaves in {moves} moves");
+        assert!(
+            shadowed * 10 < lead_notes * 5,
+            "{m:?}: {shadowed}/{lead_notes} tune notes shadowed a third to a sixth below"
+        );
+        assert!(
+            parallels * 100 <= moves * 6,
+            "{m:?}: {parallels} parallel fifths or octaves in {moves} moves"
+        );
         if alto_attacks > 0 {
-            assert!(off * 10 >= alto_attacks * 4, "{m:?}: the clarinet attacks between the tune's notes ({off}/{alto_attacks})");
+            assert!(
+                off * 10 >= alto_attacks * 4,
+                "{m:?}: the clarinet attacks between the tune's notes ({off}/{alto_attacks})"
+            );
         }
     }
 }
@@ -260,11 +382,25 @@ fn soli_is_four_independent_voices() {
 fn shout_and_key_up() {
     for m in [Music::World(2), Music::World(5)] {
         let shout = play(song(m), 6, &[freedom(0.5), force(Chorus::Shout)], 12);
-        let up = play(song(m), 6, &[freedom(0.5), Input::ForceChorus(Some(Call { chorus: Chorus::Shout, key_up: true }))], 12);
+        let up = play(
+            song(m),
+            6,
+            &[
+                freedom(0.5),
+                Input::ForceChorus(Some(Call {
+                    chorus: Chorus::Shout,
+                    key_up: true,
+                })),
+            ],
+            12,
+        );
         let mut stabs = 0;
         for (a, b) in shout.iter().zip(&up) {
             assert!(a.c.band.swell > 0.0 && a.c.orns[1].has(Orn::ShoutStabs));
-            stabs += a.ch(1).filter(|c| a.ch(0).any(|l| l.start == c.start)).count();
+            stabs += a
+                .ch(1)
+                .filter(|c| a.ch(0).any(|l| l.start == c.start))
+                .count();
             assert_eq!(a.ev.len(), b.ev.len());
             for (x, y) in a.ev.iter().zip(&b.ev) {
                 assert_eq!((x.ch, x.start, x.end), (y.ch, y.start, y.end));
@@ -291,11 +427,17 @@ fn riffs_are_chord_tones() {
         let mut notes = 0;
         for b in bars.iter().filter(|b| b.c.orns[1].has(Orn::Riff)) {
             for e in b.ch(1) {
-                let Sound::Note(n) = e.sound else { panic!("{m:?}: a chord in a riff") };
+                let Sound::Note(n) = e.sound else {
+                    panic!("{m:?}: a chord in a riff")
+                };
                 // (The 8ths swing: the chord where the 8th was written.)
                 let h = Harm::new(chart.at(e.beat - 0.2));
                 let h2 = Harm::new(chart.at(e.beat));
-                assert!(h.is_chord_tone(n) || h2.is_chord_tone(n), "{m:?}: {n} over {:?}", h.chord);
+                assert!(
+                    h.is_chord_tone(n) || h2.is_chord_tone(n),
+                    "{m:?}: {n} over {:?}",
+                    h.chord
+                );
                 notes += 1;
             }
         }
@@ -308,25 +450,49 @@ fn riffs_are_chord_tones() {
 /// 0, none without the game's setting.
 #[test]
 fn levels_start_with_an_intro() {
-    let config = |seed| EngineConfig { seed, intro: true, ..EngineConfig::on_grid() };
+    let config = |seed| EngineConfig {
+        seed,
+        intro: true,
+        ..EngineConfig::on_grid()
+    };
     let mut kinds = std::collections::HashSet::new();
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
         let n = s.bars();
         for seed in [k as u64, 40 + k as u64] {
             let (_, bars) = play_with(s, config(seed), &[freedom(0.35)], |_| vec![], 8);
-            let intro: Vec<_> = bars[..4].iter().map(|b| b.c.band.intro.expect("an intro")).collect();
+            let intro: Vec<_> = bars[..4]
+                .iter()
+                .map(|b| b.c.band.intro.expect("an intro"))
+                .collect();
             kinds.insert(intro[0].kind);
-            assert_eq!(bars[..4].iter().map(|b| b.c.slot.song_bar).collect::<Vec<_>>(), [n - 4, n - 3, n - 2, n - 1]);
-            assert!(bars[..3].iter().all(|b| b.ch(0).next().is_none()), "{m:?}: the lead played in the intro");
+            assert_eq!(
+                bars[..4]
+                    .iter()
+                    .map(|b| b.c.slot.song_bar)
+                    .collect::<Vec<_>>(),
+                [n - 4, n - 3, n - 2, n - 1]
+            );
+            assert!(
+                bars[..3].iter().all(|b| b.ch(0).next().is_none()),
+                "{m:?}: the lead played in the intro"
+            );
             assert!(bars[3].ch(0).count() >= 3, "{m:?}: no pickup");
-            assert!(bars[3].c.band.fill != Default::default(), "{m:?}: no fill into the head");
+            assert!(
+                bars[3].c.band.fill != Default::default(),
+                "{m:?}: no fill into the head"
+            );
             assert_eq!((bars[4].c.slot.pass, bars[4].c.slot.song_bar), (0, 0));
             assert!(bars[4].c.band.intro.is_none() && bars[4].c.band.crash);
             if intro[0].kind == IntroKind::Pedal {
                 let dom = (s.key + 7) % 12;
                 // (The last bar may approach the head.)
-                assert!(bars[..3].iter().all(|b| b.ch(2).all(|e| e.sound.notes()[0] % 12 == dom)), "{m:?}: the pedal moved");
+                assert!(
+                    bars[..3]
+                        .iter()
+                        .all(|b| b.ch(2).all(|e| e.sound.notes()[0] % 12 == dom)),
+                    "{m:?}: the pedal moved"
+                );
                 assert_eq!(bars[3].notes(2)[0] % 12, dom);
             }
         }
@@ -344,12 +510,30 @@ fn songs_end_with_an_ending() {
     let mut kinds = std::collections::HashSet::new();
     for (k, m) in LOOPING.into_iter().enumerate() {
         let s = song(m);
-        for (seed, f) in [(k as u64, 0.0), (k as u64, 0.5), (10 + k as u64, 0.5), (20 + k as u64, 0.5)] {
-            let cfg = EngineConfig { seed, ..EngineConfig::on_grid() };
-            let (e, bars) = play_with(s, cfg, &[freedom(f)], |k| if k == 6 { vec![Input::End] } else { vec![] }, 40);
+        for (seed, f) in [
+            (k as u64, 0.0),
+            (k as u64, 0.5),
+            (10 + k as u64, 0.5),
+            (20 + k as u64, 0.5),
+        ] {
+            let cfg = EngineConfig {
+                seed,
+                ..EngineConfig::on_grid()
+            };
+            let (e, bars) = play_with(
+                s,
+                cfg,
+                &[freedom(f)],
+                |k| if k == 6 { vec![Input::End] } else { vec![] },
+                40,
+            );
             assert!(e.finished(), "{m:?}: didn't finish");
             let ending: Vec<_> = bars.iter().filter_map(|b| b.c.band.ending).collect();
-            assert_eq!(ending.len(), ending[0].n as usize, "{m:?}: a cut-short ending");
+            assert_eq!(
+                ending.len(),
+                ending[0].n as usize,
+                "{m:?}: a cut-short ending"
+            );
             assert!(bars.iter().position(|b| b.c.band.ending.is_some()).unwrap() >= 6);
             let kind = ending[0].kind;
             kinds.insert(kind);
@@ -359,14 +543,30 @@ fn songs_end_with_an_ending() {
             let tonic = Harm::new(last.c.band.subs[0].unwrap().chord);
             for ch in [0, 1, 2] {
                 let notes = last.notes(ch);
-                assert!(!notes.is_empty() && notes.iter().all(|&x| tonic.is_chord_tone(x) || ch == 1), "{m:?} {kind:?}: ch {ch} {notes:?}");
+                assert!(
+                    !notes.is_empty() && notes.iter().all(|&x| tonic.is_chord_tone(x) || ch == 1),
+                    "{m:?} {kind:?}: ch {ch} {notes:?}"
+                );
             }
-            assert_eq!(last.notes(2)[0] % 12, s.key % 12, "{m:?}: the bass isn't on the root");
+            assert_eq!(
+                last.notes(2)[0] % 12,
+                s.key % 12,
+                "{m:?}: the bass isn't on the root"
+            );
             if kind == EndKind::Basie {
                 let plinks = &bars[bars.len() - 2];
                 assert_eq!(plinks.ch(1).count(), 3);
-                let others: Vec<_> = plinks.ev.iter().filter(|e| e.ch != 1).map(|e| (e.ch, plinks.rel(e), e.sound)).collect();
-                assert!(others.is_empty(), "{m:?} at {f}: {others:?} with the plinks ({:?})", plinks.c.orns.map(|o| o.names()));
+                let others: Vec<_> = plinks
+                    .ev
+                    .iter()
+                    .filter(|e| e.ch != 1)
+                    .map(|e| (e.ch, plinks.rel(e), e.sound))
+                    .collect();
+                assert!(
+                    others.is_empty(),
+                    "{m:?} at {f}: {others:?} with the plinks ({:?})",
+                    plinks.c.orns.map(|o| o.names())
+                );
             }
         }
     }
@@ -381,8 +581,17 @@ fn the_jingle_gets_a_basie_ending() {
     let (e, bars) = play_with(s, EngineConfig::default(), &[freedom(0.35)], |_| vec![], 20);
     assert!(e.finished());
     assert_eq!(bars.len(), s.bars() + 2);
-    let steps: Vec<_> = bars.iter().filter_map(|b| b.c.band.ending.map(|x| (x.kind, x.step()))).collect();
-    assert_eq!(steps, [(EndKind::Basie, EndStep::Plinks), (EndKind::Basie, EndStep::Final)]);
+    let steps: Vec<_> = bars
+        .iter()
+        .filter_map(|b| b.c.band.ending.map(|x| (x.kind, x.step())))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            (EndKind::Basie, EndStep::Plinks),
+            (EndKind::Basie, EndStep::Final)
+        ]
+    );
     let (e, bars) = play_with(s, EngineConfig::default(), &[freedom(0.0)], |_| vec![], 20);
     assert!(e.finished() && bars.len() == s.bars() && bars.iter().all(|b| !b.c.band.arranged()));
 }

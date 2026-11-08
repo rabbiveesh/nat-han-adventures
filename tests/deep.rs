@@ -68,16 +68,27 @@ fn inputs_hash() -> u64 {
     let mut files: Vec<PathBuf> = SOURCES.iter().map(|s| root.join(s)).collect();
     let mut levels: Vec<PathBuf> = std::fs::read_dir(root.join("levels"))
         .map(|d| {
-            d.filter_map(|e| e.ok().map(|e| e.path())).filter(|p| p.extension().is_some_and(|x| x == "txt")).collect()
+            d.filter_map(|e| e.ok().map(|e| e.path()))
+                .filter(|p| p.extension().is_some_and(|x| x == "txt"))
+                .collect()
         })
         .unwrap_or_default();
     levels.sort();
     files.extend(levels);
     let mut h = 0xcbf29ce484222325;
     for f in files {
-        fnv(&mut h, f.strip_prefix(root).unwrap_or(&f).to_string_lossy().as_bytes());
+        fnv(
+            &mut h,
+            f.strip_prefix(root)
+                .unwrap_or(&f)
+                .to_string_lossy()
+                .as_bytes(),
+        );
         // A missing file (moved, say) hashes as missing: the check reruns.
-        fnv(&mut h, &std::fs::read(&f).unwrap_or_else(|_| b"<missing>".to_vec()));
+        fnv(
+            &mut h,
+            &std::fs::read(&f).unwrap_or_else(|_| b"<missing>".to_vec()),
+        );
     }
     h
 }
@@ -104,7 +115,10 @@ fn threads() -> usize {
 }
 
 fn campaign() -> Vec<Level> {
-    LEVEL_SOURCES.iter().map(|s| Level::parse(s).expect("campaign level parses")).collect()
+    LEVEL_SOURCES
+        .iter()
+        .map(|s| Level::parse(s).expect("campaign level parses"))
+        .collect()
 }
 
 /// Tier 1's reachable director states: the music you might arrive at a gate with.
@@ -133,7 +147,10 @@ fn deep_director() {
         let mut clean = all.clone();
         clean.acts.retain(|a| !KNOWN.iter().any(|k| k.0 == *a));
         let mut fail = Vec::new();
-        for (cfg, what) in [(&clean, "without the known issues' frames"), (&all, "every act")] {
+        for (cfg, what) in [
+            (&clean, "without the known issues' frames"),
+            (&all, "every act"),
+        ] {
             let (ex, found) = explore_with(cfg, threads(), false, &check);
             let c = &ex.coverage;
             eprintln!(
@@ -146,7 +163,9 @@ fn deep_director() {
                 c.music.len()
             );
             for ce in &found {
-                let known = KNOWN.iter().find(|k| k.1 == ce.violation.prop && ce.state.0.contains(&k.0));
+                let known = KNOWN
+                    .iter()
+                    .find(|k| k.1 == ce.violation.prop && ce.state.0.contains(&k.0));
                 match known {
                     Some((_, _, why)) if cfg.acts.len() == all.acts.len() => {
                         eprintln!("KNOWN ISSUE ({why}):\n{ce}\n")
@@ -158,7 +177,10 @@ fn deep_director() {
                 }
             }
         }
-        assert!(fail.is_empty(), "deep director: properties {fail:?} fail (counterexamples above)");
+        assert!(
+            fail.is_empty(),
+            "deep director: properties {fail:?} fail (counterexamples above)"
+        );
     });
 }
 
@@ -259,7 +281,9 @@ fn attempt(s: &Sim, r: &Recipe, need: Need) -> Result<(), Failed> {
         t.apply_with(a, |x, _| history.push((x.tick, need.met(x), x.harmony())));
     }
     let takeoff = t.tick;
-    t.apply_with(Act::Wait(r.cross as u16), |x, _| history.push((x.tick, need.met(x), x.harmony())));
+    t.apply_with(Act::Wait(r.cross as u16), |x, _| {
+        history.push((x.tick, need.met(x), x.harmony()))
+    });
     // The state just before each tick from take-off − lead on (the last frame of each tick).
     let from = takeoff - need.lead();
     let mut bad: Vec<(i32, Harmony)> = Vec::new();
@@ -273,8 +297,11 @@ fn attempt(s: &Sim, r: &Recipe, need: Need) -> Result<(), Failed> {
         return Ok(());
     }
     let came = history.iter().skip(1).position(|e| e.1);
-    let stolen = came
-        .is_some_and(|i| history[i + 1..].iter().any(|e| !e.1 && Need::Band(e.2) != need && director::summonable(e.2)));
+    let stolen = came.is_some_and(|i| {
+        history[i + 1..]
+            .iter()
+            .any(|e| !e.1 && Need::Band(e.2) != need && director::summonable(e.2))
+    });
     let mut acts = r.acts.clone();
     acts.push(Act::Wait(r.cross as u16));
     Err(Failed {
@@ -326,7 +353,11 @@ fn mega_recipes(g: &Groove) -> Vec<Recipe> {
         .into_iter()
         .map(|mut r| {
             r.acts.push(Act::Wait(ticks(hop).max(1) as u16));
-            Recipe { name: format!("{}: a hop onto Han, the mega-boost", r.name), cross: ticks(1.5) + 1, ..r }
+            Recipe {
+                name: format!("{}: a hop onto Han, the mega-boost", r.name),
+                cross: ticks(1.5) + 1,
+                ..r
+            }
         })
         .collect()
 }
@@ -337,12 +368,19 @@ fn gap_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     let speed = RUN_SPEED * g.speed_scale * 0.9;
     let mut out = Vec::new();
     for wait in [0.0, BAR_TICKS as f32 * TICK] {
-        let mut ev: Vec<(f32, Act)> = nuggets.iter().map(|&d| (d * TILE / speed, Act::NUGGET)).collect();
+        let mut ev: Vec<(f32, Act)> = nuggets
+            .iter()
+            .map(|&d| (d * TILE / speed, Act::NUGGET))
+            .collect();
         let last = ev.last().map_or(0.0, |e| e.0);
         ev.push((last, Act::CALL));
         ev.push((last + run_up * TILE / speed + wait, Act::JUMP));
         out.push(Recipe {
-            name: format!("{} nuggets at {:.0} px/s, jump after {wait}s", nuggets.len(), speed),
+            name: format!(
+                "{} nuggets at {:.0} px/s, jump after {wait}s",
+                nuggets.len(),
+                speed
+            ),
             acts: timeline(&ev),
             cross: 6,
         });
@@ -358,7 +396,10 @@ fn chasm_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
     let hop = air_time(g, f32::INFINITY, None);
     let mut out = Vec::new();
     for wait in [0.5, 1.5, 3.0] {
-        let mut ev: Vec<(f32, Act)> = nuggets.iter().map(|&d| (d * TILE / speed, Act::NUGGET)).collect();
+        let mut ev: Vec<(f32, Act)> = nuggets
+            .iter()
+            .map(|&d| (d * TILE / speed, Act::NUGGET))
+            .collect();
         let last = ev.last().map_or(0.0, |e| e.0);
         ev.push((last, Act::CALL));
         let hop_at = last + run_up * TILE / speed + wait;
@@ -366,7 +407,11 @@ fn chasm_recipes(g: &Groove, nuggets: &[f32], run_up: f32) -> Vec<Recipe> {
         let mut acts = timeline(&ev);
         acts.push(Act::Wait(ticks(hop).max(1) as u16));
         out.push(Recipe {
-            name: format!("{} nuggets at {:.0} px/s, hop onto Han after {wait}s, the throw", nuggets.len(), speed),
+            name: format!(
+                "{} nuggets at {:.0} px/s, hop onto Han after {wait}s, the throw",
+                nuggets.len(),
+                speed
+            ),
             acts,
             cross: ticks(1.5) + 1,
         });
@@ -395,7 +440,10 @@ fn waltz_recipes(g: &Groove, wait: f32) -> Vec<Recipe> {
                     (p + 2.0 * gap, Act::CALL),
                     (p + 2.0 * gap + 2.5 + w, Act::Wait(0)),
                 ];
-                let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
+                let acts: Vec<Act> = timeline(&ev)
+                    .into_iter()
+                    .filter(|a| *a != Act::Wait(0))
+                    .collect();
                 out.push(Recipe {
                     name: format!(
                         "{}3 jumps {gap}s apart (hop {hop:.2}s), 2.5s to the platform, {w}s for the glide",
@@ -416,7 +464,11 @@ fn glide_wait(level: &Level, m: &GateMark) -> f32 {
     level
         .platforms
         .iter()
-        .filter(|p| p.dx != 0.0 && (m.c0..=m.c1).contains(&(p.col as i32)) && (m.r0..=m.r1 + 1).contains(&(p.row as i32)))
+        .filter(|p| {
+            p.dx != 0.0
+                && (m.c0..=m.c1).contains(&(p.col as i32))
+                && (m.r0..=m.r1 + 1).contains(&(p.row as i32))
+        })
         .map(|p| p.period)
         .fold(0.0, f32::max)
 }
@@ -432,7 +484,10 @@ fn chute_recipes(walk: f32, ghosts: usize) -> Vec<Recipe> {
             ev.push((t, Act::DEATH));
             let back = t + RESPAWN_DELAY;
             for k in 0..ghosts {
-                ev.push((back + walk * (k + 1) as f32 / (ghosts + 1) as f32, Act::NUGGET));
+                ev.push((
+                    back + walk * (k + 1) as f32 / (ghosts + 1) as f32,
+                    Act::NUGGET,
+                ));
             }
             for k in 0..toots {
                 ev.push((back + walk * (k as f32 + 0.5) / toots as f32, Act::TOOT));
@@ -441,7 +496,10 @@ fn chute_recipes(walk: f32, ghosts: usize) -> Vec<Recipe> {
         }
         ev.sort_by(|a, b| a.0.total_cmp(&b.0));
         ev.push((t, Act::Wait(0)));
-        let acts: Vec<Act> = timeline(&ev).into_iter().filter(|a| *a != Act::Wait(0)).collect();
+        let acts: Vec<Act> = timeline(&ev)
+            .into_iter()
+            .filter(|a| *a != Act::Wait(0))
+            .collect();
         out.push(Recipe {
             name: format!(
                 "{} chute laps ({walk:.1}s back, {ghosts} ghost nuggets, {toots} toots each)",
@@ -463,7 +521,9 @@ fn nugget_line(level: &Level, m: &GateMark) -> (Vec<f32>, f32) {
         let mut v: Vec<i32> = level
             .things
             .iter()
-            .filter(|t| t.kind == ThingKind::Nugget && (row - 4..=row + 1).contains(&(t.row as i32)))
+            .filter(|t| {
+                t.kind == ThingKind::Nugget && (row - 4..=row + 1).contains(&(t.row as i32))
+            })
             .map(|t| (edge - t.col as i32) * dir)
             .filter(|b| (0..=30).contains(b))
             .collect();
@@ -481,12 +541,17 @@ fn nugget_line(level: &Level, m: &GateMark) -> (Vec<f32>, f32) {
 /// Walk back to a chute from the nearest respawn before it (s at 90% run), and the nuggets on
 /// the way (ghosts after a splat).
 fn chute_lap(level: &Level, m: &GateMark) -> (f32, usize) {
-    let respawns = std::iter::once(level.start.0 as i32).chain(level.checkpoints().map(|t| t.col as i32));
+    let respawns =
+        std::iter::once(level.start.0 as i32).chain(level.checkpoints().map(|t| t.col as i32));
     let (from, dist) = respawns
         .map(|c| (c, if c <= m.c0 { m.c0 - c } else { c - m.c1 }))
         .min_by_key(|x| x.1)
         .expect("a level has a start");
-    let (a, b) = if from <= m.c0 { (from, m.c0) } else { (m.c1, from) };
+    let (a, b) = if from <= m.c0 {
+        (from, m.c0)
+    } else {
+        (m.c1, from)
+    };
     let ghosts = level
         .things
         .iter()
@@ -558,10 +623,22 @@ fn deep_campaign_gates_from_every_music_state() {
         let mut attempts = 0usize;
         for (li, level) in levels.iter().enumerate() {
             let report = check_with(level, &Options::default(), &phys);
-            assert!(report.errs.is_empty(), "level {}: the validator fails: {:?}", li + 1, report.errs);
+            assert!(
+                report.errs.is_empty(),
+                "level {}: the validator fails: {:?}",
+                li + 1,
+                report.errs
+            );
             for (m, need, what) in band_gates(level) {
                 gates += 1;
-                let gate = format!("L{} {what} (mark {},{} {},{})", li + 1, m.c0, m.r0, m.c1, m.r1);
+                let gate = format!(
+                    "L{} {what} (mark {},{} {},{})",
+                    li + 1,
+                    m.c0,
+                    m.r0,
+                    m.c1,
+                    m.r1
+                );
                 if m.topic == Topic::Grip {
                     // The side splat must have faded by the time you slide in again.
                     let back = RESPAWN_DELAY + chute_lap(level, &m).0;
@@ -584,24 +661,36 @@ fn deep_campaign_gates_from_every_music_state() {
                                         let fails: Vec<(usize, Failed)> = rs
                                             .iter()
                                             .enumerate()
-                                            .filter_map(|(k, r)| attempt(s, r, need).err().map(|e| (k, e)))
+                                            .filter_map(|(k, r)| {
+                                                attempt(s, r, need).err().map(|e| (k, e))
+                                            })
                                             .collect();
-                                        let ok =
-                                            if need == Need::Grip { fails.is_empty() } else { fails.len() < rs.len() };
+                                        let ok = if need == Need::Grip {
+                                            fails.is_empty()
+                                        } else {
+                                            fails.len() < rs.len()
+                                        };
                                         (ok, fails)
                                     })
                                     .collect::<Vec<_>>()
                             })
                         })
                         .collect();
-                    hs.into_iter().flat_map(|h| h.join().expect("recipe panicked")).collect()
+                    hs.into_iter()
+                        .flat_map(|h| h.join().expect("recipe panicked"))
+                        .collect()
                 });
                 attempts += results.iter().map(|r| r.1.len()).sum::<usize>();
                 if let Some(i) = results.iter().position(|r| !r.0) {
                     errors.push(format!(
                         "{gate}: can't be crossed from the state `{}`:\n    {}",
                         states[i].0,
-                        results[i].1.iter().map(|f| f.1.msg.as_str()).collect::<Vec<_>>().join("\n    ")
+                        results[i]
+                            .1
+                            .iter()
+                            .map(|f| f.1.msg.as_str())
+                            .collect::<Vec<_>>()
+                            .join("\n    ")
                     ));
                 }
                 // Fragile ways: recipes where another summon takes over from the gate's mode.
@@ -612,10 +701,22 @@ fn deep_campaign_gates_from_every_music_state() {
                     }
                 }
                 let ok = results.iter().filter(|r| r.0).count();
-                eprintln!("{gate}: crossable from {ok}/{} arrival states", states.len());
+                eprintln!(
+                    "{gate}: crossable from {ok}/{} arrival states",
+                    states.len()
+                );
                 // The most common one, with an example (the first state, the shortest trace).
-                if let Some((&k, &(n, i))) = fragile.iter().max_by_key(|e| (e.1.0, std::cmp::Reverse(*e.0))) {
-                    let msg = &results[i].1.iter().find(|f| f.0 == k).expect("recorded").1.msg;
+                if let Some((&k, &(n, i))) = fragile
+                    .iter()
+                    .max_by_key(|e| (e.1.0, std::cmp::Reverse(*e.0)))
+                {
+                    let msg = &results[i]
+                        .1
+                        .iter()
+                        .find(|f| f.0 == k)
+                        .expect("recorded")
+                        .1
+                        .msg;
                     eprintln!(
                         "  note: in {} way(s) of crossing another summon takes over (up to {n} states), e.g. after `{}`:\n    {msg}",
                         fragile.len(),
@@ -624,8 +725,15 @@ fn deep_campaign_gates_from_every_music_state() {
                 }
             }
         }
-        eprintln!("{gates} band gates × {} arrival states ({attempts} failed attempts noted)", states.len());
-        assert!(errors.is_empty(), "gates not crossable from every music state:\n{}", errors.join("\n"));
+        eprintln!(
+            "{gates} band gates × {} arrival states ({attempts} failed attempts noted)",
+            states.len()
+        );
+        assert!(
+            errors.is_empty(),
+            "gates not crossable from every music state:\n{}",
+            errors.join("\n")
+        );
     });
 }
 
@@ -652,7 +760,12 @@ fn deep_boost_chains_cant_bypass_band_gates() {
         let mut tried = 0;
         for (li, level) in levels.iter().enumerate() {
             let map = Map::new(level);
-            for (m, _, what) in band_gates(level).into_iter().filter(|g| !matches!(g.0.topic, Topic::Chain | Topic::Mega | Topic::Shaft | Topic::Trapeze)) {
+            for (m, _, what) in band_gates(level).into_iter().filter(|g| {
+                !matches!(
+                    g.0.topic,
+                    Topic::Chain | Topic::Mega | Topic::Shaft | Topic::Trapeze
+                )
+            }) {
                 // Heading the way you come to it from the start; take-offs on the mark's rows
                 // up to two chasms' width (28 tiles) before it; landing past its far side.
                 let dir = if (level.start.0 as i32) < m.c0 { 1 } else { -1 };
@@ -663,14 +776,31 @@ fn deep_boost_chains_cant_bypass_band_gates() {
                             continue;
                         }
                         let chasm = if dir > 0 {
-                            Chasm { row: r, c0: edge + 1, c1: m.c1 }
+                            Chasm {
+                                row: r,
+                                c0: edge + 1,
+                                c1: m.c1,
+                            }
                         } else {
-                            Chasm { row: r, c0: m.c0, c1: edge - 1 }
+                            Chasm {
+                                row: r,
+                                c0: m.c0,
+                                c1: edge - 1,
+                            }
                         };
                         for play in chain_plays() {
                             tried += 1;
-                            if let Some(land) = chain_try(level, &chasm, dir, play, GsSwitch::Never, ChasmMarks::Level) {
-                                let e = found.entry((li + 1, m.topic.word())).or_insert((0, String::new()));
+                            if let Some(land) = chain_try(
+                                level,
+                                &chasm,
+                                dir,
+                                play,
+                                GsSwitch::Never,
+                                ChasmMarks::Level,
+                            ) {
+                                let e = found
+                                    .entry((li + 1, m.topic.word()))
+                                    .or_insert((0, String::new()));
                                 e.0 += 1;
                                 if e.1.is_empty() {
                                     e.1 = format!(
@@ -700,9 +830,16 @@ fn deep_boost_chains_cant_bypass_band_gates() {
             }
         }
         for k in KNOWN_BYPASSES.iter().filter(|k| !found.contains_key(k)) {
-            eprintln!("STALE: L{} {} no longer bypassed: remove it from KNOWN_BYPASSES", k.0, k.1);
+            eprintln!(
+                "STALE: L{} {} no longer bypassed: remove it from KNOWN_BYPASSES",
+                k.0, k.1
+            );
         }
-        assert!(fail.is_empty(), "{} new boost-chain bypasses of band gates (above)", fail.len());
+        assert!(
+            fail.is_empty(),
+            "{} new boost-chain bypasses of band gates (above)",
+            fail.len()
+        );
     });
 }
 
@@ -737,7 +874,10 @@ fn parachute_landings(map: &Map, level: &Level, at: (i32, i32)) -> Vec<(i32, i32
     for dc in [-6, -4, -3, -1, 0, 1, 3, 4, 6] {
         let c = at.0 + dc;
         let mut r = at.1 - 4;
-        while r < level.height as i32 && !Nav::node(map, level, (c, r)) && !level.tile(c, r).is_solid() {
+        while r < level.height as i32
+            && !Nav::node(map, level, (c, r))
+            && !level.tile(c, r).is_solid()
+        {
             r += 1;
         }
         if Nav::node(map, level, (c, r)) {
@@ -762,19 +902,32 @@ fn deep_han_reaches_his_gates() {
         for (li, level) in levels.iter().enumerate() {
             let map = Map::for_han(level);
             let start = (level.start.0 as i32, level.start.1 as i32);
-            for m in level
-                .gates
-                .iter()
-                .filter(|g| matches!(g.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Chain | Topic::BuddyRaft))
-            {
+            for m in level.gates.iter().filter(|g| {
+                matches!(
+                    g.topic,
+                    Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Chain | Topic::BuddyRaft
+                )
+            }) {
                 // His spots: the mark's cells he can stand in (a mega wall's or a cling shaft's: at
                 // its foot, he boosts or climbs from there).
-                let r0 = if matches!(m.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze) { m.r1 } else { m.r0 };
+                let r0 = if matches!(m.topic, Topic::Mega | Topic::Shaft | Topic::Trapeze) {
+                    m.r1
+                } else {
+                    m.r0
+                };
                 let spots: Vec<(i32, i32)> = (r0..=m.r1)
                     .flat_map(|r| (m.c0..=m.c1).map(move |c| (c, r)))
                     .filter(|&c| Nav::node(&map, level, c))
                     .collect();
-                let gate = format!("L{} {} (mark {},{} {},{})", li + 1, m.topic.word(), m.c0, m.r0, m.c1, m.r1);
+                let gate = format!(
+                    "L{} {} (mark {},{} {},{})",
+                    li + 1,
+                    m.topic.word(),
+                    m.c0,
+                    m.r0,
+                    m.c1,
+                    m.r1
+                );
                 if spots.is_empty() {
                     errors.push(format!("{gate}: no cell Han can stand in"));
                     continue;
@@ -788,9 +941,9 @@ fn deep_han_reaches_his_gates() {
                     }
                     // Parachute in next to Nat (standing at any of the spots), then walk.
                     let ok = spots.iter().any(|&nat| {
-                        parachute_landings(&map, level, nat)
-                            .into_iter()
-                            .any(|p| matches!(nav.route(&map, p, target, usize::MAX), Route::Found(_)))
+                        parachute_landings(&map, level, nat).into_iter().any(|p| {
+                            matches!(nav.route(&map, p, target, usize::MAX), Route::Found(_))
+                        })
                     });
                     if ok {
                         chuted += 1;

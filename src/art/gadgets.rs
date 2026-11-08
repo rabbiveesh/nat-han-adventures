@@ -468,8 +468,18 @@ pub fn bumper() -> Vec<Pixels> {
 
 // ---------------------------------------------------------------- beat blocks
 
-const RED_PAL: Palette = &[('k', hex(0x401018)), ('w', hex(0xffb0b8)), ('c', hex(0xe03848)), ('C', hex(0xa01c30))];
-const BLUE_PAL: Palette = &[('k', hex(0x101c40)), ('w', hex(0xb0d0ff)), ('c', hex(0x3870e0)), ('C', hex(0x1c3ca0))];
+const RED_PAL: Palette = &[
+    ('k', hex(0x401018)),
+    ('w', hex(0xffb0b8)),
+    ('c', hex(0xe03848)),
+    ('C', hex(0xa01c30)),
+];
+const BLUE_PAL: Palette = &[
+    ('k', hex(0x101c40)),
+    ('w', hex(0xb0d0ff)),
+    ('c', hex(0x3870e0)),
+    ('C', hex(0x1c3ca0)),
+];
 const BEAT: [&[&str]; 2] = [
     &[
         "kkkkkkkkkkkkkkkk",

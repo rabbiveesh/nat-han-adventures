@@ -30,30 +30,34 @@ pub mod assist;
 pub use adaptive::{AdaptiveProfile, AssistMode, HiddenRespawn, StoryAssistState};
 pub use assist::Assists;
 pub use groove::{
-    ALIEN_EVERY, ALIEN_PULSE, BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, BeatClock, DRUNK_SWAY,
-    FIRED_UP_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, JumpedOnOne, MELTING_JUMP, MELTING_SIZE,
-    NERVOUS_TIME, Nudge, OVERTONE_TOOT, OneJumps, SEASICK_DECEL, SEASICK_ROLL, SEASICK_ROLL_HZ, SEASICK_SECS,
-    WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
+    ALIEN_EVERY, ALIEN_PULSE, BOUNCE_MIN_SPEED, BOUNCE_RESTITUTION, BOUNCE_SPEED, BeatClock,
+    DRUNK_SWAY, FIRED_UP_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, JumpedOnOne,
+    MELTING_JUMP, MELTING_SIZE, NERVOUS_TIME, Nudge, OVERTONE_TOOT, OneJumps, SEASICK_DECEL,
+    SEASICK_ROLL, SEASICK_ROLL_HZ, SEASICK_SECS, WALTZ_ONE_BOOST, WALTZ_ONE_LINE,
     WALTZ_ONE_LINE_EVERY, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW, WALTZ_SPRAY_BARS,
 };
-pub use hazards::{SideStain, SIDE_STAIN_LIFE, CAN_HEIGHT, CAN_WIDTH,
-    FLY_PERIOD, FORGIVE, RAFT_LIFE_FLOOR, RAFT_SINK, RAFT_SINK_DEPTH, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, RaftLife, raft_sink,
-    spray_on,
-};
-pub use platforms::platform_pos;
-pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, stand_pos};
 pub use han::{
-    BACK_WARN_LINE, CANNONBALL_LINE, DEATH_LINES, FLOAT_FUEL, FLOAT_REFUEL, FLOAT_SPEED, FLY_LINE, GLUB_LINE, HanFloat, FOLLOW_GAP, FlySpin, GRIP_LINE, GRUMBLE_LINES, HAN_MARCH_SPEED, HAN_PLUG_LINGER, HAN_RAFT_LIFE_FLOOR,
-    HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, HAN_TOOTS, HanAnim, HanBrain, HanMode, HanNav, HanPhys,
-    HanPose, HanRaft, LEMME_LINE, NERVOUS_GAP, NERVOUS_LINE, PARACHUTE_FALL, PRO_LINE, SprayPlug, UNION_LINE, brace_range,
-    breather, go_ahead_delay, grumble_line, grumble_lines, han_raft_life, intercept_range, overuse_limit,
+    BACK_WARN_LINE, CANNONBALL_LINE, DEATH_LINES, FLOAT_FUEL, FLOAT_REFUEL, FLOAT_SPEED, FLY_LINE,
+    FOLLOW_GAP, FlySpin, GLUB_LINE, GRIP_LINE, GRUMBLE_LINES, HAN_MARCH_SPEED, HAN_PLUG_LINGER,
+    HAN_RAFT_LIFE_FLOOR, HAN_RAFT_WIDTH, HAN_RUN_SPEED, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME,
+    HAN_TOOTS, HanAnim, HanBrain, HanFloat, HanMode, HanNav, HanPhys, HanPose, HanRaft, LEMME_LINE,
+    NERVOUS_GAP, NERVOUS_LINE, PARACHUTE_FALL, PRO_LINE, SprayPlug, UNION_LINE, brace_range,
+    breather, go_ahead_delay, grumble_line, grumble_lines, han_raft_life, intercept_range,
+    overuse_limit,
+};
+pub use hazards::{
+    CAN_HEIGHT, CAN_WIDTH, FLY_PERIOD, FORGIVE, RAFT_LIFE_FLOOR, RAFT_SINK, RAFT_SINK_DEPTH,
+    RaftLife, SIDE_STAIN_LIFE, SPRAY_CYCLE, SPRAY_HEIGHT, SPRAY_ON, SPRAY_WIDTH, SideStain,
+    raft_sink, spray_on,
+};
+pub use lifecycle::{GeneratedLevel, cell_floor, spawn_region, stand_pos};
+pub use physics::{
+    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY,
+    PlayerControl, THROW_CARRY, THROW_SPEED, TileMood, WEAK_BOOST_SPEED, han_carrier, move_towards,
+    springs, step_body,
 };
 pub use pickups::CHECKPOINT_QUIPS;
-pub use physics::{
-    BOOST_SPEED, Body, Carrier, Contact, Dead, Fall, HanBoosted, HanHead, KICK_CARRY, PlayerControl, THROW_CARRY, THROW_SPEED, TileMood,
-    WEAK_BOOST_SPEED, han_carrier,
-    move_towards, springs, step_body,
-};
+pub use platforms::platform_pos;
 pub use visuals::{CharacterSprite, FrameAnim, GameCamera, Particle, VisualSet};
 
 /// Physics and feel tuning. Units: pixels and seconds; a tile is 16px. Level design relies on

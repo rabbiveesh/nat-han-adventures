@@ -13,8 +13,8 @@
 //! `[ ]` repeats are written out. The other channels, the header and the chart stay as typed.
 
 use nat_han_adventures::audio::chart::{self, Chart};
-use nat_han_adventures::audio::live::song::{CHANNELS, SongError};
 use nat_han_adventures::audio::live::SongFile;
+use nat_han_adventures::audio::live::song::{CHANNELS, SongError};
 use nat_han_adventures::audio::mml::{Arp, Channel, Drum, EventKind, Track};
 
 /// A tracker row / piano-roll snap: a 16th, in beats.
@@ -61,7 +61,13 @@ impl Sound {
 }
 
 /// The drums, in row order (bottom to top in the piano roll).
-pub const DRUMS: [Drum; 5] = [Drum::Kick, Drum::Snare, Drum::ClosedHat, Drum::OpenHat, Drum::Crash];
+pub const DRUMS: [Drum; 5] = [
+    Drum::Kick,
+    Drum::Snare,
+    Drum::ClosedHat,
+    Drum::OpenHat,
+    Drum::Crash,
+];
 /// The lowest and highest notes MML can write (`o0 c` .. `o8 b`).
 pub const LOWEST: u8 = 12;
 pub const HIGHEST: u8 = 119;
@@ -137,10 +143,24 @@ impl Part {
                 };
                 // Duty only means something on the pulse channels.
                 let duty = if pulse { e.duty } else { DEFAULT_DUTY };
-                Some(Note { start: e.start, dur: e.dur, sound, volume: e.volume, duty, tie: e.tie && ch < 3, inst: e.inst })
+                Some(Note {
+                    start: e.start,
+                    dur: e.dur,
+                    sound,
+                    volume: e.volume,
+                    duty,
+                    tie: e.tie && ch < 3,
+                    inst: e.inst,
+                })
             })
             .collect();
-        let mut p = Part { ch, notes, length, bar_beats, inst_names: Vec::new() };
+        let mut p = Part {
+            ch,
+            notes,
+            length,
+            bar_beats,
+            inst_names: Vec::new(),
+        };
         p.normalize();
         p
     }
@@ -151,12 +171,18 @@ impl Part {
 
     /// The note sounding at beat `t`.
     pub fn at(&self, t: f64) -> Option<usize> {
-        self.notes.iter().position(|n| n.start <= t + EPS && t + EPS < n.end())
+        self.notes
+            .iter()
+            .position(|n| n.start <= t + EPS && t + EPS < n.end())
     }
 
     /// The note starting in `[a, b)`.
     pub fn starting_in(&self, a: f64, b: f64) -> impl Iterator<Item = usize> + '_ {
-        self.notes.iter().enumerate().filter(move |(_, n)| n.start >= a - EPS && n.start < b - EPS).map(|(i, _)| i)
+        self.notes
+            .iter()
+            .enumerate()
+            .filter(move |(_, n)| n.start >= a - EPS && n.start < b - EPS)
+            .map(|(i, _)| i)
     }
 
     /// Insert a note: it cuts the note sounding where it starts and replaces the notes that
@@ -170,7 +196,8 @@ impl Part {
         n.dur = end - n.start;
         n.tie = false;
         let (s, e) = (n.start, n.end());
-        self.notes.retain(|m| !(m.start >= s - EPS && m.start < e - EPS));
+        self.notes
+            .retain(|m| !(m.start >= s - EPS && m.start < e - EPS));
         for m in &mut self.notes {
             if m.start < s - EPS && m.end() > s + EPS {
                 m.dur = s - m.start;
@@ -252,12 +279,22 @@ impl Part {
 
     /// The name `@i` writes for instrument `k`.
     pub fn inst_name(&self, k: u8) -> &str {
-        if k == 0 { "default" } else { self.inst_names.get(k as usize - 1).map_or("default", String::as_str) }
+        if k == 0 {
+            "default"
+        } else {
+            self.inst_names
+                .get(k as usize - 1)
+                .map_or("default", String::as_str)
+        }
     }
 
     /// The instrument in force at beat `t` (the last note's at or before it).
     pub fn inst_at(&self, t: f64) -> u8 {
-        self.notes.iter().rev().find(|n| n.start <= t + EPS).map_or(0, |n| n.inst)
+        self.notes
+            .iter()
+            .rev()
+            .find(|n| n.start <= t + EPS)
+            .map_or(0, |n| n.inst)
     }
 
     /// The channel as MML: one bar per `|`, four bars a line (each ending with its bar numbers),
@@ -268,7 +305,8 @@ impl Part {
         let bars = self.bars();
         let pulse = self.ch < 2;
         let mut out: Vec<Vec<String>> = vec![Vec::new(); bars];
-        let (mut octave, mut volume, mut duty, mut inst) = (DEFAULT_OCTAVE, DEFAULT_VOLUME, DEFAULT_DUTY, 0u8);
+        let (mut octave, mut volume, mut duty, mut inst) =
+            (DEFAULT_OCTAVE, DEFAULT_VOLUME, DEFAULT_DUTY, 0u8);
         // Where the last sounding token is (to put a `&` after it).
         let mut last: Option<(usize, usize)> = None;
         if let Some(first) = self.notes.first() {
@@ -320,7 +358,11 @@ impl Part {
                     out[b].push(format!("o{oct}"));
                     octave = oct;
                 }
-                let mut tok = lengths(seg_end - t).iter().map(|l| format!("{name}{l}")).collect::<Vec<_>>().join("&");
+                let mut tok = lengths(seg_end - t)
+                    .iter()
+                    .map(|l| format!("{name}{l}"))
+                    .collect::<Vec<_>>()
+                    .join("&");
                 if seg_end < n.end() - EPS {
                     // On over the bar line.
                     tok.push('&');
@@ -341,7 +383,11 @@ impl Part {
             let line: Vec<String> = chunk.iter().map(|b| b.join(" ")).collect();
             let line = line.join(" ");
             let (a, z) = (l * 4 + 1, l * 4 + chunk.len());
-            let label = if a == z { format!("; {a}") } else { format!("; {a}-{z}") };
+            let label = if a == z {
+                format!("; {a}")
+            } else {
+                format!("; {a}-{z}")
+            };
             s += &format!("{line:<72} {label}\n");
         }
         s.trim_end().to_string()
@@ -355,7 +401,9 @@ fn out_first(out: &mut [Vec<String>], tok: String) {
 }
 
 /// Note names by pitch class: sharps on F# C# G#, flats on Eb Bb (`c+ e- f+ g+ b-`).
-const NAMES: [&str; 12] = ["c", "c+", "d", "e-", "e", "f", "f+", "g", "g+", "a", "b-", "b"];
+const NAMES: [&str; 12] = [
+    "c", "c+", "d", "e-", "e", "f", "f+", "g", "g+", "a", "b-", "b",
+];
 
 fn octave_of(n: u8) -> i32 {
     n as i32 / 12 - 1
@@ -434,7 +482,10 @@ fn length_tokens() -> &'static [(f64, String)] {
             }
         }
         nice.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let mut rest: Vec<_> = (1..=96).map(|n| dotted(n, 0)).filter(|(b, _)| !nice.iter().any(|x| (x.0 - b).abs() < EPS)).collect();
+        let mut rest: Vec<_> = (1..=96)
+            .map(|n| dotted(n, 0))
+            .filter(|(b, _)| !nice.iter().any(|x| (x.0 - b).abs() < EPS))
+            .collect();
         rest.sort_by(|a, b| b.0.total_cmp(&a.0));
         nice.extend(rest);
         nice
@@ -479,12 +530,21 @@ pub fn sections(text: &str) -> Vec<Section> {
     let mut out: Vec<Section> = Vec::new();
     for (i, raw) in lines.iter().enumerate() {
         let line = raw.split_once(';').map_or(*raw, |(a, _)| a).trim();
-        let word = line.strip_prefix('[').and_then(|l| l.strip_suffix(']')).map(str::trim);
-        if let Some(name) = word.filter(|w| w.len() >= 3 && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')) {
+        let word = line
+            .strip_prefix('[')
+            .and_then(|l| l.strip_suffix(']'))
+            .map(str::trim);
+        if let Some(name) = word
+            .filter(|w| w.len() >= 3 && w.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+        {
             if let Some(prev) = out.last_mut() {
                 prev.body.1 = i;
             }
-            out.push(Section { name: name.to_string(), header: i, body: (i + 1, lines.len()) });
+            out.push(Section {
+                name: name.to_string(),
+                header: i,
+                body: (i + 1, lines.len()),
+            });
         }
     }
     out
@@ -526,7 +586,9 @@ pub struct InstLine {
 
 /// The lines of the `[instruments]` section.
 pub fn instrument_lines(text: &str) -> Vec<InstLine> {
-    let Some(sec) = sections(text).into_iter().find(|s| s.name == "instruments") else { return Vec::new() };
+    let Some(sec) = sections(text).into_iter().find(|s| s.name == "instruments") else {
+        return Vec::new();
+    };
     text.lines()
         .enumerate()
         .skip(sec.body.0)
@@ -557,16 +619,32 @@ pub fn set_instrument(text: &str, name: &str, def: &str) -> String {
 
 /// The text with channel `ch`'s palette set to `names` (the line removed if empty).
 pub fn set_palette(text: &str, ch: &str, names: &[String]) -> String {
-    set_inst_line(text, ch, &if names.is_empty() { String::new() } else { format!("{ch} = {}", names.join(" ")) }, true)
+    set_inst_line(
+        text,
+        ch,
+        &if names.is_empty() {
+            String::new()
+        } else {
+            format!("{ch} = {}", names.join(" "))
+        },
+        true,
+    )
 }
 
 fn set_inst_line(text: &str, name: &str, new: &str, palette: bool) -> String {
     let mut lines: Vec<String> = text.lines().map(str::to_string).collect();
-    if let Some(l) = instrument_lines(text).into_iter().find(|l| l.name == name && l.palette == palette) {
+    if let Some(l) = instrument_lines(text)
+        .into_iter()
+        .find(|l| l.name == name && l.palette == palette)
+    {
         if new.is_empty() {
             lines.remove(l.line);
         } else {
-            lines[l.line] = if l.comment.is_empty() { new.to_string() } else { format!("{new:<48} ; {}", l.comment) };
+            lines[l.line] = if l.comment.is_empty() {
+                new.to_string()
+            } else {
+                format!("{new:<48} ; {}", l.comment)
+            };
         }
     } else if !new.is_empty() {
         let secs = sections(text);
@@ -578,14 +656,22 @@ fn set_inst_line(text: &str, name: &str, new: &str, palette: bool) -> String {
                     at -= 1;
                 }
                 // Instruments before the palettes.
-                if !palette && let Some(first) = instrument_lines(text).into_iter().find(|l| l.palette) {
+                if !palette
+                    && let Some(first) = instrument_lines(text).into_iter().find(|l| l.palette)
+                {
                     at = first.line;
                 }
                 lines.insert(at, new.to_string());
             }
             None => {
-                let at = secs.iter().find(|s| CHANNELS.iter().any(|(c, _)| *c == s.name)).map_or(lines.len(), |s| s.header);
-                lines.splice(at..at, ["[instruments]".to_string(), new.to_string(), String::new()]);
+                let at = secs
+                    .iter()
+                    .find(|s| CHANNELS.iter().any(|(c, _)| *c == s.name))
+                    .map_or(lines.len(), |s| s.header);
+                lines.splice(
+                    at..at,
+                    ["[instruments]".to_string(), new.to_string(), String::new()],
+                );
             }
         }
     }
@@ -613,7 +699,14 @@ pub struct SongDoc {
 impl SongDoc {
     pub fn new(stem: &str, text: &str) -> SongDoc {
         let parsed = SongFile::parse(text);
-        SongDoc { stem: stem.to_string(), text: text.to_string(), saved: text.to_string(), good: parsed.clone().ok(), parsed, revision: 0 }
+        SongDoc {
+            stem: stem.to_string(),
+            text: text.to_string(),
+            saved: text.to_string(),
+            good: parsed.clone().ok(),
+            parsed,
+            revision: 0,
+        }
     }
 
     pub fn dirty(&self) -> bool {
@@ -682,7 +775,12 @@ impl SongDoc {
     /// Rewrite channel `ch` in the formatter's form (no change to what it plays).
     pub fn canonicalize(&mut self, ch: usize) -> Result<(), String> {
         let p = self.part(ch).ok_or("nothing parsed")?;
-        if p.notes.is_empty() && self.good.as_ref().is_some_and(|s| s.sources[ch].trim().is_empty()) {
+        if p.notes.is_empty()
+            && self
+                .good
+                .as_ref()
+                .is_some_and(|s| s.sources[ch].trim().is_empty())
+        {
             return Ok(());
         }
         self.write_part(&p)
@@ -727,7 +825,10 @@ pub fn excerpt(song: &SongFile, from: usize, to: usize) -> SongFile {
         if let Some(e) = events.first_mut() {
             e.tie = false;
         }
-        *t = Track { events, length: z - a };
+        *t = Track {
+            events,
+            length: z - a,
+        };
     }
     s.looping = true;
     s.chart = song.chart.as_ref().map(|c| {
@@ -737,15 +838,22 @@ pub fn excerpt(song: &SongFile, from: usize, to: usize) -> SongFile {
             .filter(|sl| sl.end() > a + EPS && sl.start < z - EPS)
             .map(|sl| {
                 let start = sl.start.max(a);
-                chart::Slot { start: start - a, dur: sl.end().min(z) - start, chord: sl.chord }
+                chart::Slot {
+                    start: start - a,
+                    dur: sl.end().min(z) - start,
+                    chord: sl.chord,
+                }
             })
             .collect();
-        Chart { slots, bars: to - from, meter: c.meter }
+        Chart {
+            slots,
+            bars: to - from,
+            meter: c.meter,
+        }
     });
     s.chords = s.chart.as_ref().map_or(String::new(), Chart::to_text);
     s
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -758,7 +866,10 @@ mod tests {
     }
 
     fn pitches(p: &Part) -> Vec<(f64, f64, u8)> {
-        p.notes.iter().map(|n| (n.start, n.dur, n.sound.pitch())).collect()
+        p.notes
+            .iter()
+            .map(|n| (n.start, n.dur, n.sound.pitch()))
+            .collect()
     }
 
     /// Every song in `music/`: the formatter writes each channel so it plays exactly the same
@@ -769,21 +880,31 @@ mod tests {
         let text = library::text("tiger_rag").unwrap();
         let lines = instrument_lines(text);
         let brass = lines.iter().find(|l| l.name == "brass").unwrap();
-        assert!(!brass.palette && brass.def.starts_with("vol") && brass.comment.contains("trumpet"));
+        assert!(
+            !brass.palette && brass.def.starts_with("vol") && brass.comment.contains("trumpet")
+        );
         assert!(lines.iter().any(|l| l.palette && l.name == "pulse1"));
         let t = set_instrument(text, "brass", "vol 15 10 | duty 1");
         let s = SongFile::parse(&t).unwrap();
         let k = s.instruments.index("brass").unwrap();
-        assert!(matches!(s.instruments.defs[k as usize - 1], nat_han_adventures::audio::live::instrument::Def::Tone(t) if t.vol.unwrap().steps() == [15, 10]));
+        assert!(
+            matches!(s.instruments.defs[k as usize - 1], nat_han_adventures::audio::live::instrument::Def::Tone(t) if t.vol.unwrap().steps() == [15, 10])
+        );
         assert!(t.contains("; a trumpet"), "the comment stays");
         let t = set_instrument(&t, "kazoo", "vol 9 | duty 3");
         let t = set_palette(&t, "pulse2", &["default".into(), "kazoo".into()]);
         let s = SongFile::parse(&t).unwrap();
-        assert_eq!(s.instruments.palette(1), [0, s.instruments.index("kazoo").unwrap()]);
+        assert_eq!(
+            s.instruments.palette(1),
+            [0, s.instruments.index("kazoo").unwrap()]
+        );
         // A song without the section gets one, before its channels.
         let mini = "[song]\ntitle = m\nbpm = 120\n[pulse1]\nc1 |\n";
         let t = set_instrument(mini, "a", "vol 3");
-        assert!(t.find("[instruments]").unwrap() < t.find("[pulse1]").unwrap(), "{t}");
+        assert!(
+            t.find("[instruments]").unwrap() < t.find("[pulse1]").unwrap(),
+            "{t}"
+        );
         assert_eq!(SongFile::parse(&t).unwrap().instruments.names, ["a"]);
     }
 
@@ -793,7 +914,8 @@ mod tests {
             let mut doc = SongDoc::new(stem, text);
             let before: Vec<Part> = (0..4).map(|ch| doc.part(ch).unwrap()).collect();
             for ch in 0..4 {
-                doc.canonicalize(ch).unwrap_or_else(|e| panic!("{stem} ch{ch}: {e}"));
+                doc.canonicalize(ch)
+                    .unwrap_or_else(|e| panic!("{stem} ch{ch}: {e}"));
             }
             let canon = doc.text.clone();
             for (ch, b) in before.iter().enumerate() {
@@ -802,10 +924,17 @@ mod tests {
             for ch in 0..4 {
                 doc.canonicalize(ch).unwrap();
             }
-            assert_eq!(doc.text, canon, "{stem}: the formatter's output is a fixed point");
+            assert_eq!(
+                doc.text, canon,
+                "{stem}: the formatter's output is a fixed point"
+            );
             let song = doc.good.as_ref().unwrap();
             let orig = SongFile::parse(text).unwrap();
-            assert_eq!((song.bars(), song.chart.clone()), (orig.bars(), orig.chart.clone()), "{stem}");
+            assert_eq!(
+                (song.bars(), song.chart.clone()),
+                (orig.bars(), orig.chart.clone()),
+                "{stem}"
+            );
         }
     }
 
@@ -829,7 +958,10 @@ mod tests {
         assert_eq!(a.text, c.text);
         assert!(a.text.contains("o4 c4 e4 e4 f4 | o4 g1 |"), "{}", a.text);
         // The other sections are untouched.
-        assert!(a.text.starts_with("; tiny\n[song]") && a.text.contains("[noise]\nk4 s4 k4 s4 | k4 s4 k8 k8 s4 |"));
+        assert!(
+            a.text.starts_with("; tiny\n[song]")
+                && a.text.contains("[noise]\nk4 s4 k4 s4 | k4 s4 k8 k8 s4 |")
+        );
 
         // Moving and resizing too: the piano roll's drag vs the text.
         let mut m = tiny();
@@ -859,17 +991,31 @@ mod tests {
         let mut doc = SongDoc::new("sgb", library::text("sweet_georgia_brown").unwrap());
         let mut seed = 7u64;
         let mut rnd = |n: u64| {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            seed = seed
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             (seed >> 33) % n
         };
         for _ in 0..60 {
             let ch = rnd(4) as usize;
             let part = doc.part(ch).unwrap();
             let steps = (part.length / STEP) as u64;
-            let sound = if part.drums() { Sound::Drum(DRUMS[rnd(4) as usize]) } else { Sound::Note(40 + rnd(40) as u8) };
+            let sound = if part.drums() {
+                Sound::Drum(DRUMS[rnd(4) as usize])
+            } else {
+                Sound::Note(40 + rnd(40) as u8)
+            };
             let r = match rnd(4) {
                 0 => doc.edit(ch, |p| {
-                    p.insert(Note { start: rnd(steps) as f64 * STEP, dur: (1 + rnd(24)) as f64 * STEP, sound, volume: 10, duty: 1, tie: false, inst: 0 });
+                    p.insert(Note {
+                        start: rnd(steps) as f64 * STEP,
+                        dur: (1 + rnd(24)) as f64 * STEP,
+                        sound,
+                        volume: 10,
+                        duty: 1,
+                        tie: false,
+                        inst: 0,
+                    });
                 }),
                 1 if !part.notes.is_empty() => {
                     let i = rnd(part.notes.len() as u64) as usize;
@@ -904,20 +1050,48 @@ mod tests {
     fn notes_across_bar_lines_are_tied() {
         let mut doc = tiny();
         doc.edit(0, |p| {
-            p.insert(Note { start: 3.0, dur: 2.0, sound: Sound::Note(67), volume: 12, duty: 2, tie: false, inst: 0 });
+            p.insert(Note {
+                start: 3.0,
+                dur: 2.0,
+                sound: Sound::Note(67),
+                volume: 12,
+                duty: 2,
+                tie: false,
+                inst: 0,
+            });
         })
         .unwrap();
-        assert!(doc.text.contains("o4 c4 d4 e4 g4& | o4 g4 r2."), "{}", doc.text);
+        assert!(
+            doc.text.contains("o4 c4 d4 e4 g4& | o4 g4 r2."),
+            "{}",
+            doc.text
+        );
         let p = doc.part(0).unwrap();
-        assert_eq!(pitches(&p), [(0.0, 1.0, 60), (1.0, 1.0, 62), (2.0, 1.0, 64), (3.0, 2.0, 67)]);
+        assert_eq!(
+            pitches(&p),
+            [
+                (0.0, 1.0, 60),
+                (1.0, 1.0, 62),
+                (2.0, 1.0, 64),
+                (3.0, 2.0, 67)
+            ]
+        );
         // Slurs, chords, octaves, triplets, volumes and duties survive.
         let mut doc = tiny();
-        doc.set_text(doc.text.replace("c4 d4 e4 f4 | g1 |", "c4& >d4 <{c e g}4 l12 c c c | v9 @1 c2 g2 |"));
+        doc.set_text(doc.text.replace(
+            "c4 d4 e4 f4 | g1 |",
+            "c4& >d4 <{c e g}4 l12 c c c | v9 @1 c2 g2 |",
+        ));
         assert!(doc.error().is_none(), "{:?}", doc.error());
         let before = doc.part(0).unwrap();
         doc.canonicalize(0).unwrap();
         assert_eq!(doc.part(0).unwrap(), before, "{}", doc.text);
-        assert!(doc.text.contains("o4 c4& o5 d4 o4 {c e g}4 c12 c12 c12 | v9 @1 o4 c2 g2 |"), "{}", doc.text);
+        assert!(
+            doc.text
+                .contains("o4 c4& o5 d4 o4 {c e g}4 c12 c12 c12 | v9 @1 o4 c2 g2 |"),
+            "{}",
+            doc.text
+        );
     }
 
     #[test]

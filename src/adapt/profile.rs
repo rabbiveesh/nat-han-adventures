@@ -87,12 +87,22 @@ pub struct SkillState {
 
 impl SkillState {
     pub fn new(center: Band) -> Self {
-        SkillState { center, spread: DEFAULT_SPREAD, window: RollingWindow::default(), epoch: 0, fell_from: None }
+        SkillState {
+            center,
+            spread: DEFAULT_SPREAD,
+            window: RollingWindow::default(),
+            epoch: 0,
+            fell_from: None,
+        }
     }
 
     /// Rooms at the center needed before a promotion.
     pub fn evidence_needed(&self) -> usize {
-        if self.fell_from == Some(self.center + 1) { REPROMOTE_EVIDENCE } else { MIN_EVIDENCE }
+        if self.fell_from == Some(self.center + 1) {
+            REPROMOTE_EVIDENCE
+        } else {
+            MIN_EVIDENCE
+        }
     }
 }
 
@@ -263,7 +273,10 @@ pub enum AdaptEvent {
     /// exercised went, at the band it stands for (the level's number), with the assist dial it
     /// was played at. Joins the skills' windows like a room; once calibrated, a skill's band can
     /// move on it the same way (promote, demote, widen). Never touches the free-play dial.
-    Evidence { skills: Vec<(Skill, Band, Outcome)>, assists: f32 },
+    Evidence {
+        skills: Vec<(Skill, Band, Outcome)>,
+        assists: f32,
+    },
     /// A skill became available to free play. If it was never played, its center starts at the
     /// mean center of the skills that have been played, minus [`UNLOCK_OFFSET`] (so a strong
     /// player doesn't grind a new mechanic up from band 1).
@@ -276,17 +289,29 @@ pub enum AdaptEvent {
 /// profile is returned (clone first to keep the old one). [`PlayerProfile::cues`] holds what
 /// this event asks of the caller.
 pub fn reduce(state: PlayerProfile, event: AdaptEvent) -> PlayerProfile {
-    let state = PlayerProfile { cues: Vec::new(), ..state };
+    let state = PlayerProfile {
+        cues: Vec::new(),
+        ..state
+    };
     match event {
-        AdaptEvent::RoomStarted { room_id, skills, expected_deaths, par_secs } => {
-            room_started(state, room_id, skills, expected_deaths, par_secs)
-        }
+        AdaptEvent::RoomStarted {
+            room_id,
+            skills,
+            expected_deaths,
+            par_secs,
+        } => room_started(state, room_id, skills, expected_deaths, par_secs),
         AdaptEvent::RoomFinished(result) => room_finished(state, result),
         AdaptEvent::Frustrated(signal) => match state.room.clone() {
             Some(room) if room.frustrated => state,
             Some(room) => {
                 let s = ease(state, &room.skills, signal);
-                PlayerProfile { room: Some(ActiveRoom { frustrated: true, ..room }), ..s }
+                PlayerProfile {
+                    room: Some(ActiveRoom {
+                        frustrated: true,
+                        ..room
+                    }),
+                    ..s
+                }
             }
             None => ease(state, &[], signal),
         },
@@ -295,12 +320,25 @@ pub fn reduce(state: PlayerProfile, event: AdaptEvent) -> PlayerProfile {
     }
 }
 
-fn evidence(state: PlayerProfile, played: &[(Skill, Band, Outcome)], assists: f32) -> PlayerProfile {
+fn evidence(
+    state: PlayerProfile,
+    played: &[(Skill, Band, Outcome)],
+    assists: f32,
+) -> PlayerProfile {
     let mut skills = state.skills.clone();
     for &(skill, band, outcome) in played {
         let st = &skills[skill.index()];
-        let entry = WindowEntry { outcome, band: band.clamp(MIN_BAND, MAX_BAND), center: st.center, epoch: st.epoch, assists };
-        skills[skill.index()] = SkillState { window: st.window.push(entry), ..st.clone() };
+        let entry = WindowEntry {
+            outcome,
+            band: band.clamp(MIN_BAND, MAX_BAND),
+            center: st.center,
+            epoch: st.epoch,
+            assists,
+        };
+        skills[skill.index()] = SkillState {
+            window: st.window.push(entry),
+            ..st.clone()
+        };
     }
     let s = PlayerProfile { skills, ..state };
     if s.calibrating() {
@@ -316,7 +354,12 @@ fn skill_unlocked(state: PlayerProfile, skill: Skill) -> PlayerProfile {
     if state.calibrating() || !state.skill(skill).window.entries.is_empty() {
         return state;
     }
-    let played: Vec<Band> = state.skills.iter().filter(|s| !s.window.entries.is_empty()).map(|s| s.center).collect();
+    let played: Vec<Band> = state
+        .skills
+        .iter()
+        .filter(|s| !s.window.entries.is_empty())
+        .map(|s| s.center)
+        .collect();
     if played.is_empty() {
         return state;
     }
@@ -324,7 +367,11 @@ fn skill_unlocked(state: PlayerProfile, skill: Skill) -> PlayerProfile {
     let center = super::skill::clamp_band(mean.round() as i32 - UNLOCK_OFFSET as i32);
     let mut skills = state.skills.clone();
     let st = &skills[skill.index()];
-    skills[skill.index()] = SkillState { center, epoch: st.epoch + 1, ..st.clone() };
+    skills[skill.index()] = SkillState {
+        center,
+        epoch: st.epoch + 1,
+        ..st.clone()
+    };
     PlayerProfile { skills, ..state }
 }
 
@@ -336,20 +383,37 @@ fn room_started(
     par_secs: Option<f32>,
 ) -> PlayerProfile {
     if let Some(room) = state.room.clone().filter(|r| r.room_id == room_id) {
-        let room = ActiveRoom { restarts: room.restarts + 1, ..room };
+        let room = ActiveRoom {
+            restarts: room.restarts + 1,
+            ..room
+        };
         if !room.frustrated
             && let Some(signal) = frustration::detect(0, 0.0, room.restarts)
         {
             let s = ease(state, &room.skills, signal);
-            return PlayerProfile { room: Some(ActiveRoom { frustrated: true, ..room }), ..s };
+            return PlayerProfile {
+                room: Some(ActiveRoom {
+                    frustrated: true,
+                    ..room
+                }),
+                ..s
+            };
         }
-        return PlayerProfile { room: Some(room), ..state };
+        return PlayerProfile {
+            room: Some(room),
+            ..state
+        };
     }
     let skills = skills
         .into_iter()
         .map(|(skill, band)| {
             let st = state.skill(skill);
-            RoomSkill { skill, band: band.clamp(MIN_BAND, MAX_BAND), center: st.center, epoch: st.epoch }
+            RoomSkill {
+                skill,
+                band: band.clamp(MIN_BAND, MAX_BAND),
+                center: st.center,
+                epoch: st.epoch,
+            }
         })
         .collect();
     let room = ActiveRoom {
@@ -361,14 +425,24 @@ fn room_started(
         restarts: 0,
         frustrated: false,
     };
-    PlayerProfile { room: Some(room), ..state }
+    PlayerProfile {
+        room: Some(room),
+        ..state
+    }
 }
 
 fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
-    let Some(room) = state.room.clone() else { return state };
+    let Some(room) = state.room.clone() else {
+        return state;
+    };
     let excess = result.deaths.saturating_sub(room.expected_deaths);
     let after_cleans = state.recent.len() >= CARELESS_AFTER_CLEAN
-        && state.recent.iter().rev().take(CARELESS_AFTER_CLEAN).all(|r| r.outcome == Outcome::Clean);
+        && state
+            .recent
+            .iter()
+            .rev()
+            .take(CARELESS_AFTER_CLEAN)
+            .all(|r| r.outcome == Outcome::Clean);
     let quick = result.first_death_secs.is_some_and(|t| t < CARELESS_SECS);
     let outcome = if excess == 0 {
         Outcome::Clean
@@ -377,14 +451,21 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
     } else {
         Outcome::Struggle
     };
-    let time_ratio = room.par_secs.filter(|p| *p > 0.0).map(|p| result.time_secs / p);
+    let time_ratio = room
+        .par_secs
+        .filter(|p| *p > 0.0)
+        .map(|p| result.time_secs / p);
 
     let mut recent = state.recent.clone();
     recent.push(RecentRoom {
         outcome,
         excess_deaths: excess,
         time_ratio,
-        toots_per_min: if result.time_secs > 0.0 { result.toots as f32 * 60.0 / result.time_secs } else { 0.0 },
+        toots_per_min: if result.time_secs > 0.0 {
+            result.toots as f32 * 60.0 / result.time_secs
+        } else {
+            0.0
+        },
     });
     if recent.len() > RECENT_ROOMS {
         recent.drain(..recent.len() - RECENT_ROOMS);
@@ -423,7 +504,9 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
     let assists = match outcome {
         Outcome::Clean => s.assists - ASSIST_FADE,
         Outcome::Careless => s.assists,
-        Outcome::Struggle if signal.is_some() => s.assists + (death_rise - frustration_bump(s.assists)).max(0.0),
+        Outcome::Struggle if signal.is_some() => {
+            s.assists + (death_rise - frustration_bump(s.assists)).max(0.0)
+        }
         Outcome::Struggle => s.assists + death_rise,
     }
     .clamp(0.0, 1.0);
@@ -431,10 +514,23 @@ fn room_finished(state: PlayerProfile, result: RoomResult) -> PlayerProfile {
     let mut skills = s.skills.clone();
     for rs in &room.skills {
         let st = &skills[rs.skill.index()];
-        let entry = WindowEntry { outcome, band: rs.band, center: rs.center, epoch: rs.epoch, assists: room.assists };
-        skills[rs.skill.index()] = SkillState { window: st.window.push(entry), ..st.clone() };
+        let entry = WindowEntry {
+            outcome,
+            band: rs.band,
+            center: rs.center,
+            epoch: rs.epoch,
+            assists: room.assists,
+        };
+        skills[rs.skill.index()] = SkillState {
+            window: st.window.push(entry),
+            ..st.clone()
+        };
     }
-    let s = PlayerProfile { skills, assists, ..s };
+    let s = PlayerProfile {
+        skills,
+        assists,
+        ..s
+    };
 
     if let Some(signal) = signal {
         return ease(s, &room.skills, signal);
@@ -473,8 +569,13 @@ fn judge(mut s: PlayerProfile, judged: &[Skill]) -> PlayerProfile {
             }
         } else {
             match st.window.clean_rate() {
-                (Some(rate), n) if n >= WIDEN_MIN_ROOMS && rate > WIDEN_AT && st.spread < WIDEN_MAX => {
-                    SkillState { spread: (st.spread + WIDEN_STEP).min(WIDEN_MAX), ..st.clone() }
+                (Some(rate), n)
+                    if n >= WIDEN_MIN_ROOMS && rate > WIDEN_AT && st.spread < WIDEN_MAX =>
+                {
+                    SkillState {
+                        spread: (st.spread + WIDEN_STEP).min(WIDEN_MAX),
+                        ..st.clone()
+                    }
                 }
                 _ => st.clone(),
             }
@@ -511,25 +612,48 @@ pub fn should_demote(st: &SkillState) -> bool {
 /// *stretch* room (played above the center): then the stretch was the problem, not the
 /// center, so only the spread narrows (dropping a sound center there caused re-climb
 /// oscillation in the simulator).
-fn ease(state: PlayerProfile, room_skills: &[RoomSkill], signal: FrustrationSignal) -> PlayerProfile {
+fn ease(
+    state: PlayerProfile,
+    room_skills: &[RoomSkill],
+    signal: FrustrationSignal,
+) -> PlayerProfile {
     let mut cues = state.cues.clone();
     cues.push(Cue::Encourage(signal));
     let mut skills = state.skills.clone();
-    let pushing: Vec<&RoomSkill> = room_skills.iter().filter(|rs| rs.band >= rs.center).collect();
-    let targets: Vec<&RoomSkill> = if pushing.is_empty() { room_skills.iter().take(1).collect() } else { pushing };
+    let pushing: Vec<&RoomSkill> = room_skills
+        .iter()
+        .filter(|rs| rs.band >= rs.center)
+        .collect();
+    let targets: Vec<&RoomSkill> = if pushing.is_empty() {
+        room_skills.iter().take(1).collect()
+    } else {
+        pushing
+    };
     if state.calibration.done {
         for rs in targets {
             let st = &skills[rs.skill.index()];
             let stretch = rs.band > rs.center && st.center == rs.center;
-            let center = if stretch { st.center } else { st.center.saturating_sub(1).max(MIN_BAND) };
+            let center = if stretch {
+                st.center
+            } else {
+                st.center.saturating_sub(1).max(MIN_BAND)
+            };
             if center != st.center {
                 cues.push(Cue::Eased(rs.skill, center));
             }
             skills[rs.skill.index()] = SkillState {
                 center,
                 spread: (st.spread - FRUSTRATION_NARROW).max(DEMOTE_SPREAD_MIN),
-                epoch: if center != st.center { st.epoch + 1 } else { st.epoch },
-                fell_from: if center != st.center { Some(st.center) } else { st.fell_from },
+                epoch: if center != st.center {
+                    st.epoch + 1
+                } else {
+                    st.epoch
+                },
+                fell_from: if center != st.center {
+                    Some(st.center)
+                } else {
+                    st.fell_from
+                },
                 ..st.clone()
             };
         }
@@ -563,7 +687,11 @@ fn calibration_room(
         .or(room.skills.first())
         .map(|rs| rs.band)
         .unwrap_or(MIN_BAND);
-    let calibration = s.calibration.record(Probe { band, clean, time_ratio });
+    let calibration = s.calibration.record(Probe {
+        band,
+        clean,
+        time_ratio,
+    });
     let mut s = PlayerProfile { calibration, ..s };
     if let Some(signal) = signal {
         s = ease(s, &room.skills, signal);
@@ -573,15 +701,28 @@ fn calibration_room(
     }
     let p = s.calibration.placement();
     let skills = std::array::from_fn(|i| {
-        let center = if Skill::ALL[i] == CALIBRATION_SKILL { p.band } else { p.band.saturating_sub(1).max(MIN_BAND) };
-        SkillState { center, spread: p.spread, window: RollingWindow::default(), epoch: s.skills[i].epoch + 1, fell_from: None }
+        let center = if Skill::ALL[i] == CALIBRATION_SKILL {
+            p.band
+        } else {
+            p.band.saturating_sub(1).max(MIN_BAND)
+        };
+        SkillState {
+            center,
+            spread: p.spread,
+            window: RollingWindow::default(),
+            epoch: s.skills[i].epoch + 1,
+            fell_from: None,
+        }
     });
     let mut cues = s.cues.clone();
     cues.push(Cue::Calibrated(p));
     PlayerProfile {
         skills,
         assists: s.assists.max(p.assists),
-        calibration: Calibration { done: true, ..s.calibration.clone() },
+        calibration: Calibration {
+            done: true,
+            ..s.calibration.clone()
+        },
         cues,
         ..s
     }

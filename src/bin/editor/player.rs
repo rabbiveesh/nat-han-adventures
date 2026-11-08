@@ -9,9 +9,11 @@
 use kira::sound::static_sound::{StaticSoundData, StaticSoundSettings};
 use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend};
 use nat_han_adventures::audio::live::chorus;
-use nat_han_adventures::audio::live::playback::{ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData, Published};
-use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::engine::DRIFT_BPM;
+use nat_han_adventures::audio::live::feel::Feel;
+use nat_han_adventures::audio::live::playback::{
+    ENGINE_RATE, LiveHandle, LiveSound, LiveSoundData, Published,
+};
 use nat_han_adventures::audio::live::soloist::Soloist;
 use nat_han_adventures::audio::live::{BeatClock, Engine, EngineConfig, Input, SongFile};
 use nat_han_adventures::audio::tuning::Tuning;
@@ -44,18 +46,38 @@ pub struct Dials {
 
 impl Default for Dials {
     fn default() -> Self {
-        Dials { force_harmony: None, force_tuning: None, force_feel: None, force_chorus: None, freedom: [0.0; 5], mix: [1.0; 4], soloist: None, pocket: true, duck: true, drift: true }
+        Dials {
+            force_harmony: None,
+            force_tuning: None,
+            force_feel: None,
+            force_chorus: None,
+            freedom: [0.0; 5],
+            mix: [1.0; 4],
+            soloist: None,
+            pocket: true,
+            duck: true,
+            drift: true,
+        }
     }
 }
 
 impl Dials {
     pub fn freedom_input(&self) -> Input {
         let [lead, comp, bass, drums, dynamics] = self.freedom;
-        Input::SetFreedom { lead, comp, bass, drums, dynamics }
+        Input::SetFreedom {
+            lead,
+            comp,
+            bass,
+            drums,
+            dynamics,
+        }
     }
 
     pub fn human_input(&self) -> Input {
-        Input::SetHuman { loose: if self.pocket { 1.0 } else { 0.0 }, duck: self.duck }
+        Input::SetHuman {
+            loose: if self.pocket { 1.0 } else { 0.0 },
+            duck: self.duck,
+        }
     }
 
     pub fn inputs(&self) -> [Input; 8] {
@@ -110,7 +132,12 @@ pub struct Player {
 }
 
 fn to_static(r: synth::Rendered) -> StaticSoundData {
-    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into_iter().map(Into::into).collect(), settings: StaticSoundSettings::new(), slice: None }
+    StaticSoundData {
+        sample_rate: r.sample_rate,
+        frames: r.frames.into_iter().map(Into::into).collect(),
+        settings: StaticSoundSettings::new(),
+        slice: None,
+    }
 }
 
 impl Player {
@@ -121,19 +148,24 @@ impl Player {
                 let (sound, handle) = data.split();
                 (None, Some(sound), Some(handle), None)
             }
-            AudioOutput::Device => match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
-                Ok(mut m) => {
-                    let h = m.play(data).ok();
-                    (Some(m), None, h, None)
+            AudioOutput::Device => {
+                match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
+                    Ok(mut m) => {
+                        let h = m.play(data).ok();
+                        (Some(m), None, h, None)
+                    }
+                    Err(e) => (None, None, None, Some(format!("no audio output: {e:?}"))),
                 }
-                Err(e) => (None, None, None, Some(format!("no audio output: {e:?}"))),
-            },
+            }
         };
         let mut p = Player {
             manager,
             headless,
             handle,
-            sfx: Sfx::ALL.into_iter().map(|s| (s, to_static(sfx::render(s)))).collect(),
+            sfx: Sfx::ALL
+                .into_iter()
+                .map(|s| (s, to_static(sfx::render(s))))
+                .collect(),
             published: Published::default(),
             tape: None,
             seen: (0, 0.0),
@@ -153,7 +185,14 @@ impl Player {
     }
 
     /// Start `song` (bars `offset..` of the edited song) at song beat `beat`, fresh.
-    pub fn play(&mut self, song: &SongFile, offset: usize, beat: f64, dials: &Dials, ctx: &Context) {
+    pub fn play(
+        &mut self,
+        song: &SongFile,
+        offset: usize,
+        beat: f64,
+        dials: &Dials,
+        ctx: &Context,
+    ) {
         match self.engine(song, beat, dials, ctx) {
             Ok(e) => {
                 if let Some(h) = self.handle.as_mut() {
@@ -168,8 +207,21 @@ impl Player {
         }
     }
 
-    fn engine(&mut self, song: &SongFile, beat: f64, dials: &Dials, ctx: &Context) -> Result<Engine, String> {
-        let mut e = Engine::with_config(song, ENGINE_RATE, EngineConfig { drift_bpm: if dials.drift { DRIFT_BPM } else { 0.0 }, ..EngineConfig::default() })?;
+    fn engine(
+        &mut self,
+        song: &SongFile,
+        beat: f64,
+        dials: &Dials,
+        ctx: &Context,
+    ) -> Result<Engine, String> {
+        let mut e = Engine::with_config(
+            song,
+            ENGINE_RATE,
+            EngineConfig {
+                drift_bpm: if dials.drift { DRIFT_BPM } else { 0.0 },
+                ..EngineConfig::default()
+            },
+        )?;
         e.start_at(e.shape().at(beat.max(0.0)));
         e.post(Input::SetStats(ctx.stats));
         e.post(Input::SetFilters(ctx.filters));
@@ -214,7 +266,14 @@ impl Player {
         if !self.sfx_on {
             return;
         }
-        let Some(d) = self.sfx.iter().find(|(k, _)| *k == s).map(|(_, d)| d.clone()) else { return };
+        let Some(d) = self
+            .sfx
+            .iter()
+            .find(|(k, _)| *k == s)
+            .map(|(_, d)| d.clone())
+        else {
+            return;
+        };
         if let Some(m) = self.manager.as_mut() {
             let _ = m.play(d.volume(Decibels(-2.0)));
         }
@@ -245,7 +304,9 @@ impl Player {
         if self.published.chunks != self.seen.0 {
             self.seen = (self.published.chunks, now);
         }
-        let Some(p) = self.pending.as_ref() else { return };
+        let Some(p) = self.pending.as_ref() else {
+            return;
+        };
         if !self.published.playing {
             let (song, offset) = (p.song.clone(), p.offset);
             self.play(&song, offset, 0.0, dials, ctx);
@@ -287,7 +348,11 @@ impl Player {
 
     /// A clock's song beat in the 4/4 song (the waltz runs on its own 3/4 beats).
     pub fn canonical_beat(&self, c: &BeatClock) -> f64 {
-        if (c.beats_per_bar - self.bar_beats).abs() > 1e-6 { waltz::unwarp(c.position.song_beat) } else { c.position.song_beat }
+        if (c.beats_per_bar - self.bar_beats).abs() > 1e-6 {
+            waltz::unwarp(c.position.song_beat)
+        } else {
+            c.position.song_beat
+        }
     }
 
     /// The heard song beat in the edited song (the selection's offset added).

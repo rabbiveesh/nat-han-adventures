@@ -46,9 +46,15 @@ pub(super) fn plugin(app: &mut App) {
 }
 
 /// The glimpse comes with its level (a restart brings back an unfound one).
-fn spawn_glimpse(mut commands: Commands, active: Option<Res<ActiveLevel>>, glimpse: Query<(), With<HanGlimpse>>) {
+fn spawn_glimpse(
+    mut commands: Commands,
+    active: Option<Res<ActiveLevel>>,
+    glimpse: Query<(), With<HanGlimpse>>,
+) {
     let Some(active) = active else { return };
-    let Some(s) = &active.level.secret else { return };
+    let Some(s) = &active.level.secret else {
+        return;
+    };
     if !glimpse.is_empty() {
         return;
     }
@@ -56,7 +62,10 @@ fn spawn_glimpse(mut commands: Commands, active: Option<Res<ActiveLevel>>, glimp
     commands.spawn((
         Name::new("HanGlimpse"),
         LevelEntity,
-        HanGlimpse { text: s.text.clone(), found: false },
+        HanGlimpse {
+            text: s.text.clone(),
+            found: false,
+        },
         Pos(at),
         Transform::from_translation(at.extend(0.5)),
     ));
@@ -74,7 +83,9 @@ fn find_secret(
         // The grate's center: half a tile above his middle.
         if !g.found && (pos.0 + Vec2::Y * TILE / 2.0).distance(nat.0) <= SECRET_RADIUS {
             g.found = true;
-            says.write(HanSays { text: g.text.clone() });
+            says.write(HanSays {
+                text: g.text.clone(),
+            });
             sfx.write(PlaySfx(Sfx::Secret));
             found.write(SecretFound);
         }
@@ -87,14 +98,20 @@ fn shout(
     mut shouting: ResMut<Shouting>,
     mut out: MessageWriter<ShoutChorus>,
 ) {
-    let (Some(at), Ok(nat)) = (active.level.shout, player.single()) else { return };
+    let (Some(at), Ok(nat)) = (active.level.shout, player.single()) else {
+        return;
+    };
     if !shouting.0 && at.reached(nat.0, active.level.height) {
         shouting.0 = true;
         out.write(ShoutChorus(true));
     }
 }
 
-fn reset_shout(mut started: MessageReader<LevelStarted>, mut shouting: ResMut<Shouting>, mut out: MessageWriter<ShoutChorus>) {
+fn reset_shout(
+    mut started: MessageReader<LevelStarted>,
+    mut shouting: ResMut<Shouting>,
+    mut out: MessageWriter<ShoutChorus>,
+) {
     if started.read().count() > 0 {
         if shouting.0 {
             out.write(ShoutChorus(false));

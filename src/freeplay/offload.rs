@@ -80,11 +80,18 @@ pub fn fingerprint(level: &Level) -> u64 {
 }
 
 fn line_id(line: &str) -> Option<usize> {
-    CHECKPOINT_LINES.iter().chain(CALIBRATION_LINES).position(|l| *l == line)
+    CHECKPOINT_LINES
+        .iter()
+        .chain(CALIBRATION_LINES)
+        .position(|l| *l == line)
 }
 
 fn line_at(id: usize) -> Option<&'static str> {
-    CHECKPOINT_LINES.iter().chain(CALIBRATION_LINES).nth(id).copied()
+    CHECKPOINT_LINES
+        .iter()
+        .chain(CALIBRATION_LINES)
+        .nth(id)
+        .copied()
 }
 
 /// A job for the worker: `id` comes back with the answer. `None` if the plan can't be sent
@@ -148,8 +155,25 @@ pub fn decode_job(text: &str) -> Option<(u64, u32, RoomPlan)> {
     if next().is_some() || template >= super::templates::TEMPLATES.len() {
         return None;
     }
-    let request = RoomRequest { skill, band, assists };
-    Some((id, seed, RoomPlan { index, request, template, hint, line, world, side_b: 0, solo }))
+    let request = RoomRequest {
+        skill,
+        band,
+        assists,
+    };
+    Some((
+        id,
+        seed,
+        RoomPlan {
+            index,
+            request,
+            template,
+            hint,
+            line,
+            world,
+            side_b: 0,
+            solo,
+        },
+    ))
 }
 
 /// The worker's answer to job `id`: what it found and the room's [`fingerprint`].
@@ -191,7 +215,17 @@ pub fn decode_verdict(text: &str) -> Option<(u64, Verdict, u64)> {
     if next().is_some() || attempts == 0 {
         return None;
     }
-    Some((id, Verdict { attempts, fallback, deaths, marks, micros }, fingerprint))
+    Some((
+        id,
+        Verdict {
+            attempts,
+            fallback,
+            deaths,
+            marks,
+            micros,
+        },
+        fingerprint,
+    ))
 }
 
 /// The worker's whole job: a message in, the answer out (`<PROTOCOL> error` for a message it
@@ -237,7 +271,10 @@ pub fn poll(id: u64, seed: u32, plan: &RoomPlan, waited: f32) -> Outcome {
         return match accept(id, seed, plan, &text) {
             Some(room) => Outcome::Done(Box::new(room)),
             None => {
-                web::retire(&format!("bad answer: {}", text.chars().take(80).collect::<String>()));
+                web::retire(&format!(
+                    "bad answer: {}",
+                    text.chars().take(80).collect::<String>()
+                ));
                 Outcome::Failed
             }
         };
@@ -304,24 +341,34 @@ mod web {
         let worker = match web_sys::Worker::new(URL) {
             Ok(w) => w,
             Err(e) => {
-                bevy::log::warn!("free play: no room worker ({e:?}); rooms are generated in the game");
+                bevy::log::warn!(
+                    "free play: no room worker ({e:?}); rooms are generated in the game"
+                );
                 *s.broken.borrow_mut() = true;
                 return;
             }
         };
         let link = s.link.clone();
         let to = worker.clone();
-        let on_message = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
-            let Some(text) = e.data().as_string() else { return };
-            // Jobs held until the worker was ready go now.
-            for job in link.borrow_mut().heard(text) {
-                let _ = to.post_message(&JsValue::from_str(&job));
-            }
-        });
+        let on_message =
+            Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
+                let Some(text) = e.data().as_string() else {
+                    return;
+                };
+                // Jobs held until the worker was ready go now.
+                for job in link.borrow_mut().heard(text) {
+                    let _ = to.post_message(&JsValue::from_str(&job));
+                }
+            });
         let broken = s.broken.clone();
         let on_error = Closure::<dyn FnMut(web_sys::Event)>::new(move |e: web_sys::Event| {
-            let msg = e.dyn_ref::<web_sys::ErrorEvent>().map(|e| e.message()).unwrap_or_default();
-            bevy::log::warn!("free play: the room worker failed ({msg}); rooms are generated in the game");
+            let msg = e
+                .dyn_ref::<web_sys::ErrorEvent>()
+                .map(|e| e.message())
+                .unwrap_or_default();
+            bevy::log::warn!(
+                "free play: the room worker failed ({msg}); rooms are generated in the game"
+            );
             *broken.borrow_mut() = true;
         });
         worker.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
@@ -357,7 +404,9 @@ mod web {
     }
 
     pub fn retire(why: &str) {
-        bevy::log::warn!("free play: retiring the room worker ({why}); rooms are generated in the game");
+        bevy::log::warn!(
+            "free play: retiring the room worker ({why}); rooms are generated in the game"
+        );
         STATE.with_borrow_mut(|s| {
             *s.broken.borrow_mut() = true;
             if let Some(w) = s.worker.take() {
@@ -370,10 +419,11 @@ mod web {
     pub fn serve() {
         let scope: web_sys::DedicatedWorkerGlobalScope = js_sys::global().unchecked_into();
         let reply_to = scope.clone();
-        let on_message = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
-            let text = e.data().as_string().unwrap_or_default();
-            let _ = reply_to.post_message(&JsValue::from_str(&super::answer(&text)));
-        });
+        let on_message =
+            Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
+                let text = e.data().as_string().unwrap_or_default();
+                let _ = reply_to.post_message(&JsValue::from_str(&super::answer(&text)));
+            });
         scope.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
         on_message.forget();
         // Jobs posted before this point were dropped: the game holds them until it hears this.
@@ -401,7 +451,19 @@ mod tests {
             han_hint: false,
             extra_nuggets_before_quartal: 2,
         };
-        RoomPlan::new(4242, index, RoomRequest { skill, band, assists }, 3, index > 0, index == 0, 10)
+        RoomPlan::new(
+            4242,
+            index,
+            RoomRequest {
+                skill,
+                band,
+                assists,
+            },
+            3,
+            index > 0,
+            index == 0,
+            10,
+        )
     }
 
     #[test]
@@ -412,7 +474,10 @@ mod tests {
             assert_eq!(decode_job(&text), Some((77, 4242, p)), "{text}");
         }
         assert_eq!(decode_job("nh0 job 1 2"), None);
-        assert_eq!(decode_job(&(encode_job(1, 2, &plan(Skill::Grease, 3, 1)).unwrap() + " 9")), None);
+        assert_eq!(
+            decode_job(&(encode_job(1, 2, &plan(Skill::Grease, 3, 1)).unwrap() + " 9")),
+            None
+        );
         assert!(answer("garbage").ends_with(" error"));
     }
 
@@ -425,7 +490,10 @@ mod tests {
         assert_eq!(link.send("a".into()), None);
         assert_eq!(link.send("b".into()), None);
         assert_eq!(link.next(), None);
-        assert_eq!(link.heard(READY.into()), vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            link.heard(READY.into()),
+            vec!["a".to_string(), "b".to_string()]
+        );
         assert_eq!(link.send("c".into()), Some("c".into()));
         assert_eq!(link.heard("nh1 room 1".into()), Vec::<String>::new());
         assert_eq!(link.next().as_deref(), Some("nh1 room 1"));
@@ -436,20 +504,29 @@ mod tests {
 
     #[test]
     fn the_worker_and_the_game_build_the_same_room() {
-        for (i, s) in [Skill::Precision, Skill::Stains, Skill::Waltz].into_iter().enumerate() {
+        for (i, s) in [Skill::Precision, Skill::Stains, Skill::Waltz]
+            .into_iter()
+            .enumerate()
+        {
             let p = plan(s, 4, 1 + i as u32);
             let reply = answer(&encode_job(9, 4242, &p).unwrap());
             let room = accept(9, 4242, &p, &reply).expect("matching room");
             let direct = Job::new(4242, p.clone()).run();
             assert_eq!(room.level, direct.level);
-            assert_eq!((room.plan, room.attempts, room.fallback), (direct.plan, direct.attempts, direct.fallback));
+            assert_eq!(
+                (room.plan, room.attempts, room.fallback),
+                (direct.plan, direct.attempts, direct.fallback)
+            );
             assert_eq!(room.expected_deaths, direct.expected_deaths);
             // Someone else's answer, or a different room (a stale worker), is refused.
             assert!(accept(10, 4242, &p, &reply).is_none());
             let (_, v, fp) = decode_verdict(&reply).unwrap();
             assert!(accept(9, 4242, &p, &encode_verdict(9, &v, fp ^ 1)).is_none());
             let other = Room::rebuild(4243, p.clone(), v);
-            assert_eq!(accept(9, 4243, &p, &reply).is_some(), other.level == room.level);
+            assert_eq!(
+                accept(9, 4243, &p, &reply).is_some(),
+                other.level == room.level
+            );
         }
     }
 }

@@ -35,7 +35,10 @@ pub const PICK: usize = 10;
 /// The set list for a room, with `cleared` Side B levels behind the player: Giant Steps and
 /// fired up, and melting once Spike Alley (B2, its drip pipe) is cleared. Always empty.
 pub fn setlist(cleared: usize) -> Vec<(SetCall, u32)> {
-    let mut out = vec![(SetCall::Mode(Harmony::Coltrane), 0), (SetCall::Mode(Harmony::Quartal), 0)];
+    let mut out = vec![
+        (SetCall::Mode(Harmony::Coltrane), 0),
+        (SetCall::Mode(Harmony::Quartal), 0),
+    ];
     if cleared >= 2 {
         out.push((SetCall::Melt, 0));
     }
@@ -96,7 +99,9 @@ impl Piece {
             Piece::Alley { over: false } | Piece::Deck { over: false } => vec![],
             Piece::Fork { route: Route::Leap } => vec![(-20, GIANT), (26, GAP)],
             Piece::Fork { route: Route::Drop } => vec![(-20, GIANT), (31, MELT)],
-            Piece::Fork { route: Route::Under } => vec![(-20, MELT), (32, MELT)],
+            Piece::Fork {
+                route: Route::Under,
+            } => vec![(-20, MELT), (32, MELT)],
         }
     }
 
@@ -116,7 +121,9 @@ impl Piece {
     fn nuggets_on_route(self) -> Vec<(i32, usize)> {
         match self {
             Piece::Deck { over: false } => vec![(30, STAND)],
-            Piece::Fork { route: Route::Under } => vec![(33, STAND), (40, STAND)],
+            Piece::Fork {
+                route: Route::Under,
+            } => vec![(33, STAND), (40, STAND)],
             _ => vec![],
         }
     }
@@ -124,7 +131,9 @@ impl Piece {
     /// The row Han's on at `dx` from the anchor (for a nugget that pays for a call there).
     fn row_at(self, dx: i32) -> usize {
         match self {
-            Piece::Fork { route: Route::Leap | Route::Drop } if (5..=43).contains(&dx) => 5,
+            Piece::Fork {
+                route: Route::Leap | Route::Drop,
+            } if (5..=43).contains(&dx) => 5,
             _ => STAND,
         }
     }
@@ -184,7 +193,11 @@ struct Grid(Vec<Vec<u8>>);
 
 impl Grid {
     fn new(width: usize) -> Grid {
-        Grid((0..ALONE_H).map(|r| vec![if r >= FLOOR { b'#' } else { b'.' }; width]).collect())
+        Grid(
+            (0..ALONE_H)
+                .map(|r| vec![if r >= FLOOR { b'#' } else { b'.' }; width])
+                .collect(),
+        )
     }
 
     fn set(&mut self, col: usize, row: usize, ch: u8) {
@@ -194,7 +207,11 @@ impl Grid {
     }
 
     fn get(&self, col: usize, row: usize) -> u8 {
-        self.0.get(row).and_then(|r| r.get(col)).copied().unwrap_or(b'#')
+        self.0
+            .get(row)
+            .and_then(|r| r.get(col))
+            .copied()
+            .unwrap_or(b'#')
     }
 
     fn fill(&mut self, cols: std::ops::Range<usize>, rows: std::ops::Range<usize>, ch: u8) {
@@ -215,10 +232,18 @@ pub struct Drawn {
 
 /// The pieces a room may use with `cleared` Side B levels behind the player.
 fn pieces(d: &mut Dice, cleared: usize) -> Piece {
-    let mut kinds = vec![Piece::Wall, Piece::Gap, Piece::Deck { over: d.chance(0.5) }];
+    let mut kinds = vec![
+        Piece::Wall,
+        Piece::Gap,
+        Piece::Deck {
+            over: d.chance(0.5),
+        },
+    ];
     if cleared >= 2 {
         kinds.push(Piece::Pipe);
-        kinds.push(Piece::Alley { over: d.chance(0.5) });
+        kinds.push(Piece::Alley {
+            over: d.chance(0.5),
+        });
     }
     if cleared >= 3 {
         let route = d.pick(&[Route::Leap, Route::Drop, Route::Under]);
@@ -249,12 +274,18 @@ pub fn draw(c: &mut Canvas, d: &mut Dice, band: Band, cleared: usize) -> Drawn {
         // Two fork decks in a row would land Han's drop on the next deck's step: let the
         // music breathe with a plain piece between them.
         if last_deck && matches!(p, Piece::Deck { .. } | Piece::Fork { .. }) {
-            p = if d.chance(0.5) { Piece::Wall } else { Piece::Gap };
+            p = if d.chance(0.5) {
+                Piece::Wall
+            } else {
+                Piece::Gap
+            };
         }
         let calls = p.calls();
         // Its first call a little past the last piece (Han's back on the floor by the nugget
         // that pays for it, 6 columns before), and far enough from the last call.
-        let o = (end + room_gap.max(20) - p.quiet_from()).max(last_call + call_gap - p.quiet_from()) + d.int(0, slack);
+        let o = (end + room_gap.max(20) - p.quiet_from())
+            .max(last_call + call_gap - p.quiet_from())
+            + d.int(0, slack);
         last_call = calls.last().map_or(o + p.quiet_from(), |c| o + c.0);
         end = o + p.width();
         last_deck = matches!(p, Piece::Deck { .. } | Piece::Fork { .. });
@@ -291,14 +322,18 @@ pub fn draw(c: &mut Canvas, d: &mut Dice, band: Band, cleared: usize) -> Drawn {
         // grabs a nugget a column before he's at it).
         let have = supply.iter().position(|&n| {
             let clash = |c: f32, kind: usize| c < n && c > n - 2.0 && kind != k;
-            n <= col as f32 - 3.0 && !calls.iter().any(|&(c, kind)| clash(c, kind)) && !paid.iter().any(|&(c, kind)| clash(c, kind))
+            n <= col as f32 - 3.0
+                && !calls.iter().any(|&(c, kind)| clash(c, kind))
+                && !paid.iter().any(|&(c, kind)| clash(c, kind))
         });
         let n = match have {
             Some(i) => supply.remove(i),
             None => {
                 let dx = col - o - 6;
                 let (mut nc, row) = (col - 6, p.row_at(dx));
-                while g.get(nc as usize, row) != b'.' || g.get(nc as usize, row + 1) == b'.' && row == STAND {
+                while g.get(nc as usize, row) != b'.'
+                    || g.get(nc as usize, row + 1) == b'.' && row == STAND
+                {
                     nc -= 1;
                 }
                 g.set(nc as usize, row, b'o');
@@ -313,8 +348,16 @@ pub fn draw(c: &mut Canvas, d: &mut Dice, band: Band, cleared: usize) -> Drawn {
     // cursor (the cursor moves with every pick and call).
     let mut ev: Vec<(f32, u8, usize)> = calls.iter().map(|&(c, k)| (c, 1, k)).collect();
     for &(n, k) in &paid {
-        let before = calls.iter().filter(|c| c.0 < n).map(|c| c.0).fold(f32::NEG_INFINITY, f32::max);
-        let prior_nug = paid.iter().filter(|p| p.0 < n).map(|p| p.0).fold(f32::NEG_INFINITY, f32::max);
+        let before = calls
+            .iter()
+            .filter(|c| c.0 < n)
+            .map(|c| c.0)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let prior_nug = paid
+            .iter()
+            .filter(|p| p.0 < n)
+            .map(|p| p.0)
+            .fold(f32::NEG_INFINITY, f32::max);
         let at = (n - 2.5).max(before + 0.3).max(prior_nug + 0.5);
         ev.push((at, 0, k));
     }
@@ -336,9 +379,24 @@ pub fn draw(c: &mut Canvas, d: &mut Dice, band: Band, cleared: usize) -> Drawn {
     }
     // The rewinds it takes to learn the room: one a piece (a fork, two: its way in and its
     // way on), as a grease chute expects its splats.
-    let rewinds = placed.iter().map(|(p, _)| if matches!(p, Piece::Fork { .. }) { 2 } else { 1 }).sum();
+    let rewinds = placed
+        .iter()
+        .map(|(p, _)| {
+            if matches!(p, Piece::Fork { .. }) {
+                2
+            } else {
+                1
+            }
+        })
+        .sum();
     c.expect_deaths(rewinds);
-    Drawn { built: Built { hint: None, checkpoint: None }, solution }
+    Drawn {
+        built: Built {
+            hint: None,
+            checkpoint: None,
+        },
+        solution,
+    }
 }
 
 /// The template's build function (`templates::TEMPLATES`): the room, without its solution.

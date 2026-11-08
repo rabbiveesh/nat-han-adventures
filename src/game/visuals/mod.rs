@@ -18,8 +18,8 @@ pub use particles::Particle;
 use super::han::{HanAnim, HanBrain, HanMode, HanPose, SprayPlug};
 use super::physics::{Body, Dead, PlayerControl};
 use super::{
-    Checkpoint, Fly, Goal, Groove, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player, Pos,
-    PrevPos, Spray, Stain, tuning,
+    Checkpoint, Fly, Goal, Groove, Han, LevelEntity, LevelTile, MovingPlatform, Nugget, Player,
+    Pos, PrevPos, Spray, Stain, tuning,
 };
 use crate::art::{SpriteId, Sprites};
 use crate::events::{Jumped, Landed};
@@ -37,7 +37,11 @@ pub enum VisualSet {
 pub(super) fn plugin(app: &mut App) {
     app.configure_sets(
         PostUpdate,
-        (VisualSet::Interpolate, VisualSet::Animate, VisualSet::Camera)
+        (
+            VisualSet::Interpolate,
+            VisualSet::Animate,
+            VisualSet::Camera,
+        )
             .chain()
             .before(bevy::transform::TransformSystems::Propagate),
     )
@@ -50,7 +54,10 @@ pub(super) fn plugin(app: &mut App) {
     .add_observer(platform_sprite)
     .add_observer(stain_sprite)
     .add_observer(side_stain_sprite)
-    .add_systems(PostUpdate, fade_side_stain_sprites.run_if(resource_exists::<Sprites>))
+    .add_systems(
+        PostUpdate,
+        fade_side_stain_sprites.run_if(resource_exists::<Sprites>),
+    )
     .add_observer(player_sprite)
     .add_observer(han_sprite)
     .add_observer(stage_han_sprite)
@@ -59,7 +66,12 @@ pub(super) fn plugin(app: &mut App) {
     .add_systems(Update, new_gate_markers.run_if(resource_exists::<Sprites>))
     .add_systems(PostUpdate, interpolate.in_set(VisualSet::Interpolate))
     .add_systems(PostUpdate, float_kicks.in_set(VisualSet::Animate))
-    .add_systems(PostUpdate, hide_nat.after(VisualSet::Animate).run_if(resource_exists::<crate::game::sideb::SideB>))
+    .add_systems(
+        PostUpdate,
+        hide_nat
+            .after(VisualSet::Animate)
+            .run_if(resource_exists::<crate::game::sideb::SideB>),
+    )
     .add_systems(
         PostUpdate,
         (
@@ -101,14 +113,17 @@ fn dev_jump_to_level(
     mut next: ResMut<NextState<crate::state::AppState>>,
     mut levels: ResMut<crate::level::Levels>,
 ) {
-    let n = std::env::var("NATHAN_LEVEL").ok().and_then(|v| v.parse::<usize>().ok());
+    let n = std::env::var("NATHAN_LEVEL")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok());
     let file = std::env::var("NATHAN_LEVEL_FILE").ok();
     if n.is_none() && file.is_none() {
         return;
     }
     current.0 = n.unwrap_or(1).saturating_sub(1);
     if let Some(path) = file {
-        let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("NATHAN_LEVEL_FILE {path}: {e}"));
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("NATHAN_LEVEL_FILE {path}: {e}"));
         let level = crate::level::Level::parse(&text).unwrap_or_else(|e| panic!("{path}: {e}"));
         if let Some(slot) = levels.0.get_mut(current.0) {
             *slot = level;
@@ -136,7 +151,10 @@ pub struct CharacterSprite {
 
 impl Default for CharacterSprite {
     fn default() -> Self {
-        Self { squash: Vec2::ONE, size: 1.0 }
+        Self {
+            squash: Vec2::ONE,
+            size: 1.0,
+        }
     }
 }
 
@@ -154,7 +172,9 @@ fn tile_sprite(
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(sprites), Ok((t, mut tf))) = (sprites, q.get_mut(add.entity)) else { return };
+    let (Some(sprites), Ok((t, mut tf))) = (sprites, q.get_mut(add.entity)) else {
+        return;
+    };
     let w = t.world;
     let (id, anim) = match t.tile {
         Tile::Empty => return,
@@ -200,8 +220,16 @@ fn tile_sprite(
     }
     e.insert(s);
     if anim {
-        let fps = if id == SpriteId::Belt { crate::level::BELT_SPEED / 2.0 } else { 4.0 };
-        let offset = if id == SpriteId::Belt { 0.0 } else { t.col as f32 * 0.13 };
+        let fps = if id == SpriteId::Belt {
+            crate::level::BELT_SPEED / 2.0
+        } else {
+            4.0
+        };
+        let offset = if id == SpriteId::Belt {
+            0.0
+        } else {
+            t.col as f32 * 0.13
+        };
         e.insert(FrameAnim { id, fps, offset });
     }
 }
@@ -213,7 +241,9 @@ fn nugget_sprite(
     mut commands: Commands,
 ) {
     let Some(sprites) = sprites else { return };
-    let (offset, ghost) = q.get(add.entity).map_or((0.0, false), |(t, g)| (t.translation.x * 0.011, g));
+    let (offset, ghost) = q
+        .get(add.entity)
+        .map_or((0.0, false), |(t, g)| (t.translation.x * 0.011, g));
     let mut s = sprite(&sprites, SpriteId::Nugget);
     if ghost {
         // Already counted: faded.
@@ -221,15 +251,24 @@ fn nugget_sprite(
     }
     commands.entity(add.entity).insert((
         s,
-        FrameAnim { id: SpriteId::Nugget, fps: 8.0, offset },
+        FrameAnim {
+            id: SpriteId::Nugget,
+            fps: 8.0,
+            offset,
+        },
     ));
 }
 
-fn checkpoint_sprite(add: On<Add, Checkpoint>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+fn checkpoint_sprite(
+    add: On<Add, Checkpoint>,
+    sprites: Option<Res<Sprites>>,
+    mut commands: Commands,
+) {
     let Some(sprites) = sprites else { return };
-    commands
-        .entity(add.entity)
-        .insert((sprite(&sprites, SpriteId::CheckpointOff), Anchor::BOTTOM_CENTER));
+    commands.entity(add.entity).insert((
+        sprite(&sprites, SpriteId::CheckpointOff),
+        Anchor::BOTTOM_CENTER,
+    ));
 }
 
 fn goal_sprite(
@@ -242,7 +281,11 @@ fn goal_sprite(
     commands.entity(add.entity).insert((
         sprite(&sprites, SpriteId::GoalFlag),
         Anchor::BOTTOM_CENTER,
-        FrameAnim { id: SpriteId::GoalFlag, fps: 5.0, offset: 0.0 },
+        FrameAnim {
+            id: SpriteId::GoalFlag,
+            fps: 5.0,
+            offset: 0.0,
+        },
     ));
     // The throne, just right of the flag (decorative).
     if let Ok(tf) = q.get(add.entity) {
@@ -267,7 +310,11 @@ fn fly_sprite(
     let offset = q.get(add.entity).map_or(0.0, |f| f.phase);
     commands.entity(add.entity).insert((
         sprite(&sprites, SpriteId::Fly),
-        FrameAnim { id: SpriteId::Fly, fps: 16.0, offset },
+        FrameAnim {
+            id: SpriteId::Fly,
+            fps: 16.0,
+            offset,
+        },
     ));
 }
 
@@ -281,7 +328,11 @@ fn spray_sprite(add: On<Add, Spray>, sprites: Option<Res<Sprites>>, mut commands
                 p.spawn((
                     JetSegment,
                     sprite(&sprites, SpriteId::SprayJet),
-                    FrameAnim { id: SpriteId::SprayJet, fps: 12.0, offset: k as f32 * 0.1 },
+                    FrameAnim {
+                        id: SpriteId::SprayJet,
+                        fps: 12.0,
+                        offset: k as f32 * 0.1,
+                    },
                     Transform::from_xyz(0.0, k as f32 * TILE + TILE / 2.0, 0.1),
                     Visibility::Hidden,
                 ));
@@ -290,9 +341,20 @@ fn spray_sprite(add: On<Add, Spray>, sprites: Option<Res<Sprites>>, mut commands
 }
 
 /// A splat stain, drawn over the spikes it covers.
-fn stain_sprite(add: On<Add, Stain>, q: Query<&Stain>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
-    let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else { return };
-    let id = if s.tile == Tile::StainDown { SpriteId::StainDown } else { SpriteId::StainUp };
+fn stain_sprite(
+    add: On<Add, Stain>,
+    q: Query<&Stain>,
+    sprites: Option<Res<Sprites>>,
+    mut commands: Commands,
+) {
+    let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else {
+        return;
+    };
+    let id = if s.tile == Tile::StainDown {
+        SpriteId::StainDown
+    } else {
+        SpriteId::StainUp
+    };
     commands.entity(add.entity).insert(sprite(&sprites, id));
 }
 
@@ -303,14 +365,23 @@ fn side_stain_sprite(
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else { return };
+    let (Some(sprites), Ok(s)) = (sprites, q.get(add.entity)) else {
+        return;
+    };
     let _ = s; // (Rotation onto the face is applied by `fade_side_stain_sprites`.)
-    commands.entity(add.entity).insert(sprite(&sprites, SpriteId::StainUp));
+    commands
+        .entity(add.entity)
+        .insert(sprite(&sprites, SpriteId::StainUp));
 }
 
 fn fade_side_stain_sprites(mut q: Query<(&crate::game::SideStain, &mut Sprite, &mut Transform)>) {
     for (s, mut sprite, mut tf) in &mut q {
-        sprite.color = Color::srgba(1.0, 1.0, 1.0, (s.life / crate::game::SIDE_STAIN_LIFE).clamp(0.0, 1.0));
+        sprite.color = Color::srgba(
+            1.0,
+            1.0,
+            1.0,
+            (s.life / crate::game::SIDE_STAIN_LIFE).clamp(0.0, 1.0),
+        );
         tf.rotation = Quat::from_rotation_z(-s.side * std::f32::consts::FRAC_PI_2);
     }
 }
@@ -321,7 +392,9 @@ fn platform_sprite(
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(sprites), Ok(p)) = (sprites, q.get(add.entity)) else { return };
+    let (Some(sprites), Ok(p)) = (sprites, q.get(add.entity)) else {
+        return;
+    };
     let id = match p.kind {
         PlatformKind::Tp => SpriteId::PlatformTp,
         PlatformKind::Duck => SpriteId::PlatformDuck,
@@ -331,32 +404,57 @@ fn platform_sprite(
     if p.kind == PlatformKind::Raft && p.width > 1 {
         // Han's big raft: his splatted overalls, three segments.
         let width = p.width;
-        commands.entity(add.entity).insert(Visibility::default()).with_children(|c| {
-            for i in 0..width {
-                let x = (i as f32 - (width as f32 - 1.0) / 2.0) * TILE;
-                let frame = if i == 0 { 0 } else if i + 1 == width { 2 } else { 1 };
-                c.spawn((Sprite::from_image(sprites.frame(SpriteId::HanRaft, frame)), Transform::from_xyz(x, 0.0, 0.0)));
-            }
-        });
+        commands
+            .entity(add.entity)
+            .insert(Visibility::default())
+            .with_children(|c| {
+                for i in 0..width {
+                    let x = (i as f32 - (width as f32 - 1.0) / 2.0) * TILE;
+                    let frame = if i == 0 {
+                        0
+                    } else if i + 1 == width {
+                        2
+                    } else {
+                        1
+                    };
+                    c.spawn((
+                        Sprite::from_image(sprites.frame(SpriteId::HanRaft, frame)),
+                        Transform::from_xyz(x, 0.0, 0.0),
+                    ));
+                }
+            });
         return;
     }
     if p.kind == PlatformKind::Raft {
         // One bobbing blob.
-        commands.entity(add.entity).insert(Visibility::default()).with_child((
-            Sprite::from_image(sprites.get(id)),
-            FrameAnim { id, fps: 2.0, offset: p.base.x * 0.01 },
-            Transform::default(),
-        ));
+        commands
+            .entity(add.entity)
+            .insert(Visibility::default())
+            .with_child((
+                Sprite::from_image(sprites.get(id)),
+                FrameAnim {
+                    id,
+                    fps: 2.0,
+                    offset: p.base.x * 0.01,
+                },
+                Transform::default(),
+            ));
         return;
     }
     let width = p.width;
-    commands.entity(add.entity).insert(Visibility::default()).with_children(|c| {
-        for i in 0..width {
-            let x = (i as f32 - (width as f32 - 1.0) / 2.0) * TILE;
-            // Alternate frames so long platforms don't look stamped.
-            c.spawn((Sprite::from_image(sprites.frame(id, i)), Transform::from_xyz(x, 0.0, 0.0)));
-        }
-    });
+    commands
+        .entity(add.entity)
+        .insert(Visibility::default())
+        .with_children(|c| {
+            for i in 0..width {
+                let x = (i as f32 - (width as f32 - 1.0) / 2.0) * TILE;
+                // Alternate frames so long platforms don't look stamped.
+                c.spawn((
+                    Sprite::from_image(sprites.frame(id, i)),
+                    Transform::from_xyz(x, 0.0, 0.0),
+                ));
+            }
+        });
 }
 
 /// Characters' sprite child: feet at the bottom of the collision box, anchored bottom-center
@@ -373,20 +471,33 @@ fn character_child(sprites: &Sprites, id: SpriteId) -> impl Bundle {
 fn player_sprite(add: On<Add, Player>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
     let Some(sprites) = sprites else { return };
     let child = character_child(&sprites, SpriteId::PooIdle);
-    commands.entity(add.entity).insert(Visibility::default()).with_child(child);
+    commands
+        .entity(add.entity)
+        .insert(Visibility::default())
+        .with_child(child);
 }
 
 /// NAT ALONE's encore: Han, just for the gag (`game::encore`), drawn like Han.
-fn stage_han_sprite(add: On<Add, crate::game::encore::StageHan>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
+fn stage_han_sprite(
+    add: On<Add, crate::game::encore::StageHan>,
+    sprites: Option<Res<Sprites>>,
+    mut commands: Commands,
+) {
     let Some(sprites) = sprites else { return };
     let child = character_child(&sprites, SpriteId::HanIdle);
-    commands.entity(add.entity).insert(Visibility::Hidden).with_child(child);
+    commands
+        .entity(add.entity)
+        .insert(Visibility::Hidden)
+        .with_child(child);
 }
 
 fn han_sprite(add: On<Add, Han>, sprites: Option<Res<Sprites>>, mut commands: Commands) {
     let Some(sprites) = sprites else { return };
     let child = character_child(&sprites, SpriteId::HanIdle);
-    commands.entity(add.entity).insert(Visibility::default()).with_child(child);
+    commands
+        .entity(add.entity)
+        .insert(Visibility::default())
+        .with_child(child);
 }
 
 /// What a gate mark looks like, and where (world center of the overlay, z): giant walls get
@@ -425,7 +536,10 @@ fn marks_decor(level: &Level, marks: &[crate::level::GateMark]) -> Vec<(SpriteId
                 // A glide launch: a 3/4 emblem in the ground at each end, under the take-off
                 // side and the landing (the first solid tile below the mark's ends).
                 for c in [m.c0, m.c1] {
-                    if let Some(f) = (m.r0..=m.r1 + 4).map(|r| (c, r)).find(|&(c, r)| r >= 0 && level.tile(c, r).is_solid()) {
+                    if let Some(f) = (m.r0..=m.r1 + 4)
+                        .map(|r| (c, r))
+                        .find(|&(c, r)| r >= 0 && level.tile(c, r).is_solid())
+                    {
                         out.push((SpriteId::WaltzEmblem, at(f), 0.45));
                     }
                 }
@@ -455,12 +569,20 @@ mod tests {
             for m in level.gates.iter().filter(|g| g.topic == Topic::Waltz) {
                 let decor = gate_decor(level);
                 let inside = |id: SpriteId| {
-                    decor.iter().filter(|(d, at, _)| {
-                        let (c, _) = level.cell_at(*at);
-                        *d == id && (m.c0..=m.c1).contains(&c)
-                    }).count()
+                    decor
+                        .iter()
+                        .filter(|(d, at, _)| {
+                            let (c, _) = level.cell_at(*at);
+                            *d == id && (m.c0..=m.c1).contains(&c)
+                        })
+                        .count()
                 };
-                assert!(inside(SpriteId::WaltzEmblem) >= 1, "{}: glide launch at col {} has no 3/4 emblem", level.name, m.c0);
+                assert!(
+                    inside(SpriteId::WaltzEmblem) >= 1,
+                    "{}: glide launch at col {} has no 3/4 emblem",
+                    level.name,
+                    m.c0
+                );
             }
         }
     }
@@ -478,7 +600,9 @@ fn gate_markers(
     mut drawn: ResMut<MarkersDrawn>,
     mut commands: Commands,
 ) {
-    let (Some(active), Some(sprites)) = (active, sprites) else { return };
+    let (Some(active), Some(sprites)) = (active, sprites) else {
+        return;
+    };
     spawn_markers(&mut commands, &sprites, gate_decor(&active.level));
     drawn.0 = active.level.gates.len();
 }
@@ -493,13 +617,19 @@ fn new_gate_markers(
     mut drawn: ResMut<MarkersDrawn>,
     mut commands: Commands,
 ) {
-    let (Some(active), Some(_)) = (active, run) else { return };
+    let (Some(active), Some(_)) = (active, run) else {
+        return;
+    };
     if han.is_empty() {
         return;
     }
     let marks = &active.level.gates;
     if marks.len() > drawn.0 {
-        spawn_markers(&mut commands, &sprites, marks_decor(&active.level, &marks[drawn.0..]));
+        spawn_markers(
+            &mut commands,
+            &sprites,
+            marks_decor(&active.level, &marks[drawn.0..]),
+        );
         drawn.0 = marks.len();
     }
 }
@@ -525,16 +655,32 @@ fn han_fx(
     mut was_sinking: Local<bool>,
 ) {
     for b in boosted.read() {
-        sfx.write(crate::events::PlaySfx(if b.boing { crate::audio::Sfx::Boing } else { crate::audio::Sfx::Jump }));
+        sfx.write(crate::events::PlaySfx(if b.boing {
+            crate::audio::Sfx::Boing
+        } else {
+            crate::audio::Sfx::Jump
+        }));
         commands.spawn((
             LevelEntity,
-            Particle { vel: Vec2::new(0.0, -30.0), gravity: 0.0, life: 0.4, max_life: 0.4, fade: true },
+            Particle {
+                vel: Vec2::new(0.0, -30.0),
+                gravity: 0.0,
+                life: 0.4,
+                max_life: 0.4,
+                fade: true,
+            },
             Sprite::from_image(sprites.get(SpriteId::TootPuff)),
-            FrameAnim { id: SpriteId::TootPuff, fps: 10.0, offset: 0.0 },
+            FrameAnim {
+                id: SpriteId::TootPuff,
+                fps: 10.0,
+                offset: 0.0,
+            },
             Transform::from_translation((b.pos + Vec2::new(0.0, -12.0)).extend(6.0)),
         ));
     }
-    let sinking = han.single().is_ok_and(|(b, _)| matches!(b.mode, HanMode::Sinking { .. }));
+    let sinking = han
+        .single()
+        .is_ok_and(|(b, _)| matches!(b.mode, HanMode::Sinking { .. }));
     if sinking && !*was_sinking {
         sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Splat));
     }
@@ -551,7 +697,9 @@ fn trapeze_handle(
     mut handle: Query<(Entity, &mut Transform, &mut Sprite), (With<TrapezeHandle>, Without<Han>)>,
 ) {
     let swing = han.single().ok().and_then(|(b, tf)| match b.mode {
-        HanMode::Trapeze { anchor, on: true, .. } => Some((anchor, tf.translation.truncate())),
+        HanMode::Trapeze {
+            anchor, on: true, ..
+        } => Some((anchor, tf.translation.truncate())),
         _ => None,
     });
     let Some((anchor, han)) = swing else {
@@ -570,7 +718,12 @@ fn trapeze_handle(
         *t = tf;
         sprite.custom_size = Some(size);
     } else {
-        commands.spawn((LevelEntity, TrapezeHandle, Sprite::from_color(Color::srgb(0.62, 0.42, 0.22), size), tf));
+        commands.spawn((
+            LevelEntity,
+            TrapezeHandle,
+            Sprite::from_color(Color::srgb(0.62, 0.42, 0.22), size),
+            tf,
+        ));
         // The cup (it stays put; it goes with the handle).
         commands.spawn((
             LevelEntity,
@@ -604,7 +757,11 @@ fn interpolate(
     mut q: Query<(&Pos, &PrevPos, &mut Transform)>,
 ) {
     let running = state.is_some_and(|s| *s.get() == PlayState::Running);
-    let a = if running { fixed.overstep_fraction() } else { 1.0 };
+    let a = if running {
+        fixed.overstep_fraction()
+    } else {
+        1.0
+    };
     for (pos, prev, mut tf) in &mut q {
         let p = prev.0.lerp(pos.0, a);
         tf.translation.x = p.x;
@@ -621,14 +778,22 @@ fn frame_anims(
 ) {
     let t = time.elapsed_secs();
     // Belts run on their own clock: fired up, they roll as fast as they carry.
-    let rate = if groove.is_some_and(|g| g.fired_up()) { crate::level::FIRED_UP_TILES } else { 1.0 };
+    let rate = if groove.is_some_and(|g| g.fired_up()) {
+        crate::level::FIRED_UP_TILES
+    } else {
+        1.0
+    };
     *belt_clock += time.delta_secs() * rate;
     for (anim, mut sprite) in &mut q {
         let frames = sprites.frames(anim.id);
         if frames.len() < 2 {
             continue;
         }
-        let t = if anim.id == SpriteId::Belt { *belt_clock } else { t };
+        let t = if anim.id == SpriteId::Belt {
+            *belt_clock
+        } else {
+            t
+        };
         let i = (((t + anim.offset) * anim.fps) as usize) % frames.len();
         if sprite.image != frames[i] {
             sprite.image = frames[i].clone();
@@ -655,7 +820,9 @@ fn animate_player(
     };
     let t = time.elapsed_secs();
     for &child in children {
-        let Ok((mut sprite, mut cs, mut vis)) = kids.get_mut(child) else { continue };
+        let Ok((mut sprite, mut cs, mut vis)) = kids.get_mut(child) else {
+            continue;
+        };
         for _ in jumped.read() {
             cs.squash = Vec2::new(0.75, 1.3);
         }
@@ -669,14 +836,25 @@ fn animate_player(
         }
         let (id, frame) = if let Some(dead) = dead {
             let since = tuning::RESPAWN_DELAY - dead.remaining;
-            *vis = if since < SPLAT_SHOW { Visibility::Inherited } else { Visibility::Hidden };
+            *vis = if since < SPLAT_SHOW {
+                Visibility::Inherited
+            } else {
+                Visibility::Hidden
+            };
             cs.squash = Vec2::ONE;
             let n = sprites.frames(SpriteId::PooSplat).len().max(1);
             (SpriteId::PooSplat, ((since * 14.0) as usize).min(n - 1))
         } else {
             *vis = Visibility::Inherited;
             if !body.on_ground {
-                (if body.vel.y > 0.0 { SpriteId::PooJump } else { SpriteId::PooFall }, (t * 10.0) as usize)
+                (
+                    if body.vel.y > 0.0 {
+                        SpriteId::PooJump
+                    } else {
+                        SpriteId::PooFall
+                    },
+                    (t * 10.0) as usize,
+                )
             } else if body.vel.x.abs() > 10.0 {
                 (SpriteId::PooRun, (t * 12.0) as usize)
             } else {
@@ -694,19 +872,28 @@ fn animate_player(
 fn animate_han(
     time: Res<Time>,
     sprites: Res<Sprites>,
-    mut han: Query<(&HanAnim, &Children, &mut Visibility), Or<(With<Han>, With<crate::game::encore::StageHan>)>>,
+    mut han: Query<
+        (&HanAnim, &Children, &mut Visibility),
+        Or<(With<Han>, With<crate::game::encore::StageHan>)>,
+    >,
     mut kids: Query<(&mut Sprite, &mut CharacterSprite, &mut Transform)>,
     mut was_jumping: Local<bool>,
 ) {
     let t = time.elapsed_secs();
     for (anim, children, mut vis) in &mut han {
-        let want = if anim.hidden { Visibility::Hidden } else { Visibility::Inherited };
+        let want = if anim.hidden {
+            Visibility::Hidden
+        } else {
+            Visibility::Inherited
+        };
         if *vis != want {
             *vis = want;
         }
         let jumping = matches!(anim.pose, HanPose::Jump | HanPose::Paddle);
         for &child in children {
-            let Ok((mut sprite, mut cs, mut tf)) = kids.get_mut(child) else { continue };
+            let Ok((mut sprite, mut cs, mut tf)) = kids.get_mut(child) else {
+                continue;
+            };
             if jumping && !*was_jumping {
                 cs.squash = Vec2::new(0.8, 1.2);
             } else if !jumping && *was_jumping {
@@ -717,7 +904,9 @@ fn animate_han(
                 HanPose::Run => (SpriteId::HanRun, (t * 12.0) as usize),
                 HanPose::Jump => (SpriteId::HanJump, (t * 10.0) as usize),
                 // (Clinging: braced, plunger up, against the wall.)
-                HanPose::Braced | HanPose::Cling | HanPose::Trapeze => (SpriteId::HanBraced, (t * 4.0) as usize),
+                HanPose::Braced | HanPose::Cling | HanPose::Trapeze => {
+                    (SpriteId::HanBraced, (t * 4.0) as usize)
+                }
                 HanPose::Intercept => (SpriteId::HanIntercept, (t * 8.0) as usize),
                 HanPose::March => (SpriteId::HanMarch, (t * 9.0) as usize),
                 HanPose::Parachute => (SpriteId::HanParachute, (t * 2.0) as usize),
@@ -732,7 +921,11 @@ fn animate_han(
             }
             sprite.flip_x = anim.facing_left;
             // The nervous band: he trembles. A jet or a fly: a comedic wobble.
-            tf.translation.x = if anim.tremble && (t * 30.0) as i32 % 2 == 0 { 1.0 } else { 0.0 };
+            tf.translation.x = if anim.tremble && (t * 30.0) as i32 % 2 == 0 {
+                1.0
+            } else {
+                0.0
+            };
             let wobble = anim.wobble * 0.35 * (t * 28.0).sin();
             tf.rotation = Quat::from_rotation_z(wobble);
         }
@@ -769,23 +962,37 @@ fn update_checkpoints(
     mut q: Query<(&Checkpoint, &mut Sprite), Changed<Checkpoint>>,
 ) {
     for (cp, mut sprite) in &mut q {
-        sprite.image =
-            sprites.get(if cp.active { SpriteId::CheckpointOn } else { SpriteId::CheckpointOff });
+        sprite.image = sprites.get(if cp.active {
+            SpriteId::CheckpointOn
+        } else {
+            SpriteId::CheckpointOff
+        });
     }
 }
 
 fn update_sprays(
-    sprays: Query<(&Spray, &Children, &Transform, Option<&SprayPlug>), Or<(Changed<Spray>, With<SprayPlug>)>>,
+    sprays: Query<
+        (&Spray, &Children, &Transform, Option<&SprayPlug>),
+        Or<(Changed<Spray>, With<SprayPlug>)>,
+    >,
     mut jets: Query<(&mut Visibility, &Transform), (With<JetSegment>, Without<Spray>)>,
 ) {
     for (spray, children, tf, plug) in &sprays {
         // Han's body stops the jet: segments above where it's cut off don't show.
         let base = tf.translation.truncate() + Vec2::new(0.0, TILE);
-        let top = if spray.on { SprayPlug::jet(plug, base).map(|(_, hi)| hi.y) } else { None };
+        let top = if spray.on {
+            SprayPlug::jet(plug, base).map(|(_, hi)| hi.y)
+        } else {
+            None
+        };
         for &c in children {
             if let Ok((mut vis, seg)) = jets.get_mut(c) {
                 let bottom = tf.translation.y + seg.translation.y - TILE / 2.0;
-                let want = if top.is_some_and(|t| t > bottom + 4.0) { Visibility::Inherited } else { Visibility::Hidden };
+                let want = if top.is_some_and(|t| t > bottom + 4.0) {
+                    Visibility::Inherited
+                } else {
+                    Visibility::Hidden
+                };
                 if *vis != want {
                     *vis = want;
                 }
@@ -796,7 +1003,11 @@ fn update_sprays(
 
 /// Han's float: his end segments bob as he kicks (faster when Nat paddles him), and low on
 /// kicks he shivers ([`FLOAT_LOW`](super::han::FLOAT_LOW)).
-fn float_kicks(time: Res<Time>, floats: Query<(&super::han::HanFloat, &Children)>, mut tf: Query<&mut Transform, Without<super::han::HanFloat>>) {
+fn float_kicks(
+    time: Res<Time>,
+    floats: Query<(&super::han::HanFloat, &Children)>,
+    mut tf: Query<&mut Transform, Without<super::han::HanFloat>>,
+) {
     let t = time.elapsed_secs();
     for (f, kids) in &floats {
         let low = f.fuel < super::han::FLOAT_LOW;
@@ -805,8 +1016,16 @@ fn float_kicks(time: Res<Time>, floats: Query<(&super::han::HanFloat, &Children)
             let Ok(mut k) = tf.get_mut(k) else { continue };
             let end = i == 0 || i + 1 == n;
             let rate = if f.vel.abs() > 1.0 { 14.0 } else { 6.0 };
-            let kick = if end { ((t * rate + i as f32).sin() > 0.0) as i32 as f32 } else { 0.0 };
-            let shiver = if low { (((t * 30.0) as i32 % 2) as f32 - 0.5) * 2.0 } else { 0.0 };
+            let kick = if end {
+                ((t * rate + i as f32).sin() > 0.0) as i32 as f32
+            } else {
+                0.0
+            };
+            let shiver = if low {
+                (((t * 30.0) as i32 % 2) as f32 - 0.5) * 2.0
+            } else {
+                0.0
+            };
             k.translation.y = kick;
             k.translation.x = (i as f32 - (n as f32 - 1.0) / 2.0) * TILE + shiver;
         }

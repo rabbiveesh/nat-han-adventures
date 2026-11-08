@@ -10,9 +10,9 @@
 //! any other room's, so a new gate kind needs only the validator to know it.
 
 use super::alone::{self, ALONE_H};
-use super::sets::{self, SET_H};
 use super::canvas::*;
 use super::dice::{Dice, t};
+use super::sets::{self, SET_H};
 use crate::adapt::{Band, Skill};
 use crate::level::validate::{BUDDY_POOL_MIN, CHASM_MIN};
 use crate::level::{PlatformKind, Topic};
@@ -41,7 +41,11 @@ pub struct Unlocks {
 impl From<usize> for Unlocks {
     /// Story levels only.
     fn from(levels: usize) -> Unlocks {
-        Unlocks { levels, side_b: 0, solo: 0 }
+        Unlocks {
+            levels,
+            side_b: 0,
+            solo: 0,
+        }
     }
 }
 
@@ -76,34 +80,226 @@ pub struct Template {
 
 /// Every template.
 pub const TEMPLATES: &[Template] = &[
-    Template { name: "jump gauntlet", skill: Skill::Precision, unlock: 0, side_b: 0, solo: 0, height: H, build: gauntlet },
-    Template { name: "shelf climb", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: CLIMB_H, build: shelf_climb },
-    Template { name: "flies and sprays", skill: Skill::HazardTiming, unlock: 0, side_b: 0, solo: 0, height: H, build: hazards },
-    Template { name: "moving platforms", skill: Skill::MovingPlatforms, unlock: 0, side_b: 0, solo: 0, height: H, build: platforms },
-    Template { name: "giant wall", skill: Skill::GiantSteps, unlock: 0, side_b: 0, solo: 0, height: H, build: giant_wall },
-    Template { name: "long gap", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: H, build: long_gap },
-    Template { name: "glide launch", skill: Skill::Waltz, unlock: 6, side_b: 0, solo: 0, height: H, build: glide_launch },
-    Template { name: "stain pit", skill: Skill::Stains, unlock: 2, side_b: 0, solo: 0, height: H, build: stain_pit },
-    Template { name: "grease chute", skill: Skill::Grease, unlock: 5, side_b: 0, solo: 0, height: H, build: grease_chute },
-    Template { name: "mega wall", skill: Skill::Buddy, unlock: 2, side_b: 0, solo: 0, height: MEGA_H, build: mega_wall },
-    Template { name: "buddy raft pool", skill: Skill::Buddy, unlock: 4, side_b: 0, solo: 0, height: H, build: buddy_raft_pool },
-    Template { name: "fired-up chasm", skill: Skill::Buddy, unlock: 7, side_b: 0, solo: 0, height: CHASM_H, build: fired_up_chasm },
-    Template { name: "cling shaft", skill: Skill::Buddy, unlock: 8, side_b: 0, solo: 0, height: MEGA_H, build: cling_shaft },
-    Template { name: "trapeze", skill: Skill::Buddy, unlock: 9, side_b: 0, solo: 0, height: MEGA_H, build: trapeze },
-    Template { name: "gadget run", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: H, build: gadget_run },
-    Template { name: "beat hall", skill: Skill::HazardTiming, unlock: 1, side_b: 0, solo: 0, height: H, build: beat_hall },
-    Template { name: "gadget world", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 1, height: H, build: gadget_world },
+    Template {
+        name: "jump gauntlet",
+        skill: Skill::Precision,
+        unlock: 0,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: gauntlet,
+    },
+    Template {
+        name: "shelf climb",
+        skill: Skill::Precision,
+        unlock: 1,
+        side_b: 0,
+        solo: 0,
+        height: CLIMB_H,
+        build: shelf_climb,
+    },
+    Template {
+        name: "flies and sprays",
+        skill: Skill::HazardTiming,
+        unlock: 0,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: hazards,
+    },
+    Template {
+        name: "moving platforms",
+        skill: Skill::MovingPlatforms,
+        unlock: 0,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: platforms,
+    },
+    Template {
+        name: "giant wall",
+        skill: Skill::GiantSteps,
+        unlock: 0,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: giant_wall,
+    },
+    Template {
+        name: "long gap",
+        skill: Skill::FiredUp,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: long_gap,
+    },
+    Template {
+        name: "glide launch",
+        skill: Skill::Waltz,
+        unlock: 6,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: glide_launch,
+    },
+    Template {
+        name: "stain pit",
+        skill: Skill::Stains,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: stain_pit,
+    },
+    Template {
+        name: "grease chute",
+        skill: Skill::Grease,
+        unlock: 5,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: grease_chute,
+    },
+    Template {
+        name: "mega wall",
+        skill: Skill::Buddy,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: MEGA_H,
+        build: mega_wall,
+    },
+    Template {
+        name: "buddy raft pool",
+        skill: Skill::Buddy,
+        unlock: 4,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: buddy_raft_pool,
+    },
+    Template {
+        name: "fired-up chasm",
+        skill: Skill::Buddy,
+        unlock: 7,
+        side_b: 0,
+        solo: 0,
+        height: CHASM_H,
+        build: fired_up_chasm,
+    },
+    Template {
+        name: "cling shaft",
+        skill: Skill::Buddy,
+        unlock: 8,
+        side_b: 0,
+        solo: 0,
+        height: MEGA_H,
+        build: cling_shaft,
+    },
+    Template {
+        name: "trapeze",
+        skill: Skill::Buddy,
+        unlock: 9,
+        side_b: 0,
+        solo: 0,
+        height: MEGA_H,
+        build: trapeze,
+    },
+    Template {
+        name: "gadget run",
+        skill: Skill::Precision,
+        unlock: 1,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: gadget_run,
+    },
+    Template {
+        name: "beat hall",
+        skill: Skill::HazardTiming,
+        unlock: 1,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: beat_hall,
+    },
+    Template {
+        name: "gadget world",
+        skill: Skill::Precision,
+        unlock: 1,
+        side_b: 0,
+        solo: 1,
+        height: H,
+        build: gadget_world,
+    },
     // The Side B room: once B1 is cleared (its pieces grow with each Side B level cleared).
     // Never picked by skill: `super::run` mixes it in now and then.
-    Template { name: "han alone", skill: Skill::Buddy, unlock: 0, side_b: 1, solo: 0, height: ALONE_H, build: alone::build },
+    Template {
+        name: "han alone",
+        skill: Skill::Buddy,
+        unlock: 0,
+        side_b: 1,
+        solo: 0,
+        height: ALONE_H,
+        build: alone::build,
+    },
     // The crossroads: three roads, the call picks one (served for either mode's skill).
-    Template { name: "crossroads", skill: Skill::GiantSteps, unlock: 2, side_b: 0, solo: 0, height: CROSS_H, build: crossroads },
-    Template { name: "crossroads", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: CROSS_H, build: crossroads },
+    Template {
+        name: "crossroads",
+        skill: Skill::GiantSteps,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: CROSS_H,
+        build: crossroads,
+    },
+    Template {
+        name: "crossroads",
+        skill: Skill::FiredUp,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: CROSS_H,
+        build: crossroads,
+    },
     // A set (`super::sets`): rooftop over the canal, its bridge the crossroads' fork.
-    Template { name: "rooftop set", skill: Skill::GiantSteps, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::rooftop },
-    Template { name: "rooftop set", skill: Skill::FiredUp, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::rooftop },
-    Template { name: "ferry set", skill: Skill::MovingPlatforms, unlock: 2, side_b: 0, solo: 0, height: SET_H, build: sets::ferry },
-    Template { name: "gadget duet", skill: Skill::Precision, unlock: 1, side_b: 0, solo: 0, height: H, build: gadget_duet },
+    Template {
+        name: "rooftop set",
+        skill: Skill::GiantSteps,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: SET_H,
+        build: sets::rooftop,
+    },
+    Template {
+        name: "rooftop set",
+        skill: Skill::FiredUp,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: SET_H,
+        build: sets::rooftop,
+    },
+    Template {
+        name: "ferry set",
+        skill: Skill::MovingPlatforms,
+        unlock: 2,
+        side_b: 0,
+        solo: 0,
+        height: SET_H,
+        build: sets::ferry,
+    },
+    Template {
+        name: "gadget duet",
+        skill: Skill::Precision,
+        unlock: 1,
+        side_b: 0,
+        solo: 0,
+        height: H,
+        build: gadget_duet,
+    },
 ];
 
 /// The templates for a skill.
@@ -207,7 +403,11 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
             checkpoint = Some((c.width() + 1, top - 1));
             c.ground(3, top);
         }
-        let kind = if band < 3 && d.chance(0.3) { 4 } else { d.int(0, if band >= 3 { 4 } else { 1 }) };
+        let kind = if band < 3 && d.chance(0.3) {
+            4
+        } else {
+            d.int(0, if band >= 3 { 4 } else { 1 })
+        };
         match kind {
             // A gap, maybe to a ledge up or down.
             0 | 1 => {
@@ -295,7 +495,10 @@ fn gauntlet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         c.ground(2, top);
     }
     c.ground(3, FLOOR);
-    Built { hint: None, checkpoint }
+    Built {
+        hint: None,
+        checkpoint,
+    }
 }
 
 // ─── Precision, tall: a shelf climb ──────────────────────────────────────────
@@ -331,7 +534,11 @@ fn shelf_climb(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
         let step = if band >= 6 && d.chance(0.4) { 4 } else { 3 };
         r -= step;
         let last = r <= summit + step;
-        let sx = if last || right { shaft - w - if last { 0 } else { d.int(0, 1) as usize } } else { d.int(0, 1) as usize };
+        let sx = if last || right {
+            shaft - w - if last { 0 } else { d.int(0, 1) as usize }
+        } else {
+            d.int(0, 1) as usize
+        };
         rungs.push((x0 + sx, r.max(summit + 1)));
         right = !right;
         if last {
@@ -357,7 +564,10 @@ fn shelf_climb(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     for k in (summit + 2..floor - 1).step_by(4) {
         c.nugget(x + 1, k);
     }
-    Built { hint: Some((&[Topic::OneWay], "Hop hop hop!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::OneWay], "Hop hop hop!")),
+        checkpoint,
+    }
 }
 
 // ─── HazardTiming: flies and sprays ──────────────────────────────────────────
@@ -448,14 +658,31 @@ fn platforms(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
             let w = d.scaled(band, 6.0, 11.0, 2) as usize;
             let x = c.width();
             let sewage = d.chance(0.5);
-            if sewage { c.pool(w) } else { c.pit(w) };
-            let kind = if sewage { PlatformKind::Duck } else { PlatformKind::Tp };
+            if sewage {
+                c.pool(w)
+            } else {
+                c.pit(w)
+            };
+            let kind = if sewage {
+                PlatformKind::Duck
+            } else {
+                PlatformKind::Tp
+            };
             if w <= 8 {
                 c.platform(x, FLOOR, pw, (w - pw) as f32, 0.0, period, d.u(), kind);
             } else {
                 let half = w / 2;
                 c.platform(x, FLOOR, pw, (half - pw) as f32, 0.0, period, d.u(), kind);
-                c.platform(x + half, FLOOR, pw, (w - half - pw) as f32, 0.0, period, d.u(), kind);
+                c.platform(
+                    x + half,
+                    FLOOR,
+                    pw,
+                    (w - half - pw) as f32,
+                    0.0,
+                    period,
+                    d.u(),
+                    kind,
+                );
             }
             arc(c, x + 1, w - 2, STAND - 1, 1);
             c.ground(lerpi(band, 4.0, 2.0) + 1, FLOOR);
@@ -464,7 +691,16 @@ fn platforms(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
             let h = d.int(4, 6) as usize;
             let x = c.width();
             c.pit(pw + 1);
-            c.platform(x, FLOOR, pw, 0.0, h as f32, period, d.u(), PlatformKind::Plunger);
+            c.platform(
+                x,
+                FLOOR,
+                pw,
+                0.0,
+                h as f32,
+                period,
+                d.u(),
+                PlatformKind::Plunger,
+            );
             let ledge = c.width();
             c.ground(3 + d.int(0, 2) as usize, FLOOR - h);
             for k in 0..3 {
@@ -475,7 +711,10 @@ fn platforms(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         }
     }
     c.ground(3, FLOOR);
-    Built { hint: Some((&[Topic::Platform], "Ride the rolls!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Platform], "Ride the rolls!")),
+        checkpoint,
+    }
 }
 
 // ─── GiantSteps: a giant wall with a runway ──────────────────────────────────
@@ -510,7 +749,10 @@ fn giant_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         c.pit(d.int(2, 3) as usize);
     }
     c.ground(4, FLOOR);
-    Built { hint: Some((&[Topic::Giant], "Big wall!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Giant], "Big wall!")),
+        checkpoint,
+    }
 }
 
 // ─── FiredUp: a long gap with a nugget line ──────────────────────────────────
@@ -543,7 +785,10 @@ fn long_gap(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built
         c.ground(3, FLOOR);
     }
     c.ground(2, FLOOR);
-    Built { hint: Some((&[Topic::Gap], "Big gap!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Gap], "Big gap!")),
+        checkpoint,
+    }
 }
 
 // ─── Waltz: a glide launch ───────────────────────────────────────────────────
@@ -561,14 +806,26 @@ fn glide_launch(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built
     let gap = lerpi(band, GLIDE_GAP.0 as f32, GLIDE_GAP.1 as f32);
     let x = c.width();
     c.pit(pw + dx + gap);
-    c.platform(x, FLOOR, pw, dx as f32, 0.0, GLIDE_PERIOD, d.u(), PlatformKind::Tp);
+    c.platform(
+        x,
+        FLOOR,
+        pw,
+        dx as f32,
+        0.0,
+        GLIDE_PERIOD,
+        d.u(),
+        PlatformKind::Tp,
+    );
     // The prize past it.
     let past = c.width();
     c.ground(4, FLOOR);
     for k in 0..3 {
         c.nugget(past + k, STAND);
     }
-    Built { hint: Some((&[Topic::Waltz], "Waltz time!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Waltz], "Waltz time!")),
+        checkpoint,
+    }
 }
 
 /// A glide launch's platform period (s): 8 tiles in 4.5 s, 89 px/s at its fastest (the most
@@ -609,7 +866,10 @@ fn stain_pit(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         c.pit(d.int(2, 3) as usize);
         c.ground(3, FLOOR);
     }
-    Built { hint: Some((&[Topic::Stain], "Splat time!")), checkpoint: None }
+    Built {
+        hint: Some((&[Topic::Stain], "Splat time!")),
+        checkpoint: None,
+    }
 }
 
 // ─── Grease: a chute ─────────────────────────────────────────────────────────
@@ -694,7 +954,10 @@ fn mega_wall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     c.ground(2, top + 4);
     c.ground(2, top + 8);
     c.ground(HAN_TAIL, floor);
-    Built { hint: Some((&[Topic::Mega], "Hop on!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Mega], "Hop on!")),
+        checkpoint,
+    }
 }
 
 /// A cling shaft: a low corridor (under a wall up to the ceiling) into a 3-wide shaft whose far
@@ -721,7 +984,13 @@ fn cling_shaft(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     // The corridor under the near wall: two rows of headroom, solid to the top (no roof to
     // mega-boost onto from outside).
     for _ in 0..4 {
-        c.column(move |r| if r < floor - 2 || r >= floor { b'#' } else { b'.' });
+        c.column(move |r| {
+            if r < floor - 2 || r >= floor {
+                b'#'
+            } else {
+                b'.'
+            }
+        });
     }
     c.ground(3, floor);
     let x = c.width();
@@ -734,7 +1003,10 @@ fn cling_shaft(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
     c.ground(2, top + 4);
     c.ground(2, top + 8);
     c.ground(HAN_TAIL, floor);
-    Built { hint: Some((&[Topic::Shaft], "Wall time!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Shaft], "Wall time!")),
+        checkpoint,
+    }
 }
 
 /// A trapeze: a runway to waltz on, then a lip under a ceiling that ends over the gap (Han's
@@ -770,7 +1042,10 @@ fn trapeze(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     }
     c.ground(2, high + 2);
     c.ground(HAN_TAIL, floor);
-    Built { hint: Some((&[Topic::Trapeze], "Swing time!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Trapeze], "Swing time!")),
+        checkpoint,
+    }
 }
 
 /// Where a buddy raft pool starts (column in the room, from the entry checkpoint near 0).
@@ -809,7 +1084,10 @@ fn buddy_raft_pool(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bu
     }
     c.ground(HAN_TAIL, FLOOR);
     // No mid-room checkpoint: one near the pool would let Nat's own rafts bridge it.
-    Built { hint: Some((&[Topic::BuddyRaft], "All aboard!")), checkpoint: None }
+    Built {
+        hint: Some((&[Topic::BuddyRaft], "All aboard!")),
+        checkpoint: None,
+    }
 }
 
 /// A fired-up chasm room's rows: a throw stays well under the room's top (a ceiling).
@@ -826,14 +1104,19 @@ fn fired_up_chasm(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Bui
     for k in 0..4 {
         c.nugget(x + 1 + k * 2, floor - 1);
     }
-    let w = d.scaled(band, 15.0, 18.0, 1).clamp(CHASM_MIN as i32 + 1, 18) as usize;
+    let w = d
+        .scaled(band, 15.0, 18.0, 1)
+        .clamp(CHASM_MIN as i32 + 1, 18) as usize;
     c.pit(w);
     let x = c.width();
     c.ground(HAN_TAIL, floor);
     for k in (1..HAN_TAIL - 1).step_by(2) {
         c.nugget(x + k, floor - 1);
     }
-    Built { hint: Some((&[Topic::Chain], "Hop on!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Chain], "Hop on!")),
+        checkpoint,
+    }
 }
 
 // ─── Precision: a gadget run ─────────────────────────────────────────────────
@@ -864,7 +1147,11 @@ fn gadget_run(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
                 for k in 0..run {
                     c.set(x + k, FLOOR, if against { b'{' } else { b'}' });
                 }
-                let g = if against { d.int(2, 3) } else { d.scaled(band, 3.0, 7.0, 1).clamp(3, 8) } as usize;
+                let g = if against {
+                    d.int(2, 3)
+                } else {
+                    d.scaled(band, 3.0, 7.0, 1).clamp(3, 8)
+                } as usize;
                 let gx = c.width();
                 c.pit(g);
                 let a = g.min(5);
@@ -951,7 +1238,10 @@ fn gadget_run(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         4 => (&[Topic::Bumper], "Quack!"),
         _ => (&[Topic::Brick], "Smash it!"),
     };
-    Built { hint: Some(hint), checkpoint }
+    Built {
+        hint: Some(hint),
+        checkpoint,
+    }
 }
 
 // ─── Precision: the gadget world ─────────────────────────────────────────────
@@ -963,11 +1253,19 @@ fn gadget_run(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
 /// fan up a wall with a brush sticking out of it (`|`).
 fn gadget_world(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> Built {
     const KINDS: [char; 6] = ['e', 'w', '!', 'b', 'm', '|'];
-    let cleared = if dress.solo == 0 { usize::MAX } else { dress.solo as usize };
+    let cleared = if dress.solo == 0 {
+        usize::MAX
+    } else {
+        dress.solo as usize
+    };
     let taught: Vec<usize> = (0..KINDS.len())
         .filter(|&k| crate::game::solo::teaches(KINDS[k]).is_some_and(|n| n < cleared))
         .collect();
-    let kind = if taught.is_empty() { 0 } else { d.pick(&taught) };
+    let kind = if taught.is_empty() {
+        0
+    } else {
+        d.pick(&taught)
+    };
     c.ground(4, FLOOR);
     let n = lead_in(d);
     hills(c, d, band, n);
@@ -1094,7 +1392,10 @@ fn gadget_world(c: &mut Canvas, d: &mut Dice, band: Band, dress: &Dressing) -> B
         4 => (&[Topic::Fling], "Keep going!"),
         _ => (&[Topic::Fan], "Mind the brush!"),
     };
-    Built { hint: Some(hint), checkpoint }
+    Built {
+        hint: Some(hint),
+        checkpoint,
+    }
 }
 
 // ─── HazardTiming: a beat hall ───────────────────────────────────────────────
@@ -1124,7 +1425,12 @@ fn beat_hall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
             }
             let beat = band >= 5 && d.chance(0.5);
             if beat {
-                c.header(format!("crusher@{},{row}: beat={} phase={:.2}", x + 1, d.int(1, 2), d.u() * 0.5));
+                c.header(format!(
+                    "crusher@{},{row}: beat={} phase={:.2}",
+                    x + 1,
+                    d.int(1, 2),
+                    d.u() * 0.5
+                ));
             } else {
                 c.header(format!("crusher@{},{row}: phase={:.2}", x + 1, d.u()));
             }
@@ -1142,9 +1448,15 @@ fn beat_hall(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
         }
     }
     c.ground(3, FLOOR);
-    let hint: (&'static [Topic], &'static str) =
-        if crushers { (&[Topic::Crusher], "Wait... go!") } else { (&[Topic::Beat], "On the beat!") };
-    Built { hint: Some(hint), checkpoint }
+    let hint: (&'static [Topic], &'static str) = if crushers {
+        (&[Topic::Crusher], "Wait... go!")
+    } else {
+        (&[Topic::Beat], "On the beat!")
+    };
+    Built {
+        hint: Some(hint),
+        checkpoint,
+    }
 }
 
 // ─── A crossroads: the call is the choice ────────────────────────────────────
@@ -1158,7 +1470,11 @@ pub const CANAL_RISE: usize = 11;
 /// A column of `ch` over rows `r0..=r1` (pairs), open air elsewhere.
 pub(super) fn stack(c: &mut Canvas, runs: &[(usize, usize, u8)]) {
     let runs = runs.to_vec();
-    c.column(move |r| runs.iter().find(|&&(a, b, _)| (a..=b).contains(&r)).map_or(b'.', |&(_, _, ch)| ch));
+    c.column(move |r| {
+        runs.iter()
+            .find(|&&(a, b, _)| (a..=b).contains(&r))
+            .map_or(b'.', |&(_, _, ch)| ch)
+    });
 }
 
 /// Three roads out of one fork (the level design checklist's "the call is the choice"), all in
@@ -1191,7 +1507,10 @@ fn crossroads(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built {
     let checkpoint = Some((c.width() + 1, k - 1));
     c.ground(3, k);
     fork(c, d, band, false);
-    Built { hint: Some((&[Topic::Giant, Topic::Gap], "Pick a road!")), checkpoint }
+    Built {
+        hint: Some((&[Topic::Giant, Topic::Gap], "Pick a road!")),
+        checkpoint,
+    }
 }
 
 /// The crossroads' fork, from the canal's level (the canvas's floor - 11, where Nat stands at
@@ -1226,15 +1545,24 @@ pub(super) fn fork(c: &mut Canvas, d: &mut Dice, band: Band, lean: bool) {
         c.set(x0 + j, ledge, b'=');
     }
     for _ in 0..ledge_w - 4 {
-        stack(c, &[(ledge, ledge, b'='), (k, ceil, b'#'), (f, bottom, b'#')]);
+        stack(
+            c,
+            &[(ledge, ledge, b'='), (k, ceil, b'#'), (f, bottom, b'#')],
+        );
     }
     // The Giant Steps wall, the rooftop's start.
     let h0 = c.width();
-    stack(c, &[(roof, ledge, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
+    stack(
+        c,
+        &[(roof, ledge, b'#'), (k, ceil, b'#'), (f, bottom, b'#')],
+    );
     // The plateau under the rooftop: the fired-up run-up, its nuggets.
     let px = c.width();
     for _ in 0..5 + d.int(0, 2) {
-        stack(c, &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
+        stack(
+            c,
+            &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')],
+        );
     }
     if !lean {
         c.nugget(px + 1, k - 1);
@@ -1252,7 +1580,10 @@ pub(super) fn fork(c: &mut Canvas, d: &mut Dice, band: Band, lean: bool) {
         arc(c, g + 4, 3, k - 1, 3);
         let ix = c.width();
         for _ in 0..island {
-            stack(c, &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')]);
+            stack(
+                c,
+                &[(roof, roof + 1, b'#'), (k, ceil, b'#'), (f, bottom, b'#')],
+            );
         }
         for j in 0..island.min(3) {
             c.nugget(ix + j, k - 1);
@@ -1262,7 +1593,10 @@ pub(super) fn fork(c: &mut Canvas, d: &mut Dice, band: Band, lean: bool) {
     // The rooftop's last stretch, over the drop to the floor: sewage at the foot of the last
     // island (nowhere for Han to stand and boost anyone back up its face), then floor.
     for _ in 0..4 {
-        stack(c, &[(roof, roof + 1, b'#'), (f, f, b'~'), (f + 1, bottom, b'#')]);
+        stack(
+            c,
+            &[(roof, roof + 1, b'#'), (f, f, b'~'), (f + 1, bottom, b'#')],
+        );
     }
     for _ in 0..3 {
         stack(c, &[(roof, roof + 1, b'#'), (f, bottom, b'#')]);
@@ -1333,7 +1667,13 @@ fn gadget_duet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
         c.ground(2, f);
         let x = c.width();
         for k in 0..3 {
-            stack(c, &[(f + 2, f + 2, if k == 1 { b'*' } else { b'#' }), (f + 3, bottom, b'#')]);
+            stack(
+                c,
+                &[
+                    (f + 2, f + 2, if k == 1 { b'*' } else { b'#' }),
+                    (f + 3, bottom, b'#'),
+                ],
+            );
         }
         for k in (2..6).step_by(2) {
             c.nugget(x + 1, f - k);
@@ -1422,7 +1762,13 @@ fn gadget_duet(c: &mut Canvas, d: &mut Dice, band: Band, _: &Dressing) -> Built 
         c.ground(3, f);
     }
     c.ground(3, f);
-    let hint: (&'static [Topic], &'static str) =
-        if fans { (&[Topic::Fan, Topic::Crumble], "Whoosh! Go go!") } else { (&[Topic::Belt, Topic::Spring], "Ride, bounce!") };
-    Built { hint: Some(hint), checkpoint }
+    let hint: (&'static [Topic], &'static str) = if fans {
+        (&[Topic::Fan, Topic::Crumble], "Whoosh! Go go!")
+    } else {
+        (&[Topic::Belt, Topic::Spring], "Ride, bounce!")
+    };
+    Built {
+        hint: Some(hint),
+        checkpoint,
+    }
 }

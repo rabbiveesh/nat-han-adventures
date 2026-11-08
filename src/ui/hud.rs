@@ -20,10 +20,19 @@ const BAND_SECS: f32 = 3.0;
 const INTRO_SECS: f32 = 1.6;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::Playing), (spawn_hud, spawn_intro)).add_systems(
-        Update,
-        (update_hud, update_groove_badge, tick_intro, checkpoint_toast, band_toast, update_band_readout).run_if(in_state(AppState::Playing)),
-    );
+    app.add_systems(OnEnter(AppState::Playing), (spawn_hud, spawn_intro))
+        .add_systems(
+            Update,
+            (
+                update_hud,
+                update_groove_badge,
+                tick_intro,
+                checkpoint_toast,
+                band_toast,
+                update_band_readout,
+            )
+                .run_if(in_state(AppState::Playing)),
+        );
 }
 
 #[derive(Component)]
@@ -40,7 +49,10 @@ struct IntroCard {
 }
 
 fn level_name(levels: &Levels, i: usize) -> String {
-    levels.0.get(i).map_or_else(|| "???".into(), |l| l.name.to_uppercase())
+    levels
+        .0
+        .get(i)
+        .map_or_else(|| "???".into(), |l| l.name.to_uppercase())
 }
 
 fn spawn_hud(
@@ -65,12 +77,20 @@ fn spawn_hud(
             },
         ))
         .with_children(|bar| {
-            bar.spawn(Node { column_gap: px(4.0), align_items: AlignItems::Center, min_width: px(64.0), ..default() })
-                .with_children(|n| {
-                    n.spawn(icon(sprites.as_deref(), SpriteId::IconNugget, 8.0, 8.0));
-                    n.spawn((label(f, "0/0", 8.0, GOLD), HudText::Nuggets));
-                });
-            bar.spawn((label(f, level_name(&levels, current.0), 8.0, CREAM), HudText::Name));
+            bar.spawn(Node {
+                column_gap: px(4.0),
+                align_items: AlignItems::Center,
+                min_width: px(64.0),
+                ..default()
+            })
+            .with_children(|n| {
+                n.spawn(icon(sprites.as_deref(), SpriteId::IconNugget, 8.0, 8.0));
+                n.spawn((label(f, "0/0", 8.0, GOLD), HudText::Nuggets));
+            });
+            bar.spawn((
+                label(f, level_name(&levels, current.0), 8.0, CREAM),
+                HudText::Name,
+            ));
             bar.spawn(Node {
                 flex_direction: FlexDirection::Column,
                 align_items: AlignItems::End,
@@ -132,7 +152,15 @@ pub fn waltz_beat_dots(g: &Groove) -> String {
         return String::new();
     }
     let n = g.clock.beats_per_bar.max(1);
-    (0..n).map(|k| if k == g.clock.beat { char::from(b'1' + k) } else { '.' }).collect()
+    (0..n)
+        .map(|k| {
+            if k == g.clock.beat {
+                char::from(b'1' + k)
+            } else {
+                '.'
+            }
+        })
+        .collect()
 }
 
 /// The badge's text for a groove: what the music does to the physics, in plain words ("" for
@@ -170,14 +198,20 @@ fn update_groove_badge(
     mut text: Query<&mut Text, (With<GrooveBadgeText>, Without<GrooveBadgeBeat>)>,
     mut beat: Query<&mut Text, (With<GrooveBadgeBeat>, Without<GrooveBadgeText>)>,
 ) {
-    let dots = groove.as_ref().map_or_else(String::new, |g| waltz_beat_dots(g));
+    let dots = groove
+        .as_ref()
+        .map_or_else(String::new, |g| waltz_beat_dots(g));
     for mut t in &mut beat {
         if t.0 != dots {
             t.0 = dots.clone();
         }
     }
     let s = groove.map_or_else(String::new, |g| groove_badge(&g));
-    let vis = if s.is_empty() { Visibility::Hidden } else { Visibility::Inherited };
+    let vis = if s.is_empty() {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
     for mut v in &mut badge {
         v.set_if_neq(vis);
     }
@@ -207,7 +241,9 @@ fn update_hud(
             HudText::Nuggets => format!("{}/{}", run.nuggets, run.nuggets_total),
             // Free play: the room counter (never a difficulty).
             HudText::Name if side_b.is_some() => side_b.clone().unwrap_or_default(),
-            HudText::Name => free.as_ref().map_or_else(|| level_name(&levels, current.0), |f| f.room_label()),
+            HudText::Name => free
+                .as_ref()
+                .map_or_else(|| level_name(&levels, current.0), |f| f.room_label()),
             HudText::Time => format_time(run.time),
             HudText::Splats if run.deaths == 0 => String::new(),
             HudText::Splats => format!("SPLATS {}", run.deaths),
@@ -237,23 +273,39 @@ fn spawn_intro(
     let (title, name) = match (&free, &side_b, &solo, &generated) {
         (Some(r), _, _, _) => ("FREE PLAY".to_string(), format!("SEED {}", r.seed_text())),
         (None, Some(s), _, Some(g)) => (format!("SIDE B {}", s.level + 1), g.0.name.to_uppercase()),
-        (None, None, Some(s), Some(g)) => (format!("NAT ALONE {}", s.0 + 1), g.0.name.to_uppercase()),
-        _ => (format!("LEVEL {}", current.0 + 1), level_name(&levels, current.0)),
+        (None, None, Some(s), Some(g)) => {
+            (format!("NAT ALONE {}", s.0 + 1), g.0.name.to_uppercase())
+        }
+        _ => (
+            format!("LEVEL {}", current.0 + 1),
+            level_name(&levels, current.0),
+        ),
     };
     commands
         .spawn((
             Name::new("IntroCard"),
             IntroCard { age: 0.0 },
             DespawnOnExit(AppState::Playing),
-            Node { padding: UiRect::bottom(px(48.0)), ..fullscreen() },
+            Node {
+                padding: UiRect::bottom(px(48.0)),
+                ..fullscreen()
+            },
         ))
         .with_children(|root| {
-            root.spawn(panel(Node { padding: UiRect::axes(px(16.0), px(8.0)), ..column(8.0, 8.0) }))
-                .with_children(|p| {
-                    p.spawn(label(f, title, 16.0, GOLD));
-                    p.spawn(label(f, name, 8.0, CREAM));
-                    p.spawn(label(f, format!("WORLD {world}: {}", world_name(world)), 8.0, DIM_CREAM));
-                });
+            root.spawn(panel(Node {
+                padding: UiRect::axes(px(16.0), px(8.0)),
+                ..column(8.0, 8.0)
+            }))
+            .with_children(|p| {
+                p.spawn(label(f, title, 16.0, GOLD));
+                p.spawn(label(f, name, 8.0, CREAM));
+                p.spawn(label(
+                    f,
+                    format!("WORLD {world}: {}", world_name(world)),
+                    8.0,
+                    DIM_CREAM,
+                ));
+            });
         });
 }
 
@@ -266,7 +318,11 @@ fn tick_intro(mut commands: Commands, time: Res<Time>, mut q: Query<(Entity, &mu
     }
 }
 
-fn checkpoint_toast(mut commands: Commands, font: Res<UiFont>, mut reader: MessageReader<CheckpointReached>) {
+fn checkpoint_toast(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    mut reader: MessageReader<CheckpointReached>,
+) {
     if reader.read().last().is_some() {
         spawn_toast(&mut commands, &font, "CHECKPOINT!", 1.5);
     }
@@ -288,7 +344,9 @@ fn band_toast(
         }
         return;
     }
-    let Some(change) = reader.read().last() else { return };
+    let Some(change) = reader.read().last() else {
+        return;
+    };
     let (why, what) = band_lines(&change.now);
     for e in &old {
         commands.entity(e).despawn();
@@ -349,31 +407,70 @@ mod tests {
     fn the_waltz_badge_counts_the_beat() {
         let w = Groove::of(Harmony::Waltz);
         assert_eq!(groove_badge(&w), "JUMP ON ONE");
-        let laughing = Groove::new(Filters { harmony: Harmony::Waltz, just_intonation: true });
+        let laughing = Groove::new(Filters {
+            harmony: Harmony::Waltz,
+            just_intonation: true,
+        });
         assert_eq!(groove_badge(&laughing), "JUMP ON ONE + BOUNCY");
-        assert_eq!(groove_badge(&laughing.in_phrase(Tuning::Tet7)), "JUMP ON ONE + SLIPPERY LANDINGS");
-        assert_eq!(groove_badge(&laughing.in_phrase(Tuning::Just)), "JUMP ON ONE + NO BOUNCE");
-        let gripping = Groove { nervous: true, ..laughing };
-        assert_eq!(groove_badge(&gripping.in_phrase(Tuning::Tet7)), "JUMP ON ONE + GRIPPY FEET");
-        assert_eq!(groove_badge(&gripping.in_phrase(Tuning::BohlenPierce)), "JUMP ON ONE + GRIPPY FEET + HEAVY BEATS");
+        assert_eq!(
+            groove_badge(&laughing.in_phrase(Tuning::Tet7)),
+            "JUMP ON ONE + SLIPPERY LANDINGS"
+        );
+        assert_eq!(
+            groove_badge(&laughing.in_phrase(Tuning::Just)),
+            "JUMP ON ONE + NO BOUNCE"
+        );
+        let gripping = Groove {
+            nervous: true,
+            ..laughing
+        };
+        assert_eq!(
+            groove_badge(&gripping.in_phrase(Tuning::Tet7)),
+            "JUMP ON ONE + GRIPPY FEET"
+        );
+        assert_eq!(
+            groove_badge(&gripping.in_phrase(Tuning::BohlenPierce)),
+            "JUMP ON ONE + GRIPPY FEET + HEAVY BEATS"
+        );
         assert_eq!(groove_badge(&Groove::of(Harmony::Coltrane)), "LOW GRAVITY");
         assert_eq!(groove_badge(&Groove::of(Harmony::Quartal)), "FAST FEET");
-        assert_eq!(groove_badge(&Groove::of(Harmony::MelodicMinor)), "SLOW-MO + GRIPPY FEET");
-        let dots: Vec<String> =
-            [0.2, 1.5, 2.9, 3.1].iter().map(|&b| waltz_beat_dots(&w.at(BeatClock::at(b, 0.5, 3)))).collect();
+        assert_eq!(
+            groove_badge(&Groove::of(Harmony::MelodicMinor)),
+            "SLOW-MO + GRIPPY FEET"
+        );
+        let dots: Vec<String> = [0.2, 1.5, 2.9, 3.1]
+            .iter()
+            .map(|&b| waltz_beat_dots(&w.at(BeatClock::at(b, 0.5, 3))))
+            .collect();
         assert_eq!(dots, ["1..", ".2.", "..3", "1.."]);
         assert_eq!(waltz_beat_dots(&Groove::default()), "");
         let now = NowPlaying {
             music: Music::World(4),
             title: "",
-            filters: Filters { harmony: Harmony::Waltz, just_intonation: false },
+            filters: Filters {
+                harmony: Harmony::Waltz,
+                just_intonation: false,
+            },
             reason: crate::audio::director::REASON_WALTZ,
             tuning_now: None,
             band_now: "",
         };
-        assert_eq!(band_lines(&now), ("THE BAND WALTZES".to_string(), "JUMP ON ONE".to_string()));
-        let laughing = NowPlaying { filters: Filters { harmony: Harmony::Original, just_intonation: true }, reason: "", ..now };
-        assert_eq!(band_lines(&laughing), ("THE BAND IS FEELING IT".to_string(), "BOUNCY".to_string()));
+        assert_eq!(
+            band_lines(&now),
+            ("THE BAND WALTZES".to_string(), "JUMP ON ONE".to_string())
+        );
+        let laughing = NowPlaying {
+            filters: Filters {
+                harmony: Harmony::Original,
+                just_intonation: true,
+            },
+            reason: "",
+            ..now
+        };
+        assert_eq!(
+            band_lines(&laughing),
+            ("THE BAND IS FEELING IT".to_string(), "BOUNCY".to_string())
+        );
     }
 }
 
@@ -403,7 +500,11 @@ fn spawn_band_readout(commands: &mut Commands, f: &UiFont) {
             BackgroundColor(PANEL),
             BorderColor::all(DARK_GOLD),
         ))
-        .with_child((BandReadout, label(f, "", 8.0, CREAM), TextLayout::justify(Justify::Right)));
+        .with_child((
+            BandReadout,
+            label(f, "", 8.0, CREAM),
+            TextLayout::justify(Justify::Right),
+        ));
 }
 
 /// The readout lines for what's sounding: the mode's nickname, the laughing band's (its
@@ -418,12 +519,19 @@ pub fn band_readout_text(now: &crate::audio::NowPlaying) -> String {
         Harmony::Waltz => "WALTZING",
         Harmony::MelodicMinor => "NERVOUS",
     };
-    let laughing = match (now.tuning_now.and_then(Nudge::of), now.filters.just_intonation) {
+    let laughing = match (
+        now.tuning_now.and_then(Nudge::of),
+        now.filters.just_intonation,
+    ) {
         (Some(n), _) => n.label(),
         (None, true) => "LAUGHING",
         (None, false) => "",
     };
-    [mode, laughing, now.band_now].into_iter().filter(|l| !l.is_empty()).collect::<Vec<_>>().join("\n")
+    [mode, laughing, now.band_now]
+        .into_iter()
+        .filter(|l| !l.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 fn update_band_readout(
@@ -433,7 +541,11 @@ fn update_band_readout(
 ) {
     let Some(now) = now else { return };
     let text = band_readout_text(&now);
-    let vis = if text.is_empty() { Visibility::Hidden } else { Visibility::Inherited };
+    let vis = if text.is_empty() {
+        Visibility::Hidden
+    } else {
+        Visibility::Inherited
+    };
     for mut v in &mut panel {
         v.set_if_neq(vis);
     }
@@ -453,13 +565,19 @@ mod readout_tests {
     fn readout_gives_the_nicknames() {
         let mut now = NowPlaying::default();
         assert_eq!(band_readout_text(&now), "", "plain: hidden");
-        now.filters = Filters { harmony: Harmony::Coltrane, just_intonation: true };
+        now.filters = Filters {
+            harmony: Harmony::Coltrane,
+            just_intonation: true,
+        };
         assert_eq!(band_readout_text(&now), "GIANT STEPS!\nLAUGHING");
         now.tuning_now = Some(Tuning::Tet7);
         assert_eq!(band_readout_text(&now), "GIANT STEPS!\nSEASICK");
         now.band_now = "BOSSA NOVA";
         assert_eq!(band_readout_text(&now), "GIANT STEPS!\nSEASICK\nBOSSA NOVA");
-        now.filters = Filters { harmony: Harmony::Original, just_intonation: false };
+        now.filters = Filters {
+            harmony: Harmony::Original,
+            just_intonation: false,
+        };
         now.tuning_now = None;
         assert_eq!(band_readout_text(&now), "BOSSA NOVA");
     }

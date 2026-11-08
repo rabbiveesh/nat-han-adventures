@@ -6,18 +6,23 @@
 use bevy::prelude::*;
 
 use super::{palette::*, *};
-use crate::audio::{BandMeters, Harmony};
 use crate::audio::director::SUMMON_ORDER;
+use crate::audio::{BandMeters, Harmony};
 use crate::game::sideb::{MELT_SECS, Phase, SetCall, SideB};
 use crate::state::AppState;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::Playing), spawn.run_if(resource_exists::<SideB>))
-        .add_systems(
-            Update,
-            (respawn, update).chain().run_if(in_state(AppState::Playing).and_then(resource_exists::<SideB>)),
-        )
-        .add_systems(Update, clear_away.run_if(not(resource_exists::<SideB>)));
+    app.add_systems(
+        OnEnter(AppState::Playing),
+        spawn.run_if(resource_exists::<SideB>),
+    )
+    .add_systems(
+        Update,
+        (respawn, update)
+            .chain()
+            .run_if(in_state(AppState::Playing).and_then(resource_exists::<SideB>)),
+    )
+    .add_systems(Update, clear_away.run_if(not(resource_exists::<SideB>)));
 }
 
 /// The set list strip, for Side B level `.0`.
@@ -75,7 +80,12 @@ fn icon_of(c: SetCall) -> SpriteId {
     }
 }
 
-fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, side: Res<SideB>) {
+fn spawn(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    sprites: Option<Res<Sprites>>,
+    side: Res<SideB>,
+) {
     let sprites = sprites.as_deref();
     commands
         .spawn((
@@ -120,30 +130,59 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
                         BorderColor::all(Color::NONE),
                     ))
                     .with_children(|cell| {
-                        cell.spawn(Node { column_gap: px(3.0), align_items: AlignItems::Center, ..default() }).with_children(|line| {
+                        cell.spawn(Node {
+                            column_gap: px(3.0),
+                            align_items: AlignItems::Center,
+                            ..default()
+                        })
+                        .with_children(|line| {
                             line.spawn(icon(sprites, icon_of(*h), 8.0, 8.0));
                             line.spawn((CallCount(k), label(&font, "", 8.0, CREAM)));
                         });
-                        cell.spawn((Node { width: px(26.0), height: px(2.0), ..default() }, BackgroundColor(DARK_BROWN)))
-                            .with_child((CallTimer(k), Node { width: percent(0.0), height: percent(100.0), ..default() }, BackgroundColor(GOLD)));
+                        cell.spawn((
+                            Node {
+                                width: px(26.0),
+                                height: px(2.0),
+                                ..default()
+                            },
+                            BackgroundColor(DARK_BROWN),
+                        ))
+                        .with_child((
+                            CallTimer(k),
+                            Node {
+                                width: percent(0.0),
+                                height: percent(100.0),
+                                ..default()
+                            },
+                            BackgroundColor(GOLD),
+                        ));
                     });
                 }
             });
-            root.spawn(Node { column_gap: px(4.0), ..default() }).with_children(|row| {
+            root.spawn(Node {
+                column_gap: px(4.0),
+                ..default()
+            })
+            .with_children(|row| {
                 for k in 0..side.setlist.len() {
-                    row.spawn((CallPick(k), label(&font, "CALL", 8.0, GOLD), Visibility::Hidden));
+                    row.spawn((
+                        CallPick(k),
+                        label(&font, "CALL", 8.0, GOLD),
+                        Visibility::Hidden,
+                    ));
                 }
             });
         });
-    commands.spawn((
-        Name::new("SideBBanner"),
-        DespawnOnExit(AppState::Playing),
-        fullscreen(),
-        GlobalZIndex(40),
-        Visibility::Hidden,
-        Banner,
-    ))
-    .with_child(label(&font, "", 24.0, GOLD));
+    commands
+        .spawn((
+            Name::new("SideBBanner"),
+            DespawnOnExit(AppState::Playing),
+            fullscreen(),
+            GlobalZIndex(40),
+            Visibility::Hidden,
+            Banner,
+        ))
+        .with_child(label(&font, "", 24.0, GOLD));
 }
 
 #[allow(clippy::type_complexity)]
@@ -162,7 +201,11 @@ fn update(
     for (c, mut border, mut bg) in &mut cells {
         let picked = c.0 == side.selected;
         border.set_if_neq(BorderColor::all(if picked { GOLD } else { Color::NONE }));
-        bg.set_if_neq(BackgroundColor(if picked { Color::srgb(0.35, 0.24, 0.08) } else { Color::NONE }));
+        bg.set_if_neq(BackgroundColor(if picked {
+            Color::srgb(0.35, 0.24, 0.08)
+        } else {
+            Color::NONE
+        }));
     }
     for (c, mut text, mut color) in &mut counts {
         let left = side.left[c.0];
@@ -176,11 +219,19 @@ fn update(
         let share = match side.setlist[c.0].0 {
             SetCall::Mode(h) => meters
                 .as_ref()
-                .and_then(|m| SUMMON_ORDER.iter().position(|&s| s == h).and_then(|i| m.0.summons[i].active))
+                .and_then(|m| {
+                    SUMMON_ORDER
+                        .iter()
+                        .position(|&s| s == h)
+                        .and_then(|i| m.0.summons[i].active)
+                })
                 .unwrap_or(0.0),
             SetCall::Melt => {
                 let now = run.as_ref().map_or(0.0, |r| r.time);
-                director.as_ref().and_then(|d| d.melt_until).map_or(0.0, |u| ((u - now) / MELT_SECS).clamp(0.0, 1.0))
+                director
+                    .as_ref()
+                    .and_then(|d| d.melt_until)
+                    .map_or(0.0, |u| ((u - now) / MELT_SECS).clamp(0.0, 1.0))
             }
         };
         let w = percent(share * 100.0);
@@ -190,15 +241,25 @@ fn update(
     }
     for (p, mut v) in &mut picks {
         let show = p.0 == side.selected && side.left[p.0] > 0 && side.phase == Phase::Playing;
-        v.set_if_neq(if show { Visibility::Inherited } else { Visibility::Hidden });
+        v.set_if_neq(if show {
+            Visibility::Inherited
+        } else {
+            Visibility::Hidden
+        });
     }
-    let Ok((mut v, children)) = banner.single_mut() else { return };
+    let Ok((mut v, children)) = banner.single_mut() else {
+        return;
+    };
     let text = match side.phase {
         Phase::Rewind { .. } => Some("REWIND!"),
         Phase::Cleared { .. } => Some("CLEAR!"),
         Phase::Playing => None,
     };
-    v.set_if_neq(if text.is_some() { Visibility::Inherited } else { Visibility::Hidden });
+    v.set_if_neq(if text.is_some() {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    });
     if let Some(t) = text
         && let Some(mut tx) = children.first().and_then(|&c| texts.get_mut(c).ok())
         && tx.0 != t

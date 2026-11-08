@@ -10,8 +10,8 @@ use nat_han_adventures::{
     adapt::StoryAssist,
     events::*,
     game::{
-        AssistMode, Assists, Body, Dead, HiddenRespawn, Player, Pos, PrevPos, RaftLife, StoryAssistState,
-        adaptive::ENCOURAGE_LINES,
+        AssistMode, Assists, Body, Dead, HiddenRespawn, Player, Pos, PrevPos, RaftLife,
+        StoryAssistState, adaptive::ENCOURAGE_LINES,
     },
     level::{Level, Levels, TILE},
     state::{AppState, CurrentLevel},
@@ -61,16 +61,25 @@ fn listen(
 fn app_with(levels: &[&str], setup: impl FnOnce(&mut World)) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            DT,
+        )))
         .add_plugins(nat_han_adventures::gameplay)
-        .insert_resource(Levels(levels.iter().map(|l| Level::parse(l).expect("test level parses")).collect()))
+        .insert_resource(Levels(
+            levels
+                .iter()
+                .map(|l| Level::parse(l).expect("test level parses"))
+                .collect(),
+        ))
         .init_resource::<Heard>()
         .add_systems(Last, listen);
     app.finish();
     app.cleanup();
     app.update();
     setup(app.world_mut());
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::Playing);
     app.update();
     app.update();
     app
@@ -87,7 +96,10 @@ fn step(app: &mut App, secs: f32) {
 }
 
 fn player(app: &mut App) -> Entity {
-    app.world_mut().query_filtered::<Entity, With<Player>>().single(app.world()).unwrap()
+    app.world_mut()
+        .query_filtered::<Entity, With<Player>>()
+        .single(app.world())
+        .unwrap()
 }
 
 fn dial(app: &App) -> f32 {
@@ -117,7 +129,10 @@ fn assert_above_floors(a: Assists) {
     let floor = Assists::default();
     assert!(a.coyote_mult >= floor.coyote_mult, "{a:?}");
     assert!(a.jump_buffer_mult >= floor.jump_buffer_mult, "{a:?}");
-    assert!(a.hitbox_forgiveness_px >= floor.hitbox_forgiveness_px, "{a:?}");
+    assert!(
+        a.hitbox_forgiveness_px >= floor.hitbox_forgiveness_px,
+        "{a:?}"
+    );
     assert!(a.raft_life_mult >= floor.raft_life_mult, "{a:?}");
 }
 
@@ -159,20 +174,37 @@ fn deaths_raise_assists_and_clean_checkpoints_fade_them() {
     let a = assists(&app);
     // 6 excess deaths × 0.08, plus one frustration (3 excess) × 0.15.
     assert!((dial(&app) - 0.63).abs() < 1e-4, "{}", dial(&app));
-    assert!((a.coyote_mult - 1.63).abs() < 1e-4 && (a.jump_buffer_mult - (1.0 + 0.75 * 0.63)).abs() < 1e-4, "{a:?}");
+    assert!(
+        (a.coyote_mult - 1.63).abs() < 1e-4
+            && (a.jump_buffer_mult - (1.0 + 0.75 * 0.63)).abs() < 1e-4,
+        "{a:?}"
+    );
     assert_eq!(a.hitbox_forgiveness_px, 2.0);
     assert!((a.raft_life_mult - 1.63).abs() < 1e-4);
     assert!(a.han_eagerness > 0.8, "{a:?}");
     assert_eq!(app.world().resource::<RaftLife>().scale, a.raft_life_mult);
-    let encouraged: Vec<_> = heard(&app).says.iter().filter(|s| ENCOURAGE_LINES.contains(&s.as_str())).collect();
-    assert_eq!(encouraged.len(), 1, "Han encourages once per segment: {:?}", heard(&app).says);
+    let encouraged: Vec<_> = heard(&app)
+        .says
+        .iter()
+        .filter(|s| ENCOURAGE_LINES.contains(&s.as_str()))
+        .collect();
+    assert_eq!(
+        encouraged.len(),
+        1,
+        "Han encourages once per segment: {:?}",
+        heard(&app).says
+    );
 
     // Next level: a clean run fades the dial at every checkpoint (0.12 each) down to nothing.
     RIGHT.release(app.world_mut());
     app.world_mut().resource_mut::<CurrentLevel>().0 = 1;
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::LevelSelect);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::LevelSelect);
     app.update();
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::Playing);
     app.update();
     app.update();
     RIGHT.press(app.world_mut());
@@ -186,7 +218,13 @@ fn deaths_raise_assists_and_clean_checkpoints_fade_them() {
     assert_eq!(heard(&app).deaths, 6);
     assert_eq!(dial(&app), 0.0);
     let a = assists(&app);
-    assert_eq!(Assists { han_eagerness: 0.5, ..a }, Assists::default());
+    assert_eq!(
+        Assists {
+            han_eagerness: 0.5,
+            ..a
+        },
+        Assists::default()
+    );
     assert!(a.han_eagerness < 0.5, "cruising: Han is lazier ({a:?})");
 }
 
@@ -222,7 +260,12 @@ fn idling_after_a_death_gets_encouragement() {
     assert!((dial(&app) - 0.08).abs() < 1e-5);
     step(&mut app, 2.0);
     assert!((dial(&app) - 0.23).abs() < 1e-5, "{}", dial(&app));
-    assert!(heard(&app).says.iter().any(|s| ENCOURAGE_LINES.contains(&s.as_str())));
+    assert!(
+        heard(&app)
+            .says
+            .iter()
+            .any(|s| ENCOURAGE_LINES.contains(&s.as_str()))
+    );
 }
 
 const FORGIVE: &str = "name: Forgive
@@ -237,7 +280,10 @@ const FORGIVE: &str = "name: Forgive
 fn stand_near_spike(px: f32) -> bool {
     let mut app = app_with(&[FORGIVE], |w| {
         w.insert_resource(AssistMode::Manual);
-        w.insert_resource(Assists { hitbox_forgiveness_px: px, ..default() });
+        w.insert_resource(Assists {
+            hitbox_forgiveness_px: px,
+            ..default()
+        });
     });
     step(&mut app, 0.5);
     let p = player(&mut app);
@@ -254,7 +300,10 @@ fn hazards_forgive_by_the_configured_px() {
     assert!(stand_near_spike(1.0), "1 px of forgiveness isn't enough");
     assert!(!stand_near_spike(2.0), "2 px forgives it");
     assert!(!stand_near_spike(3.0));
-    assert!(stand_near_spike(-5.0), "negative forgiveness is ignored (never below the floor)");
+    assert!(
+        stand_near_spike(-5.0),
+        "negative forgiveness is ignored (never below the floor)"
+    );
 }
 
 const CAN: &str = "name: Can
@@ -270,7 +319,10 @@ const CAN: &str = "name: Can
 fn stand_near_can(px: f32) -> bool {
     let mut app = app_with(&[CAN], |w| {
         w.insert_resource(AssistMode::Manual);
-        w.insert_resource(Assists { hitbox_forgiveness_px: px, ..default() });
+        w.insert_resource(Assists {
+            hitbox_forgiveness_px: px,
+            ..default()
+        });
     });
     step(&mut app, 1.6);
     assert_eq!(heard(&app).deaths, 0);
@@ -278,7 +330,10 @@ fn stand_near_can(px: f32) -> bool {
     // The can's body starts at 6 tiles + (16 - CAN_WIDTH) / 2 px.
     let can_left = 6.0 * TILE + (TILE - nat_han_adventures::game::CAN_WIDTH) / 2.0;
     let half = nat_han_adventures::game::tuning::PLAYER_SIZE.0 / 2.0;
-    let at = Vec2::new(can_left + 1.5 - (half - nat_han_adventures::game::FORGIVE), app.world().get::<Pos>(p).unwrap().0.y);
+    let at = Vec2::new(
+        can_left + 1.5 - (half - nat_han_adventures::game::FORGIVE),
+        app.world().get::<Pos>(p).unwrap().0.y,
+    );
     app.world_mut().get_mut::<Pos>(p).unwrap().0 = at;
     app.world_mut().get_mut::<PrevPos>(p).unwrap().0 = at;
     step(&mut app, 0.5);
@@ -310,7 +365,10 @@ const LEDGE: &str = "name: Ledge
 fn late_jump_is_a_ground_jump(coyote_mult: f32, late: f32) -> bool {
     let mut app = app_with(&[LEDGE], |w| {
         w.insert_resource(AssistMode::Manual);
-        w.insert_resource(Assists { coyote_mult, ..default() });
+        w.insert_resource(Assists {
+            coyote_mult,
+            ..default()
+        });
     });
     RIGHT.press(app.world_mut());
     let p = player(&mut app);
@@ -332,11 +390,26 @@ fn late_jump_is_a_ground_jump(coyote_mult: f32, late: f32) -> bool {
 #[test]
 fn coyote_time_scales_with_the_assist() {
     assert!(late_jump_is_a_ground_jump(1.0, 0.05));
-    assert!(!late_jump_is_a_ground_jump(1.0, 0.15), "past the normal coyote time: a toot");
-    assert!(late_jump_is_a_ground_jump(2.0, 0.15), "doubled coyote time still jumps");
-    assert!(!late_jump_is_a_ground_jump(1.5, 0.18), "1.5× coyote time runs out too");
-    assert!(!late_jump_is_a_ground_jump(0.5, 0.15), "never below the floor");
-    assert!(late_jump_is_a_ground_jump(0.5, 0.05), "never below the floor");
+    assert!(
+        !late_jump_is_a_ground_jump(1.0, 0.15),
+        "past the normal coyote time: a toot"
+    );
+    assert!(
+        late_jump_is_a_ground_jump(2.0, 0.15),
+        "doubled coyote time still jumps"
+    );
+    assert!(
+        !late_jump_is_a_ground_jump(1.5, 0.18),
+        "1.5× coyote time runs out too"
+    );
+    assert!(
+        !late_jump_is_a_ground_jump(0.5, 0.15),
+        "never below the floor"
+    );
+    assert!(
+        late_jump_is_a_ground_jump(0.5, 0.05),
+        "never below the floor"
+    );
 }
 
 #[test]
@@ -371,7 +444,9 @@ const LONG: &str = "name: Long
 ";
 
 fn respawns_on_long(dial: f32) -> Vec2 {
-    let mut app = app_with(&[LONG], |w| w.insert_resource(StoryAssistState(StoryAssist::new(dial))));
+    let mut app = app_with(&[LONG], |w| {
+        w.insert_resource(StoryAssistState(StoryAssist::new(dial)))
+    });
     RIGHT.press(app.world_mut());
     until(&mut app, |a| !heard(a).respawns.is_empty());
     heard(&app).respawns[0]
@@ -389,11 +464,14 @@ fn a_high_dial_respawns_at_a_hidden_midway_point() {
 
 #[test]
 fn hidden_respawn_resets_with_the_level() {
-    let mut app = app_with(&[LONG], |w| w.insert_resource(StoryAssistState(StoryAssist::new(0.5))));
+    let mut app = app_with(&[LONG], |w| {
+        w.insert_resource(StoryAssistState(StoryAssist::new(0.5)))
+    });
     RIGHT.press(app.world_mut());
     step(&mut app, 4.0);
     assert!(app.world().resource::<HiddenRespawn>().pos.is_some());
-    app.world_mut().write_message(nat_han_adventures::game::RestartLevel);
+    app.world_mut()
+        .write_message(nat_han_adventures::game::RestartLevel);
     app.update();
     app.update();
     assert!(app.world().resource::<HiddenRespawn>().pos.is_none());
@@ -422,7 +500,9 @@ fn han_repeats_the_nearest_hint_after_repeated_deaths() {
     app.update();
     assert_eq!(count(&app), 1);
     // High dial: repeated deaths at the same spot bring it back (once per segment).
-    let mut app = app_with(&[HINTED], |w| w.insert_resource(StoryAssistState(StoryAssist::new(0.6))));
+    let mut app = app_with(&[HINTED], |w| {
+        w.insert_resource(StoryAssistState(StoryAssist::new(0.6)))
+    });
     RIGHT.press(app.world_mut());
     until(&mut app, |a| heard(a).deaths >= 4);
     app.update();
@@ -449,20 +529,43 @@ fn profile(app: &App) -> &PlayerProfile {
 /// Each finished story segment is evidence for the skills it exercised, at the level's number.
 #[test]
 fn story_segments_feed_the_skill_profile() {
-    let mut app = app_with(&[WALK, WALK, WALK], |w| w.resource_mut::<CurrentLevel>().0 = 2);
+    let mut app = app_with(&[WALK, WALK, WALK], |w| {
+        w.resource_mut::<CurrentLevel>().0 = 2
+    });
     RIGHT.press(app.world_mut());
-    until(&mut app, |a| profile(a).skill(Skill::Precision).window.entries.len() == 1);
+    until(&mut app, |a| {
+        profile(a).skill(Skill::Precision).window.entries.len() == 1
+    });
     let e = profile(&app).skill(Skill::Precision).window.entries[0];
-    assert_eq!((e.outcome, e.band), (Outcome::Clean, 3), "level 3 is band 3");
-    until(&mut app, |a| profile(a).skill(Skill::Precision).window.entries.len() == 2);
-    assert!(profile(&app).skill(Skill::HazardTiming).window.entries.is_empty(), "nothing hazardous here");
+    assert_eq!(
+        (e.outcome, e.band),
+        (Outcome::Clean, 3),
+        "level 3 is band 3"
+    );
+    until(&mut app, |a| {
+        profile(a).skill(Skill::Precision).window.entries.len() == 2
+    });
+    assert!(
+        profile(&app)
+            .skill(Skill::HazardTiming)
+            .window
+            .entries
+            .is_empty(),
+        "nothing hazardous here"
+    );
 }
 
 /// A profile that finds platforming easy at band 1.
 fn easy_precision(w: &mut World) {
     let mut p = PlayerProfile::new();
     for _ in 0..4 {
-        p = reduce(p, AdaptEvent::Evidence { skills: vec![(Skill::Precision, 1, Outcome::Clean)], assists: 0.0 });
+        p = reduce(
+            p,
+            AdaptEvent::Evidence {
+                skills: vec![(Skill::Precision, 1, Outcome::Clean)],
+                assists: 0.0,
+            },
+        );
     }
     w.insert_resource(AdaptiveProfile(p));
 }
@@ -474,7 +577,10 @@ fn deaths_at_easy_skills_are_slips() {
     let mut easy = app_with(&[SPIKY], easy_precision);
     RIGHT.press(easy.world_mut());
     until(&mut easy, |a| heard(a).deaths >= 1);
-    assert_eq!((heard(&easy).slips, heard(&easy).skills[0]), (1, Skill::Precision));
+    assert_eq!(
+        (heard(&easy).slips, heard(&easy).skills[0]),
+        (1, Skill::Precision)
+    );
     let mut fresh = app(SPIKY);
     RIGHT.press(fresh.world_mut());
     until(&mut fresh, |a| heard(a).deaths >= 1);
@@ -498,7 +604,13 @@ fn stain_pit_deaths_are_never_slips() {
         let mut p = PlayerProfile::new();
         for _ in 0..4 {
             let skills = Skill::ALL.iter().map(|&s| (s, 1, Outcome::Clean)).collect();
-            p = reduce(p, AdaptEvent::Evidence { skills, assists: 0.0 });
+            p = reduce(
+                p,
+                AdaptEvent::Evidence {
+                    skills,
+                    assists: 0.0,
+                },
+            );
         }
         w.insert_resource(AdaptiveProfile(p));
     });

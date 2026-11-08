@@ -29,9 +29,13 @@ struct Heard {
 fn app(level: &str) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            DT,
+        )))
         .add_plugins(nat_han_adventures::gameplay)
-        .insert_resource(Levels(vec![Level::parse(level).expect("test level parses")]))
+        .insert_resource(Levels(vec![
+            Level::parse(level).expect("test level parses"),
+        ]))
         .init_resource::<Heard>()
         // Tests set Han's eagerness themselves: the adaptive engine stays out.
         .insert_resource(AssistMode::Manual)
@@ -51,7 +55,9 @@ fn app(level: &str) -> App {
     app.finish();
     app.cleanup();
     app.update();
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::Playing);
     app.update();
     app.update();
     app
@@ -74,16 +80,37 @@ fn step(app: &mut App, secs: f32) {
 
 /// `HAN_TRACE=1`: print Han's state every step.
 fn trace(app: &mut App) {
-    if std::env::var("HAN_TRACE").is_err() || app.world_mut().query::<&Han>().iter(app.world()).next().is_none() {
+    if std::env::var("HAN_TRACE").is_err()
+        || app
+            .world_mut()
+            .query::<&Han>()
+            .iter(app.world())
+            .next()
+            .is_none()
+    {
         return;
     }
     let (n, nb, h, hb, b) = (nat(app), nat_body(app), han(app), han_body(app), brain(app));
     eprintln!(
         "t {:6.2} nat {:5.0},{:4.0} v{:4.0},{:4.0} g{} r{} | han {:5.0},{:4.0} v{:4.0},{:4.0} g{} {:?} goal {:?} path {} exec {:?} lost {} toots {}",
         app.world().resource::<SimClock>().time,
-        n.x, n.y, nb.vel.x, nb.vel.y, nb.on_ground as u8, nb.riding.is_some() as u8,
-        h.x, h.y, hb.vel.x, hb.vel.y, hb.on_ground as u8, b.mode, b.goal, b.path.len(),
-        b.exec.map(|e| (e.mv, e.to, e.flying, e.t)), b.lost, b.ctl.toots_left
+        n.x,
+        n.y,
+        nb.vel.x,
+        nb.vel.y,
+        nb.on_ground as u8,
+        nb.riding.is_some() as u8,
+        h.x,
+        h.y,
+        hb.vel.x,
+        hb.vel.y,
+        hb.on_ground as u8,
+        b.mode,
+        b.goal,
+        b.path.len(),
+        b.exec.map(|e| (e.mv, e.to, e.flying, e.t)),
+        b.lost,
+        b.ctl.toots_left
     );
 }
 
@@ -104,7 +131,10 @@ fn tap(app: &mut App) {
 }
 
 fn single<C: Component>(app: &mut App) -> Entity {
-    app.world_mut().query_filtered::<Entity, With<C>>().single(app.world()).unwrap()
+    app.world_mut()
+        .query_filtered::<Entity, With<C>>()
+        .single(app.world())
+        .unwrap()
 }
 
 fn nat(app: &mut App) -> Vec2 {
@@ -149,7 +179,10 @@ fn put<C: Component>(app: &mut App, p: Vec2) {
 }
 
 fn set_groove(app: &mut App, harmony: Harmony, laughing: bool) {
-    app.world_mut().insert_resource(Groove::new(Filters { harmony, just_intonation: laughing }));
+    app.world_mut().insert_resource(Groove::new(Filters {
+        harmony,
+        just_intonation: laughing,
+    }));
 }
 
 fn eagerness(app: &mut App, e: f32) {
@@ -240,7 +273,10 @@ fn han_follows_on_his_own_routes_and_lands_properly() {
     assert_eq!(brain(&mut app).drops, 0, "no parachute needed");
     assert!(max_gap < 12.0 * TILE, "kept up: {max_gap}");
     assert!(han_body(&mut app).on_ground, "standing at {h}");
-    assert!((h.y - p.y).abs() < 1.0 && (p.x - h.x) > 0.5 * TILE && (p.x - h.x) < 3.0 * TILE, "in his slot: {h} vs {p}");
+    assert!(
+        (h.y - p.y).abs() < 1.0 && (p.x - h.x) > 0.5 * TILE && (p.x - h.x) < 3.0 * TILE,
+        "in his slot: {h} vs {p}"
+    );
 }
 
 /// Walking and stopping, back and forth: Han never stands inside Nat.
@@ -253,8 +289,14 @@ fn han_never_overlaps_nat_awkwardly() {
         release(&mut app, key);
         step(&mut app, 1.5);
         let (p, h) = (nat(&mut app), han(&mut app));
-        assert!((p.x - h.x).abs() >= 12.0, "han at {h}, nat at {p}: overlapping");
-        assert!((p.x - h.x).abs() < 3.0 * TILE, "han at {h}, nat at {p}: lagging");
+        assert!(
+            (p.x - h.x).abs() >= 12.0,
+            "han at {h}, nat at {p}: overlapping"
+        );
+        assert!(
+            (p.x - h.x).abs() < 3.0 * TILE,
+            "han at {h}, nat at {p}: lagging"
+        );
     }
 }
 
@@ -286,8 +328,16 @@ fn han_rides_moving_platforms() {
     }
     let h = han(&mut app);
     assert!(rode, "Han rode the platform");
-    assert_eq!(brain(&mut app).drops, 0, "no parachute: {:?}", brain(&mut app).mode);
-    assert!(h.x > 25.0 * TILE && han_body(&mut app).on_ground, "across: {h}");
+    assert_eq!(
+        brain(&mut app).drops,
+        0,
+        "no parachute: {:?}",
+        brain(&mut app).mode
+    );
+    assert!(
+        h.x > 25.0 * TILE && han_body(&mut app).on_ground,
+        "across: {h}"
+    );
 }
 
 // --- The plunger boost ------------------------------------------------------------------------
@@ -301,11 +351,18 @@ fn boost_launches_and_refreshes_the_toot() {
     put::<Player>(&mut app, h + Vec2::new(0.0, 2.0 * TILE));
     step(&mut app, 0.5);
     let p = single::<Player>(&mut app);
-    assert_eq!(nat_body(&mut app).riding, Some(single::<Han>(&mut app)), "standing on Han's head");
+    assert_eq!(
+        nat_body(&mut app).riding,
+        Some(single::<Han>(&mut app)),
+        "standing on Han's head"
+    );
     assert_eq!(anim(&mut app).pose, HanPose::Braced, "braced");
     let jumps = heard(&app).jumped;
     // Use the toot first so the boost visibly refreshes it.
-    app.world_mut().get_mut::<PlayerControl>(p).unwrap().has_toot = false;
+    app.world_mut()
+        .get_mut::<PlayerControl>(p)
+        .unwrap()
+        .has_toot = false;
     let feet0 = nat(&mut app).y - 7.0;
     tap(&mut app);
     let mut top: f32 = 0.0;
@@ -314,11 +371,18 @@ fn boost_launches_and_refreshes_the_toot() {
         trace(&mut app);
         top = top.max(nat(&mut app).y - 7.0);
         if i == 2 {
-            assert!(app.world().get::<PlayerControl>(p).unwrap().has_toot, "the boost refreshes the toot");
+            assert!(
+                app.world().get::<PlayerControl>(p).unwrap().has_toot,
+                "the boost refreshes the toot"
+            );
         }
     }
     assert_eq!(heard(&app).boosted, 1);
-    assert_eq!(heard(&app).jumped, jumps, "a boost isn't a Jumped: the band doesn't count it");
+    assert_eq!(
+        heard(&app).jumped,
+        jumps,
+        "a boost isn't a Jumped: the band doesn't count it"
+    );
     let rise = (top - feet0) / TILE;
     assert!((6.5..7.5).contains(&rise), "launched {rise} tiles");
 }
@@ -354,9 +418,15 @@ fn mega_climb(giant_steps: bool) -> Vec2 {
 #[test]
 fn giant_steps_mega_boost_climbs_a_mega_wall() {
     let p = mega_climb(true);
-    assert!(p.y > standing(11.0 * TILE) - 1.0 && p.x > 25.0 * TILE, "on the wall: {p}");
+    assert!(
+        p.y > standing(11.0 * TILE) - 1.0 && p.x > 25.0 * TILE,
+        "on the wall: {p}"
+    );
     let p = mega_climb(false);
-    assert!(p.y < standing(TILE) + 1.0, "the weak boost: still at the foot, {p}");
+    assert!(
+        p.y < standing(TILE) + 1.0,
+        "the weak boost: still at the foot, {p}"
+    );
 }
 
 // --- Fired up: the running throw ---------------------------------------------------------------
@@ -366,7 +436,12 @@ fn giant_steps_mega_boost_climbs_a_mega_wall() {
 /// into the chasm.
 fn throw_across(fired: bool) -> (Vec2, usize) {
     let mut rows = vec![".".repeat(70); 14];
-    rows.push(format!("{}{}{}", "#".repeat(30), ".".repeat(16), "#".repeat(24)));
+    rows.push(format!(
+        "{}{}{}",
+        "#".repeat(30),
+        ".".repeat(16),
+        "#".repeat(24)
+    ));
     rows[13].replace_range(2..3, "P");
     rows[13].replace_range(66..67, "G");
     let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
@@ -380,7 +455,11 @@ fn throw_across(fired: bool) -> (Vec2, usize) {
     let h = han(&mut app);
     put::<Player>(&mut app, h + Vec2::new(0.0, 2.0 * TILE));
     step(&mut app, 0.5);
-    assert_eq!(nat_body(&mut app).riding, Some(single::<Han>(&mut app)), "standing on Han's head");
+    assert_eq!(
+        nat_body(&mut app).riding,
+        Some(single::<Han>(&mut app)),
+        "standing on Han's head"
+    );
     press(&mut app, RIGHT);
     tap(&mut app);
     step(&mut app, 0.35);
@@ -439,50 +518,31 @@ fn shield_level_on(grated: bool) -> String {
     format!("name: Shield\n---\n{}\n", rows.join("\n"))
 }
 
+/// No playing by waiting: standing by a can tunnel or a fly swarm, Han stays put (he went
+/// ahead to shield Nat once; they're timing hazards you jump now).
 #[test]
-fn han_goes_ahead_and_shields_nat_from_sprays() {
-    shields_nat(&shield_level());
-}
-
-/// Han plugs the cans themselves too: a can tunnel on the floor, walked behind him.
-#[test]
-fn han_shields_nat_from_floor_cans() {
-    shields_nat(&shield_level_on(false));
-}
-
-fn shields_nat(level: &str) {
-    let mut app = app(level);
-    // Walk up to the row and stand facing it.
-    press(&mut app, RIGHT);
-    while nat(&mut app).x < 28.0 * TILE {
-        app.update();
-        trace(&mut app);
+fn han_never_goes_ahead_into_sprays_or_flies() {
+    for level in [shield_level(), shield_level_on(false), FLIES.to_string()] {
+        let mut app = app(&level);
+        let to = if level.starts_with("name: Flies") {
+            10.0
+        } else {
+            28.0
+        };
+        press(&mut app, RIGHT);
+        while nat(&mut app).x < to * TILE {
+            app.update();
+        }
+        release(&mut app, RIGHT);
+        for _ in 0..240 {
+            app.update();
+            assert!(
+                !matches!(brain(&mut app).mode, HanMode::Ahead { .. }),
+                "Han went ahead"
+            );
+        }
+        assert_eq!(said(&app, LEMME_LINE), 0);
     }
-    release(&mut app, RIGHT);
-    let t0 = app.world().resource::<SimClock>().time;
-    while !matches!(brain(&mut app).mode, HanMode::Ahead { .. }) {
-        app.update();
-        trace(&mut app);
-        assert!(app.world().resource::<SimClock>().time - t0 < 3.0, "Han never went ahead");
-    }
-    let waited = app.world().resource::<SimClock>().time - t0;
-    assert!((go_ahead_delay(0.5) - 0.2..go_ahead_delay(0.5) + 0.6).contains(&waited), "went after {waited}s");
-    assert_eq!(said(&app, LEMME_LINE), 1);
-    assert_eq!(anim(&mut app).pose, HanPose::March);
-    // Walk right behind him (he's solid from behind while he marches).
-    step(&mut app, 0.4);
-    press(&mut app, RIGHT);
-    let mut plugged = 0;
-    while nat(&mut app).x < 56.0 * TILE {
-        app.update();
-        trace(&mut app);
-        plugged = plugged.max(app.world_mut().query::<&SprayPlug>().iter(app.world()).filter(|p| p.linger > 0.0).count());
-        let at = nat(&mut app);
-        assert_eq!(heard(&app).died, 0, "Nat got sprayed at {at}");
-        assert!(app.world().resource::<SimClock>().time - t0 < 20.0, "stuck at {}", nat(&mut app));
-    }
-    assert!(plugged > 0, "jets were plugged");
-    assert!(nat(&mut app).x - han(&mut app).x < 2.0 * TILE, "Nat stayed behind Han");
 }
 
 #[test]
@@ -507,7 +567,10 @@ fn sprays_nat_alone(level: &str) {
             break;
         }
     }
-    assert!(heard(&app).died > 0, "running through alone gets you sprayed");
+    assert!(
+        heard(&app).died > 0,
+        "running through alone gets you sprayed"
+    );
 }
 
 const FLIES: &str = "name: Flies
@@ -522,23 +585,6 @@ const FLIES: &str = "name: Flies
 ..P........................................................G
 ############################################################
 ";
-
-#[test]
-fn flies_bounce_off_han() {
-    let mut app = app(FLIES);
-    // Stand facing the swarm; Han goes to check it out.
-    step(&mut app, 0.5);
-    press(&mut app, RIGHT);
-    while nat(&mut app).x < 10.0 * TILE {
-        app.update();
-    }
-    release(&mut app, RIGHT);
-    step(&mut app, 4.0);
-    let spins: Vec<FlySpin> = app.world_mut().query::<&FlySpin>().iter(app.world()).copied().collect();
-    assert!(spins.iter().any(|s| s.dir < 0.0 || s.offset != 0.0), "a fly bounced: {spins:?}");
-    assert!(said(&app, FLY_LINE) >= 1);
-    assert_eq!(heard(&app).died, 0);
-}
 
 const SEWER: &str = "name: Sewer
 ---
@@ -555,7 +601,11 @@ const SEWER: &str = "name: Sewer
 ";
 
 fn float(app: &mut App) -> Option<(Entity, HanFloat, Vec2)> {
-    app.world_mut().query::<(Entity, &HanFloat, &Pos)>().iter(app.world()).next().map(|(e, f, p)| (e, *f, p.0))
+    app.world_mut()
+        .query::<(Entity, &HanFloat, &Pos)>()
+        .iter(app.world())
+        .next()
+        .map(|(e, f, p)| (e, *f, p.0))
 }
 
 /// Run Nat up to SEWER's pool (stopping at its edge): Han cannonballs in on the run-up, no
@@ -603,8 +653,12 @@ fn han_floats_nat_across_the_pool() {
     let (e, f, at) = run_up_to_the_pool(&mut app);
     assert_eq!(said(&app, CANNONBALL_LINE), 1);
     assert_eq!(f.dir, 1.0);
-    let rafts: Vec<MovingPlatform> =
-        app.world_mut().query_filtered::<&MovingPlatform, With<HanRaft>>().iter(app.world()).cloned().collect();
+    let rafts: Vec<MovingPlatform> = app
+        .world_mut()
+        .query_filtered::<&MovingPlatform, With<HanRaft>>()
+        .iter(app.world())
+        .cloned()
+        .collect();
     assert_eq!(rafts.len(), 1, "one float");
     assert_eq!(rafts[0].width, HAN_RAFT_WIDTH);
     assert!(at.x > 10.0 * TILE && at.x < 14.0 * TILE, "float at {at}");
@@ -616,7 +670,11 @@ fn han_floats_nat_across_the_pool() {
     let (_, f, at) = float(&mut app).unwrap();
     assert!(f.vel > 0.8 * FLOAT_SPEED, "paddling: {f:?}");
     assert!(at.x > x0 + 2.0 * TILE, "moved {} px", at.x - x0);
-    assert!((nat(&mut app).x - at.x).abs() < 1.5 * TILE, "Nat rides along: nat {} float {at}", nat(&mut app));
+    assert!(
+        (nat(&mut app).x - at.x).abs() < 1.5 * TILE,
+        "Nat rides along: nat {} float {at}",
+        nat(&mut app)
+    );
     assert_eq!(nat_body(&mut app).riding, Some(e));
     // Let go: he stops. Back-paddle: he goes back.
     release(&mut app, RIGHT);
@@ -635,7 +693,11 @@ fn han_floats_nat_across_the_pool() {
     tap(&mut app);
     step(&mut app, 0.8);
     release(&mut app, RIGHT);
-    assert!(nat(&mut app).x > 24.0 * TILE && nat_body(&mut app).on_ground, "across: {}", nat(&mut app));
+    assert!(
+        nat(&mut app).x > 24.0 * TILE && nat_body(&mut app).on_ground,
+        "across: {}",
+        nat(&mut app)
+    );
     // He climbs out and parachutes back.
     let mut chute = false;
     for _ in 0..600 {
@@ -649,7 +711,11 @@ fn han_floats_nat_across_the_pool() {
     assert!(chute, "parachuted back");
     assert!(float(&mut app).is_none());
     assert_eq!(said(&app, PRO_LINE), 1);
-    assert_eq!(app.world().resource::<LevelRun>().deaths, 0, "not Nat's death");
+    assert_eq!(
+        app.world().resource::<LevelRun>().deaths,
+        0,
+        "not Nat's death"
+    );
     assert_eq!(heard(&app).died, 0);
 }
 
@@ -666,7 +732,10 @@ fn han_float_runs_on_nuggets() {
     app.world_mut().write_message(NuggetCollected { pos });
     app.update();
     let after = float(&mut app).unwrap().1.fuel;
-    assert!((after - before - FLOAT_REFUEL).abs() < 0.1, "{before} -> {after}");
+    assert!(
+        (after - before - FLOAT_REFUEL).abs() < 0.1,
+        "{before} -> {after}"
+    );
     step(&mut app, after - 0.3);
     assert_eq!(heard(&app).died, 0, "still afloat");
     step(&mut app, 2.0);
@@ -689,7 +758,10 @@ fn han_cannonballs_without_waiting() {
             t += DT;
             assert!(t < 3.0, "eagerness {e}: Han never went");
         }
-        assert!(nat_body(&mut app).vel.x > 20.0, "eagerness {e}: Nat still running when Han goes");
+        assert!(
+            nat_body(&mut app).vel.x > 20.0,
+            "eagerness {e}: Nat still running when Han goes"
+        );
     }
 }
 
@@ -724,10 +796,16 @@ fn han_follows_normally_next_to_a_giant_wall() {
     let (p, h) = (nat(&mut app), han(&mut app));
     assert!(p.x > 48.0 * TILE, "Nat at the wall: {p}");
     assert!(max_gap < 4.0 * TILE, "kept up: {max_gap}");
-    assert!((p.x - h.x).abs() < 3.0 * TILE && (p.x - h.x).abs() >= 12.0, "in his slot by the wall: {h} vs {p}");
+    assert!(
+        (p.x - h.x).abs() < 3.0 * TILE && (p.x - h.x).abs() >= 12.0,
+        "in his slot by the wall: {h} vs {p}"
+    );
     assert_eq!(brain(&mut app).drops, 0, "no parachute");
     let cell = (h.x / TILE) as i32;
-    assert!(cell > 41 - nat_han_adventures::level::HAN_BERTH, "in the band zone: col {cell}");
+    assert!(
+        cell > 41 - nat_han_adventures::level::HAN_BERTH,
+        "in the band zone: col {cell}"
+    );
     assert!(head(&mut app).weak, "his boost is the weak one there");
 }
 
@@ -738,7 +816,11 @@ fn boost_rise(app: &mut App, col: f32) -> f32 {
     let h = han(app);
     put::<Player>(app, h + Vec2::new(0.0, 1.5 * TILE));
     step(app, 0.5);
-    assert_eq!(nat_body(app).riding, Some(single::<Han>(app)), "on Han's head");
+    assert_eq!(
+        nat_body(app).riding,
+        Some(single::<Han>(app)),
+        "on Han's head"
+    );
     let feet0 = nat(app).y - 7.0;
     tap(app);
     let mut top: f32 = 0.0;
@@ -756,15 +838,27 @@ fn boost_rise(app: &mut App, col: f32) -> f32 {
 /// gate's kind first); away from them it's the full one, silently.
 #[test]
 fn boost_is_weak_near_band_gates_and_han_grumbles() {
-    for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
-        let lvl = FLAT.replace("name: Flat\n", &format!("name: Flat\ngate: {} 40,10 45,11\n", topic.word()));
+    for topic in [
+        Topic::Giant,
+        Topic::Gap,
+        Topic::Waltz,
+        Topic::Grip,
+        Topic::Stain,
+    ] {
+        let lvl = FLAT.replace(
+            "name: Flat\n",
+            &format!("name: Flat\ngate: {} 40,10 45,11\n", topic.word()),
+        );
         let mut app = app(&lvl);
         step(&mut app, 0.5);
         // In the zone (14 columns from the mark): a hop about a normal jump's height.
         let weak = boost_rise(&mut app, 30.0);
         assert!(head(&mut app).weak, "{topic:?}");
         let expect = WEAK_BOOST_SPEED * WEAK_BOOST_SPEED / (2.0 * tuning::GRAVITY) / TILE;
-        assert!((weak - expect).abs() < 0.3, "{topic:?}: weak boost {weak} tiles, expected ~{expect}");
+        assert!(
+            (weak - expect).abs() < 0.3,
+            "{topic:?}: weak boost {weak} tiles, expected ~{expect}"
+        );
         assert!(weak < 3.2, "{topic:?}: no more than a normal jump");
         assert_eq!(heard(&app).boosted, 1, "{topic:?}");
         let line = grumble_lines(topic)[0];
@@ -776,10 +870,16 @@ fn boost_is_weak_near_band_gates_and_han_grumbles() {
         let says = heard(&app).says.len();
         let full = boost_rise(&mut app, 8.0);
         assert!(!head(&mut app).weak);
-        assert!((6.5..7.5).contains(&full), "{topic:?}: full boost {full} tiles");
+        assert!(
+            (6.5..7.5).contains(&full),
+            "{topic:?}: full boost {full} tiles"
+        );
         assert_eq!(heard(&app).says.len(), says, "{:?}", heard(&app).says);
         // In mid-air in the zone his head holds nobody (no chains of weak boosts).
-        put::<Han>(&mut app, Vec2::new(30.0 * TILE + 8.0, standing(TILE) + 3.0 * TILE));
+        put::<Han>(
+            &mut app,
+            Vec2::new(30.0 * TILE + 8.0, standing(TILE) + 3.0 * TILE),
+        );
         app.update();
         assert!(!head(&mut app).solid, "{topic:?}: mid-air in the zone");
     }
@@ -788,11 +888,24 @@ fn boost_is_weak_near_band_gates_and_han_grumbles() {
 /// The grumbles go round: the gate's own lines and the general ones, all short enough.
 #[test]
 fn grumbles_rotate() {
-    for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
+    for topic in [
+        Topic::Giant,
+        Topic::Gap,
+        Topic::Waltz,
+        Topic::Grip,
+        Topic::Stain,
+    ] {
         let n = grumble_lines(topic).len() + GRUMBLE_LINES.len();
-        let lines: std::collections::HashSet<&str> = (0..n as u32).map(|k| grumble_line(Some(topic), k)).collect();
+        let lines: std::collections::HashSet<&str> = (0..n as u32)
+            .map(|k| grumble_line(Some(topic), k))
+            .collect();
         assert_eq!(lines.len(), n, "{topic:?}: every line in turn");
-        assert!(lines.iter().all(|l| l.len() <= nat_han_adventures::level::MAX_LINE), "{lines:?}");
+        assert!(
+            lines
+                .iter()
+                .all(|l| l.len() <= nat_han_adventures::level::MAX_LINE),
+            "{lines:?}"
+        );
     }
     assert!(GRUMBLE_LINES.contains(&grumble_line(None, 1)));
 }
@@ -832,7 +945,10 @@ fn weak_boost_cannot_climb_a_giant_wall() {
         tap(&mut app);
         step(&mut app, 1.5);
         let p = nat(&mut app);
-        assert!(p.y < standing(7.0 * TILE) - 8.0, "toot at {toot_at}: up the wall at {p}");
+        assert!(
+            p.y < standing(7.0 * TILE) - 8.0,
+            "toot at {toot_at}: up the wall at {p}"
+        );
         assert_eq!(heard(&app).boosted, 1);
     }
 }
@@ -842,7 +958,12 @@ fn weak_boost_cannot_climb_a_giant_wall() {
 #[test]
 fn weak_boost_cannot_cross_a_long_gap() {
     let mut rows = vec![".".repeat(60); 14];
-    rows.push(format!("{}{}{}", "#".repeat(25), ".".repeat(11), "#".repeat(24)));
+    rows.push(format!(
+        "{}{}{}",
+        "#".repeat(25),
+        ".".repeat(11),
+        "#".repeat(24)
+    ));
     rows[13].replace_range(2..3, "P");
     rows[13].replace_range(56..57, "G");
     let rows: Vec<&str> = rows.iter().map(String::as_str).collect();
@@ -860,7 +981,11 @@ fn weak_boost_cannot_cross_a_long_gap() {
         step(&mut app, toot_at);
         tap(&mut app);
         step(&mut app, 2.0);
-        assert!(heard(&app).died >= 1 || nat(&mut app).x < 36.0 * TILE, "toot at {toot_at}: across at {}", nat(&mut app));
+        assert!(
+            heard(&app).died >= 1 || nat(&mut app).x < 36.0 * TILE,
+            "toot at {toot_at}: across at {}",
+            nat(&mut app)
+        );
     }
 }
 
@@ -944,7 +1069,8 @@ fn han_per_mode_physics() {
     let mut moved_off_beat = 0.0f32;
     for k in 0..90 {
         let beats = k as f64 / 60.0 / secs;
-        *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+        *app.world_mut().resource_mut::<Groove>() =
+            Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
         let x0 = han(&mut app).x;
         app.update();
         trace(&mut app);
@@ -952,7 +1078,10 @@ fn han_per_mode_physics() {
             moved_off_beat = moved_off_beat.max((han(&mut app).x - x0).abs() - 0.0);
         }
     }
-    assert!(moved_off_beat < 3.0, "Han slid {moved_off_beat}px off the beat");
+    assert!(
+        moved_off_beat < 3.0,
+        "Han slid {moved_off_beat}px off the beat"
+    );
     // Nervous: clings closer, trembles.
     let mut app = self::app(FLAT);
     set_groove(&mut app, Harmony::MelodicMinor, false);
@@ -985,42 +1114,21 @@ fn han_per_mode_physics() {
 
 #[test]
 fn buddy_raft_and_shield_timing() {
-    use nat_han_adventures::game::{HAN_PLUG_LINGER, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, PARACHUTE_FALL};
+    use nat_han_adventures::game::{
+        HAN_PLUG_LINGER, HAN_SEWAGE_RESPAWN, HAN_SINK_TIME, PARACHUTE_FALL,
+    };
     // One raft cycle (sink, gone, parachute from ~8.5 tiles, the lazy go-ahead, the walk in) is
     // far shorter than Han's raft floats: Nat on raft i waits for raft i+1 in safety.
-    let cycle = HAN_SINK_TIME + HAN_SEWAGE_RESPAWN + 8.5 * TILE / PARACHUTE_FALL + go_ahead_delay(0.0) + 1.0;
+    let cycle = HAN_SINK_TIME
+        + HAN_SEWAGE_RESPAWN
+        + 8.5 * TILE / PARACHUTE_FALL
+        + go_ahead_delay(0.0)
+        + 1.0;
     assert!(cycle < HAN_RAFT_LIFE_FLOOR - 5.0, "cycle {cycle}s");
     // Nat right behind Han (blocked by his back: 12 px, at march speed) clears each jet well
     // inside its linger.
     let lag = (tuning::PLAYER_SIZE.0 + 8.0) / HAN_MARCH_SPEED;
     assert!(lag < HAN_PLUG_LINGER, "lag {lag}s");
-}
-
-/// Going ahead is an escort: Nat may dawdle, Han waits for him and keeps the jets plugged.
-#[test]
-fn han_escorts_a_dawdling_nat_through_the_can_tunnel() {
-    let mut app = app(&shield_level());
-    press(&mut app, RIGHT);
-    while nat(&mut app).x < 28.0 * TILE {
-        app.update();
-    }
-    release(&mut app, RIGHT);
-    while !matches!(brain(&mut app).mode, HanMode::Ahead { .. }) {
-        app.update();
-    }
-    step(&mut app, 2.0);
-    let lead = han(&mut app).x - nat(&mut app).x;
-    assert!(lead < 2.5 * TILE, "Han waited for Nat: {lead}");
-    press(&mut app, RIGHT);
-    for _ in 0..1200 {
-        app.update();
-        if nat(&mut app).x > 56.0 * TILE {
-            break;
-        }
-    }
-    let at = nat(&mut app);
-    assert_eq!(heard(&app).died, 0, "sprayed at {at}");
-    assert!(at.x > 56.0 * TILE);
 }
 
 // --- Keeping up ---------------------------------------------------------------------------------
@@ -1067,7 +1175,10 @@ fn hops_level() -> String {
     rows[floor as usize - 1][2] = b'P';
     let w = cols.len();
     rows[floor as usize - 1][w - 2] = b'G';
-    let rows: Vec<String> = rows.into_iter().map(|r| String::from_utf8(r).unwrap()).collect();
+    let rows: Vec<String> = rows
+        .into_iter()
+        .map(|r| String::from_utf8(r).unwrap())
+        .collect();
     format!("name: Hops\n---\n{}\n", rows.join("\n"))
 }
 
@@ -1117,12 +1228,25 @@ fn han_keeps_up_with_a_zooming_nat() {
     );
     assert_eq!(heard(&app).died, 0);
     let mean = lag_sum / n as f32;
-    eprintln!("lag: max {:.1} tiles, mean {:.1} tiles, drops {}", max_lag / TILE, mean / TILE, brain(&mut app).drops);
+    eprintln!(
+        "lag: max {:.1} tiles, mean {:.1} tiles, drops {}",
+        max_lag / TILE,
+        mean / TILE,
+        brain(&mut app).drops
+    );
     assert_eq!(brain(&mut app).drops, 0, "no parachute needed");
     // Nat in the air leaves the slot behind at his take-off: a few tiles is fine. Before Han
     // took off on the run (and re-routed without stopping) he ended up ~90 tiles behind.
-    assert!(max_lag < 8.0 * TILE, "kept up: {} tiles behind at most", max_lag / TILE);
-    assert!(mean < 6.0 * TILE, "kept up: {} tiles behind on average", mean / TILE);
+    assert!(
+        max_lag < 8.0 * TILE,
+        "kept up: {} tiles behind at most",
+        max_lag / TILE
+    );
+    assert!(
+        mean < 6.0 * TILE,
+        "kept up: {} tiles behind on average",
+        mean / TILE
+    );
 }
 
 // --- The waltz: the trapeze ---------------------------------------------------------------------
@@ -1159,7 +1283,8 @@ fn trapeze_flight(waltz: bool) -> (Vec2, bool, usize) {
     let mut tick = |app: &mut App| {
         if waltz {
             let beats = frame as f64 * DT / secs;
-            *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+            *app.world_mut().resource_mut::<Groove>() =
+                Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
         }
         frame += 1;
         app.update();
@@ -1190,7 +1315,11 @@ fn trapeze_flight(waltz: bool) -> (Vec2, bool, usize) {
     for _ in 0..4 {
         tick(&mut app);
     }
-    assert_eq!(nat_body(&mut app).riding, Some(single::<Han>(&mut app)), "riding Han on the trapeze");
+    assert_eq!(
+        nat_body(&mut app).riding,
+        Some(single::<Han>(&mut app)),
+        "riding Han on the trapeze"
+    );
     while bar(&app) < 0.97 {
         tick(&mut app);
     }
@@ -1207,7 +1336,10 @@ fn trapeze_flight(waltz: bool) -> (Vec2, bool, usize) {
     for _ in 0..150 {
         tick(&mut app);
     }
-    assert!(!matches!(brain(&mut app).mode, HanMode::Trapeze { .. }), "he let go");
+    assert!(
+        !matches!(brain(&mut app).mode, HanMode::Trapeze { .. }),
+        "he let go"
+    );
     (nat(&mut app), true, heard(&app).died)
 }
 
@@ -1216,7 +1348,10 @@ fn waltz_trapeze_launches_nat_across() {
     let (p, swung, died) = trapeze_flight(true);
     assert!(swung, "Han got on the trapeze");
     assert_eq!(died, 0);
-    assert!(p.x > 43.0 * TILE && (p.y - standing(5.0 * TILE)).abs() < 1.0, "across, past the spikes: {p}");
+    assert!(
+        p.x > 43.0 * TILE && (p.y - standing(5.0 * TILE)).abs() < 1.0,
+        "across, past the spikes: {p}"
+    );
     // Not waltzing: no trapeze.
     let (_, swung, _) = trapeze_flight(false);
     assert!(!swung, "no trapeze out of the waltz");

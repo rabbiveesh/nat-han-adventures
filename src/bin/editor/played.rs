@@ -14,7 +14,11 @@ use crate::model::Part;
 pub fn parts(song: &SongFile, harmony: Harmony) -> Option<[Part; 4]> {
     let mut plain = song.clone();
     plain.swing = 0.0;
-    let shape = if harmony == Harmony::Waltz { Shape::waltz(&plain, 32_000) } else { Shape::new(&plain, 32_000) };
+    let shape = if harmony == Harmony::Waltz {
+        Shape::waltz(&plain, 32_000)
+    } else {
+        Shape::new(&plain, 32_000)
+    };
     let a = Arrangement::new(&plain, plain.chart.as_ref(), harmony, 1, &shape).ok()?;
     let (len, bb) = (song.beats(), song.bar_beats());
     Some(std::array::from_fn(|ch| {
@@ -48,7 +52,11 @@ fn bar_texts(chart: &Chart, label: impl Fn(usize) -> String) -> Vec<String> {
         }
         let text = names.join(" ");
         // "%": one chord, the same as the whole bar before.
-        bars.push(if names.len() == 1 && text == prev { "%".into() } else { text.clone() });
+        bars.push(if names.len() == 1 && text == prev {
+            "%".into()
+        } else {
+            text.clone()
+        });
         prev = text;
     }
     bars
@@ -90,7 +98,10 @@ pub fn played(chart: &Chart, harmony: Harmony) -> Vec<String> {
             format!("{}{q}", pc_name(c.root))
         }),
         // Two 3/4 bars to each written bar.
-        Harmony::Waltz => written(chart).into_iter().map(|t| if t == "%" { t } else { format!("¾ {t}") }).collect(),
+        Harmony::Waltz => written(chart)
+            .into_iter()
+            .map(|t| if t == "%" { t } else { format!("¾ {t}") })
+            .collect(),
         Harmony::Original => written(chart),
     }
 }
@@ -111,7 +122,11 @@ mod tests {
         assert_ne!(played(c, Harmony::Coltrane), w);
         for h in Harmony::ALL {
             let p = parts(&song, h).unwrap();
-            assert!(p.iter().all(|p| p.notes.iter().all(|n| n.end() <= song.beats() + 1e-6)), "{h:?}");
+            assert!(
+                p.iter()
+                    .all(|p| p.notes.iter().all(|n| n.end() <= song.beats() + 1e-6)),
+                "{h:?}"
+            );
         }
     }
 }

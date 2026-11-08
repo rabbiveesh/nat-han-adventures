@@ -8,11 +8,17 @@ use leafwing_input_manager::prelude::*;
 use super::{palette::*, *};
 use crate::audio::{Calibrating, LiveClock};
 use crate::game::RestartLevel;
-use crate::save::{MAX_AUDIO_DELAY_MS, Progress};
 use crate::input::Action;
+use crate::save::{MAX_AUDIO_DELAY_MS, Progress};
 use crate::state::{AppState, PlayState};
 
-const OPTIONS: [&str; 5] = ["RESUME", "RESTART", "AUDIO DELAY", "BAND LESSONS", "LEVEL SELECT"];
+const OPTIONS: [&str; 5] = [
+    "RESUME",
+    "RESTART",
+    "AUDIO DELAY",
+    "BAND LESSONS",
+    "LEVEL SELECT",
+];
 const AUDIO_DELAY: usize = 2;
 /// Shows the band's lesson cards the player has seen again (`ui::lesson`).
 const BAND_LESSONS: usize = 3;
@@ -20,7 +26,11 @@ const BAND_LESSONS: usize = 3;
 const END_RUN: &str = "END RUN";
 
 fn option(i: usize, free: bool) -> &'static str {
-    if free && i == OPTIONS.len() - 1 { END_RUN } else { OPTIONS[i] }
+    if free && i == OPTIONS.len() - 1 {
+        END_RUN
+    } else {
+        OPTIONS[i]
+    }
 }
 
 pub fn plugin(app: &mut App) {
@@ -31,7 +41,11 @@ pub fn plugin(app: &mut App) {
         })
         .add_systems(
             Update,
-            (input.run_if(not(resource_exists::<Calib>)), calibrate.run_if(resource_exists::<Calib>), highlight)
+            (
+                input.run_if(not(resource_exists::<Calib>)),
+                calibrate.run_if(resource_exists::<Calib>),
+                highlight,
+            )
                 .chain()
                 .run_if(in_state(PlayState::Paused)),
         );
@@ -43,7 +57,11 @@ struct PauseCursor(usize);
 #[derive(Component)]
 struct PauseOption(usize);
 
-fn spawn(mut commands: Commands, font: Res<UiFont>, free: Option<Res<crate::freeplay::FreePlayRun>>) {
+fn spawn(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    free: Option<Res<crate::freeplay::FreePlayRun>>,
+) {
     commands.insert_resource(PauseCursor(0));
     let f = &*font;
     commands
@@ -55,23 +73,41 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, free: Option<Res<crate::free
             GlobalZIndex(10),
         ))
         .with_children(|root| {
-            root.spawn(panel(Node { padding: UiRect::axes(px(24.0), px(16.0)), ..column(16.0, 8.0) }))
-                .with_children(|p| {
-                    p.spawn((label(f, "PAUSED", 16.0, GOLD), Node { margin: UiRect::bottom(px(8.0)), ..default() }));
-                    for i in 0..OPTIONS.len() {
-                        p.spawn((label(f, option(i, free.is_some()), 8.0, CREAM), PauseOption(i)));
-                    }
-                    if let Some(run) = &free {
-                        p.spawn((
-                            label(f, format!("SEED {}", run.seed_text()), 8.0, GOLD),
-                            Node { margin: UiRect::top(px(8.0)), ..default() },
-                        ));
-                    }
+            root.spawn(panel(Node {
+                padding: UiRect::axes(px(24.0), px(16.0)),
+                ..column(16.0, 8.0)
+            }))
+            .with_children(|p| {
+                p.spawn((
+                    label(f, "PAUSED", 16.0, GOLD),
+                    Node {
+                        margin: UiRect::bottom(px(8.0)),
+                        ..default()
+                    },
+                ));
+                for i in 0..OPTIONS.len() {
                     p.spawn((
-                        label(f, "(HOLD IT IN...)", 8.0, DIM_CREAM),
-                        Node { margin: UiRect::top(px(8.0)), ..default() },
+                        label(f, option(i, free.is_some()), 8.0, CREAM),
+                        PauseOption(i),
                     ));
-                });
+                }
+                if let Some(run) = &free {
+                    p.spawn((
+                        label(f, format!("SEED {}", run.seed_text()), 8.0, GOLD),
+                        Node {
+                            margin: UiRect::top(px(8.0)),
+                            ..default()
+                        },
+                    ));
+                }
+                p.spawn((
+                    label(f, "(HOLD IT IN...)", 8.0, DIM_CREAM),
+                    Node {
+                        margin: UiRect::top(px(8.0)),
+                        ..default()
+                    },
+                ));
+            });
         });
 }
 
@@ -124,7 +160,11 @@ fn highlight(
     for (o, mut text, mut color) in &mut q {
         let on = o.0 == cursor.0;
         let name = option(o.0, free.is_some());
-        let s = if on { format!("> {name} <") } else { name.to_string() };
+        let s = if on {
+            format!("> {name} <")
+        } else {
+            name.to_string()
+        };
         if text.0 != s {
             text.0 = s;
         }
@@ -171,21 +211,39 @@ fn open_calibration(commands: &mut Commands, font: &UiFont, ms: u32) {
             GlobalZIndex(11),
         ))
         .with_children(|root| {
-            root.spawn(panel(Node { padding: UiRect::axes(px(24.0), px(16.0)), ..column(16.0, 8.0) }))
-                .with_children(|p| {
-                    p.spawn((label(f, "AUDIO DELAY", 16.0, GOLD), Node { margin: UiRect::bottom(px(8.0)), ..default() }));
-                    p.spawn(label(f, "TAP JUMP ON THE BEAT", 8.0, CREAM));
-                    p.spawn((label(f, "", 8.0, CREAM), CalibText::Taps));
-                    p.spawn((label(f, "", 8.0, GOLD), CalibText::Delay));
-                    p.spawn((label(f, "", 8.0, GREEN), CalibText::Note));
-                    p.spawn((
-                        label(f, "< > NUDGE   OK DONE   BACK UNDO", 8.0, DIM_CREAM),
-                        Node { margin: UiRect::top(px(8.0)), ..default() },
-                    ));
-                });
+            root.spawn(panel(Node {
+                padding: UiRect::axes(px(24.0), px(16.0)),
+                ..column(16.0, 8.0)
+            }))
+            .with_children(|p| {
+                p.spawn((
+                    label(f, "AUDIO DELAY", 16.0, GOLD),
+                    Node {
+                        margin: UiRect::bottom(px(8.0)),
+                        ..default()
+                    },
+                ));
+                p.spawn(label(f, "TAP JUMP ON THE BEAT", 8.0, CREAM));
+                p.spawn((label(f, "", 8.0, CREAM), CalibText::Taps));
+                p.spawn((label(f, "", 8.0, GOLD), CalibText::Delay));
+                p.spawn((label(f, "", 8.0, GREEN), CalibText::Note));
+                p.spawn((
+                    label(f, "< > NUDGE   OK DONE   BACK UNDO", 8.0, DIM_CREAM),
+                    Node {
+                        margin: UiRect::top(px(8.0)),
+                        ..default()
+                    },
+                ));
+            });
         })
         .id();
-    commands.insert_resource(Calib { root, before: ms, taps: Vec::new(), note: "", armed: false });
+    commands.insert_resource(Calib {
+        root,
+        before: ms,
+        taps: Vec::new(),
+        note: "",
+        armed: false,
+    });
     commands.insert_resource(Calibrating);
 }
 
@@ -269,7 +327,9 @@ fn delay_from_taps(ms: u32, taps: &[f64], beat_secs: f64) -> Option<u32> {
     if taps.is_empty() {
         return None;
     }
-    let (sin, cos) = taps.iter().fold((0.0, 0.0), |(s, c), p| (s + (TAU * p).sin(), c + (TAU * p).cos()));
+    let (sin, cos) = taps.iter().fold((0.0, 0.0), |(s, c), p| {
+        (s + (TAU * p).sin(), c + (TAU * p).cos())
+    });
     let n = taps.len() as f64;
     // Resultant length: 1 for taps at one spot, 0 for taps all around the beat.
     if (sin * sin + cos * cos).sqrt() / n < 0.6 {

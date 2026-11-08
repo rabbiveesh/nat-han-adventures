@@ -2,9 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
-use nat_han_adventures::audio::live::song::CHANNELS;
-use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::engine::CommittedBar;
+use nat_han_adventures::audio::live::feel::Feel;
+use nat_han_adventures::audio::live::song::CHANNELS;
 use nat_han_adventures::audio::live::{Input, SongFile, library};
 use nat_han_adventures::audio::mml::{self, Options};
 use nat_han_adventures::audio::{AudioOutput, Harmony};
@@ -62,7 +62,17 @@ pub struct TrackerUi {
 
 impl Default for TrackerUi {
     fn default() -> Self {
-        TrackerUi { row: 0, ch: 0, rec: false, octave: 4, len: 2, step: 2, follow: true, show_played: false, scrolled: None }
+        TrackerUi {
+            row: 0,
+            ch: 0,
+            rec: false,
+            octave: 4,
+            len: 2,
+            step: 2,
+            follow: true,
+            show_played: false,
+            scrolled: None,
+        }
     }
 }
 
@@ -94,7 +104,18 @@ pub struct PianoUi {
 
 impl Default for PianoUi {
     fn default() -> Self {
-        PianoUi { ch: 0, first_bar: 0, bars: 2, len: 2, ghosts: true, overlay: true, follow: true, selected: None, drag: None, recenter: true }
+        PianoUi {
+            ch: 0,
+            first_bar: 0,
+            bars: 2,
+            len: 2,
+            ghosts: true,
+            overlay: true,
+            follow: true,
+            selected: None,
+            drag: None,
+            recenter: true,
+        }
     }
 }
 
@@ -122,7 +143,12 @@ pub struct InstUi {
 
 impl Default for InstUi {
     fn default() -> Self {
-        InstUi { selected: None, ch: 0, octave: 4, draft: None }
+        InstUi {
+            selected: None,
+            ch: 0,
+            octave: 4,
+            draft: None,
+        }
     }
 }
 
@@ -185,7 +211,9 @@ pub fn list_songs(root: &Path) -> Vec<SongEntry> {
             (p.extension()? == "song").then(|| {
                 let stem = p.file_stem()?.to_string_lossy().to_string();
                 let text = std::fs::read_to_string(&p).ok()?;
-                let title = SongFile::parse(&text).map(|s| s.title).unwrap_or_else(|_| "(doesn't parse)".into());
+                let title = SongFile::parse(&text)
+                    .map(|s| s.title)
+                    .unwrap_or_else(|_| "(doesn't parse)".into());
                 Some(SongEntry { stem, title })
             })?
         })
@@ -193,7 +221,10 @@ pub fn list_songs(root: &Path) -> Vec<SongEntry> {
     if out.is_empty() {
         out = library::FILES
             .iter()
-            .map(|(stem, t)| SongEntry { stem: stem.to_string(), title: SongFile::parse(t).map(|s| s.title).unwrap_or_default() })
+            .map(|(stem, t)| SongEntry {
+                stem: stem.to_string(),
+                title: SongFile::parse(t).map(|s| s.title).unwrap_or_default(),
+            })
             .collect();
     }
     out.sort_by(|a, b| a.stem.cmp(&b.stem));
@@ -202,7 +233,9 @@ pub fn list_songs(root: &Path) -> Vec<SongEntry> {
 
 /// Read a song's text (from disk, else the built-in copy).
 pub fn read_song(root: &Path, stem: &str) -> Option<String> {
-    std::fs::read_to_string(root.join(format!("music/{stem}.song"))).ok().or_else(|| library::text(stem).map(str::to_string))
+    std::fs::read_to_string(root.join(format!("music/{stem}.song")))
+        .ok()
+        .or_else(|| library::text(stem).map(str::to_string))
 }
 
 /// Short title ("Sweet Georgia Brown" from "Sweet Georgia Brown (Bernie/..., 1925)").
@@ -216,7 +249,13 @@ impl Editor {
         // The title music, unless asked.
         let stem = stem
             .map(str::to_string)
-            .or_else(|| songs.iter().find(|s| s.stem == "sweet_georgia_brown").or(songs.first()).map(|s| s.stem.clone()))
+            .or_else(|| {
+                songs
+                    .iter()
+                    .find(|s| s.stem == "sweet_georgia_brown")
+                    .or(songs.first())
+                    .map(|s| s.stem.clone())
+            })
             .unwrap_or_else(|| "sweet_georgia_brown".into());
         let text = read_song(&root, &stem).unwrap_or_default();
         Editor {
@@ -233,7 +272,10 @@ impl Editor {
             level: [12; 4],
             tracker: TrackerUi::default(),
             piano: PianoUi::default(),
-            text: TextUi { cheat: true, ..TextUi::default() },
+            text: TextUi {
+                cheat: true,
+                ..TextUi::default()
+            },
             inst: InstUi::default(),
             audition: None,
             loop_on: false,
@@ -322,7 +364,10 @@ impl Editor {
 
     /// Audition instrument `name` on channel `ch` in the song (again: stop auditioning).
     pub fn audition(&mut self, ch: usize, name: &str) {
-        let same = self.audition.as_ref().is_some_and(|(c, n)| *c == ch && n == name);
+        let same = self
+            .audition
+            .as_ref()
+            .is_some_and(|(c, n)| *c == ch && n == name);
         self.audition = (!same).then(|| (ch, name.to_string()));
         if self.player.playing {
             if let Some((song, offset)) = self.engine_song() {
@@ -337,7 +382,10 @@ impl Editor {
     /// Play a few notes (or a groove, for a kit) on instrument `name`, alone.
     pub fn preview(&mut self, name: &str) {
         let Some(song) = self.song() else { return };
-        let kit = song.instruments.index(name).is_some_and(|k| song.instruments.is_kit(k));
+        let kit = song
+            .instruments
+            .index(name)
+            .is_some_and(|k| song.instruments.is_kit(k));
         let ch = if kit { 3 } else { self.inst.ch.min(2) };
         let o = (self.inst.octave - if ch == 2 { 2 } else { 0 }).clamp(1, 6);
         let body = if kit {
@@ -347,18 +395,22 @@ impl Editor {
         };
         let text = format!(
             "[song]\ntitle = preview\nbpm = {}\nloop = no\n[instruments]\n{}\n[{}]\n{body}\n",
-            song.bpm,
-            song.instruments_src,
-            CHANNELS[ch].0
+            song.bpm, song.instruments_src, CHANNELS[ch].0
         );
-        match SongFile::parse(&text).map_err(|e| e.to_string()).and_then(|s| nat_han_adventures::audio::synth::render_song(&s)) {
+        match SongFile::parse(&text)
+            .map_err(|e| e.to_string())
+            .and_then(|s| nat_han_adventures::audio::synth::render_song(&s))
+        {
             Ok(r) => self.player.play_rendered(r),
             Err(e) => self.complain(format!("preview: {e}")),
         }
     }
 
     fn context(&self) -> Context {
-        Context { filters: self.game.decided.map(|d| d.0).unwrap_or_default(), stats: self.game.band.stats }
+        Context {
+            filters: self.game.decided.map(|d| d.0).unwrap_or_default(),
+            stats: self.game.band.stats,
+        }
     }
 
     pub fn play_from(&mut self, bar: usize) {
@@ -366,9 +418,11 @@ impl Editor {
             self.complain("nothing to play: the song doesn't parse");
             return;
         };
-        let beat = (bar.saturating_sub(offset) as f64 * song.bar_beats()).min((song.bars().saturating_sub(1)) as f64 * song.bar_beats());
+        let beat = (bar.saturating_sub(offset) as f64 * song.bar_beats())
+            .min((song.bars().saturating_sub(1)) as f64 * song.bar_beats());
         let ctx = self.context();
-        self.player.play(&song, offset, beat.max(0.0), &self.dials, &ctx);
+        self.player
+            .play(&song, offset, beat.max(0.0), &self.dials, &ctx);
         self.swapped = self.doc.revision;
         if let Some(e) = self.player.error.clone() {
             self.complain(e);
@@ -389,7 +443,9 @@ impl Editor {
         match self.view {
             View::Tracker | View::Instruments => self.tracker.row / self.rows_per_bar().max(1),
             View::Piano | View::Thinking => self.piano.first_bar,
-            View::Text => self.text_cursor_beat().map_or(0, |b| (b / self.bar_beats()).floor() as usize),
+            View::Text => self
+                .text_cursor_beat()
+                .map_or(0, |b| (b / self.bar_beats()).floor() as usize),
         }
         .min(self.bars().saturating_sub(1))
     }
@@ -397,17 +453,36 @@ impl Editor {
     /// The song beat at the text cursor (inside a channel's MML: from the parser's walk).
     pub fn text_cursor_beat(&self) -> Option<f64> {
         let text = &self.doc.text;
-        let byte = text.char_indices().nth(self.text.cursor).map_or(text.len(), |(i, _)| i);
+        let byte = text
+            .char_indices()
+            .nth(self.text.cursor)
+            .map_or(text.len(), |(i, _)| i);
         let line = text[..byte].matches('\n').count();
-        let sec = sections(text).into_iter().find(|s| s.body.0 <= line && line < s.body.1.max(s.body.0 + 1))?;
+        let sec = sections(text)
+            .into_iter()
+            .find(|s| s.body.0 <= line && line < s.body.1.max(s.body.0 + 1))?;
         let ch = CHANNELS.iter().position(|(n, _)| *n == sec.name)?;
-        let start: usize = text.split_inclusive('\n').take(sec.body.0).map(str::len).sum();
-        let end: usize = text.split_inclusive('\n').take(sec.body.1).map(str::len).sum();
+        let start: usize = text
+            .split_inclusive('\n')
+            .take(sec.body.0)
+            .map(str::len)
+            .sum();
+        let end: usize = text
+            .split_inclusive('\n')
+            .take(sec.body.1)
+            .map(str::len)
+            .sum();
         let body = &text[start..end.min(text.len())];
         let parsed = mml::parse_with(body, CHANNELS[ch].1, Options::bars(None)).ok()?;
         let at = byte - start;
         // The last visit at or before the cursor (first pass of a repeat).
-        parsed.visits.iter().filter(|v| v.pos <= at).map(|v| (v.pos, v.time)).max_by(|a, b| a.0.cmp(&b.0).then(b.1.total_cmp(&a.1))).map(|v| v.1)
+        parsed
+            .visits
+            .iter()
+            .filter(|v| v.pos <= at)
+            .map(|v| (v.pos, v.time))
+            .max_by(|a, b| a.0.cmp(&b.0).then(b.1.total_cmp(&a.1)))
+            .map(|v| v.1)
     }
 
     pub fn set_view(&mut self, v: View) {
@@ -419,7 +494,11 @@ impl Editor {
         let any_solo = self.solo.iter().any(|s| *s);
         self.dials.mix = std::array::from_fn(|ch| {
             let audible = !self.mute[ch] && (!any_solo || self.solo[ch]);
-            if audible { self.level[ch] as f32 / 12.0 } else { 0.0 }
+            if audible {
+                self.level[ch] as f32 / 12.0
+            } else {
+                0.0
+            }
         });
         self.player.post(Input::SetMix(self.dials.mix));
     }
@@ -497,7 +576,10 @@ impl Editor {
     pub fn save(&mut self) {
         match self.doc.save(&self.root) {
             Ok(p) => {
-                let msg = format!("saved {}", p.strip_prefix(&self.root).unwrap_or(&p).display());
+                let msg = format!(
+                    "saved {}",
+                    p.strip_prefix(&self.root).unwrap_or(&p).display()
+                );
                 self.say(msg);
                 self.songs = list_songs(&self.root);
             }
@@ -510,14 +592,20 @@ impl Editor {
         if self.player.playing {
             self.player.published.state.harmony
         } else {
-            self.dials.force_harmony.or(self.game.decided.map(|d| d.0.harmony)).unwrap_or_default()
+            self.dials
+                .force_harmony
+                .or(self.game.decided.map(|d| d.0.harmony))
+                .unwrap_or_default()
         }
     }
 
     pub fn played(&mut self) -> &PlayedCache {
         let h = self.shown_harmony();
         let rev = self.doc.revision;
-        let stale = self.played.as_ref().is_none_or(|p| p.revision != rev || p.harmony != h);
+        let stale = self
+            .played
+            .as_ref()
+            .is_none_or(|p| p.revision != rev || p.harmony != h);
         if stale {
             let song = self.doc.good.as_ref();
             let parts = song.and_then(|s| played::parts(s, h));
@@ -589,7 +677,11 @@ impl Editor {
             self.thinking.pop_first();
         }
         for b in &self.player.published.state.upcoming {
-            let bar = if b.harmony == Harmony::Waltz { b.slot.song_bar / 2 } else { b.slot.song_bar } + self.player.offset;
+            let bar = if b.harmony == Harmony::Waltz {
+                b.slot.song_bar / 2
+            } else {
+                b.slot.song_bar
+            } + self.player.offset;
             if let Some(f) = self.feels.get_mut(bar) {
                 *f = b.band.feel;
             }
@@ -612,7 +704,10 @@ impl Editor {
 
     /// The heard position in the edited song (beats), when playing.
     pub fn playhead(&self) -> Option<f64> {
-        self.player.playing.then(|| self.player.song_beat(self.now)).filter(|b| b.is_finite())
+        self.player
+            .playing
+            .then(|| self.player.song_beat(self.now))
+            .filter(|b| b.is_finite())
     }
 }
 
@@ -622,7 +717,11 @@ mod tests {
 
     #[test]
     fn the_text_cursor_knows_its_beat() {
-        let mut e = Editor::new(repo_root(), Some("sweet_georgia_brown"), AudioOutput::Headless);
+        let mut e = Editor::new(
+            repo_root(),
+            Some("sweet_georgia_brown"),
+            AudioOutput::Headless,
+        );
         let text = e.doc.text.clone();
         // The cursor on bar 5's first note of the lead (`o5 d4 e4 f4 d4 |` starts the line).
         let at = text.find("o5 d4 e4 f4 d4").unwrap();
@@ -670,7 +769,11 @@ mod tests {
     /// The loop selection plays bars 5-6 over and over.
     #[test]
     fn the_selection_loops() {
-        let mut e = Editor::new(repo_root(), Some("sweet_georgia_brown"), AudioOutput::Headless);
+        let mut e = Editor::new(
+            repo_root(),
+            Some("sweet_georgia_brown"),
+            AudioOutput::Headless,
+        );
         e.selection = (4, 6);
         e.loop_on = true;
         e.play_from(4);
@@ -690,7 +793,11 @@ mod tests {
     /// Play, edit, and the edit is swapped into the running engine at the next bar line.
     #[test]
     fn edits_are_hot_swapped() {
-        let mut e = Editor::new(repo_root(), Some("sweet_georgia_brown"), AudioOutput::Headless);
+        let mut e = Editor::new(
+            repo_root(),
+            Some("sweet_georgia_brown"),
+            AudioOutput::Headless,
+        );
         e.play_from(2);
         let mut t = 0.0;
         let mut step = |e: &mut Editor, secs: f64| {
@@ -709,6 +816,9 @@ mod tests {
         step(&mut e, 2.0);
         assert_eq!(e.swapped, e.doc.revision);
         let bar2 = e.player.published.state.position.song_bar;
-        assert!(bar2 > bar && bar2 <= bar + 3, "carried on from where it was: {bar} -> {bar2}");
+        assert!(
+            bar2 > bar && bar2 <= bar + 3,
+            "carried on from where it was: {bar} -> {bar2}"
+        );
     }
 }

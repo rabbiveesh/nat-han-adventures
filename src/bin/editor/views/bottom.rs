@@ -31,7 +31,13 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
     let font = mono(11.0);
     // Bar numbers (drag to select the loop).
     let num_row = Rect::from_min_size(rect.min, vec2(rect.width(), 16.0));
-    p.text(pos2(rect.left(), num_row.center().y), Align2::LEFT_CENTER, "BAR", font.clone(), TEXT_FAINT);
+    p.text(
+        pos2(rect.left(), num_row.center().y),
+        Align2::LEFT_CENTER,
+        "BAR",
+        font.clone(),
+        TEXT_FAINT,
+    );
     let sel = ed.selection;
     for k in 0..n {
         let b = first + k;
@@ -45,12 +51,32 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 p.line_segment([r.left_bottom(), r.right_bottom()], Stroke::new(2.0, LINE));
             }
         }
-        p.line_segment([pos2(x, num_row.top()), pos2(x, num_row.bottom())], Stroke::new(1.0, LINE));
-        let c = if Some(b) == playhead.map(|h| (h / bb).floor() as usize) { GOLD } else { TEXT_FAINT };
-        p.text(pos2(x + 4.0, num_row.center().y), Align2::LEFT_CENTER, format!("{:02}", b + 1), font.clone(), c);
+        p.line_segment(
+            [pos2(x, num_row.top()), pos2(x, num_row.bottom())],
+            Stroke::new(1.0, LINE),
+        );
+        let c = if Some(b) == playhead.map(|h| (h / bb).floor() as usize) {
+            GOLD
+        } else {
+            TEXT_FAINT
+        };
+        p.text(
+            pos2(x + 4.0, num_row.center().y),
+            Align2::LEFT_CENTER,
+            format!("{:02}", b + 1),
+            font.clone(),
+            c,
+        );
     }
-    let sel_resp = ui.interact(Rect::from_min_max(pos2(x_of(first as f64), num_row.top()), num_row.max), ui.id().with("sel"), Sense::click_and_drag());
-    let bar_at = |x: f32| (first as f64 + ((x - rect.left() - LABEL_W) / col).floor() as f64).clamp(0.0, bars.saturating_sub(1) as f64) as usize;
+    let sel_resp = ui.interact(
+        Rect::from_min_max(pos2(x_of(first as f64), num_row.top()), num_row.max),
+        ui.id().with("sel"),
+        Sense::click_and_drag(),
+    );
+    let bar_at = |x: f32| {
+        (first as f64 + ((x - rect.left() - LABEL_W) / col).floor() as f64)
+            .clamp(0.0, bars.saturating_sub(1) as f64) as usize
+    };
     if (sel_resp.drag_started() || sel_resp.clicked())
         && let Some(pos) = sel_resp.interact_pointer_pos()
     {
@@ -61,7 +87,9 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
     if sel_resp.dragged()
         && let Some(pos) = sel_resp.interact_pointer_pos()
     {
-        let a: usize = ui.memory(|m| m.data.get_temp(ui.id().with("anchor"))).unwrap_or(ed.selection.0);
+        let a: usize = ui
+            .memory(|m| m.data.get_temp(ui.id().with("anchor")))
+            .unwrap_or(ed.selection.0);
         let b = bar_at(pos.x);
         ed.selection = (a.min(b), a.max(b) + 1);
     }
@@ -71,9 +99,18 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
     sel_resp.on_hover_text("drag to select bars to loop (the loop button plays them)");
     // Chart rows.
     let mut y = num_row.bottom() + 4.0;
-    for (label, row, gold) in [("chart · written", &written, false), ("as played", &played, true)] {
+    for (label, row, gold) in [
+        ("chart · written", &written, false),
+        ("as played", &played, true),
+    ] {
         let r = Rect::from_min_size(pos2(rect.left(), y), vec2(rect.width(), 20.0));
-        p.text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, label, font.clone(), if gold { GOLD } else { TEXT_DIM });
+        p.text(
+            pos2(r.left(), r.center().y),
+            Align2::LEFT_CENTER,
+            label,
+            font.clone(),
+            if gold { GOLD } else { TEXT_DIM },
+        );
         for k in 0..n {
             let b = first + k;
             let x = x_of(b as f64);
@@ -83,43 +120,94 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
             if changed {
                 p.rect_filled(cell, 0.0, HILITE);
             }
-            p.line_segment([cell.left_top(), cell.left_bottom()], Stroke::new(1.0, LINE));
+            p.line_segment(
+                [cell.left_top(), cell.left_bottom()],
+                Stroke::new(1.0, LINE),
+            );
             let c = if changed { GOLD } else { TEXT };
-            ui.painter_at(cell.shrink2(vec2(2.0, 0.0))).text(pos2(x + 4.0, r.center().y), Align2::LEFT_CENTER, text, if changed { mono(11.0) } else { font.clone() }, c);
+            ui.painter_at(cell.shrink2(vec2(2.0, 0.0))).text(
+                pos2(x + 4.0, r.center().y),
+                Align2::LEFT_CENTER,
+                text,
+                if changed { mono(11.0) } else { font.clone() },
+                c,
+            );
         }
         y = r.bottom() + 2.0;
     }
     // The feel lane: which bars the band played in another groove.
     {
         let r = Rect::from_min_size(pos2(rect.left(), y), vec2(rect.width(), 16.0));
-        p.text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, "feel", font.clone(), TEXT_DIM);
+        p.text(
+            pos2(r.left(), r.center().y),
+            Align2::LEFT_CENTER,
+            "feel",
+            font.clone(),
+            TEXT_DIM,
+        );
         let mut tip = Vec::new();
         for k in 0..n {
             let b = first + k;
             let x = x_of(b as f64);
             let cell = Rect::from_min_max(pos2(x, r.top()), pos2(x + col, r.bottom()));
-            p.line_segment([cell.left_top(), cell.left_bottom()], Stroke::new(1.0, LINE));
+            p.line_segment(
+                [cell.left_top(), cell.left_bottom()],
+                Stroke::new(1.0, LINE),
+            );
             let f = ed.feels.get(b).copied().unwrap_or_default();
             if f != Feel::Swing {
                 p.rect_filled(cell.shrink(1.0), 2.0, feel_colour(f).gamma_multiply(0.35));
                 let starts = b == 0 || ed.feels.get(b - 1) != Some(&f) || k == 0;
                 if starts {
-                    ui.painter_at(Rect::from_min_max(cell.min, pos2(rect.right(), cell.max.y))).text(pos2(x + 4.0, r.center().y), Align2::LEFT_CENTER, f.label().to_lowercase(), mono(10.0), feel_colour(f));
+                    ui.painter_at(Rect::from_min_max(cell.min, pos2(rect.right(), cell.max.y)))
+                        .text(
+                            pos2(x + 4.0, r.center().y),
+                            Align2::LEFT_CENTER,
+                            f.label().to_lowercase(),
+                            mono(10.0),
+                            feel_colour(f),
+                        );
                 }
                 tip.push(format!("bar {}: {}", b + 1, f.label().to_lowercase()));
             }
         }
-        let hover = ui.interact(Rect::from_min_max(pos2(rect.left() + LABEL_W, r.top()), r.max), ui.id().with("feel-lane"), Sense::hover());
-        hover.on_hover_text(if tip.is_empty() { "the band's feel: swing (the tune's own) so far".to_string() } else { tip.join("\n") });
+        let hover = ui.interact(
+            Rect::from_min_max(pos2(rect.left() + LABEL_W, r.top()), r.max),
+            ui.id().with("feel-lane"),
+            Sense::hover(),
+        );
+        hover.on_hover_text(if tip.is_empty() {
+            "the band's feel: swing (the tune's own) so far".to_string()
+        } else {
+            tip.join("\n")
+        });
         y = r.bottom() + 2.0;
     }
     if written.is_empty() {
-        p.text(pos2(rect.left() + LABEL_W + 4.0, y - 40.0), Align2::LEFT_CENTER, "(no [chords]: the band can only play it as written)", font.clone(), TEXT_FAINT);
+        p.text(
+            pos2(rect.left() + LABEL_W + 4.0, y - 40.0),
+            Align2::LEFT_CENTER,
+            "(no [chords]: the band can only play it as written)",
+            font.clone(),
+            TEXT_FAINT,
+        );
     }
     // Phrase plans.
     y += 6.0;
-    let cap = p.text(pos2(rect.left(), y + 6.0), Align2::LEFT_CENTER, "PHRASE PLANS", font.clone(), TEXT_FAINT);
-    p.text(pos2(cap.right() + 6.0, y + 6.0), Align2::LEFT_CENTER, "· solid = committed · dashed = planned, can still change", font.clone(), TEXT_FAINT);
+    let cap = p.text(
+        pos2(rect.left(), y + 6.0),
+        Align2::LEFT_CENTER,
+        "PHRASE PLANS",
+        font.clone(),
+        TEXT_FAINT,
+    );
+    p.text(
+        pos2(cap.right() + 6.0, y + 6.0),
+        Align2::LEFT_CENTER,
+        "· solid = committed · dashed = planned, can still change",
+        font.clone(),
+        TEXT_FAINT,
+    );
     y += 16.0;
     let st = &ed.player.published.state;
     let pos = st.position;
@@ -131,11 +219,21 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
         let rel = if waltz { rel / 2.0 } else { rel };
         rel + ed.player.offset as f64
     };
-    let committed_to = st.upcoming.last().map(|b| b.slot.index + 1).unwrap_or(pos.bar);
+    let committed_to = st
+        .upcoming
+        .last()
+        .map(|b| b.slot.index + 1)
+        .unwrap_or(pos.bar);
     for (role, m) in Role::ALL.iter().zip(st.musicians.iter()) {
         let ch = role.channel();
         let r = Rect::from_min_size(pos2(rect.left(), y), vec2(rect.width(), 20.0));
-        p.text(pos2(r.left(), r.center().y), Align2::LEFT_CENTER, ROLE[ch], font.clone(), CHANNEL[ch]);
+        p.text(
+            pos2(r.left(), r.center().y),
+            Align2::LEFT_CENTER,
+            ROLE[ch],
+            font.clone(),
+            CHANNEL[ch],
+        );
         if playing && let Some(plan) = m.plan {
             let (a, z) = (plan.start, plan.start + plan.bars as u64);
             let split = committed_to.clamp(a, z);
@@ -144,11 +242,17 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 if from >= to {
                     continue;
                 }
-                let (xa, xb) = (x_of(to_song(from)).max(rect.left() + LABEL_W), x_of(to_song(to)).min(rect.right()));
+                let (xa, xb) = (
+                    x_of(to_song(from)).max(rect.left() + LABEL_W),
+                    x_of(to_song(to)).min(rect.right()),
+                );
                 if xb <= xa + 2.0 {
                     continue;
                 }
-                let block = Rect::from_min_max(pos2(xa + 1.0, r.top() + 1.0), pos2(xb - 1.0, r.bottom() - 1.0));
+                let block = Rect::from_min_max(
+                    pos2(xa + 1.0, r.top() + 1.0),
+                    pos2(xb - 1.0, r.bottom() - 1.0),
+                );
                 let text_c = if solid {
                     p.rect_filled(block, 3.0, CHANNEL[ch]);
                     BG
@@ -156,8 +260,23 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                     dashed(&p, block, Stroke::new(1.0, CHANNEL[ch]));
                     CHANNEL[ch]
                 };
-                let text = if solid { label.clone() } else if split > a { "planned".into() } else { label.clone() };
-                ui.painter_at(block.shrink2(vec2(4.0, 0.0))).text(pos2(block.left() + 6.0, block.center().y + if solid { 0.0 } else { -4.0 }), Align2::LEFT_CENTER, text, font.clone(), text_c);
+                let text = if solid {
+                    label.clone()
+                } else if split > a {
+                    "planned".into()
+                } else {
+                    label.clone()
+                };
+                ui.painter_at(block.shrink2(vec2(4.0, 0.0))).text(
+                    pos2(
+                        block.left() + 6.0,
+                        block.center().y + if solid { 0.0 } else { -4.0 },
+                    ),
+                    Align2::LEFT_CENTER,
+                    text,
+                    font.clone(),
+                    text_c,
+                );
             }
             // Bar by bar: what was played (committed), what's planned (ahead).
             let mut tip = Vec::new();
@@ -166,24 +285,59 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 let played = committed.map(|c| c.orns[ch]);
                 let orns = played.unwrap_or(plan.intent(bar).orns);
                 let names: Vec<&str> = orns.iter().map(|o| o.name()).collect();
-                let feel = committed.map(|c| c.band.feel).filter(|f| *f != Feel::Swing).map(|f| format!("[{}] ", f.label().to_lowercase())).unwrap_or_default();
+                let feel = committed
+                    .map(|c| c.band.feel)
+                    .filter(|f| *f != Feel::Swing)
+                    .map(|f| format!("[{}] ", f.label().to_lowercase()))
+                    .unwrap_or_default();
                 if !names.is_empty() {
-                    tip.push(format!("bar {}: {feel}{}{}", to_song(bar).floor() as usize + 1, if played.is_some() { "" } else { "(planned) " }, names.join(", ")));
+                    tip.push(format!(
+                        "bar {}: {feel}{}{}",
+                        to_song(bar).floor() as usize + 1,
+                        if played.is_some() { "" } else { "(planned) " },
+                        names.join(", ")
+                    ));
                 }
                 let (xa, xb) = (x_of(to_song(bar)), x_of(to_song(bar + 1)));
-                if xa < rect.left() + LABEL_W || xb > rect.right() || played.is_some() || names.is_empty() {
+                if xa < rect.left() + LABEL_W
+                    || xb > rect.right()
+                    || played.is_some()
+                    || names.is_empty()
+                {
                     continue;
                 }
-                let short: String = names[0].chars().take(((xb - xa) / 7.0).max(3.0) as usize).collect();
-                ui.painter_at(Rect::from_min_max(pos2(xa + 2.0, r.top()), pos2(xb - 2.0, r.bottom())))
-                    .text(pos2(xa + 4.0, r.center().y + 5.0), Align2::LEFT_CENTER, short, mono(9.0), CHANNEL[ch].gamma_multiply(0.8));
+                let short: String = names[0]
+                    .chars()
+                    .take(((xb - xa) / 7.0).max(3.0) as usize)
+                    .collect();
+                ui.painter_at(Rect::from_min_max(
+                    pos2(xa + 2.0, r.top()),
+                    pos2(xb - 2.0, r.bottom()),
+                ))
+                .text(
+                    pos2(xa + 4.0, r.center().y + 5.0),
+                    Align2::LEFT_CENTER,
+                    short,
+                    mono(9.0),
+                    CHANNEL[ch].gamma_multiply(0.8),
+                );
             }
-            let hover = ui.interact(Rect::from_min_max(pos2(rect.left() + LABEL_W, r.top()), r.max), ui.id().with(("lane", ch)), Sense::hover());
+            let hover = ui.interact(
+                Rect::from_min_max(pos2(rect.left() + LABEL_W, r.top()), r.max),
+                ui.id().with(("lane", ch)),
+                Sense::hover(),
+            );
             if !tip.is_empty() {
                 hover.on_hover_text(tip.join("\n"));
             }
         } else if !playing && ch == 0 {
-            p.text(pos2(rect.left() + LABEL_W + 4.0, r.center().y), Align2::LEFT_CENTER, "(the band's plans show while it plays)", font.clone(), TEXT_FAINT);
+            p.text(
+                pos2(rect.left() + LABEL_W + 4.0, r.center().y),
+                Align2::LEFT_CENTER,
+                "(the band's plans show while it plays)",
+                font.clone(),
+                TEXT_FAINT,
+            );
         }
         y = r.bottom() + 2.0;
     }
@@ -192,8 +346,15 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
         let bar = h / bb;
         if bar >= first as f64 && bar < (first + SHOWN) as f64 {
             let x = x_of(bar);
-            p.rect_filled(Rect::from_min_max(pos2(x - 3.0, rect.top()), pos2(x + 3.0, rect.bottom())), 0.0, GOLD.gamma_multiply(0.12));
-            p.line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(2.0, GOLD));
+            p.rect_filled(
+                Rect::from_min_max(pos2(x - 3.0, rect.top()), pos2(x + 3.0, rect.bottom())),
+                0.0,
+                GOLD.gamma_multiply(0.12),
+            );
+            p.line_segment(
+                [pos2(x, rect.top()), pos2(x, rect.bottom())],
+                Stroke::new(2.0, GOLD),
+            );
         }
     }
 }
@@ -245,7 +406,13 @@ fn feel_colour(f: Feel) -> Color32 {
 }
 
 fn dashed(p: &egui::Painter, r: Rect, stroke: Stroke) {
-    let pts = [r.left_top(), r.right_top(), r.right_bottom(), r.left_bottom(), r.left_top()];
+    let pts = [
+        r.left_top(),
+        r.right_top(),
+        r.right_bottom(),
+        r.left_bottom(),
+        r.left_top(),
+    ];
     p.extend(Shape::dashed_line(&pts, stroke, 4.0, 3.0));
     let _ = Color32::TRANSPARENT;
 }

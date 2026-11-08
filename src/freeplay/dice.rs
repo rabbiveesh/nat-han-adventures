@@ -58,7 +58,11 @@ impl Dice {
 
     /// Uniform integer in `lo..=hi`.
     pub fn int(&mut self, lo: i32, hi: i32) -> i32 {
-        if hi <= lo { lo } else { self.0.random_range(lo..=hi) }
+        if hi <= lo {
+            lo
+        } else {
+            self.0.random_range(lo..=hi)
+        }
     }
 
     pub fn chance(&mut self, p: f32) -> bool {
@@ -102,8 +106,14 @@ mod tests {
 
     #[test]
     fn dice_are_deterministic() {
-        let a: Vec<i32> = { let mut d = Dice::new(5); (0..20).map(|_| d.int(0, 100)).collect() };
-        let b: Vec<i32> = { let mut d = Dice::new(5); (0..20).map(|_| d.int(0, 100)).collect() };
+        let a: Vec<i32> = {
+            let mut d = Dice::new(5);
+            (0..20).map(|_| d.int(0, 100)).collect()
+        };
+        let b: Vec<i32> = {
+            let mut d = Dice::new(5);
+            (0..20).map(|_| d.int(0, 100)).collect()
+        };
         assert_eq!(a, b);
         assert_ne!(stream(1, 0, 0), stream(1, 0, 1));
         assert_ne!(stream(1, 0, 0), stream(2, 0, 0));

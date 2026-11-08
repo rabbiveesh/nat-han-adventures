@@ -24,30 +24,40 @@ struct Deaths(usize);
 fn app(level: &Level) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
+            DT,
+        )))
         .add_plugins(nat_han_adventures::gameplay)
         .insert_resource(Levels(vec![level.clone()]))
         .insert_resource(AssistMode::Manual)
         .init_resource::<Deaths>()
-        .add_systems(Last, |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| {
-            for e in r.read() {
-                if std::env::var("HAN_TRACE").is_ok() {
-                    eprintln!("died: {e:?}");
+        .add_systems(
+            Last,
+            |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| {
+                for e in r.read() {
+                    if std::env::var("HAN_TRACE").is_ok() {
+                        eprintln!("died: {e:?}");
+                    }
+                    d.0 += 1;
                 }
-                d.0 += 1;
-            }
-        });
+            },
+        );
     app.finish();
     app.cleanup();
     app.update();
-    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
+    app.world_mut()
+        .resource_mut::<NextState<AppState>>()
+        .set(AppState::Playing);
     app.update();
     app.update();
     app
 }
 
 fn single<C: Component>(app: &mut App) -> Entity {
-    app.world_mut().query_filtered::<Entity, With<C>>().single(app.world()).unwrap()
+    app.world_mut()
+        .query_filtered::<Entity, With<C>>()
+        .single(app.world())
+        .unwrap()
 }
 
 fn pos<C: Component>(app: &mut App) -> Vec2 {
@@ -86,14 +96,20 @@ fn wait_for_han(app: &mut App, what: &str) {
     for _ in 0..(20.0 / DT) as usize {
         app.update();
         let (n, h) = (pos::<Player>(app), pos::<Han>(app));
-        if (n - h).length() < 3.0 * TILE && body::<Han>(app).on_ground && body::<Han>(app).vel.x.abs() < 1.0 {
+        if (n - h).length() < 3.0 * TILE
+            && body::<Han>(app).on_ground
+            && body::<Han>(app).vel.x.abs() < 1.0
+        {
             step(app, 0.3);
             return;
         }
     }
     let h = single::<Han>(app);
     let at = pos::<Han>(app);
-    panic!("{what}: Han never came: {:?} at {at}", app.world().get::<HanBrain>(h).unwrap().mode);
+    panic!(
+        "{what}: Han never came: {:?} at {at}",
+        app.world().get::<HanBrain>(h).unwrap().mode
+    );
 }
 
 fn deaths(app: &App) -> usize {
@@ -111,7 +127,12 @@ fn marks(topic: Topic) -> Vec<(String, Level, GateMark)> {
         .enumerate()
         .flat_map(|(i, s)| {
             let level = Level::parse(s).unwrap();
-            level.gates.iter().filter(|g| g.topic == topic).map(|&g| (format!("level {}", i + 1), level.clone(), g)).collect::<Vec<_>>()
+            level
+                .gates
+                .iter()
+                .filter(|g| g.topic == topic)
+                .map(|&g| (format!("level {}", i + 1), level.clone(), g))
+                .collect::<Vec<_>>()
         })
         .collect()
 }
@@ -122,17 +143,46 @@ fn room_marks(template: &str, topic: Topic) -> Vec<(String, Level, GateMark)> {
     use nat_han_adventures::adapt::{AssistLevers, RoomRequest};
     use nat_han_adventures::freeplay::generate::{RoomPlan, generate};
     use nat_han_adventures::freeplay::templates::TEMPLATES;
-    let ti = TEMPLATES.iter().position(|t| t.name == template).expect("a template");
+    let ti = TEMPLATES
+        .iter()
+        .position(|t| t.name == template)
+        .expect("a template");
     let mut out = Vec::new();
     for band in [1, 5, 10] {
         for seed in [11, 12] {
-            let request = RoomRequest { skill: TEMPLATES[ti].skill, band, assists: AssistLevers::NONE };
-            let plan = RoomPlan { template: ti, hint: false, ..RoomPlan::new(seed, 1, request, 2, true, false, 10) };
+            let request = RoomRequest {
+                skill: TEMPLATES[ti].skill,
+                band,
+                assists: AssistLevers::NONE,
+            };
+            let plan = RoomPlan {
+                template: ti,
+                hint: false,
+                ..RoomPlan::new(seed, 1, request, 2, true, false, 10)
+            };
             let room = generate(seed, plan);
-            assert!(!room.fallback, "{template} band {band} seed {seed}: fell back");
-            let ms: Vec<GateMark> = room.level.gates.iter().copied().filter(|g| g.topic == topic).collect();
-            assert!(!ms.is_empty(), "{template} band {band} seed {seed}: no {topic:?} mark");
-            out.extend(ms.into_iter().map(|m| (format!("{template} band {band} seed {seed}"), room.level.clone(), m)));
+            assert!(
+                !room.fallback,
+                "{template} band {band} seed {seed}: fell back"
+            );
+            let ms: Vec<GateMark> = room
+                .level
+                .gates
+                .iter()
+                .copied()
+                .filter(|g| g.topic == topic)
+                .collect();
+            assert!(
+                !ms.is_empty(),
+                "{template} band {band} seed {seed}: no {topic:?} mark"
+            );
+            out.extend(ms.into_iter().map(|m| {
+                (
+                    format!("{template} band {band} seed {seed}"),
+                    room.level.clone(),
+                    m,
+                )
+            }));
         }
     }
     out
@@ -147,7 +197,10 @@ fn mega_walls_in_the_campaign() {
     }
     // Without Giant Steps it's his weak boost there: no way up.
     let (what, level, m) = &ms[0];
-    assert!(!play_mega(what, level, *m, false), "{what}: on top without Giant Steps");
+    assert!(
+        !play_mega(what, level, *m, false),
+        "{what}: on top without Giant Steps"
+    );
 }
 
 #[test]
@@ -161,20 +214,32 @@ fn free_play_mega_walls() {
 fn play_mega(what: &str, level: &Level, m: GateMark, giant_steps: bool) -> bool {
     let mut app = app(level);
     if giant_steps {
-        app.world_mut().insert_resource(Groove::of(nat_han_adventures::audio::Harmony::Coltrane));
+        app.world_mut()
+            .insert_resource(Groove::of(nat_han_adventures::audio::Harmony::Coltrane));
     }
     // The mesa: the first column in the mark solid at Nat's height.
     let r = m.r1;
-    let face = (m.c0..=m.c1).find(|&c| level.tile(c, r).is_solid()).expect("a wall face");
-    let height = (0..).take_while(|k| level.tile(face, r - k).is_solid()).count() as i32;
-    assert!(height >= 11, "{what}: a mega wall is 11+ tall, not {height}");
+    let face = (m.c0..=m.c1)
+        .find(|&c| level.tile(c, r).is_solid())
+        .expect("a wall face");
+    let height = (0..)
+        .take_while(|k| level.tile(face, r - k).is_solid())
+        .count() as i32;
+    assert!(
+        height >= 11,
+        "{what}: a mega wall is 11+ tall, not {height}"
+    );
     put::<Player>(&mut app, stand(level, face - 2, r));
     wait_for_han(&mut app, what);
     // Hop onto Han's head (he's in his slot behind), and mega-boost, toot near the top.
     let h = pos::<Han>(&mut app);
     put::<Player>(&mut app, h + Vec2::new(0.0, 1.5 * TILE));
     step(&mut app, 0.4);
-    assert_eq!(body::<Player>(&mut app).riding, Some(single::<Han>(&mut app)), "{what}: on Han");
+    assert_eq!(
+        body::<Player>(&mut app).riding,
+        Some(single::<Han>(&mut app)),
+        "{what}: on Han"
+    );
     RIGHT.press(app.world_mut());
     tap(&mut app);
     step(&mut app, 0.6);
@@ -200,17 +265,26 @@ fn cling_shafts_in_the_campaign() {
     let ms = marks(Topic::Shaft);
     assert!(!ms.is_empty());
     for (what, level, m) in &ms {
-        assert!(play_shaft(what, level, *m, true), "{what}: not up the shaft");
+        assert!(
+            play_shaft(what, level, *m, true),
+            "{what}: not up the shaft"
+        );
     }
     // The band not nervous, he doesn't cling: no way up.
     let (what, level, m) = &ms[0];
-    assert!(!play_shaft(what, level, *m, false), "{what}: up the shaft without grip");
+    assert!(
+        !play_shaft(what, level, *m, false),
+        "{what}: up the shaft without grip"
+    );
 }
 
 #[test]
 fn free_play_cling_shafts() {
     for (what, level, m) in room_marks("cling shaft", Topic::Shaft) {
-        assert!(play_shaft(&what, &level, m, true), "{what}: not up the shaft");
+        assert!(
+            play_shaft(&what, &level, m, true),
+            "{what}: not up the shaft"
+        );
     }
 }
 
@@ -218,10 +292,15 @@ fn free_play_cling_shafts() {
 /// and kick off it, toot at the top: up out of the shaft?
 fn play_shaft(what: &str, level: &Level, m: GateMark, grip: bool) -> bool {
     let mut app = app(level);
-    app.world_mut().insert_resource(Groove { nervous: grip, ..Groove::default() });
+    app.world_mut().insert_resource(Groove {
+        nervous: grip,
+        ..Groove::default()
+    });
     // The shaft's floor: the first open column of the mark at its bottom row.
     let r = m.r1;
-    let c = (m.c0..=m.c1).find(|&c| !level.tile(c, r).is_solid() && level.tile(c, r + 1).is_solid()).expect("a shaft floor");
+    let c = (m.c0..=m.c1)
+        .find(|&c| !level.tile(c, r).is_solid() && level.tile(c, r + 1).is_solid())
+        .expect("a shaft floor");
     put::<Player>(&mut app, stand(level, c + 1, r));
     let han = single::<Han>(&mut app);
     let mut kick = 0.0;
@@ -235,7 +314,11 @@ fn play_shaft(what: &str, level: &Level, m: GateMark, grip: bool) -> bool {
         }
     }
     if kick == 0.0 {
-        assert!(!grip, "{what}: Han never clung: {:?}", app.world().get::<HanBrain>(han).unwrap().mode);
+        assert!(
+            !grip,
+            "{what}: Han never clung: {:?}",
+            app.world().get::<HanBrain>(han).unwrap().mode
+        );
         return false;
     }
     let floor = pos::<Player>(&mut app).y;
@@ -248,7 +331,10 @@ fn play_shaft(what: &str, level: &Level, m: GateMark, grip: bool) -> bool {
     tap(&mut app);
     step(&mut app, 0.33); // the toot near the top
     let mode = app.world().get::<HanBrain>(han).unwrap().mode;
-    assert!(!matches!(mode, HanMode::Cling { .. }), "{what}: kicked off, he lets go: {mode:?}");
+    assert!(
+        !matches!(mode, HanMode::Cling { .. }),
+        "{what}: kicked off, he lets go: {mode:?}"
+    );
     tap(&mut app);
     // Let go once landed up top (a narrow top is easy to overshoot).
     for _ in 0..(1.5 / DT) as usize {
@@ -273,7 +359,10 @@ fn trapezes_in_the_campaign() {
     }
     // Out of the waltz he doesn't swing: no way across.
     let (what, level, m) = &ms[0];
-    assert!(!play_trapeze(what, level, *m, false), "{what}: across without the waltz");
+    assert!(
+        !play_trapeze(what, level, *m, false),
+        "{what}: across without the waltz"
+    );
 }
 
 #[test]
@@ -298,14 +387,20 @@ fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
     let mut tick = |app: &mut App| {
         if waltz {
             let beats = frame as f64 * DT / secs;
-            app.world_mut().insert_resource(Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3)));
+            app.world_mut()
+                .insert_resource(Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3)));
         }
         frame += 1;
         app.update();
     };
     put::<Player>(&mut app, stand(level, lip - dir, m.r1));
     let han = single::<Han>(&mut app);
-    let on = |app: &App| matches!(app.world().get::<HanBrain>(han).unwrap().mode, HanMode::Trapeze { on: true, .. });
+    let on = |app: &App| {
+        matches!(
+            app.world().get::<HanBrain>(han).unwrap().mode,
+            HanMode::Trapeze { on: true, .. }
+        )
+    };
     for _ in 0..(20.0 / DT) as usize {
         tick(&mut app);
         if on(&app) {
@@ -313,7 +408,11 @@ fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
         }
     }
     if !on(&app) {
-        assert!(!waltz, "{what}: Han never got on the trapeze: {:?}", app.world().get::<HanBrain>(han).unwrap().mode);
+        assert!(
+            !waltz,
+            "{what}: Han never got on the trapeze: {:?}",
+            app.world().get::<HanBrain>(han).unwrap().mode
+        );
         return false;
     }
     let bar = |app: &App| {
@@ -325,7 +424,10 @@ fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
         tick(&mut app);
     }
     let h = pos::<Han>(&mut app);
-    put::<Player>(&mut app, h + Vec2::new(0.0, nat_han_adventures::game::tuning::PLAYER_SIZE.1 + 0.5));
+    put::<Player>(
+        &mut app,
+        h + Vec2::new(0.0, nat_han_adventures::game::tuning::PLAYER_SIZE.1 + 0.5),
+    );
     for _ in 0..4 {
         tick(&mut app);
     }
@@ -347,7 +449,9 @@ fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
     let far = level.tile_center((m.c1 - 1) as usize, 0).x;
     for _ in 0..(2.0 / DT) as usize {
         tick(&mut app);
-        if body::<Player>(&mut app).on_ground && (pos::<Player>(&mut app).x - far) * dir as f32 > -2.0 * TILE {
+        if body::<Player>(&mut app).on_ground
+            && (pos::<Player>(&mut app).x - far) * dir as f32 > -2.0 * TILE
+        {
             break;
         }
     }
@@ -357,7 +461,8 @@ fn play_trapeze(what: &str, level: &Level, m: GateMark, waltz: bool) -> bool {
     }
     let p = pos::<Player>(&mut app);
     assert_eq!(deaths(&app), 0, "{what}: {p}");
-    body::<Player>(&mut app).on_ground && (p.x - level.tile_center(lip as usize, 0).x) * dir as f32 > 10.0 * TILE
+    body::<Player>(&mut app).on_ground
+        && (p.x - level.tile_center(lip as usize, 0).x) * dir as f32 > 10.0 * TILE
 }
 
 #[test]
@@ -392,10 +497,16 @@ fn play_chasm(what: &str, level: &Level, m: GateMark) {
 
 fn throw_try(what: &str, level: &Level, m: GateMark, toot: f32) -> Result<(), String> {
     let mut app = app(level);
-    app.world_mut().insert_resource(Groove::of(nat_han_adventures::audio::Harmony::Quartal));
+    app.world_mut()
+        .insert_resource(Groove::of(nat_han_adventures::audio::Harmony::Quartal));
     // The walk row: the first row of the mark with floor under it.
-    let r = (m.r0..=m.r1).find(|&r| (m.c0..=m.c1).any(|c| level.tile(c, r + 1).is_solid())).expect("a floor");
-    let edge = (m.c0..=m.c1).find(|&c| !level.tile(c, r + 1).is_solid()).expect("a chasm") - 1;
+    let r = (m.r0..=m.r1)
+        .find(|&r| (m.c0..=m.c1).any(|c| level.tile(c, r + 1).is_solid()))
+        .expect("a floor");
+    let edge = (m.c0..=m.c1)
+        .find(|&c| !level.tile(c, r + 1).is_solid())
+        .expect("a chasm")
+        - 1;
     put::<Player>(&mut app, stand(level, edge - 3, r));
     wait_for_han(&mut app, what);
     RIGHT.press(app.world_mut());
@@ -421,7 +532,13 @@ fn throw_try(what: &str, level: &Level, m: GateMark, toot: f32) -> Result<(), St
             }
             if std::env::var("HAN_TRACE").is_ok() {
                 let mode = app.world().get::<HanBrain>(han).unwrap().mode;
-                eprintln!("k={k} i={i} nat {} {} han {} {} {mode:?}", pos::<Player>(&mut app), body::<Player>(&mut app).vel, pos::<Han>(&mut app), body::<Han>(&mut app).vel);
+                eprintln!(
+                    "k={k} i={i} nat {} {} han {} {} {mode:?}",
+                    pos::<Player>(&mut app),
+                    body::<Player>(&mut app).vel,
+                    pos::<Han>(&mut app),
+                    body::<Han>(&mut app).vel
+                );
             }
             let b = body::<Player>(&mut app);
             if b.riding == Some(han) {
@@ -439,7 +556,11 @@ fn throw_try(what: &str, level: &Level, m: GateMark, toot: f32) -> Result<(), St
         step(&mut app, 0.3);
     }
     if !on {
-        return Err(format!("never got onto Han (Nat at {}, Han at {})", pos::<Player>(&mut app), pos::<Han>(&mut app)));
+        return Err(format!(
+            "never got onto Han (Nat at {}, Han at {})",
+            pos::<Player>(&mut app),
+            pos::<Han>(&mut app)
+        ));
     }
     step(&mut app, 0.2);
     RIGHT.press(app.world_mut());
@@ -483,9 +604,15 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
     let mut app = app(level);
     // The walk row: the first row of the mark with sewage under it.
     let liquid = |c: i32, r: i32| level.tile(c, r) == nat_han_adventures::level::Tile::Liquid;
-    let r = (m.r0..=m.r1).find(|&r| (m.c0..=m.c1).any(|c| liquid(c, r + 1) && !liquid(c, r))).expect("a pool");
-    let shore = (m.c0..=m.c1).find(|&c| level.tile(c + 1, r + 1) == nat_han_adventures::level::Tile::Liquid).unwrap();
-    let far = (shore + 1..).find(|&c| level.tile(c, r + 1) != nat_han_adventures::level::Tile::Liquid).unwrap();
+    let r = (m.r0..=m.r1)
+        .find(|&r| (m.c0..=m.c1).any(|c| liquid(c, r + 1) && !liquid(c, r)))
+        .expect("a pool");
+    let shore = (m.c0..=m.c1)
+        .find(|&c| level.tile(c + 1, r + 1) == nat_han_adventures::level::Tile::Liquid)
+        .unwrap();
+    let far = (shore + 1..)
+        .find(|&c| level.tile(c, r + 1) != nat_han_adventures::level::Tile::Liquid)
+        .unwrap();
     put::<Player>(&mut app, stand(level, shore - 2, r));
     wait_for_han(&mut app, what);
     // Run up to the edge: Han cannonballs in.
@@ -500,7 +627,11 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
     let mut float = None;
     for _ in 0..(4.0 / DT) as usize {
         app.update();
-        float = app.world_mut().query_filtered::<Entity, With<HanFloat>>().iter(app.world()).next();
+        float = app
+            .world_mut()
+            .query_filtered::<Entity, With<HanFloat>>()
+            .iter(app.world())
+            .next();
         if float.is_some() {
             break;
         }
@@ -519,8 +650,18 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
             break;
         }
     }
-    let fp = app.world_mut().query::<(&HanFloat, &Pos)>().iter(app.world()).next().map(|(f, p)| (*f, p.0));
-    assert!(aboard, "{what}: never got aboard (Nat at {}, shore {shore} row {r}, float {fp:?}, deaths {})", pos::<Player>(&mut app), deaths(&app));
+    let fp = app
+        .world_mut()
+        .query::<(&HanFloat, &Pos)>()
+        .iter(app.world())
+        .next()
+        .map(|(f, p)| (*f, p.0));
+    assert!(
+        aboard,
+        "{what}: never got aboard (Nat at {}, shore {shore} row {r}, float {fp:?}, deaths {})",
+        pos::<Player>(&mut app),
+        deaths(&app)
+    );
     JUMP.release(app.world_mut());
     // Paddle across, teeny-hopping the floating spikes, and hop off at the far bank.
     for _ in 0..(20.0 / DT) as usize {
@@ -528,8 +669,19 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
         let p = pos::<Player>(&mut app);
         let b = body::<Player>(&mut app);
         if std::env::var("HAN_TRACE").is_ok() {
-            let fp = app.world_mut().query::<(&HanFloat, &Pos)>().iter(app.world()).next().map(|(f, p)| (f.vel, p.0));
-            eprintln!("{what}: nat {p} v{} g{} riding {:?} deaths {} float {fp:?}", b.vel, b.on_ground as u8, b.riding.is_some(), deaths(&app));
+            let fp = app
+                .world_mut()
+                .query::<(&HanFloat, &Pos)>()
+                .iter(app.world())
+                .next()
+                .map(|(f, p)| (f.vel, p.0));
+            eprintln!(
+                "{what}: nat {p} v{} g{} riding {:?} deaths {} float {fp:?}",
+                b.vel,
+                b.on_ground as u8,
+                b.riding.is_some(),
+                deaths(&app)
+            );
         }
         if deaths(&app) > 0 || (p.x > (far as f32 + 0.5) * TILE && b.on_ground) {
             break;
@@ -557,5 +709,8 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
     }
     let p = pos::<Player>(&mut app);
     assert_eq!(deaths(&app), 0, "{what}: sank at {p}");
-    assert!(p.x > (far as f32 + 0.5) * TILE, "{what}: across at {p} (far shore col {far})");
+    assert!(
+        p.x > (far as f32 + 0.5) * TILE,
+        "{what}: across at {p} (far shore col {far})"
+    );
 }

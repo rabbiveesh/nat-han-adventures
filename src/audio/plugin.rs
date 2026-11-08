@@ -35,10 +35,11 @@ use kira::{AudioManager, AudioManagerSettings, Decibels, DefaultBackend, Playbac
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 
-use crate::game::sideb::SetCall;
 use crate::events::{
-    BandFreedom, CallBand, CheckpointReached, EncoreCue, FinalHit, HanSays, Jumped, Landed, LevelCompleted, NuggetCollected, PlaySfx, PlayerDied,
+    BandFreedom, CallBand, CheckpointReached, EncoreCue, FinalHit, HanSays, Jumped, Landed,
+    LevelCompleted, NuggetCollected, PlaySfx, PlayerDied,
 };
+use crate::game::sideb::SetCall;
 use crate::game::{self, GeneratedLevel, Groove, LevelRun, RestartLevel};
 use crate::level::{Level, Levels};
 use crate::state::{AppState, CurrentLevel, PlayState};
@@ -68,7 +69,21 @@ pub fn plugin(app: &mut App) {
         .init_resource::<SfxRng>()
         .insert_resource(MusicOverride(music_override()))
         .add_systems(Startup, setup)
-        .add_systems(Update, (side_b_rewind, follow_state, forward, direct, encore_band, shout_band, duck, play_sfx, babble).chain())
+        .add_systems(
+            Update,
+            (
+                side_b_rewind,
+                follow_state,
+                forward,
+                direct,
+                encore_band,
+                shout_band,
+                duck,
+                play_sfx,
+                babble,
+            )
+                .chain(),
+        )
         .add_systems(PostUpdate, (pump, sync).chain());
 }
 
@@ -104,7 +119,9 @@ fn music_override() -> Option<Filters> {
         let v = std::env::var("NATHAN_MUSIC").ok()?;
         let f = Filters::parse(&v);
         if f.is_none() {
-            warn!("NATHAN_MUSIC={v:?} not understood (try coltrane, quartal, melodic, waltz, original, +ji)");
+            warn!(
+                "NATHAN_MUSIC={v:?} not understood (try coltrane, quartal, melodic, waltz, original, +ji)"
+            );
         }
         f
     }
@@ -113,10 +130,16 @@ fn music_override() -> Option<Filters> {
 }
 
 /// The world of the level being played: free play's generated level, else the story level.
-pub fn playing_world(levels: Option<&Levels>, current: CurrentLevel, generated: Option<&GeneratedLevel>) -> u8 {
+pub fn playing_world(
+    levels: Option<&Levels>,
+    current: CurrentLevel,
+    generated: Option<&GeneratedLevel>,
+) -> u8 {
     match generated {
         Some(g) => g.0.world,
-        None => levels.and_then(|l| l.0.get(current.0)).map_or(1, |l| l.world),
+        None => levels
+            .and_then(|l| l.0.get(current.0))
+            .map_or(1, |l| l.world),
     }
 }
 
@@ -160,7 +183,14 @@ pub struct NowPlaying {
 
 impl Default for NowPlaying {
     fn default() -> Self {
-        NowPlaying { music: Music::Title, title: "", filters: Filters::default(), reason: "", tuning_now: None, band_now: "" }
+        NowPlaying {
+            music: Music::Title,
+            title: "",
+            filters: Filters::default(),
+            reason: "",
+            tuning_now: None,
+            band_now: "",
+        }
     }
 }
 
@@ -316,23 +346,40 @@ impl Audio {
 
 /// Rendered frames as a kira static sound.
 fn to_static(r: synth::Rendered) -> StaticSoundData {
-    StaticSoundData { sample_rate: r.sample_rate, frames: r.frames.into_iter().map(Into::into).collect(), settings: StaticSoundSettings::new(), slice: None }
+    StaticSoundData {
+        sample_rate: r.sample_rate,
+        frames: r.frames.into_iter().map(Into::into).collect(),
+        settings: StaticSoundSettings::new(),
+        slice: None,
+    }
 }
 
 fn setup(world: &mut World) {
     let started = bevy::platform::time::Instant::now();
     let output = *world.resource::<AudioOutput>();
-    let sfx = Sfx::ALL.into_iter().map(|s| (s, to_static(sfx::render(s)))).collect();
-    let han = (0..sfx::HAN_VARIANTS).map(|v| to_static(sfx::han_blip(v))).collect();
+    let sfx = Sfx::ALL
+        .into_iter()
+        .map(|s| (s, to_static(sfx::render(s))))
+        .collect();
+    let han = (0..sfx::HAN_VARIANTS)
+        .map(|v| to_static(sfx::han_blip(v)))
+        .collect();
     let data = LiveSoundData::new();
     #[cfg(feature = "capture")]
     if world.contains_resource::<super::capture::AudioCapture>() {
         // Capturing: the device path's mix, pulled a frame at a time; Han's babble seeded.
-        let mut manager = AudioManager::<super::capture::CaptureBackend>::new(AudioManagerSettings::default())
-            .expect("the capture backend never fails");
+        let mut manager =
+            AudioManager::<super::capture::CaptureBackend>::new(AudioManagerSettings::default())
+                .expect("the capture backend never fails");
         let handle = manager.play(data).ok();
         world.insert_resource(SfxRng(StdRng::seed_from_u64(0x7007)));
-        world.insert_non_send(Audio { manager: Some(Manager::Capture(manager)), headless: None, handle, sfx, han });
+        world.insert_non_send(Audio {
+            manager: Some(Manager::Capture(manager)),
+            headless: None,
+            handle,
+            sfx,
+            han,
+        });
         return;
     }
     let (manager, headless, handle) = match output {
@@ -340,28 +387,46 @@ fn setup(world: &mut World) {
             let (sound, handle) = data.split();
             (None, Some(sound), Some(handle))
         }
-        AudioOutput::Device => match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
-            Ok(mut manager) => {
-                let handle = manager.play(data).ok();
-                (Some(Manager::Device(manager)), None, handle)
+        AudioOutput::Device => {
+            match AudioManager::<DefaultBackend>::new(AudioManagerSettings::default()) {
+                Ok(mut manager) => {
+                    let handle = manager.play(data).ok();
+                    (Some(Manager::Device(manager)), None, handle)
+                }
+                Err(e) => {
+                    warn!("no audio output ({e:?}): playing silently");
+                    (None, None, None)
+                }
             }
-            Err(e) => {
-                warn!("no audio output ({e:?}): playing silently");
-                (None, None, None)
-            }
-        },
+        }
     };
-    world.insert_non_send(Audio { manager, headless, handle, sfx, han });
-    debug!("audio startup: {:.0}ms", started.elapsed().as_secs_f32() * 1000.0);
+    world.insert_non_send(Audio {
+        manager,
+        headless,
+        handle,
+        sfx,
+        han,
+    });
+    debug!(
+        "audio startup: {:.0}ms",
+        started.elapsed().as_secs_f32() * 1000.0
+    );
 }
 
 /// A fresh engine for a piece, its title, and the filters it starts with (the override, if
 /// the song can take it). `strict`: the tempo doesn't drift (the players still sit off the
 /// grid), for worlds whose play is timed to the written beat ([`strict_tempo`]).
-fn start_engine(music: Music, overrides: &MusicOverride, strict: bool) -> Result<(Engine, &'static str, Filters), String> {
+fn start_engine(
+    music: Music,
+    overrides: &MusicOverride,
+    strict: bool,
+) -> Result<(Engine, &'static str, Filters), String> {
     let (title, file) = library::song(music)?;
     // A level's tune starts with an intro (when the band's loose enough: see `chorus`).
-    let mut config = EngineConfig { intro: matches!(music, Music::World(_) | Music::SideB(_)), ..EngineConfig::default() };
+    let mut config = EngineConfig {
+        intro: matches!(music, Music::World(_) | Music::SideB(_)),
+        ..EngineConfig::default()
+    };
     if strict {
         config.drift_bpm = 0.0;
     }
@@ -383,7 +448,9 @@ fn side_b_rewind(
     mut restart: MessageReader<RestartLevel>,
     mut player: ResMut<LivePlayer>,
 ) {
-    let room_starts = side.as_ref().is_some_and(|s| s.is_added() && s.room.is_some());
+    let room_starts = side
+        .as_ref()
+        .is_some_and(|s| s.is_added() && s.room.is_some());
     if (restart.read().count() > 0 && side.is_some()) || room_starts {
         player.music = None;
     }
@@ -405,7 +472,10 @@ fn follow_state(
 ) {
     let world = playing_world(levels.as_deref(), *current_level, generated.as_deref());
     // Side B (and a free play Side B room, while Han has it) plays its own tunes.
-    let level = generated.as_deref().map(|g| &g.0).or_else(|| levels.as_deref().and_then(|l| l.0.get(current_level.0)));
+    let level = generated
+        .as_deref()
+        .map(|g| &g.0)
+        .or_else(|| levels.as_deref().and_then(|l| l.0.get(current_level.0)));
     let strict = strict_tempo(side.is_some(), level);
     let want = match (desired_music(*state.get(), world), side) {
         (Music::World(_), Some(s)) => s.tune(),
@@ -429,7 +499,8 @@ fn follow_state(
     engine.post(Input::SetFilters(filters));
     // The band plays the levels' tunes, and the level-clear jingle (a Basie ending on it,
     // if it's loose).
-    if let (Music::World(_) | Music::SideB(_) | Music::LevelClear, Some(f)) = (want, player.freedom) {
+    if let (Music::World(_) | Music::SideB(_) | Music::LevelClear, Some(f)) = (want, player.freedom)
+    {
         engine.post(set_freedom(f));
     }
     // The fanfare cuts in quickly; everything else crossfades.
@@ -440,8 +511,19 @@ fn follow_state(
     if let Some(h) = audio.handle.as_mut() {
         h.play(engine, fade_in, fade_out);
     }
-    let reason = if overrides.0.is_some() && filters != Filters::default() { "NATHAN_MUSIC" } else { "" };
-    *now_playing = NowPlaying { music: want, title, filters, reason, tuning_now: None, band_now: "" };
+    let reason = if overrides.0.is_some() && filters != Filters::default() {
+        "NATHAN_MUSIC"
+    } else {
+        ""
+    };
+    *now_playing = NowPlaying {
+        music: want,
+        title,
+        filters,
+        reason,
+        tuning_now: None,
+        band_now: "",
+    };
     // The physics follow the music the moment it starts.
     if let Some(g) = groove.as_deref_mut() {
         set_groove(g, filters);
@@ -451,14 +533,26 @@ fn follow_state(
 
 /// The physics that go with `filters` (the clock carries on: [`sync`] sets it).
 fn set_groove(g: &mut Groove, filters: Filters) {
-    let new = Groove { nervous: g.nervous, ..Groove::new(filters) };
+    let new = Groove {
+        nervous: g.nervous,
+        ..Groove::new(filters)
+    };
     if *g != new {
-        *g = Groove { clock: g.clock, ..new };
+        *g = Groove {
+            clock: g.clock,
+            ..new
+        };
     }
 }
 
 fn set_freedom(f: BandFreedom) -> Input {
-    Input::SetFreedom { lead: f.lead, comp: f.comp, bass: f.bass, drums: f.drums, dynamics: f.dynamics }
+    Input::SetFreedom {
+        lead: f.lead,
+        comp: f.comp,
+        bass: f.bass,
+        drums: f.drums,
+        dynamics: f.dynamics,
+    }
 }
 
 /// Every gameplay message, as an input.
@@ -475,10 +569,19 @@ fn forward(
     mut restart: MessageReader<RestartLevel>,
 ) {
     let mut inputs = Vec::new();
-    inputs.extend(jumped.read().map(|j| if j.double { Input::Toot } else { Input::Jump { on_ground: true } }));
+    inputs.extend(jumped.read().map(|j| {
+        if j.double {
+            Input::Toot
+        } else {
+            Input::Jump { on_ground: true }
+        }
+    }));
     inputs.extend(landed.read().map(|l| Input::Land { speed: l.speed }));
     inputs.extend(nuggets.read().map(|_| Input::Nugget));
-    inputs.extend(died.read().map(|d| if d.slip { Input::Slip } else { Input::Death }));
+    inputs.extend(
+        died.read()
+            .map(|d| if d.slip { Input::Slip } else { Input::Death }),
+    );
     inputs.extend(checkpoints.read().map(|_| Input::Checkpoint));
     inputs.extend(restart.read().map(|_| Input::Restart));
     if let Some(f) = freedom.read().last().copied() {
@@ -593,9 +696,13 @@ fn direct(
     if let Some(dec) = decided {
         player.decided = Some(dec);
     }
-    let Some(h) = audio.handle.as_mut() else { return };
+    let Some(h) = audio.handle.as_mut() else {
+        return;
+    };
     if melt_changed {
-        h.post(Input::ForceTuning(melting.then_some(crate::audio::tuning::Tuning::CarlosAlpha)));
+        h.post(Input::ForceTuning(
+            melting.then_some(crate::audio::tuning::Tuning::CarlosAlpha),
+        ));
     }
     if level_start {
         h.post(Input::LevelStart);
@@ -623,8 +730,17 @@ fn encore_band(mut cues: MessageReader<EncoreCue>, mut audio: NonSendMut<Audio>)
     for cue in cues.read() {
         match cue {
             EncoreCue::Start => {
-                h.post(Input::SetFreedom { lead: 1.0, comp: 1.0, bass: 1.0, drums: 1.0, dynamics: 1.0 });
-                h.post(Input::ForceChorus(Some(Call { chorus: Chorus::Shout, key_up: true })));
+                h.post(Input::SetFreedom {
+                    lead: 1.0,
+                    comp: 1.0,
+                    bass: 1.0,
+                    drums: 1.0,
+                    dynamics: 1.0,
+                });
+                h.post(Input::ForceChorus(Some(Call {
+                    chorus: Chorus::Shout,
+                    key_up: true,
+                })));
             }
             EncoreCue::End => {
                 h.post(Input::EndWith(EndKind::Basie));
@@ -640,14 +756,20 @@ fn encore_band(mut cues: MessageReader<EncoreCue>, mut audio: NonSendMut<Audio>)
 }
 
 /// A level's closing stretch (`shout:`, `game::secret`): shout choruses from the next bar.
-fn shout_band(mut shouts: MessageReader<crate::game::secret::ShoutChorus>, mut audio: NonSendMut<Audio>) {
+fn shout_band(
+    mut shouts: MessageReader<crate::game::secret::ShoutChorus>,
+    mut audio: NonSendMut<Audio>,
+) {
     use super::live::chorus::{Call, Chorus};
     let Some(h) = audio.handle.as_mut() else {
         shouts.clear();
         return;
     };
     for s in shouts.read() {
-        h.post(Input::ForceChorus(s.0.then_some(Call { chorus: Chorus::Shout, key_up: false })));
+        h.post(Input::ForceChorus(s.0.then_some(Call {
+            chorus: Chorus::Shout,
+            key_up: false,
+        })));
     }
 }
 
@@ -665,8 +787,14 @@ fn duck(
     if player.ducked == Some(duck) {
         return;
     }
-    let Some(h) = audio.handle.as_mut() else { return };
-    let db = if duck { MUSIC_DB + PAUSE_DUCK_DB } else { MUSIC_DB };
+    let Some(h) = audio.handle.as_mut() else {
+        return;
+    };
+    let db = if duck {
+        MUSIC_DB + PAUSE_DUCK_DB
+    } else {
+        MUSIC_DB
+    };
     if h.set_volume_db(db, 0.2) {
         player.ducked = Some(duck);
     }
@@ -688,7 +816,9 @@ fn pump(
         return;
     }
     const RATE: f64 = 48_000.0;
-    let Some(sound) = audio.headless.as_mut() else { return };
+    let Some(sound) = audio.headless.as_mut() else {
+        return;
+    };
     let n = ((time.delta_secs_f64() * RATE).round() as usize).min(48_000);
     let info = kira::info::MockInfoBuilder::new().build();
     let mut buf = [kira::Frame::ZERO; 128];
@@ -714,7 +844,9 @@ fn sync(
     mut final_hit: MessageWriter<FinalHit>,
     mut was_final: Local<bool>,
 ) {
-    let Some(h) = audio.handle.as_ref() else { return };
+    let Some(h) = audio.handle.as_ref() else {
+        return;
+    };
     let p = h.published();
     // An ending's last chord (the encore knocks Nat over on it).
     let is_final = p.playing && p.state.end_step == Some(super::live::chorus::EndStep::Final);
@@ -730,8 +862,13 @@ fn sync(
         return;
     }
     // (A medley tuning held on its own, Side B's melting, is the laughing band too.)
-    let held_phrase = crate::audio::tuning::MEDLEY_TUNINGS.contains(&p.state.tuning).then_some(p.state.tuning);
-    let filters = Filters { harmony: p.state.harmony, just_intonation: p.state.tuning == Tuning::Medley || held_phrase.is_some() };
+    let held_phrase = crate::audio::tuning::MEDLEY_TUNINGS
+        .contains(&p.state.tuning)
+        .then_some(p.state.tuning);
+    let filters = Filters {
+        harmony: p.state.harmony,
+        just_intonation: p.state.tuning == Tuning::Medley || held_phrase.is_some(),
+    };
     // The clock as heard: the engine is `ahead_secs` ahead of the output, and time has passed
     // since it published (on the web, the browser says how far off the last sample it was
     // handed is: [`web_output_lead`]), and the player's speakers may lag more than the
@@ -745,7 +882,13 @@ fn sync(
     } - delay;
     let c = &p.clock;
     // (The written tempo: the playing one drifts bar by bar.)
-    let shape = (c.written_bpm, c.beats_per_bar, c.loop_beats, filters, p.state.tuning);
+    let shape = (
+        c.written_bpm,
+        c.beats_per_bar,
+        c.loop_beats,
+        filters,
+        p.state.tuning,
+    );
     let bar = c.position.bar;
     let first_bar = match player.shape {
         Some((s, first)) if s == shape && first <= bar => first,
@@ -753,11 +896,20 @@ fn sync(
     };
     player.shape = Some((shape, first_bar));
     if dt < 0.0 {
-        let back_beats = c.position.beat + if bar > first_bar { c.beats_per_bar } else { 0.0 };
+        let back_beats = c.position.beat
+            + if bar > first_bar {
+                c.beats_per_bar
+            } else {
+                0.0
+            };
         dt = dt.max(-back_beats * 60.0 / c.bpm.max(1.0) as f64);
     }
     let heard = p.clock.advanced(dt);
-    *clock = LiveClock { clock: heard, filters, tuning: p.state.tuning };
+    *clock = LiveClock {
+        clock: heard,
+        filters,
+        tuning: p.state.tuning,
+    };
     let tuning_now = p.state.medley_phrase.or(held_phrase);
     if now_playing.tuning_now != tuning_now {
         now_playing.tuning_now = tuning_now;
@@ -770,7 +922,10 @@ fn sync(
     if player.sounding != Some(sounding) {
         let first = player.sounding.is_none();
         player.sounding = Some(sounding);
-        let reason = player.decided.filter(|(f, _)| *f == filters).map_or("", |(_, r)| r);
+        let reason = player
+            .decided
+            .filter(|(f, _)| *f == filters)
+            .map_or("", |(_, r)| r);
         if now_playing.filters != filters || (!first && now_playing.reason != reason) {
             now_playing.filters = filters;
             now_playing.reason = reason;
@@ -781,8 +936,12 @@ fn sync(
                 // The bar line it came in at (the playhead's bar: this frame or the last).
                 let c = &p.clock;
                 // (In the written tempo's seconds: the playing one drifts.)
-                let secs = c.position.song_bar as f64 * c.beats_per_bar * 60.0 / c.written_bpm as f64;
-                changed.write(MusicChanged { now: now_playing.clone(), at_secs: secs });
+                let secs =
+                    c.position.song_bar as f64 * c.beats_per_bar * 60.0 / c.written_bpm as f64;
+                changed.write(MusicChanged {
+                    now: now_playing.clone(),
+                    at_secs: secs,
+                });
             }
         }
     }
@@ -790,13 +949,21 @@ fn sync(
         // The position is the music's as played; the beat's length the written one (the physics
         // keep one set of numbers while the band drifts around it).
         let beat_secs = 60.0 / heard.written_bpm.max(1.0) as f64;
-        g.clock = game::BeatClock::at(heard.position.song_beat, beat_secs, heard.beats_per_bar.round() as u32);
+        g.clock = game::BeatClock::at(
+            heard.position.song_beat,
+            beat_secs,
+            heard.beats_per_bar.round() as u32,
+        );
         // The laughing band's phrase and its wobble, for the phrase's nudge. The voices'
         // wobble runs on song time fitted to the loop (`Medley::new`): so does this.
         g.phrase = tuning_now;
         g.sway = if tuning_now.is_some() {
             let loop_secs = heard.loop_beats * beat_secs;
-            let wobble = if loop_secs > 0.0 { Wobble::MEDLEY.fitted(loop_secs) } else { Wobble::MEDLEY };
+            let wobble = if loop_secs > 0.0 {
+                Wobble::MEDLEY.fitted(loop_secs)
+            } else {
+                Wobble::MEDLEY
+            };
             (std::f64::consts::TAU * wobble.hz * heard.position.song_beat * beat_secs).sin() as f32
         } else {
             0.0
@@ -816,7 +983,10 @@ fn sync(
 fn web_output_lead() -> Option<f64> {
     use wasm_bindgen::JsCast;
     let w = web_sys::window()?;
-    let f = js_sys::Reflect::get(w.as_ref(), &"nathanAudioLead".into()).ok()?.dyn_into::<js_sys::Function>().ok()?;
+    let f = js_sys::Reflect::get(w.as_ref(), &"nathanAudioLead".into())
+        .ok()?
+        .dyn_into::<js_sys::Function>()
+        .ok()?;
     let lead = f.call0(w.as_ref()).ok()?.as_f64()?;
     // Never trust a wild value (a suspended context, a clock hiccup) with the physics.
     lead.is_finite().then(|| lead.clamp(0.0, 1.0))

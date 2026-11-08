@@ -42,7 +42,11 @@ pub fn band_distribution(center: Band, spread: f32) -> [f32; 10] {
     ];
     let mut raw = [0.0f32; 10];
     let fold = |b: i32, toward: i32| -> usize {
-        let b = if (MIN_BAND as i32..=MAX_BAND as i32).contains(&b) { b } else { b - toward };
+        let b = if (MIN_BAND as i32..=MAX_BAND as i32).contains(&b) {
+            b
+        } else {
+            b - toward
+        };
         (b.clamp(MIN_BAND as i32, MAX_BAND as i32) - 1) as usize
     };
     for (d, w) in offsets {
@@ -81,7 +85,15 @@ pub fn pick_skill(profile: &PlayerProfile, unlocked: &[Skill], rng: &mut impl Rn
     let mut ranked: Vec<(Skill, f32)> = Vec::new();
     for &s in unlocked {
         if !ranked.iter().any(|(r, _)| *r == s) {
-            ranked.push((s, profile.skill(s).window.clean_rate().0.unwrap_or(UNKNOWN_RATE)));
+            ranked.push((
+                s,
+                profile
+                    .skill(s)
+                    .window
+                    .clean_rate()
+                    .0
+                    .unwrap_or(UNKNOWN_RATE),
+            ));
         }
     }
     match ranked.len() {
@@ -92,8 +104,16 @@ pub fn pick_skill(profile: &PlayerProfile, unlocked: &[Skill], rng: &mut impl Rn
     // Stable: equal rates keep `unlocked` order.
     ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
     let (strengths, growth) = ranked.split_at(ranked.len().div_ceil(2));
-    let share = if profile.frustrated() { FRUSTRATED_STRENGTH_SHARE } else { STRENGTH_SHARE };
-    let group = if rng.random::<f32>() < share { strengths } else { growth };
+    let share = if profile.frustrated() {
+        FRUSTRATED_STRENGTH_SHARE
+    } else {
+        STRENGTH_SHARE
+    };
+    let group = if rng.random::<f32>() < share {
+        strengths
+    } else {
+        growth
+    };
     group[rng.random_range(0..group.len())].0
 }
 
@@ -106,12 +126,20 @@ pub fn next_room(profile: &PlayerProfile, unlocked: &[Skill], rng: &mut impl Rng
         } else {
             unlocked[0]
         };
-        return RoomRequest { skill, band: profile.calibration.next_band(), assists };
+        return RoomRequest {
+            skill,
+            band: profile.calibration.next_band(),
+            assists,
+        };
     }
     let skill = pick_skill(profile, unlocked, rng);
     let st = profile.skill(skill);
     let band = sample_band(&band_distribution(st.center, st.spread), rng);
-    RoomRequest { skill, band, assists }
+    RoomRequest {
+        skill,
+        band,
+        assists,
+    }
 }
 
 #[cfg(test)]

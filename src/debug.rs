@@ -45,15 +45,22 @@ pub struct EventLog(VecDeque<(f32, &'static str, String)>);
 pub struct DebugSections(pub Vec<(&'static str, fn(&World) -> String)>);
 
 fn log_messages<M: Message + Debug>(app: &mut App) {
-    let name = std::any::type_name::<M>().rsplit("::").next().unwrap_or("?");
-    app.add_systems(Last, move |mut r: MessageReader<M>, mut log: ResMut<EventLog>, time: Res<Time<Real>>| {
-        for m in r.read() {
-            if log.0.len() == LOG_LEN {
-                log.0.pop_front();
+    let name = std::any::type_name::<M>()
+        .rsplit("::")
+        .next()
+        .unwrap_or("?");
+    app.add_systems(
+        Last,
+        move |mut r: MessageReader<M>, mut log: ResMut<EventLog>, time: Res<Time<Real>>| {
+            for m in r.read() {
+                if log.0.len() == LOG_LEN {
+                    log.0.pop_front();
+                }
+                log.0
+                    .push_back((time.elapsed_secs(), name, format!("{m:?}")));
             }
-            log.0.push_back((time.elapsed_secs(), name, format!("{m:?}")));
-        }
-    });
+        },
+    );
 }
 
 fn f9_pressed(keys: Option<Res<ButtonInput<KeyCode>>>) -> bool {
@@ -62,7 +69,8 @@ fn f9_pressed(keys: Option<Res<ButtonInput<KeyCode>>>) -> bool {
 
 fn register_builtin_sections(mut sections: ResMut<DebugSections>) {
     sections.0.push(("music director", |w| {
-        w.get_resource::<crate::audio::Director>().map_or("(none)".into(), |d| format!("{d:#?}"))
+        w.get_resource::<crate::audio::Director>()
+            .map_or("(none)".into(), |d| format!("{d:#?}"))
     }));
     sections.0.push(("saved data (raw)", |_| {
         crate::save::storage::read().unwrap_or_else(|| "(nothing saved)".into())
@@ -79,7 +87,11 @@ pub fn report(world: &mut World) -> String {
         "version {} · commit {} · {} · uptime {secs:.1}s",
         env!("CARGO_PKG_VERSION"),
         option_env!("GITHUB_SHA").unwrap_or("local build"),
-        if cfg!(target_arch = "wasm32") { "web" } else { "native" },
+        if cfg!(target_arch = "wasm32") {
+            "web"
+        } else {
+            "native"
+        },
     );
     if let Some(state) = world.get_resource::<State<crate::state::AppState>>() {
         let _ = writeln!(out, "app state: {:?}", state.get());
@@ -93,7 +105,11 @@ pub fn report(world: &mut World) -> String {
     let registry = registry.read();
     let mut ours: Vec<_> = registry
         .iter()
-        .filter(|r| r.type_info().type_path().starts_with("nat_han_adventures::"))
+        .filter(|r| {
+            r.type_info()
+                .type_path()
+                .starts_with("nat_han_adventures::")
+        })
         .collect();
     ours.sort_by_key(|r| r.type_info().type_path());
     section(&mut out, "resources");
@@ -105,7 +121,12 @@ pub fn report(world: &mut World) -> String {
             && let Some(e) = world.resource_entities().get(cid)
             && let Ok(value) = world.get_reflect(e, tid)
         {
-            let _ = writeln!(out, "{} = {:#?}", short(reg.type_info().type_path()), value.as_partial_reflect());
+            let _ = writeln!(
+                out,
+                "{} = {:#?}",
+                short(reg.type_info().type_path()),
+                value.as_partial_reflect()
+            );
         }
     }
 
@@ -168,7 +189,10 @@ fn dump(world: &mut World) {
 
 #[cfg(not(target_arch = "wasm32"))]
 fn save_report(text: &str, name: &str) -> Result<String, String> {
-    let dir = crate::save::storage::path().parent().map(std::path::PathBuf::from).unwrap_or_default();
+    let dir = crate::save::storage::path()
+        .parent()
+        .map(std::path::PathBuf::from)
+        .unwrap_or_default();
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let p = dir.join(name);
     std::fs::write(&p, text).map_err(|e| format!("{}: {e}", p.display()))?;
@@ -187,8 +211,11 @@ fn save_report(text: &str, name: &str) -> Result<String, String> {
     opts.set_type("text/plain");
     let blob = web_sys::Blob::new_with_str_sequence_and_options(&parts, &opts).map_err(err)?;
     let url = web_sys::Url::create_object_url_with_blob(&blob).map_err(err)?;
-    let a: web_sys::HtmlAnchorElement =
-        document.create_element("a").map_err(err)?.dyn_into().map_err(|_| "not an anchor")?;
+    let a: web_sys::HtmlAnchorElement = document
+        .create_element("a")
+        .map_err(err)?
+        .dyn_into()
+        .map_err(|_| "not an anchor")?;
     a.set_href(&url);
     a.set_download(name);
     a.click();

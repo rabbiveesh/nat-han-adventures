@@ -8,7 +8,11 @@ pub const H: i32 = 144;
 
 /// Pick `a` or `b` by ordered dither: `t` = 0 is all `a`, 1 is all `b`.
 fn dith(x: i32, y: i32, a: Rgba, b: Rgba, t: f32) -> Rgba {
-    if (bayer4(x, y) as f32 + 0.5) / 16.0 < t { b } else { a }
+    if (bayer4(x, y) as f32 + 0.5) / 16.0 < t {
+        b
+    } else {
+        a
+    }
 }
 
 /// Vertical gradient through `stops` (evenly spaced), dithered between neighbours.
@@ -54,7 +58,17 @@ fn hpipe(p: &mut Pixels, y: i32, r: i32, cols: [Rgba; 4]) {
                 outline
             } else {
                 let t = (dy + r) as f32 / (2 * r) as f32;
-                if t < 0.3 { light } else if t < 0.4 { dith(x, y + dy, light, mid, 0.5) } else if t < 0.7 { mid } else if t < 0.8 { dith(x, y + dy, mid, dark, 0.5) } else { dark }
+                if t < 0.3 {
+                    light
+                } else if t < 0.4 {
+                    dith(x, y + dy, light, mid, 0.5)
+                } else if t < 0.7 {
+                    mid
+                } else if t < 0.8 {
+                    dith(x, y + dy, mid, dark, 0.5)
+                } else {
+                    dark
+                }
             };
             p.set(x, y + dy, c);
         }
@@ -70,7 +84,17 @@ fn vpipe(p: &mut Pixels, x: i32, y0: i32, y1: i32, r: i32, cols: [Rgba; 4]) {
                 outline
             } else {
                 let t = (dx + r) as f32 / (2 * r) as f32;
-                if t < 0.3 { light } else if t < 0.4 { dith(x + dx, y, light, mid, 0.5) } else if t < 0.7 { mid } else if t < 0.8 { dith(x + dx, y, mid, dark, 0.5) } else { dark }
+                if t < 0.3 {
+                    light
+                } else if t < 0.4 {
+                    dith(x + dx, y, light, mid, 0.5)
+                } else if t < 0.7 {
+                    mid
+                } else if t < 0.8 {
+                    dith(x + dx, y, mid, dark, 0.5)
+                } else {
+                    dark
+                }
             };
             p.set_wrap(x + dx, y, c);
         }
@@ -93,14 +117,26 @@ fn bathroom() -> Pixels {
     for y in 0..96 {
         for x in 0..W {
             let (tx, ty) = (x % 16, y % 16);
-            let c = if tx == 15 || ty == 15 { grout } else if tx == 0 || ty == 0 { tile_hi } else { tile };
+            let c = if tx == 15 || ty == 15 {
+                grout
+            } else if tx == 0 || ty == 0 {
+                tile_hi
+            } else {
+                tile
+            };
             p.set(x, y, c);
         }
     }
     // Trim band with a little diamond pattern.
     for y in 96..102 {
         for x in 0..W {
-            let c = if y == 96 || y == 101 { dark } else if (x + y) % 6 == 0 || (x - y).rem_euclid(6) == 0 { wains_hi } else { trim };
+            let c = if y == 96 || y == 101 {
+                dark
+            } else if (x + y) % 6 == 0 || (x - y).rem_euclid(6) == 0 {
+                wains_hi
+            } else {
+                trim
+            };
             p.set(x, y, c);
         }
     }
@@ -110,7 +146,13 @@ fn bathroom() -> Pixels {
             let row = (y - 102) / 8;
             let ox = if row % 2 == 0 { 0 } else { 8 };
             let (tx, ty) = ((x + ox) % 16, (y - 102) % 8);
-            let c = if tx == 15 || ty == 7 { dark } else if ty == 0 { wains_hi } else { wains };
+            let c = if tx == 15 || ty == 7 {
+                dark
+            } else if ty == 0 {
+                wains_hi
+            } else {
+                wains
+            };
             p.set(x, y, c);
         }
     }
@@ -127,7 +169,11 @@ fn bathroom() -> Pixels {
     for y in my + 4..my + mh - 4 {
         for x in mx + 4..mx + mw - 4 {
             let d = (x - mx) + (y - my);
-            let c = if (d % 36) < 4 || (d % 36) == 7 { shine } else { glass };
+            let c = if (d % 36) < 4 || (d % 36) == 7 {
+                shine
+            } else {
+                glass
+            };
             p.set_wrap(x, y, c);
         }
     }
@@ -190,7 +236,11 @@ fn pipes() -> Pixels {
     hpipe(&mut p, 22, 6, green);
     hpipe(&mut p, 118, 8, copper);
     // Mid verticals with elbows into the mains.
-    for (x, r, y0, y1, cols) in [(34, 5, 22, 118, copper), (120, 4, 0, 118, green), (204, 5, 22, 144, copper)] {
+    for (x, r, y0, y1, cols) in [
+        (34, 5, 22, 118, copper),
+        (120, 4, 0, 118, green),
+        (204, 5, 22, 144, copper),
+    ] {
         vpipe(&mut p, x, y0, y1, r, cols);
     }
     hpipe_segment(&mut p, 70, 120, 200, 4, grey);
@@ -298,7 +348,11 @@ fn sewer() -> Pixels {
             for x in ax - r - 6..=ax + r + 6 {
                 let (dx, dy) = (x - ax, y - top);
                 let d2 = dx * dx + dy.min(0) * dy.min(0);
-                let inside_outer = if dy < 0 { d2 <= (r + 6) * (r + 6) } else { dx.abs() <= r + 6 };
+                let inside_outer = if dy < 0 {
+                    d2 <= (r + 6) * (r + 6)
+                } else {
+                    dx.abs() <= r + 6
+                };
                 let inside = if dy < 0 { d2 <= r * r } else { dx.abs() <= r };
                 if inside {
                     p.set_wrap(x, y, void);
@@ -313,12 +367,22 @@ fn sewer() -> Pixels {
         // Sludge channel at the bottom of the tunnel.
         for y in 128..H {
             for x in ax - r..=ax + r {
-                let c = if y == 128 { sludge_hi } else if y == 129 { dith(x, y, sludge_hi, sludge, 0.5) } else { sludge };
+                let c = if y == 128 {
+                    sludge_hi
+                } else if y == 129 {
+                    dith(x, y, sludge_hi, sludge, 0.5)
+                } else {
+                    sludge
+                };
                 p.set_wrap(x, y, c);
             }
         }
         // Rat eyes glowing in the dark.
-        for (ex, ey, c) in [(-18, 100, hex(0xd84030)), (10, 112, hex(0xe0b030)), (22, 92, hex(0xd84030))] {
+        for (ex, ey, c) in [
+            (-18, 100, hex(0xd84030)),
+            (10, 112, hex(0xe0b030)),
+            (22, 92, hex(0xd84030)),
+        ] {
             p.set_wrap(ax + ex, ey, c);
             p.set_wrap(ax + ex + 3, ey, c);
         }
@@ -340,12 +404,21 @@ fn sewer() -> Pixels {
 
 fn festival() -> Pixels {
     let mut p = Pixels::new(W as u32, H as u32);
-    vgradient(&mut p, 0, 100, &[hex(0x080a20), hex(0x141838), hex(0x2a2250)]);
+    vgradient(
+        &mut p,
+        0,
+        100,
+        &[hex(0x080a20), hex(0x141838), hex(0x2a2250)],
+    );
     // Stars.
     for i in 0..60 {
         let x = (hash2(i, 1, 41) % W as u32) as i32;
         let y = (hash2(i, 2, 41) % 80) as i32;
-        let c = if i % 7 == 0 { hex(0xe8e0b0) } else { hex(0x8a8cb8) };
+        let c = if i % 7 == 0 {
+            hex(0xe8e0b0)
+        } else {
+            hex(0x8a8cb8)
+        };
         p.set(x, y, c);
         if i % 13 == 0 {
             for (dx, dy) in [(-1, 0), (1, 0), (0, -1), (0, 1)] {
@@ -359,7 +432,9 @@ fn festival() -> Pixels {
     // Distant crowd / hills.
     let hill = hex(0x1a1a34);
     for x in 0..W {
-        let h = 92 + ((x as f32 * std::f32::consts::TAU / 128.0).sin() * 4.0) as i32 + (hash2(x / 2, 7, 5) % 3) as i32;
+        let h = 92
+            + ((x as f32 * std::f32::consts::TAU / 128.0).sin() * 4.0) as i32
+            + (hash2(x / 2, 7, 5) % 3) as i32;
         for y in h..H {
             p.set(x, y, hill);
         }
@@ -367,7 +442,17 @@ fn festival() -> Pixels {
     // Grass strip.
     for y in 132..H {
         for x in 0..W {
-            p.set(x, y, dith(x, y, hex(0x16281a), hex(0x1e3a22), if y == 132 { 0.6 } else { 0.2 }));
+            p.set(
+                x,
+                y,
+                dith(
+                    x,
+                    y,
+                    hex(0x16281a),
+                    hex(0x1e3a22),
+                    if y == 132 { 0.6 } else { 0.2 },
+                ),
+            );
         }
     }
     // Porta-potties: 8 in a row, 32px apart.
@@ -559,7 +644,13 @@ fn banner(p: &mut Pixels, x: i32, y: i32) {
             if yy >= h && yy - h > 6 - tail * 6 / (w / 2) {
                 continue;
             }
-            let c = if xx == 0 || xx == w - 1 || yy == 0 { gold } else if xx < 3 { red_dk } else { red };
+            let c = if xx == 0 || xx == w - 1 || yy == 0 {
+                gold
+            } else if xx < 3 {
+                red_dk
+            } else {
+                red
+            };
             p.set_wrap(x + xx, y + yy, c);
         }
     }
@@ -582,7 +673,6 @@ pub fn backdrop(w: u8) -> Vec<Pixels> {
     vec![p.shade(dim)]
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -592,7 +682,10 @@ mod tests {
     fn backdrops_are_opaque() {
         for w in 1..=5 {
             let b = &backdrop(w)[0];
-            assert!(b.data.chunks_exact(4).all(|px| px[3] == 255), "world {w} has holes");
+            assert!(
+                b.data.chunks_exact(4).all(|px| px[3] == 255),
+                "world {w} has holes"
+            );
         }
     }
 

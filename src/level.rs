@@ -147,7 +147,6 @@
 
 use bevy::prelude::*;
 
-
 pub mod buddy;
 pub mod nav;
 pub mod validate;
@@ -349,7 +348,10 @@ pub enum Tile {
 
 impl Tile {
     pub fn is_deadly(self) -> bool {
-        matches!(self, Tile::SpikesUp | Tile::SpikesDown | Tile::Liquid | Tile::SpikesRight | Tile::SpikesLeft)
+        matches!(
+            self,
+            Tile::SpikesUp | Tile::SpikesDown | Tile::Liquid | Tile::SpikesRight | Tile::SpikesLeft
+        )
     }
 
     /// Blocks from every side (ground, grease, bricks, trampolines). (A brick gives way to
@@ -417,7 +419,10 @@ impl Tile {
 
     /// A beat block, on or off.
     pub fn is_beat(self) -> bool {
-        matches!(self, Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff)
+        matches!(
+            self,
+            Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff
+        )
     }
 
     /// A beat block as it is on a bar of this parity (`odd`); anything else as it is.
@@ -444,7 +449,10 @@ impl Tile {
     /// Solid on top only: you jump up through it and stand on it (`=`, stains, crumbling
     /// platforms).
     pub fn is_one_way(self) -> bool {
-        matches!(self, Tile::OneWay | Tile::StainUp | Tile::StainDown | Tile::Crumble)
+        matches!(
+            self,
+            Tile::OneWay | Tile::StainUp | Tile::StainDown | Tile::Crumble
+        )
     }
 
     /// The stain a splat on this tile leaves, if it's spikes.
@@ -595,7 +603,10 @@ impl Topic {
 
     /// Its place in [`Topic::ALL`].
     pub fn index(self) -> usize {
-        Topic::ALL.iter().position(|&t| t == self).expect("every topic is in ALL")
+        Topic::ALL
+            .iter()
+            .position(|&t| t == self)
+            .expect("every topic is in ALL")
     }
 
     pub fn from_word(w: &str) -> Option<Topic> {
@@ -647,7 +658,11 @@ pub struct Granted {
 }
 
 impl Granted {
-    pub const NONE: Granted = Granted { giant_steps: false, grip: false, waltz: false };
+    pub const NONE: Granted = Granted {
+        giant_steps: false,
+        grip: false,
+        waltz: false,
+    };
 
     /// Is Han's trick at a `topic` gate granted?
     pub fn grants(self, topic: Topic) -> bool {
@@ -797,7 +812,11 @@ impl CrushTime {
     /// Sim time `t` with the band playing [`NOMINAL_BAR`]s from the start (the validator's and
     /// headless tests' music).
     pub fn sim(t: f32) -> CrushTime {
-        CrushTime { sim: t, bars: t / NOMINAL_BAR, bar_secs: NOMINAL_BAR }
+        CrushTime {
+            sim: t,
+            bars: t / NOMINAL_BAR,
+            bar_secs: NOMINAL_BAR,
+        }
     }
 }
 
@@ -863,7 +882,9 @@ impl Crusher {
     pub fn timeable(def: &CrusherDef) -> bool {
         match def.dir {
             CrushDir::Down => def.w as i32 <= CRUSH_MAX_FACE,
-            CrushDir::Left | CrushDir::Right => def.h as i32 <= CRUSH_MAX_FACE && def.travel <= CRUSH_MAX_LANE,
+            CrushDir::Left | CrushDir::Right => {
+                def.h as i32 <= CRUSH_MAX_FACE && def.travel <= CRUSH_MAX_LANE
+            }
         }
     }
 
@@ -872,14 +893,17 @@ impl Crusher {
         let (dc, dr) = def.dir.step();
         (0..=def.travel).flat_map(move |k| {
             (0..def.h as i32).flat_map(move |r| {
-                (0..def.w as i32).map(move |c| (def.col as i32 + c + dc * k, def.row as i32 + r + dr * k))
+                (0..def.w as i32)
+                    .map(move |c| (def.col as i32 + c + dc * k, def.row as i32 + r + dr * k))
             })
         })
     }
 
     /// The cells of its block at home.
     pub fn home(def: &CrusherDef) -> impl Iterator<Item = (i32, i32)> + '_ {
-        (0..def.h as i32).flat_map(move |r| (0..def.w as i32).map(move |c| (def.col as i32 + c, def.row as i32 + r)))
+        (0..def.h as i32).flat_map(move |r| {
+            (0..def.w as i32).map(move |c| (def.col as i32 + c, def.row as i32 + r))
+        })
     }
 }
 
@@ -957,13 +981,17 @@ impl Level {
     /// Is play here timed to the written beat: Nat alone (the gadget world's routes), beat
     /// crushers, beat blocks? The music then holds its tempo (`audio::plugin::strict_tempo`).
     pub fn on_the_beat(&self) -> bool {
-        self.solo || self.crushers.iter().any(|c| c.beat > 0) || self.tiles.iter().any(|t| t.is_beat())
+        self.solo
+            || self.crushers.iter().any(|c| c.beat > 0)
+            || self.tiles.iter().any(|t| t.is_beat())
     }
 
     /// The band (or death) gate mark whose zone holds cell (col, row), if any: there Han's
     /// boost is the weak one.
     pub fn band_zone(&self, cell: (i32, i32)) -> Option<&GateMark> {
-        self.gates.iter().find(|g| g.topic.han_keeps_clear() && g.berth().contains(cell))
+        self.gates
+            .iter()
+            .find(|g| g.topic.han_keeps_clear() && g.berth().contains(cell))
     }
 
     /// Is cell (col, row) in a band zone (Han's boost is weak there)?
@@ -986,7 +1014,9 @@ impl Level {
 
     /// Is `cell` inside a `topic` gate mark?
     pub fn in_mark(&self, topic: Topic, cell: (i32, i32)) -> bool {
-        self.gates.iter().any(|g| g.topic == topic && g.contains(cell))
+        self.gates
+            .iter()
+            .any(|g| g.topic == topic && g.contains(cell))
     }
 
     /// Is Han's boost full strength in cell (col, row)? Outside every band zone. (The name is
@@ -999,13 +1029,17 @@ impl Level {
     /// jumping off the grease).
     pub fn han_keeps_out(&self, (c, r): (i32, i32)) -> bool {
         let greasy = self.tile(c, r + 1) == Tile::Grease;
-        self.gates.iter().any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
+        self.gates
+            .iter()
+            .any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
     }
 
     /// Is column `col` inside a fired-up chasm mark (no overuse limit there, and Han catches
     /// Nat in mid-air)?
     pub fn in_chasm(&self, col: i32) -> bool {
-        self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
+        self.gates
+            .iter()
+            .any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
     }
 
     /// The tile at (col, row); outside the grid: solid walls left, right and above (the
@@ -1079,11 +1113,16 @@ impl Level {
     }
 
     pub fn nugget_count(&self) -> usize {
-        self.things.iter().filter(|t| t.kind == ThingKind::Nugget).count()
+        self.things
+            .iter()
+            .filter(|t| t.kind == ThingKind::Nugget)
+            .count()
     }
 
     pub fn checkpoints(&self) -> impl Iterator<Item = &Thing> {
-        self.things.iter().filter(|t| t.kind == ThingKind::Checkpoint)
+        self.things
+            .iter()
+            .filter(|t| t.kind == ThingKind::Checkpoint)
     }
 
     /// Han's line for each checkpoint (in checkpoint order): its `say@` line, else the next
@@ -1091,9 +1130,15 @@ impl Level {
     pub fn checkpoint_lines(&self) -> Vec<Option<&str>> {
         let mut plain = self.says.iter();
         self.checkpoints()
-            .map(|c| match self.say_at.iter().find(|s| (s.col, s.row) == (c.col, c.row)) {
-                Some(s) => Some(s.text.as_str()),
-                None => plain.next().map(String::as_str),
+            .map(|c| {
+                match self
+                    .say_at
+                    .iter()
+                    .find(|s| (s.col, s.row) == (c.col, c.row))
+                {
+                    Some(s) => Some(s.text.as_str()),
+                    None => plain.next().map(String::as_str),
+                }
             })
             .collect()
     }
@@ -1164,15 +1209,23 @@ impl Level {
                         .split_once(',')
                         .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
                         .ok_or_else(|| format!("expected `secret@<col>,<row>`, got `{k}`"))?;
-                    secret = Some(Spot { col, row, text: value.to_string(), topics: Vec::new() });
+                    secret = Some(Spot {
+                        col,
+                        row,
+                        text: value.to_string(),
+                        topics: Vec::new(),
+                    });
                 }
                 "deaths" => {
                     deaths = Some(value.parse().map_err(|_| format!("bad deaths `{value}`"))?);
                 }
                 "gate" => {
-                    let bad = || format!("expected `gate: <topic> <c0>,<r0> <c1>,<r1>`, got `{value}`");
+                    let bad =
+                        || format!("expected `gate: <topic> <c0>,<r0> <c1>,<r1>`, got `{value}`");
                     let w: Vec<&str> = value.split_whitespace().collect();
-                    let [word, a, b] = w[..] else { return Err(bad()) };
+                    let [word, a, b] = w[..] else {
+                        return Err(bad());
+                    };
                     let topic = Topic::from_word(word)
                         .filter(|t| t.is_gate())
                         .ok_or_else(|| format!("gate: `{word}` is not a gate kind"))?;
@@ -1181,7 +1234,13 @@ impl Level {
                         Some((c.trim().parse().ok()?, r.trim().parse().ok()?))
                     };
                     let ((c0, r0), (c1, r1)) = (cell(a).ok_or_else(bad)?, cell(b).ok_or_else(bad)?);
-                    gates.push(GateMark { topic, c0: c0.min(c1), r0: r0.min(r1), c1: c0.max(c1), r1: r0.max(r1) });
+                    gates.push(GateMark {
+                        topic,
+                        c0: c0.min(c1),
+                        r0: r0.min(r1),
+                        c1: c0.max(c1),
+                        r1: r0.max(r1),
+                    });
                 }
                 k if k.starts_with("crusher@") => {
                     let at = &k["crusher@".len()..];
@@ -1191,10 +1250,28 @@ impl Level {
                         .ok_or_else(|| format!("expected `crusher@<col>,<row>`, got `{k}`"))?;
                     let (mut phase, mut beat) = (None, None);
                     for kv in value.split_whitespace() {
-                        let bad = || format!("{k}: bad `{kv}` (expected `phase=<0..1>` and/or `beat=<1..8 bars>`)");
+                        let bad = || {
+                            format!(
+                                "{k}: bad `{kv}` (expected `phase=<0..1>` and/or `beat=<1..8 bars>`)"
+                            )
+                        };
                         match kv.split_once('=') {
-                            Some(("phase", v)) => phase = Some(v.parse::<f32>().ok().filter(|p| (0.0..=1.0).contains(p)).ok_or_else(bad)?),
-                            Some(("beat", v)) => beat = Some(v.parse::<u8>().ok().filter(|b| (1..=8).contains(b)).ok_or_else(bad)?),
+                            Some(("phase", v)) => {
+                                phase = Some(
+                                    v.parse::<f32>()
+                                        .ok()
+                                        .filter(|p| (0.0..=1.0).contains(p))
+                                        .ok_or_else(bad)?,
+                                )
+                            }
+                            Some(("beat", v)) => {
+                                beat = Some(
+                                    v.parse::<u8>()
+                                        .ok()
+                                        .filter(|b| (1..=8).contains(b))
+                                        .ok_or_else(bad)?,
+                                )
+                            }
                             _ => return Err(bad()),
                         }
                     }
@@ -1212,12 +1289,20 @@ impl Level {
                         .and_then(|(c, r)| Some((c.trim().parse().ok()?, r.trim().parse().ok()?)))
                         .ok_or_else(|| format!("expected `{what}@<col>,<row>`, got `{k}`"))?;
                     let topics = words
-                        .map(|w| Topic::from_word(w).ok_or_else(|| format!("{what}@{at}: unknown topic `{w}`")))
+                        .map(|w| {
+                            Topic::from_word(w)
+                                .ok_or_else(|| format!("{what}@{at}: unknown topic `{w}`"))
+                        })
                         .collect::<Result<Vec<_>, _>>()?;
                     if what == "say" && !topics.is_empty() {
                         return Err(format!("say@{at}: checkpoint lines don't take topics"));
                     }
-                    let spot = Spot { col: c, row: r, text: value.to_string(), topics };
+                    let spot = Spot {
+                        col: c,
+                        row: r,
+                        text: value.to_string(),
+                        topics,
+                    };
                     if what == "say" {
                         say_at.push(spot);
                     } else {
@@ -1246,7 +1331,9 @@ impl Level {
                                     "tp" => PlatformKind::Tp,
                                     "duck" => PlatformKind::Duck,
                                     "plunger" => PlatformKind::Plunger,
-                                    _ => return Err(format!("platform {digit}: unknown kind `{v}`")),
+                                    _ => {
+                                        return Err(format!("platform {digit}: unknown kind `{v}`"));
+                                    }
                                 }
                             }
                             _ => return Err(format!("platform {digit}: unknown key `{k}`")),
@@ -1264,7 +1351,10 @@ impl Level {
         let rows: Vec<&str> = grid.lines().map(|l| l.trim_end_matches('\r')).collect();
         // Drop trailing blank lines.
         let rows: Vec<&str> = {
-            let end = rows.iter().rposition(|r| !r.trim().is_empty()).map_or(0, |i| i + 1);
+            let end = rows
+                .iter()
+                .rposition(|r| !r.trim().is_empty())
+                .map_or(0, |i| i + 1);
             rows[..end].to_vec()
         };
         let height = rows.len();
@@ -1325,19 +1415,36 @@ impl Level {
                             return Err("more than one `G`".into());
                         }
                     }
-                    'o' => things.push(Thing { kind: ThingKind::Nugget, col, row }),
-                    'C' => things.push(Thing { kind: ThingKind::Checkpoint, col, row }),
-                    'F' => things.push(Thing { kind: ThingKind::Fly, col, row }),
-                    'S' => things.push(Thing { kind: ThingKind::Spray, col, row }),
+                    'o' => things.push(Thing {
+                        kind: ThingKind::Nugget,
+                        col,
+                        row,
+                    }),
+                    'C' => things.push(Thing {
+                        kind: ThingKind::Checkpoint,
+                        col,
+                        row,
+                    }),
+                    'F' => things.push(Thing {
+                        kind: ThingKind::Fly,
+                        col,
+                        row,
+                    }),
+                    'S' => things.push(Thing {
+                        kind: ThingKind::Spray,
+                        col,
+                        row,
+                    }),
                     '1'..='9' => {
                         let digit = c.to_digit(10).unwrap() as usize;
                         let start_col = col;
                         while col + 1 < chars.len() && chars[col + 1] == c {
                             col += 1;
                         }
-                        let (dx, dy, period, phase, kind) = platform_cfg[digit].ok_or_else(|| {
-                            format!("platform `{c}` at row {row} has no `{c}:` header line")
-                        })?;
+                        let (dx, dy, period, phase, kind) =
+                            platform_cfg[digit].ok_or_else(|| {
+                                format!("platform `{c}` at row {row} has no `{c}:` header line")
+                            })?;
                         platforms.push(MovingPlatformDef {
                             col: start_col,
                             row,
@@ -1363,12 +1470,18 @@ impl Level {
                 if tiles[row * width + col] != Tile::SpikesRight {
                     continue;
                 }
-                let at = |c: i32| (c >= 0 && (c as usize) < width).then(|| tiles[row * width + c as usize]);
+                let at = |c: i32| {
+                    (c >= 0 && (c as usize) < width).then(|| tiles[row * width + c as usize])
+                };
                 let wall = |t: Option<Tile>| t.is_some_and(|t| t.is_solid());
                 match (wall(at(col as i32 - 1)), wall(at(col as i32 + 1))) {
                     (true, false) => {}
                     (false, true) => tiles[row * width + col] = Tile::SpikesLeft,
-                    _ => return Err(format!("wall brushes `|` at row {row}, col {col} need a wall on exactly one side")),
+                    _ => {
+                        return Err(format!(
+                            "wall brushes `|` at row {row}, col {col} need a wall on exactly one side"
+                        ));
+                    }
                 }
             }
         }
@@ -1385,13 +1498,19 @@ impl Level {
 
         for s in say_at.iter().chain(&hints).chain(&secret) {
             if s.col >= width || s.row >= height {
-                return Err(format!("line at col {} row {} is outside the grid", s.col, s.row));
+                return Err(format!(
+                    "line at col {} row {} is outside the grid",
+                    s.col, s.row
+                ));
             }
         }
         if let Some(s) = &secret {
             let tile = |c: usize, r: usize| tiles[r * width + c];
             if s.row == 0 || !tile(s.col, s.row).is_solid() || !tile(s.col, s.row - 1).is_solid() {
-                return Err(format!("secret@{},{}: the grate (that cell and the one above) must be solid", s.col, s.row));
+                return Err(format!(
+                    "secret@{},{}: the grate (that cell and the one above) must be solid",
+                    s.col, s.row
+                ));
             }
         }
         Ok(Level {
@@ -1422,7 +1541,12 @@ impl Level {
 /// rectangle. Its travel runs from home until a tile (anything not empty) is in its way, the
 /// level's edge (walls left and right; below, the pit: [`CRUSH_MAX_TRAVEL`]), or another
 /// crusher's home.
-fn group_crushers(cells: &[(CrushDir, usize, usize)], tiles: &[Tile], width: usize, height: usize) -> Result<Vec<CrusherDef>, String> {
+fn group_crushers(
+    cells: &[(CrushDir, usize, usize)],
+    tiles: &[Tile],
+    width: usize,
+    height: usize,
+) -> Result<Vec<CrusherDef>, String> {
     use std::collections::HashSet;
     let all: HashSet<(usize, usize)> = cells.iter().map(|&(_, c, r)| (c, r)).collect();
     let mut seen: HashSet<(usize, usize)> = HashSet::new();
@@ -1432,27 +1556,54 @@ fn group_crushers(cells: &[(CrushDir, usize, usize)], tiles: &[Tile], width: usi
             continue;
         }
         // Flood the same char.
-        let same: HashSet<(usize, usize)> = cells.iter().filter(|x| x.0 == dir).map(|&(_, c, r)| (c, r)).collect();
+        let same: HashSet<(usize, usize)> = cells
+            .iter()
+            .filter(|x| x.0 == dir)
+            .map(|&(_, c, r)| (c, r))
+            .collect();
         let mut group = vec![(c, r)];
         seen.insert((c, r));
         let mut i = 0;
         while i < group.len() {
             let (gc, gr) = group[i];
             i += 1;
-            let ns = [(gc.wrapping_sub(1), gr), (gc + 1, gr), (gc, gr.wrapping_sub(1)), (gc, gr + 1)];
+            let ns = [
+                (gc.wrapping_sub(1), gr),
+                (gc + 1, gr),
+                (gc, gr.wrapping_sub(1)),
+                (gc, gr + 1),
+            ];
             for n in ns {
                 if same.contains(&n) && seen.insert(n) {
                     group.push(n);
                 }
             }
         }
-        let (c0, c1) = (group.iter().map(|g| g.0).min().unwrap(), group.iter().map(|g| g.0).max().unwrap());
-        let (r0, r1) = (group.iter().map(|g| g.1).min().unwrap(), group.iter().map(|g| g.1).max().unwrap());
+        let (c0, c1) = (
+            group.iter().map(|g| g.0).min().unwrap(),
+            group.iter().map(|g| g.0).max().unwrap(),
+        );
+        let (r0, r1) = (
+            group.iter().map(|g| g.1).min().unwrap(),
+            group.iter().map(|g| g.1).max().unwrap(),
+        );
         let (w, h) = (c1 - c0 + 1, r1 - r0 + 1);
         if group.len() != w * h {
-            return Err(format!("crusher `{}` at row {r0}, col {c0} isn't a filled rectangle", dir.char()));
+            return Err(format!(
+                "crusher `{}` at row {r0}, col {c0} isn't a filled rectangle",
+                dir.char()
+            ));
         }
-        let mut def = CrusherDef { col: c0, row: r0, w, h, dir, travel: 0, phase: 0.0, beat: 0 };
+        let mut def = CrusherDef {
+            col: c0,
+            row: r0,
+            w,
+            h,
+            dir,
+            travel: 0,
+            phase: 0.0,
+            beat: 0,
+        };
         let blocked = |cc: i32, rr: i32| {
             if cc < 0 || cc >= width as i32 || rr < 0 {
                 return true;
@@ -1461,7 +1612,8 @@ fn group_crushers(cells: &[(CrushDir, usize, usize)], tiles: &[Tile], width: usi
                 return false;
             }
             let (cu, ru) = (cc as usize, rr as usize);
-            tiles[ru * width + cu] != Tile::Empty || (all.contains(&(cu, ru)) && !group.contains(&(cu, ru)))
+            tiles[ru * width + cu] != Tile::Empty
+                || (all.contains(&(cu, ru)) && !group.contains(&(cu, ru)))
         };
         let (dc, dr) = dir.step();
         while def.travel < CRUSH_MAX_TRAVEL {
@@ -1476,7 +1628,10 @@ fn group_crushers(cells: &[(CrushDir, usize, usize)], tiles: &[Tile], width: usi
             def.travel = k;
         }
         if def.travel == 0 {
-            return Err(format!("crusher `{}` at row {r0}, col {c0} has no room to slam", dir.char()));
+            return Err(format!(
+                "crusher `{}` at row {r0}, col {c0} has no room to slam",
+                dir.char()
+            ));
         }
         out.push(def);
     }
@@ -1524,7 +1679,16 @@ mod tests {
     fn parses_gate_marks() {
         let src = "name: T\ngate: giant 20,3 5,9\ngate: chain 30,1 40,9\n---\nPG\n##\n";
         let l = Level::parse(src).unwrap();
-        assert_eq!(l.gates[0], GateMark { topic: Topic::Giant, c0: 5, r0: 3, c1: 20, r1: 9 });
+        assert_eq!(
+            l.gates[0],
+            GateMark {
+                topic: Topic::Giant,
+                c0: 5,
+                r0: 3,
+                c1: 20,
+                r1: 9
+            }
+        );
         assert!(l.in_band_zone((5 - HAN_BERTH, 3)) && !l.han_allowed((5 - HAN_BERTH, 3)));
         assert!(!l.in_band_zone((5 - HAN_BERTH - 1, 3)));
         assert_eq!(l.band_zone((10, 4)).map(|g| g.topic), Some(Topic::Giant));

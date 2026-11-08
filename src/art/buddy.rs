@@ -123,7 +123,11 @@ fn legs(rows: &[&str]) -> Pixels {
 }
 
 fn px(p: &mut Pixels, x: i32, y: i32, c: char) {
-    let rgba = BUDDY_PAL.iter().find(|(k, _)| *k == c).map(|(_, v)| *v).expect("palette char");
+    let rgba = BUDDY_PAL
+        .iter()
+        .find(|(k, _)| *k == c)
+        .map(|(_, v)| *v)
+        .expect("palette char");
     p.set(x, y, rgba);
 }
 

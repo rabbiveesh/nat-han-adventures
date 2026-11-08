@@ -81,7 +81,14 @@ impl Course {
             secret: None,
             shout: None,
         };
-        (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)
+        (
+            Course {
+                rooms: Vec::new(),
+                frontier: 0,
+                cap: None,
+            },
+            level,
+        )
     }
 
     /// Would a room `width` wide still fit in `level`?
@@ -91,8 +98,16 @@ impl Course {
 
     /// Stitch `room` in after the last one; `last` puts the goal flag in its exit pipe.
     /// Returns where it went, and the cap cells it replaced (to redraw).
-    pub fn add(&mut self, level: &mut Level, room: &Level, last: bool) -> (Placed, Vec<(usize, usize)>) {
-        assert!((H..=COURSE_H).contains(&room.height), "rooms are {H} to {COURSE_H} tall");
+    pub fn add(
+        &mut self,
+        level: &mut Level,
+        room: &Level,
+        last: bool,
+    ) -> (Placed, Vec<(usize, usize)>) {
+        assert!(
+            (H..=COURSE_H).contains(&room.height),
+            "rooms are {H} to {COURSE_H} tall"
+        );
         // Rows down from the room's grid to the course's.
         let dr = COURSE_H - room.height;
         let col0 = self.frontier;
@@ -103,26 +118,54 @@ impl Course {
         }
         for r in 0..COURSE_H {
             for c in 0..room.width {
-                level.tiles[r * w + col0 + c] = if r < dr { Tile::Solid } else { room.tile(c as i32, (r - dr) as i32) };
+                level.tiles[r * w + col0 + c] = if r < dr {
+                    Tile::Solid
+                } else {
+                    room.tile(c as i32, (r - dr) as i32)
+                };
             }
         }
         let checkpoint = level.checkpoints().count();
         // Left to right, so checkpoint numbers grow along the course (the game keeps the
         // highest one touched).
-        let mut things: Vec<Thing> = room.things.iter().map(|t| Thing { col: t.col + col0, row: t.row + dr, ..*t }).collect();
+        let mut things: Vec<Thing> = room
+            .things
+            .iter()
+            .map(|t| Thing {
+                col: t.col + col0,
+                row: t.row + dr,
+                ..*t
+            })
+            .collect();
         things.sort_by_key(|t| (t.col, t.row));
         level.things.extend(things);
         for p in &room.platforms {
-            level.platforms.push(crate::level::MovingPlatformDef { col: p.col + col0, row: p.row + dr, ..p.clone() });
+            level.platforms.push(crate::level::MovingPlatformDef {
+                col: p.col + col0,
+                row: p.row + dr,
+                ..p.clone()
+            });
         }
         for c in &room.crushers {
-            level.crushers.push(crate::level::CrusherDef { col: c.col + col0, row: c.row + dr, ..*c });
+            level.crushers.push(crate::level::CrusherDef {
+                col: c.col + col0,
+                row: c.row + dr,
+                ..*c
+            });
         }
         for s in &room.hints {
-            level.hints.push(crate::level::Spot { col: s.col + col0, row: s.row + dr, ..s.clone() });
+            level.hints.push(crate::level::Spot {
+                col: s.col + col0,
+                row: s.row + dr,
+                ..s.clone()
+            });
         }
         for s in &room.say_at {
-            level.say_at.push(crate::level::Spot { col: s.col + col0, row: s.row + dr, ..s.clone() });
+            level.say_at.push(crate::level::Spot {
+                col: s.col + col0,
+                row: s.row + dr,
+                ..s.clone()
+            });
         }
         // Gate marks (Han's boost is weak around the band's gates; no overuse limit in chasms).
         for g in &room.gates {
@@ -147,7 +190,11 @@ impl Course {
             }
             self.cap = Some(cap);
         }
-        let placed = Placed { col0, width: room.width, checkpoint };
+        let placed = Placed {
+            col0,
+            width: room.width,
+            checkpoint,
+        };
         self.rooms.push(placed);
         (placed, uncapped)
     }
@@ -155,7 +202,9 @@ impl Course {
     /// Close the entry pipe of room `k` behind Nat (the rooms before it get unloaded). Returns
     /// the cells made solid.
     pub fn seal(&self, level: &mut Level, k: usize) -> Vec<(usize, usize)> {
-        let Some(p) = self.rooms.get(k) else { return Vec::new() };
+        let Some(p) = self.rooms.get(k) else {
+            return Vec::new();
+        };
         let col = p.col0;
         let w = level.width;
         let cells: Vec<(usize, usize)> = Course::pipe_rows().map(|r| (col, r)).collect();
@@ -178,7 +227,11 @@ impl Course {
     /// Nuggets in room `k`.
     pub fn nuggets_in(&self, level: &Level, k: usize) -> usize {
         let cols = self.rooms[k].cols();
-        level.things.iter().filter(|t| t.kind == ThingKind::Nugget && cols.contains(&t.col)).count()
+        level
+            .things
+            .iter()
+            .filter(|t| t.kind == ThingKind::Nugget && cols.contains(&t.col))
+            .count()
     }
 }
 

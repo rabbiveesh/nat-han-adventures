@@ -51,6 +51,10 @@ impl Assists {
 
     /// Extra hazard-hitbox forgiveness (px per side), never negative.
     pub fn extra_forgiveness(&self) -> f32 {
-        if self.hitbox_forgiveness_px.is_finite() { self.hitbox_forgiveness_px.max(0.0) } else { 0.0 }
+        if self.hitbox_forgiveness_px.is_finite() {
+            self.hitbox_forgiveness_px.max(0.0)
+        } else {
+            0.0
+        }
     }
 }
