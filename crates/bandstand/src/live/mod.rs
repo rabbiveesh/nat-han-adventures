@@ -89,6 +89,7 @@
 pub mod arrange;
 pub mod band;
 pub mod chorus;
+pub mod desk;
 pub mod engine;
 pub mod feel;
 #[cfg(feature = "soundfont")]

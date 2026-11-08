@@ -2,18 +2,29 @@
 //!
 //! Han walks the level on his own AI, heading for the goal (his nav graph, `level::nav`, with
 //! Nat's physics: [`HanPhys::side_b`], one toot). The player never moves him: each level has a
-//! *set list* of calls (`setlist: giant gap melt` in the level header), empty at the start:
-//! every nugget Han grabs is one more of the call that's picked (Left/Right), and Down or Jump
-//! calls it ([`CallMode`]); the band plays that mode as it does when Nat calls it. Han takes
-//! whatever route is quickest under the physics now, so calling a mode steers him, and the
-//! levels fork: over a pipe or under it, on the deck for its nuggets or through the tunnel.
+//! *set list* of calls (`setlist: giant gap melt` in the level header), all free: 1/2/3 (on a
+//! phone, a tap on its cell) calls one ([`CallMode`]); the band
+//! plays that mode as it does when Nat calls it. Han takes whatever route is quickest under the
+//! physics now, so calling a mode steers him, and the levels fork: over a pipe or under it, on
+//! the deck for its nuggets or through the tunnel.
+//! - **The record steers him** ([`SideB::pan`], `audio::live::desk`): a hand on it (Down; on a
+//!   phone, a thumb on the turntable, the left half above the set list) drags the band to a
+//!   tape stop and Han waits; pulled back (Left; the thumb dragged left) it scratches back over
+//!   the band's last seconds and he moonwalks back; let go, the needle zips forward and on he
+//!   runs. So he can be held for the music to turn, or backed off what he can't cross yet.
+//!   (`NATHAN_STEER=balance`: the stereo balance instead, Left/Right a step across.)
 //!
 //! - **Han heads for the goal**, or, when no route gets there, for the reachable cell nearest
 //!   it (the *frontier*), and from there he **charges**: runs on, jumping at walls and edges,
 //!   tooting at the top. Without the right music playing by then, that's comically fatal.
-//! - **Han can die**: spikes, sewage, the pit, and knocking himself out on a wall he can't
-//!   climb. A death rewinds the whole level (the set list comes back with it): there are no
-//!   checkpoints on Side B.
+//! - **Han can die**: spikes, sewage, the pit. A death puts him back at the last checkpoint he
+//!   passed (`C`), or the top of the level, as the story's checkpoints do: the tune plays on
+//!   ([`Mouth`]). R starts the level over, the tune too.
+//! - **The hit** (Jump, Up; on a phone, the right half above the set list): a stab the band plays any
+//!   time, free, landing on the next beat ([`land_hits`]; the band drops out under it,
+//!   `audio::live::desk`). Beat blocks answer it on
+//!   Side B instead of the bars (each hit swaps red and blue), and trapdoors (crumbling
+//!   platforms) near Han drop at once. Calls pick how Han moves; hits work the level.
 //! - **Melting** (`melt` on the set list): the laughing band, held on its melting phrase. Han
 //!   shrinks to [`MELT_SIZE`] and ducks under ceiling spikes he'd otherwise lose his cap to,
 //!   but if it wears off while he's under them, he grows back into them.
@@ -54,8 +65,8 @@ pub static SIDE_B_SOURCES: [&str; SIDE_B_COUNT] = [
     include_str!("../../levels/side-b/b10.txt"),
 ];
 
-/// A level rewinds this long after Han's death (the needle scratch).
-pub const REWIND_SECS: f32 = 2.0;
+/// Han's back at the checkpoint this long after his death.
+pub const REWIND_SECS: f32 = 1.5;
 /// The goal reached: this long on the cheer, then back to the title.
 pub const CLEARED_SECS: f32 = 4.0;
 /// Cells a frontier search may simulate per step (~0.15 ms each natively, several times that
@@ -72,8 +83,11 @@ pub const MELT_SECS: f32 = HOLD_SECS;
 /// How long a set-list call holds the band: a few bars, so the calls have to be timed (the
 /// story's calls hold for 20 s).
 pub const HOLD_SECS: f32 = 6.0;
-/// Charging this long without getting anywhere: he's done for.
-pub const CHARGE_GIVE_UP: f32 = 8.0;
+/// The balance's glide: across the whole field in this long (the music's,
+/// [`crate::audio::live::desk::BALANCE_GLIDE_SECS`]).
+pub const PAN_GLIDE_SECS: f32 = crate::audio::live::desk::BALANCE_GLIDE_SECS;
+/// Han stops while the balance is this near the middle.
+pub const PAN_STOP: f32 = 0.15;
 
 pub const CLEARED_LINE: &str = "Nat's hat!";
 /// A free play Side B room cleared: Han tags Nat back in (after this long).
@@ -114,6 +128,8 @@ pub enum SetCall {
     Mode(Harmony),
     /// The laughing band, held on its melting phrase ([`MELT_SECS`]).
     Melt,
+    /// The nervous band, held [`HOLD_SECS`]: its grip, Han climbs a shaft's wall.
+    Nervous,
 }
 
 /// Ask the band for a set-list call. Plays it at once, charged or not.
@@ -126,17 +142,21 @@ pub fn call_of(word: &str) -> Option<SetCall> {
         "giant" => Some(SetCall::Mode(Harmony::Coltrane)),
         "gap" => Some(SetCall::Mode(Harmony::Quartal)),
         "melt" => Some(SetCall::Melt),
+        "waltz" => Some(SetCall::Mode(Harmony::Waltz)),
+        "nervous" => Some(SetCall::Nervous),
         _ => None,
     }
 }
 
-/// Where a call sits on every set list: Giant Steps, fired up, melting.
+/// Where a call sits on every set list: Giant Steps, fired up, the waltz, nervous, melting.
 fn set_list_rank(c: SetCall) -> u8 {
     match c {
         SetCall::Mode(Harmony::Coltrane) => 0,
         SetCall::Mode(Harmony::Quartal) => 1,
-        SetCall::Mode(_) => 2,
-        SetCall::Melt => 3,
+        SetCall::Mode(Harmony::Waltz) => 2,
+        SetCall::Mode(_) => 3,
+        SetCall::Nervous => 4,
+        SetCall::Melt => 5,
     }
 }
 
@@ -145,6 +165,9 @@ fn set_list_rank(c: SetCall) -> u8 {
 pub struct SideBLevel {
     pub level: Level,
     pub setlist: Vec<(SetCall, u32)>,
+    /// `turns: walls`: Han turns round at a wall he can't get over (a maze), instead of
+    /// bonking himself out.
+    pub turns: bool,
 }
 
 impl SideBLevel {
@@ -152,6 +175,7 @@ impl SideBLevel {
     /// start with one) on top of the usual format (`level` module docs).
     pub fn parse(src: &str) -> Result<SideBLevel, String> {
         let mut setlist = Vec::new();
+        let mut turns = false;
         let mut rest = String::new();
         let mut in_header = true;
         for line in src.lines() {
@@ -168,6 +192,10 @@ impl SideBLevel {
                         setlist.push((h, n));
                     }
                 }
+                Some((k, v)) if in_header && k.trim() == "turns" => match v.trim() {
+                    "walls" => turns = true,
+                    w => return Err(format!("no such turns `{w}`")),
+                },
                 _ => {
                     rest.push_str(line);
                     rest.push('\n');
@@ -177,7 +205,7 @@ impl SideBLevel {
         // Always in the same order, whatever the header says: the strip mustn't give the
         // solution's order away.
         setlist.sort_by_key(|&(c, _)| set_list_rank(c));
-        Ok(SideBLevel { level: Level::parse(&rest)?, setlist })
+        Ok(SideBLevel { level: Level::parse(&rest)?, setlist, turns })
     }
 
     /// Level `n`'s name (its `name:` header), without parsing the rest.
@@ -207,9 +235,17 @@ pub struct SideB {
     pub level: usize,
     #[reflect(ignore)]
     pub setlist: Vec<(SetCall, u32)>,
-    /// Calls left, per set list entry.
-    pub left: Vec<u32>,
+    /// The call made last (Down calls it again).
     pub selected: usize,
+    /// The balance (-1 hard left .. 1 right) and where it's gliding to: Han follows it.
+    pub pan: f32,
+    pub pan_to: f32,
+    /// Where the steer rests with no hand on it (the balance's taps, a plan's steps).
+    pub pan_rest: f32,
+    /// What the steer sounds like: the record (held: Han waits; scratched back: he moonwalks
+    /// back), or the balance (`NATHAN_STEER=balance`, `?steer=balance` on the web).
+    #[reflect(ignore)]
+    pub steer_sound: crate::audio::live::desk::Steer,
     pub phase: Phase,
     /// Where Han's heading (a cell), and whether it's the frontier (no route to the goal).
     pub target: Option<(i32, i32)>,
@@ -217,17 +253,45 @@ pub struct SideB {
     /// Charging since this long, from this x, with this many landings since.
     pub charging: Option<f32>,
     pub charge_x: f32,
+    pub charge_y: f32,
     pub charge_landings: u32,
     pub was_grounded: bool,
     /// How the last try ended.
     pub fate: Option<Fate>,
     pub rewinds: u32,
     pub calls: u32,
-    /// Nuggets Han's grabbed this try (each one more call).
-    pub refills: u32,
+    /// Nuggets Han's grabbed this try.
+    pub nuggets: u32,
     /// A free play Side B room (`crate::freeplay`) rather than a Side B level: where it is.
     #[reflect(ignore)]
     pub room: Option<AloneRoom>,
+    /// The level's `turns: walls`, and which way Han's running then (he starts towards the
+    /// goal), with where he last landed against a wall and how many in a row there.
+    pub turns: bool,
+    pub dir: Option<f32>,
+    pub bonk_at: Vec2,
+    pub bonks: u32,
+    /// The last checkpoint Han passed: a death puts him back there.
+    #[reflect(ignore)]
+    pub mouth: Option<Mouth>,
+    /// Hits landed (their parity is the beat blocks': [`crushers::beat_blocks`]), and the beat
+    /// a hit was played on, landing on the next one; hits played (the music's: `audio::plugin`).
+    ///
+    /// [`crushers::beat_blocks`]: super::crushers
+    pub hits: u32,
+    pub hit_on: Option<(u32, u8)>,
+    pub hits_played: u32,
+}
+
+/// A checkpoint Han's passed (the mouth of a passage): where a death puts him, which way the
+/// band was leaning, the beat blocks as they were.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Mouth {
+    /// The checkpoint's floor.
+    pub at: Vec2,
+    pub pan: f32,
+    pub dir: Option<f32>,
+    pub hits: u32,
 }
 
 /// A free play Side B room in the course (cells and columns of the loaded level): Nat waits in
@@ -247,40 +311,107 @@ impl SideB {
     }
 
     pub fn new(level: usize, setlist: Vec<(SetCall, u32)>) -> SideB {
-        let left = setlist.iter().map(|s| s.1).collect();
         SideB {
             level,
             setlist,
-            left,
             selected: 0,
+            pan: 1.0,
+            pan_to: 1.0,
+            pan_rest: 1.0,
+            steer_sound: Self::steer_sound(),
             phase: Phase::Playing,
             target: None,
             frontier: false,
             charging: None,
             charge_x: 0.0,
+            charge_y: 0.0,
             charge_landings: 0,
             was_grounded: true,
             fate: None,
             rewinds: 0,
             calls: 0,
-            refills: 0,
+            nuggets: 0,
             room: None,
+            turns: false,
+            dir: None,
+            bonk_at: Vec2::NAN,
+            bonks: 0,
+            mouth: None,
+            hits: 0,
+            hit_on: None,
+            hits_played: 0,
         }
     }
 
-    /// Back to the top: the set list refilled.
+    /// Side B level `n`, `b`.
+    pub fn of(n: usize, b: &SideBLevel) -> SideB {
+        SideB { turns: b.turns, ..SideB::new(n, b.setlist.clone()) }
+    }
+
+    /// Back to the top (R).
     fn rewound(&mut self) {
         *self = SideB {
             rewinds: self.rewinds + 1,
             selected: self.selected,
             fate: self.fate,
             room: self.room,
+            turns: self.turns,
+            hits_played: self.hits_played,
             ..SideB::new(self.level, self.setlist.clone())
         };
     }
 
-    pub fn calls_left(&self) -> u32 {
-        self.left.iter().sum()
+    /// Back to the last checkpoint after a death (the top, with none): the band leaning the
+    /// way it was there.
+    fn back_to_mouth(&mut self) {
+        let m = self.mouth.clone();
+        *self = SideB {
+            rewinds: self.rewinds + 1,
+            fate: self.fate,
+            room: self.room,
+            turns: self.turns,
+            selected: self.selected,
+            pan: m.as_ref().map_or(1.0, |m| m.pan),
+            pan_to: m.as_ref().map_or(1.0, |m| m.pan),
+            pan_rest: m.as_ref().map_or(1.0, |m| m.pan),
+            steer_sound: self.steer_sound,
+            dir: m.as_ref().and_then(|m| m.dir),
+            hits: m.as_ref().map_or(0, |m| m.hits),
+            hits_played: self.hits_played,
+            mouth: m,
+            ..SideB::new(self.level, self.setlist.clone())
+        };
+    }
+
+    /// The steer is the record, unless `NATHAN_STEER=balance` (native) / `?steer=balance` (web).
+pub fn steer_sound() -> crate::audio::live::desk::Steer {
+    use crate::audio::live::desk::Steer;
+    #[cfg(not(target_arch = "wasm32"))]
+    let v = std::env::var("NATHAN_STEER").ok();
+    #[cfg(target_arch = "wasm32")]
+    let v = web_sys::window()
+        .and_then(|w| w.location().search().ok())
+        .and_then(|s| s.trim_start_matches('?').split('&').find_map(|kv| kv.strip_prefix("steer=").map(str::to_string)));
+    if v.as_deref() == Some("balance") { Steer::Balance } else { Steer::Record }
+}
+
+/// Is the steer the record?
+pub fn on_record(&self) -> bool {
+    self.steer_sound == crate::audio::live::desk::Steer::Record
+}
+
+/// Which way the balance sends Han: -1, 0 (he stops) or 1.
+    pub fn steer(&self) -> f32 {
+        if self.pan.abs() < PAN_STOP { 0.0 } else { self.pan.signum() }
+    }
+
+    /// Call `k` on the set list.
+    fn call(&mut self, k: usize, calls: &mut MessageWriter<CallMode>) {
+        if k < self.setlist.len() {
+            self.selected = k;
+            self.calls += 1;
+            calls.write(CallMode(self.setlist[k].0));
+        }
     }
 }
 
@@ -291,7 +422,7 @@ pub fn start(commands: &mut Commands, n: usize) {
 
 /// Start `b` as Side B level `n` (tests: a free play Side B room on its own).
 pub fn start_level(commands: &mut Commands, n: usize, b: SideBLevel) {
-    commands.insert_resource(SideB::new(n, b.setlist));
+    commands.insert_resource(SideB::of(n, &b));
     commands.insert_resource(GeneratedLevel(b.level));
     commands.insert_resource(super::AssistMode::Manual);
     commands.insert_resource(crate::state::Shelf::SideB);
@@ -310,7 +441,11 @@ pub fn start_room(world: &mut World, k: usize, room: AloneRoom, setlist: Vec<(Se
 /// Han back at the room's start, as he came in.
 fn han_to_start(world: &mut World, room: AloneRoom) {
     let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
-    let at = super::han::spawn_spot(&level, super::stand_pos(&level, room.start.0, room.start.1));
+    han_to(world, super::han::spawn_spot(&level, super::stand_pos(&level, room.start.0, room.start.1)));
+}
+
+/// Han standing at `at`, afresh.
+fn han_to(world: &mut World, at: Vec2) {
     let mut q = world.query_filtered::<(&mut Pos, &mut PrevPos, &mut Body, &mut HanBrain), With<Han>>();
     if let Ok((mut pos, mut prev, mut body, mut brain)) = q.single_mut(world) {
         pos.0 = at;
@@ -323,14 +458,29 @@ fn han_to_start(world: &mut World, room: AloneRoom) {
 /// A rewind in a free play Side B room: Han back at its start, its nuggets back.
 fn rewind_room(world: &mut World, room: AloneRoom) {
     han_to_start(world, room);
+    nuggets_back(world, room.cols);
+}
+
+/// A death on a Side B level: Han back at the last checkpoint he passed, or the start.
+fn back_to_checkpoint(world: &mut World) {
+    let Some(mut side) = world.get_resource_mut::<SideB>() else { return };
+    side.back_to_mouth();
+    let at = side.mouth.as_ref().map(|m| m.at + Vec2::new(0.0, HALF.y));
     let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
-    let (x0, x1) = (room.cols.0 as f32 * TILE, room.cols.1 as f32 * TILE);
+    let at = at.unwrap_or_else(|| super::han::spawn_spot(&level, super::stand_pos(&level, level.start.0, level.start.1)));
+    han_to(world, at);
+}
+
+/// The nuggets in these columns, as the level has them.
+fn nuggets_back(world: &mut World, cols: (usize, usize)) {
+    let Some(level) = world.get_resource::<ActiveLevel>().map(|a| a.level.clone()) else { return };
+    let (x0, x1) = (cols.0 as f32 * TILE, cols.1 as f32 * TILE);
     let mut q = world.query_filtered::<(Entity, &Transform), With<Nugget>>();
     let old: Vec<Entity> = q.iter(world).filter(|(_, tf)| (x0..x1).contains(&tf.translation.x)).map(|(e, _)| e).collect();
     for e in old {
         world.despawn(e);
     }
-    for t in level.things.iter().filter(|t| t.kind == crate::level::ThingKind::Nugget && (room.cols.0..room.cols.1).contains(&t.col)) {
+    for t in level.things.iter().filter(|t| t.kind == crate::level::ThingKind::Nugget && (cols.0..cols.1).contains(&t.col)) {
         world.spawn(super::lifecycle::nugget(&level, t.col, t.row));
     }
 }
@@ -359,7 +509,7 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             Update,
             (
-                choose_and_call.run_if(in_state(PlayState::Running)),
+                (choose_and_call, autoplay).chain().run_if(in_state(PlayState::Running)),
                 refill_on_restart.run_if(in_state(AppState::Playing)),
             )
                 .run_if(resource_exists::<SideB>),
@@ -367,8 +517,8 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(
             FixedUpdate,
             (
-                (beacon, melt).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
-                (han_fate, han_grabs_nuggets).chain().in_set(GameSet::Interact),
+                (beacon, melt, land_hits).chain().in_set(GameSet::Prepare).after(super::lifecycle::tick_clocks),
+                (han_fate, han_grabs_nuggets, han_passes_checkpoints).chain().in_set(GameSet::Interact),
             )
                 .run_if(resource_exists::<SideB>),
         );
@@ -378,12 +528,191 @@ pub(super) fn plugin(app: &mut App) {
     app.add_systems(Startup, dev_start);
 }
 
+/// How far from Han (columns) a hit drops a trapdoor: the one under him.
+pub const HIT_REACH: f32 = 3.0;
+
+/// A hit lands on the beat after the one it was played on: the beat blocks swap (by the hits'
+/// parity: `crushers::beat_blocks`) and the trapdoors near Han drop.
+fn land_hits(
+    mut side: ResMut<SideB>,
+    groove: Res<Groove>,
+    han: Query<&Pos, With<Han>>,
+    mut doors: Query<(&super::LevelTile, &mut super::crushers::Crumble)>,
+    active: Res<ActiveLevel>,
+    mut landed: MessageWriter<crate::events::HitLanded>,
+) {
+    let Some(on) = side.hit_on else { return };
+    if on == (groove.clock.bar, groove.clock.beat) {
+        return;
+    }
+    side.hit_on = None;
+    side.hits += 1;
+    let Ok(han) = han.single() else { return };
+    let mut tiles = Vec::new();
+    for (t, mut door) in &mut doors {
+        let c = active.level.tile_center(t.col, t.row);
+        if *door == super::crushers::Crumble::Whole && (c.x - han.0.x).abs() < HIT_REACH * TILE {
+            *door = super::crushers::Crumble::Cracking(crate::level::CRUMBLE_DELAY);
+            tiles.push(c);
+        }
+    }
+    // (The beat blocks on screen swap: they flash.)
+    let level = &active.level;
+    let near = |i: usize| ((i % level.width) as f32 * TILE - han.0.x).abs() < 14.0 * TILE;
+    tiles.extend(level.tiles.iter().enumerate().filter(|&(i, t)| t.is_beat() && near(i)).map(|(i, _)| level.tile_center(i % level.width, i / level.width)));
+    landed.write(crate::events::HitLanded { pos: han.0, tiles });
+}
+
+/// Han passing a checkpoint (the mouth of a passage): a death comes back here.
+fn han_passes_checkpoints(
+    // (Gone once a free play room's cleared: `end_room`.)
+    side: Option<ResMut<SideB>>,
+    han: Query<(&Pos, &Body), With<Han>>,
+    mut checkpoints: Query<(&mut super::Checkpoint, &Transform)>,
+    mut reached: MessageWriter<crate::events::CheckpointReached>,
+) {
+    let (Some(mut side), Ok((pos, body))) = (side, han.single()) else { return };
+    if side.phase != Phase::Playing || side.room.is_some() {
+        return;
+    }
+    for (mut cp, tf) in &mut checkpoints {
+        let floor = tf.translation.truncate();
+        if cp.active || (pos.0.x - floor.x).abs() > TILE || pos.0.y - body.half.y > floor.y + 2.0 * TILE || pos.0.y + body.half.y < floor.y {
+            continue;
+        }
+        cp.active = true;
+        side.mouth = Some(Mouth { at: floor, pan: side.pan_rest, dir: side.dir, hits: side.hits });
+        reached.write(crate::events::CheckpointReached { index: cp.index, pos: floor });
+    }
+}
+
 /// Hidden ways in (Side B is a prototype): `NATHAN_SIDE_B=1 cargo run`, or `?sideb=1` on the
 /// web, start straight in Side B's level 1 (and the title's Up Up Down Down: `ui::title`).
+/// `NATHAN_SIDE_B_PLAN="4/0 10/30 +1.5 9/31 27/20"` (native, for recordings): the game plays a
+/// route itself, as `tests/side_b.rs` writes them ([`Plan`]). Going by where Han is, it plays
+/// the same however the music's clock runs.
+struct AutoPlan(Vec<PlanStep>, usize, f32, f32);
+
+/// One step of a route: at column `col` (`col/k`: once Han's crossed it, either way) or this
+/// long after the step before (`+secs/k`, or `+secs` to only wait), do `k`: call `k` (0-2),
+/// hit (`20`), lean the band left (`30`) or right (`31`). (`1k`, the old pick, is nothing now:
+/// calls are free.)
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum PlanStep {
+    At(f32, usize),
+    After(f32, Option<usize>),
+}
+
+impl PlanStep {
+    /// What it does.
+    pub fn act(self) -> Option<usize> {
+        match self {
+            PlanStep::At(_, k) => Some(k),
+            PlanStep::After(_, k) => k,
+        }
+    }
+}
+
+/// A route's text: `col/k` and `+secs/k` steps, `+secs` waits.
+pub fn parse_plan(text: &str) -> Vec<PlanStep> {
+    text.split_whitespace()
+        .filter_map(|w| {
+            let (a, k) = match w.split_once('/') {
+                Some((a, k)) => (a, Some(k.parse().ok()?)),
+                None => (w, None),
+            };
+            match a.strip_prefix('+') {
+                Some(s) => Some(PlanStep::After(s.parse().ok()?, k)),
+                None => Some(PlanStep::At(a.parse().ok()?, k?)),
+            }
+        })
+        .collect()
+}
+
+/// The hit's code in a plan, and the balance's.
+pub const PLAN_HIT: usize = 20;
+pub const PLAN_LEFT: usize = 30;
+pub const PLAN_RIGHT: usize = 31;
+
+/// Do plan step `k` (see [`PlanStep`]).
+pub fn plan_act(side: &mut SideB, k: usize, groove: &Groove, calls: &mut MessageWriter<CallMode>) {
+    match k {
+        PLAN_HIT => side.hit(groove),
+        PLAN_LEFT => side.lean(-1.0),
+        PLAN_RIGHT => side.lean(1.0),
+        k if k < 10 => side.call(k, calls),
+        _ => {}
+    }
+}
+
+/// Has Han reached plan step `step`, at `x` (columns) from `prev`, `secs` after the last?
+pub fn plan_due(step: PlanStep, prev: f32, x: f32, secs: f32) -> bool {
+    match step {
+        PlanStep::At(col, _) => (prev - col) * (x - col) <= 0.0,
+        PlanStep::After(s, _) => secs >= s,
+    }
+}
+
+fn autoplay(
+    time: Res<Time>,
+    mut plan: Local<Option<AutoPlan>>,
+    mut side: ResMut<SideB>,
+    han: Query<&Pos, With<Han>>,
+    groove: Res<Groove>,
+    mut calls: MessageWriter<CallMode>,
+) {
+    let Ok(at) = han.single() else { return };
+    let x = at.0.x / TILE;
+    let plan = plan.get_or_insert_with(|| AutoPlan(plan_from_env(), 0, x, 0.0));
+    // (A death doesn't go back in the plan: it's for clean runs.)
+    if plan.1 >= plan.0.len() || side.phase != Phase::Playing {
+        plan.2 = x;
+        return;
+    }
+    plan.3 += time.delta_secs();
+    let step = plan.0[plan.1];
+    if plan_due(step, plan.2, x, plan.3) {
+        plan.1 += 1;
+        plan.3 = 0.0;
+        if let Some(k) = step.act() {
+            plan_act(&mut side, k, &groove, &mut calls);
+        }
+    }
+    plan.2 = x;
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn plan_from_env() -> Vec<PlanStep> {
+    parse_plan(&std::env::var("NATHAN_SIDE_B_PLAN").unwrap_or_default())
+}
+
+#[cfg(target_arch = "wasm32")]
+fn plan_from_env() -> Vec<PlanStep> {
+    Vec::new()
+}
+
+/// `NATHAN_SIDE_B_FILE=<path>` (native) plays that file as the level asked for (to try a level
+/// being drawn without a rebuild).
 fn dev_start(mut commands: Commands) {
     if let Some(n) = asked_for() {
-        start(&mut commands, n.saturating_sub(1).min(SIDE_B_SOURCES.len() - 1));
+        let n = n.saturating_sub(1).min(SIDE_B_SOURCES.len() - 1);
+        match level_file() {
+            Some(b) => start_level(&mut commands, n, b),
+            None => start(&mut commands, n),
+        }
     }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn level_file() -> Option<SideBLevel> {
+    let path = std::env::var("NATHAN_SIDE_B_FILE").ok()?;
+    let text = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("NATHAN_SIDE_B_FILE {path}: {e}"));
+    Some(SideBLevel::parse(&text).unwrap_or_else(|e| panic!("NATHAN_SIDE_B_FILE {path}: {e}")))
+}
+
+#[cfg(target_arch = "wasm32")]
+fn level_file() -> Option<SideBLevel> {
+    None
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -406,28 +735,83 @@ fn leave(mut commands: Commands, side: Option<Res<SideB>>, mut mode: ResMut<supe
     }
 }
 
-/// Left/Right picks a call on the set list, Down or Jump plays it (Han jumps by himself, and
-/// on a phone the jump zone is the big button).
-fn choose_and_call(input: Single<&ActionState<Action>>, mut side: ResMut<SideB>, mut calls: MessageWriter<CallMode>) {
+/// 1/2/3 call (on a phone, a tap on a call's cell), Down calls the last one again: all free.
+/// Left/Right lean the band (on a phone, a swipe above the set list): a step each, hard over
+/// to the middle to hard over the other way. Jump or Up is the hit (on a phone, a tap above
+/// the set list): it lands on the next beat ([`land_hits`]).
+fn choose_and_call(
+    input: Single<&ActionState<Action>>,
+    mut side: ResMut<SideB>,
+    mut calls: MessageWriter<CallMode>,
+    encore: Option<Res<super::encore::Encore>>,
+    groove: Res<Groove>,
+) {
     let n = side.setlist.len();
-    if n == 0 {
+    // (The encore's calls are free: `encore`.)
+    if n == 0 || encore.is_some() {
         return;
     }
-    if input.just_pressed(&Action::Left) {
-        side.selected = (side.selected + n - 1) % n;
+    if side.phase != Phase::Playing {
+        return;
     }
-    if input.just_pressed(&Action::Right) {
-        side.selected = (side.selected + 1) % n;
-    }
-    let call = input.just_pressed(&Action::Down) || input.just_pressed(&Action::Jump);
-    if call && side.phase == Phase::Playing {
-        let k = side.selected;
-        if side.left[k] > 0 {
-            side.left[k] -= 1;
-            side.calls += 1;
-            calls.write(CallMode(side.setlist[k].0));
+    if side.on_record() {
+        // A hand on the record: held (Down), pulled back (Left), or a thumb on the phone's
+        // turntable (index.html: how fast it's dragged back); let go, it plays.
+        let held = if input.pressed(&Action::Left) {
+            Some(-1.0)
+        } else if input.pressed(&Action::Down) {
+            Some(0.0)
+        } else {
+            None
+        };
+        side.pan_to = scratch_touch().or(held).unwrap_or(side.pan_rest);
+    } else {
+        if input.just_pressed(&Action::Left) {
+            side.lean(-1.0);
+        }
+        if input.just_pressed(&Action::Right) {
+            side.lean(1.0);
+        }
+        side.pan_to = side.pan_rest;
+        if input.just_pressed(&Action::Down) {
+            let k = side.selected;
+            side.call(k, &mut calls);
         }
     }
+    if let Some(k) = Action::CALLS.iter().take(n).position(|a| input.just_pressed(a)) {
+        side.call(k, &mut calls);
+    }
+    if input.just_pressed(&Action::Jump) || input.just_pressed(&Action::Up) {
+        side.hit(&groove);
+    }
+}
+
+impl SideB {
+    /// A step of the steer's resting place that way (-1 left / back, 1 right / forward).
+    pub fn lean(&mut self, way: f32) {
+        self.pan_rest = (self.pan_rest + way).clamp(-1.0, 1.0);
+        self.pan_to = self.pan_rest;
+    }
+
+    /// The hit, played now: it lands on the next beat.
+    pub fn hit(&mut self, groove: &Groove) {
+        self.hit_on = Some((groove.clock.bar, groove.clock.beat));
+        self.hits_played += 1;
+    }
+}
+
+/// The phone's turntable (index.html sets `window.nathanScratch` while a thumb's on it: 0
+/// held, down to -1 dragged back fast).
+#[cfg(target_arch = "wasm32")]
+fn scratch_touch() -> Option<f32> {
+    let w = web_sys::window()?;
+    let v = js_sys::Reflect::get(w.as_ref(), &"nathanScratch".into()).ok()?.as_f64()?;
+    v.is_finite().then_some(v.clamp(-1.0, 1.0) as f32)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn scratch_touch() -> Option<f32> {
+    None
 }
 
 fn refill_on_restart(mut commands: Commands, mut restarts: MessageReader<RestartLevel>, mut side: ResMut<SideB>) {
@@ -452,7 +836,12 @@ fn beacon(
     mut nat: Query<(Entity, &mut Pos, &mut Body, &mut PlayerControl, Has<Finished>), (With<Player>, Without<Han>)>,
     mut han: Query<(&Pos, &Body, &mut HanBrain), (With<Han>, Without<Player>)>,
     mut says: MessageWriter<HanSays>,
+    encore: Option<Res<super::encore::Encore>>,
 ) {
+    // (The encore moves Nat and Han itself.)
+    if encore.is_some() {
+        return;
+    }
     let Ok((e, mut pos, mut body, mut ctl, finished)) = nat.single_mut() else { return };
     if !finished {
         commands.entity(e).insert(Finished);
@@ -465,7 +854,39 @@ fn beacon(
     let Ok((hpos, hbody, mut brain)) = han.single_mut() else { return };
     let goal = side.room.map_or(level.goal, |r| r.goal);
     let goal = (goal.0 as i32, goal.1 as i32);
-    let dir = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
+    // The balance glides (as the music's does), and Han follows it; in a maze he turns at walls
+    // himself, and the band swings round with him.
+    let rate = if side.on_record() { crate::audio::live::desk::RECORD_HAND } else { 2.0 / PAN_GLIDE_SECS };
+    side.pan = crate::game::move_towards(side.pan, side.pan_to, rate * time.delta_secs());
+    let mut dir = side.steer();
+    // On the record he keeps his heading (toward the goal, or the way a maze turned him) and
+    // the record runs him along it, holds him, or pulls him back along it: a moonwalk, as fast
+    // as it's scratched.
+    let toward = if goal.0 as f32 * TILE + TILE / 2.0 >= hpos.0.x { 1.0 } else { -1.0 };
+    let heading = *side.dir.get_or_insert(toward);
+    brain.pace = 1.0;
+    brain.face = None;
+    if side.on_record() {
+        let mut h = heading;
+        if side.turns && dir > 0.0 && side.phase == Phase::Playing {
+            h = turn_at_walls(level, &mut side, hpos.0, hbody, heading);
+        }
+        side.dir = Some(h);
+        dir *= h;
+        brain.pace = side.pan.abs().clamp(0.35, 1.0);
+        brain.face = Some(h);
+    } else if side.turns && dir != 0.0 && side.phase == Phase::Playing {
+        side.dir = Some(dir);
+        let d = turn_at_walls(level, &mut side, hpos.0, hbody, dir);
+        if d != dir {
+            side.pan_to = d * side.pan_to.abs().max(1.0);
+            side.pan = d * side.pan.abs();
+            dir = d;
+        }
+    }
+    if dir != 0.0 && !side.on_record() {
+        side.dir = Some(dir);
+    }
     // Re-plan from where he stands (mid-air he's carrying out a move already).
     if hbody.on_ground && side.phase == Phase::Playing {
         let map = Map::for_han(level);
@@ -485,14 +906,17 @@ fn beacon(
             crate::level::nav::Route::Budget => {}
         }
         // Got somewhere since he charged (up the wall, over the gap): that charge is over.
-        if side.charging.is_some() && (hpos.0.x - side.charge_x).abs() > 3.0 * TILE {
+        // (Up or down a lift counts; riding one too.)
+        let moved = (hpos.0.x - side.charge_x).abs() > 3.0 * TILE || (hpos.0.y - side.charge_y).abs() > 2.0 * TILE;
+        if side.charging.is_some() && (moved || hbody.riding.is_some()) {
             side.charging = None;
         }
         // At the frontier: charge!
         let there = side.target.is_some_and(|t| (t.0 - from.0) * dir as i32 <= 1 && t.1 == from.1);
-        if side.frontier && there && side.charging.is_none() {
+        if side.frontier && there && side.charging.is_none() && dir != 0.0 {
             side.charging = Some(0.0);
             side.charge_x = hpos.0.x;
+            side.charge_y = hpos.0.y;
             side.charge_landings = 0;
             says.write(HanSays { text: charge_line(level, from, dir).to_string() });
         }
@@ -502,7 +926,14 @@ fn beacon(
     }
     // He always just goes for it (`han::brain::charge`); the charge at the frontier is when he
     // yells about it, and how long he keeps it up.
-    brain.charge = (side.phase == Phase::Playing).then_some(dir);
+    // (In the middle he stands: `han::brain::charge` with no way to go.)
+    // (A room cleared, he stands at its goal for the tag.)
+    brain.charge = match side.phase {
+        Phase::Playing => Some(dir),
+        Phase::Cleared { .. } if side.room.is_some() => Some(0.0),
+        _ => None,
+    };
+    brain.maze = side.turns;
     if hbody.on_ground && !side.was_grounded && side.charging.is_some() {
         side.charge_landings += 1;
     }
@@ -512,7 +943,49 @@ fn beacon(
     body.vel = Vec2::ZERO;
     body.on_ground = true;
     body.riding = None;
-    ctl.facing = dir;
+    // (Scratched back he moonwalks: still facing the way he was going.)
+    if side.on_record() {
+        ctl.facing = side.dir.unwrap_or(1.0);
+    } else if dir != 0.0 {
+        ctl.facing = dir;
+    }
+}
+
+/// `turns: walls`: which way Han runs. He turns round when he's landed twice in a row at the
+/// same spot against a wall (he jumped and didn't get over it), or a bumper bats him back.
+fn turn_at_walls(level: &Level, side: &mut SideB, at: Vec2, body: &Body, toward: f32) -> f32 {
+    let dir = *side.dir.get_or_insert(toward);
+    let mut turn = body.launch * dir < -crate::level::BUMPER_SPEED * 0.5;
+    // (On grease he can't jump: a wall turns him straight away. So do drips he's too big for.)
+    let ahead = |dy: f32| {
+        let (c, r) = level.cell_at(at + Vec2::new(dir * (body.half.x + 3.0), dy));
+        level.tile(c, r).is_solid()
+    };
+    if body.on_ground && (ahead(0.0) || ahead(-body.half.y + 2.0)) && crate::game::physics::grease_underfoot(level, at, body.half) {
+        turn = true;
+    }
+    let (c, r) = level.cell_at(at + Vec2::new(dir * (body.half.x + super::han::DRIP_BERTH), 0.0));
+    if body.on_ground && body.half.y > HALF.y * 0.8 && level.tile(c, r) == Tile::SpikesDown {
+        turn = true;
+    }
+    if body.on_ground && !side.was_grounded && side.phase == Phase::Playing {
+        let wall = ahead(0.0) || ahead(-body.half.y + 2.0);
+        if wall && at.distance(side.bonk_at) < 1.5 * TILE {
+            side.bonks += 1;
+        } else {
+            side.bonks = if wall { 1 } else { 0 };
+            side.bonk_at = at;
+        }
+        turn |= side.bonks >= 2;
+    }
+    if turn {
+        side.bonks = 0;
+        side.bonk_at = Vec2::NAN;
+        side.charging = None;
+        side.dir = Some(-dir);
+        return -dir;
+    }
+    dir
 }
 
 /// Han's charge barks (he's nearly silent, as everywhere: `level::is_bark`).
@@ -553,8 +1026,7 @@ fn melt(time: Res<Time>, groove: Res<Groove>, mut han: Query<(&mut Pos, &mut Bod
     }
 }
 
-/// A nugget Han grabs is one more of the call that's picked on the set list: steer the cursor
-/// before he gets there.
+/// Han grabs nuggets (the score: calls are free).
 fn han_grabs_nuggets(
     mut commands: Commands,
     // (Gone the moment Han clears a free play Side B room: `end_room`.)
@@ -564,7 +1036,7 @@ fn han_grabs_nuggets(
     mut sfx: MessageWriter<crate::events::PlaySfx>,
 ) {
     let Some(mut side) = side else { return };
-    if side.phase != Phase::Playing || side.left.is_empty() {
+    if side.phase != Phase::Playing {
         return;
     }
     let Ok((pos, body)) = han.single() else { return };
@@ -573,15 +1045,25 @@ fn han_grabs_nuggets(
         let c = tf.translation.truncate();
         if (pos.0.x - c.x).abs() < body.half.x + h && (pos.0.y - c.y).abs() < body.half.y + h {
             commands.entity(e).despawn();
-            let k = side.selected;
-            side.left[k] += 1;
-            side.refills += 1;
+            side.nuggets += 1;
             sfx.write(crate::events::PlaySfx(crate::audio::Sfx::Nugget));
         }
     }
 }
 
 /// Is a box at `pos` (half extents `half`) in a spike tile's deadly half?
+/// Whether Han's in the sewage, or standing on it (the pocket a ferry leaves): his middle in
+/// it, or nothing but sewage under his feet.
+fn in_sewage(level: &Level, pos: Vec2, half: Vec2) -> bool {
+    let liquid = |p: Vec2| {
+        let (c, r) = level.cell_at(p);
+        c >= 0 && r >= 0 && level.tile(c, r) == Tile::Liquid
+    };
+    let x = half.x - super::FORGIVE;
+    let feet = pos.y - half.y - 2.0;
+    liquid(pos) || (liquid(Vec2::new(pos.x - x, feet)) && liquid(Vec2::new(pos.x + x, feet)))
+}
+
 fn on_spikes(level: &Level, pos: Vec2, half: Vec2) -> bool {
     let shrink = Vec2::splat(super::FORGIVE);
     let (min, max) = (pos - half + shrink, pos + half - shrink);
@@ -620,9 +1102,10 @@ fn han_fate(
     goal: Query<&Transform, With<Goal>>,
     crushers: Query<(&super::crushers::CrusherBlock, &Pos), Without<Han>>,
     mut says: MessageWriter<HanSays>,
-    mut restart: MessageWriter<RestartLevel>,
     mut next: ResMut<NextState<AppState>>,
     progress: Option<ResMut<crate::save::Progress>>,
+    (run, encore, mut cues): (Res<super::LevelRun>, Option<Res<super::encore::Encore>>, MessageWriter<crate::events::EncoreCue>),
+    plats: Query<(&super::MovingPlatform, &Pos), Without<Han>>,
 ) {
     let dt = time.delta_secs();
     let level = &active.level;
@@ -632,12 +1115,21 @@ fn han_fate(
     match side.phase {
         Phase::Rewind { t } => {
             if t - dt <= 0.0 {
-                restart.write(RestartLevel);
+                // Back to the last checkpoint (a free play room: its start), the tune playing on.
+                match side.room {
+                    Some(room) => {
+                        side.rewound();
+                        commands.queue(move |w: &mut World| han_to_start(w, room));
+                    }
+                    None => commands.queue(back_to_checkpoint),
+                }
             } else {
                 side.phase = Phase::Rewind { t: t - dt };
             }
             return;
         }
+        // (The last level's encore takes it from here: `encore::side_b`.)
+        Phase::Cleared { .. } if encore.is_some() => return,
         Phase::Cleared { t } => {
             if t - dt <= 0.0 && side.room.is_some() {
                 commands.queue(end_room);
@@ -648,7 +1140,7 @@ fn han_fate(
                 if n < SIDE_B_SOURCES.len() {
                     commands.queue(move |w: &mut World| {
                         let b = SideBLevel::load(n);
-                        w.insert_resource(SideB::new(n, b.setlist));
+                        w.insert_resource(SideB::of(n, &b));
                         w.insert_resource(GeneratedLevel(b.level));
                         w.write_message(RestartLevel);
                     });
@@ -674,8 +1166,10 @@ fn han_fate(
     if let Some(floor) = floor {
         let (min, max) = (floor - Vec2::new(5.0, 0.0), floor + Vec2::new(5.0, 2.0 * TILE));
         if pos.0.x + HALF.x > min.x && pos.0.x - HALF.x < max.x && pos.0.y + HALF.y > min.y && pos.0.y - HALF.y < max.y {
-            if side.room.is_some() {
+            if let Some(r) = side.room {
                 side.phase = Phase::Cleared { t: ROOM_CLEARED_SECS };
+                // (Nat waits at the goal for the tag, and Han stays there with him.)
+                side.target = Some((r.goal.0 as i32, r.goal.1 as i32));
                 say(&mut says, ROOM_CLEARED_LINE);
                 return;
             }
@@ -684,6 +1178,10 @@ fn han_fate(
                 progress.record_side_b(side.level, side.rewinds);
             }
             say(&mut says, CLEARED_LINE);
+            // Side B's last goal: Han's encore (and what goes wrong in it).
+            if super::encore::side_b::is_finale(side.level, side.room.is_some()) {
+                super::encore::side_b::start(&mut commands, &active, &run, pos.0, &mut cues);
+            }
             return;
         }
     }
@@ -696,15 +1194,17 @@ fn han_fate(
         Some(Fate::Pit)
     } else if on_spikes(level, pos.0, body.half) {
         Some(Fate::Spikes)
-    } else if side.charge_landings >= 2 && (pos.0.x - side.charge_x).abs() < 2.5 * TILE {
-        Some(Fate::Bonk)
-    } else if side.charging.is_some_and(|t| t > CHARGE_GIVE_UP) {
-        Some(Fate::Pooped)
+    } else if in_sewage(level, pos.0, body.half) && !plats.iter().any(|(m, p)| {
+        // (A ferry rides in the sewage's top row: on it, he's fine.)
+        (pos.0.x - p.0.x).abs() < m.width as f32 * TILE / 2.0 + body.half.x && (pos.0.y - body.half.y - (p.0.y + TILE / 2.0)).abs() < 4.0
+    }) {
+        // (In over his head: at once, not when his brain gets round to sinking.)
+        Some(Fate::Sewage)
     } else {
         None
     };
     if let Some(f) = fate {
-        if matches!(f, Fate::Spikes | Fate::Bonk | Fate::Pooped | Fate::Squashed) {
+        if matches!(f, Fate::Spikes | Fate::Sewage | Fate::Bonk | Fate::Pooped | Fate::Squashed) {
             brain.mode = HanMode::Sinking { t: 30.0 };
         }
         brain.charge = None;

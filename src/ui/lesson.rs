@@ -301,7 +301,7 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
         ),
         Lesson::Trick(HanTrick::Trapeze) => (
             "HAN'S TRICK: THE TRAPEZE",
-            vec!["WALTZING? HAN SWINGS FROM".into(), "THE CEILING. RIDE HIS CAP,".into(), "JUMP ON ONE: FLY FAR!".into()],
+            vec!["WALTZING? HAN HANGS FROM".into(), "THE CEILING. HOP ON HIS CAP:".into(), "ON ONE HE FLINGS YOU!".into()],
         ),
         Lesson::Trick(HanTrick::Raft) => (
             "HAN'S TRICK: THE RAFT",

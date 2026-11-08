@@ -71,6 +71,34 @@
       .hint { position: absolute; bottom: 18px; padding: 6px 10px; border-radius: 10px;
         border: 2px dashed rgba(255, 199, 46, 0.4); transition: opacity 1.2s; }
       #stick-zone .hint { left: 18px; } #jump-zone .hint { right: 18px; }
+      /* Side B (the game marks <body class="sideb">): no stick, no jump; each third of the
+         screen's bottom calls the set list cell drawn along the bottom over it, and above them
+         the middle is the hit and the sides lean the band (Han follows the sound). */
+      #calls { display: none; }
+      body.sideb #stick-zone, body.sideb #jump-zone, body.sideb #call-zone { display: none; }
+      body.sideb #calls { display: block; }
+      #call-1, #call-2, #call-3 { top: 60%; bottom: 0; width: 33.34%; }
+      #hit-zone { left: 22%; right: 22%; top: 96px; bottom: 40%; }
+      #lean-left, #lean-right { top: 96px; bottom: 40%; width: 22%; }
+      #lean-left { left: 0; } #lean-right { right: 0; }
+      #lean-left .hint { left: 12px; } #lean-right .hint { right: 12px; }
+      #hit-zone .hint { left: 50%; transform: translateX(-50%); white-space: nowrap; }
+      /* The record (Side B's steer, unless ?steer=balance): the left half is a turntable to
+         hold (Han waits) and drag back (he moonwalks); the right half is the hit. */
+      #record-zone { display: none; left: 0; width: 50%; top: 96px; bottom: 40%; }
+      body.steer-record #lean-left, body.steer-record #lean-right { display: none; }
+      body.steer-record #record-zone { display: block; }
+      body.steer-record #hit-zone { left: 50%; right: 0; }
+      #vinyl { position: absolute; left: 50%; top: 50%; width: 112px; height: 112px; margin: -56px;
+        border-radius: 50%; opacity: 0.55; pointer-events: none;
+        background: radial-gradient(circle, #ffc72e 0 9px, #1a120c 10px 13px, transparent 14px),
+          repeating-radial-gradient(circle, #2a1d14 0 2px, #3d2a1c 3px 4px); box-shadow: 0 0 0 2px rgba(255, 199, 46, 0.4); }
+      #vinyl::after { content: ""; position: absolute; left: 50%; top: 6px; width: 3px; height: 30px; margin-left: -1px;
+        background: rgba(255, 238, 200, 0.7); border-radius: 2px; }
+      #record-zone.down #vinyl { opacity: 0.9; }
+      #record-zone .hint { left: 12px; white-space: nowrap; }
+      #call-1 { left: 0; } #call-2 { left: 33.33%; } #call-3 { right: 0; }
+      #call-1 .hint, #call-2 .hint, #call-3 .hint { left: 50%; transform: translateX(-50%); bottom: 64px; white-space: nowrap; }
       body.played .hint { opacity: 0; }
       #ring { position: fixed; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%;
         border: 2px solid rgba(255, 199, 46, 0.6); display: none; pointer-events: none; z-index: 6; }
@@ -107,6 +135,15 @@
       <div class="zone" id="stick-zone"><span class="hint">&#9664; slide &#9654;</span></div>
       <div class="zone" id="jump-zone" data-key="Space"><span class="hint">tap: JUMP &middot; again: TOOT</span></div>
       <div class="zone" id="call-zone" data-key="ArrowDown"></div>
+      <div id="calls">
+        <div class="zone" id="record-zone"><div id="vinyl"></div><span class="hint">hold: WAIT &middot; drag &#9664;: BACK</span></div>
+        <div class="zone" id="lean-left" data-key="ArrowLeft"><span class="hint">&#9664; LEAN</span></div>
+        <div class="zone" id="hit-zone" data-key="Space"><span class="hint">tap: HIT</span></div>
+        <div class="zone" id="lean-right" data-key="ArrowRight"><span class="hint">LEAN &#9654;</span></div>
+        <div class="zone" id="call-1" data-key="Digit1"><span class="hint">tap: CALL</span></div>
+        <div class="zone" id="call-2" data-key="Digit2"><span class="hint">tap: CALL</span></div>
+        <div class="zone" id="call-3" data-key="Digit3"><span class="hint">tap: CALL</span></div>
+      </div>
       <div class="btn" id="up" data-key="ArrowUp">&#9650;</div>
       <div class="btn" id="down" data-key="ArrowDown">&#9660;</div>
       <div class="btn" id="ok" data-key="Enter">OK</div>
@@ -164,7 +201,7 @@
         document.body.classList.add("portrait-ok");
       });
       const CODES = { ArrowLeft: "ArrowLeft", ArrowRight: "ArrowRight", ArrowUp: "ArrowUp", ArrowDown: "ArrowDown",
-        Space: " ", Enter: "Enter", Escape: "Escape" };
+        Space: " ", Enter: "Enter", Escape: "Escape", Digit1: "1", Digit2: "2", Digit3: "3" };
       const held = new Map(); // code -> number of pointers holding it
       function key(type, code) {
         canvas.dispatchEvent(new KeyboardEvent(type, { key: CODES[code], code, bubbles: true, cancelable: true }));
@@ -217,6 +254,42 @@
           if (st.code) release(st.code);
           if (sticks.size === 0) ring.style.display = "none";
         });
+      }
+      // Side B's record: a thumb on it sets `window.nathanScratch` (the game reads it:
+      // `sideb::scratch_touch`): 0 held, down to -1 dragged back fast, up to 1 pushed on; lifted,
+      // it's gone and the record plays. The vinyl turns at the record's speed.
+      if (new URLSearchParams(location.search).get("steer") !== "balance") document.body.classList.add("steer-record");
+      {
+        const rec = document.getElementById("record-zone"), vinyl = document.getElementById("vinyl");
+        let thumb = null, vel = 0, angle = 0, last = performance.now();
+        rec.addEventListener("pointerdown", (e) => {
+          e.preventDefault(); rec.setPointerCapture(e.pointerId); canvas.focus(); played();
+          thumb = { id: e.pointerId, x: e.clientX, t: performance.now(), moved: performance.now() }; vel = 0;
+          rec.classList.add("down"); window.nathanScratch = 0;
+        });
+        rec.addEventListener("pointermove", (e) => {
+          if (!thumb || e.pointerId !== thumb.id) return;
+          const now = performance.now(), dt = Math.max(now - thumb.t, 1);
+          vel = 0.5 * vel + 0.5 * ((e.clientX - thumb.x) / dt);
+          thumb.x = e.clientX; thumb.t = now; thumb.moved = now;
+        });
+        const lift = (e) => {
+          if (!thumb || e.pointerId !== thumb.id) return;
+          thumb = null; rec.classList.remove("down"); delete window.nathanScratch;
+        };
+        for (const ev of ["pointerup", "pointercancel", "lostpointercapture"]) rec.addEventListener(ev, lift);
+        (function spin(now) {
+          if (thumb) {
+            // (A still thumb holds it: the drag's speed fades out.)
+            if (now - thumb.moved > 50) vel *= 0.8;
+            window.nathanScratch = Math.max(-1, Math.min(1, vel / 0.4));
+          }
+          const speed = thumb ? window.nathanScratch : 1;
+          angle = (angle + speed * (now - last) * 0.2) % 360;
+          last = now;
+          vinyl.style.transform = `rotate(${angle}deg)`;
+          requestAnimationFrame(spin);
+        })(performance.now());
       }
       // Never leave a key stuck if the page loses focus mid-touch.
       window.addEventListener("blur", () => { for (const code of [...held.keys()]) { held.set(code, 1); release(code); } sticks.clear(); ring.style.display = "none"; });

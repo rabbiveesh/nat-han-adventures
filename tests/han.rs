@@ -1182,3 +1182,154 @@ fn laughing_band_boing_boost() {
     assert_eq!(boosts, 0);
     assert!(rise < 4.5, "no boing: {rise}");
 }
+
+/// How forgiving the trapeze is for a person: Nat waits at the lip, jumps for Han's cap (right
+/// held) after `a` of a bar, lets go of right once he rides, then jumps off after `b` of a bar
+/// (right held) and toots at the top. The share of (a, b) on a 12 × 12 grid that gets him
+/// across (`b` = 0: no second jump, he waits for Han's fling).
+/// `cargo test --test han trick_windows -- --ignored --nocapture`.
+fn trapeze_window() -> f32 {
+    let secs = 60.0 / nat_han_adventures::audio::waltz::WALTZ_BPM as f64;
+    let bar = (3.0 * secs / DT).round() as usize;
+    let mut wins = 0;
+    let n = 12;
+    let only: Option<(usize, usize)> = std::env::var("TRAPEZE_CASE").ok().and_then(|v| {
+        let (a, b) = v.split_once(',')?;
+        Some((a.parse().ok()?, b.parse().ok()?))
+    });
+    for a in 0..n {
+        for b in 0..n {
+            if only.is_some_and(|o| o != (a, b)) {
+                continue;
+            }
+            let mut app = app(&trapeze_level());
+            let mut frame = 0usize;
+            let mut tick = |app: &mut App| {
+                let beats = frame as f64 * DT / secs;
+                *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+                frame += 1;
+                app.update();
+                trace(app);
+            };
+            let floor = |r: i32| standing((19 - r) as f32 * TILE);
+            put::<Player>(&mut app, Vec2::new(18.5 * TILE, floor(17)));
+            let on = |app: &mut App| matches!(brain(app).mode, HanMode::Trapeze { on: true, .. });
+            for _ in 0..360 {
+                tick(&mut app);
+                if on(&mut app) {
+                    break;
+                }
+            }
+            for _ in 0..a * bar / n {
+                tick(&mut app);
+            }
+            press(&mut app, RIGHT);
+            press(&mut app, JUMP);
+            let hid = single::<Han>(&mut app);
+            let mut rode = None;
+            for k in 0..120 {
+                tick(&mut app);
+                if k == 15 {
+                    release(&mut app, JUMP);
+                }
+                if nat_body(&mut app).riding == Some(hid) {
+                    rode = Some(k);
+                    break;
+                }
+            }
+            release(&mut app, RIGHT);
+            release(&mut app, JUMP);
+            if rode.is_some() && b > 0 {
+                for _ in 0..b * bar / n {
+                    tick(&mut app);
+                }
+                press(&mut app, RIGHT);
+                press(&mut app, JUMP);
+                for _ in 0..20 {
+                    tick(&mut app);
+                }
+                release(&mut app, JUMP);
+                tick(&mut app);
+                press(&mut app, JUMP);
+            } else if rode.is_some() {
+                // (Waiting for the fling: then right, and a toot at the top.)
+                let mut flung = false;
+                for _ in 0..240 {
+                    tick(&mut app);
+                    let nb = nat_body(&mut app);
+                    if !flung && nb.riding.is_none() && nb.vel.y > 0.0 {
+                        flung = true;
+                        press(&mut app, RIGHT);
+                    }
+                    if flung && nb.vel.y <= 0.0 {
+                        press(&mut app, JUMP);
+                        break;
+                    }
+                }
+            }
+            for _ in 0..200 {
+                tick(&mut app);
+            }
+            let p = nat(&mut app);
+            let ok = p.x > 43.0 * TILE && (p.y - floor(14)).abs() < 1.0 && heard(&app).died == 0;
+            wins += ok as usize;
+            eprint!("{}", if ok { '#' } else if rode.is_some() { 'r' } else { '.' });
+        }
+        eprintln!();
+    }
+    wins as f32 / (n * n) as f32
+}
+
+/// How forgiving the buddy jump is: Nat standing, Han settled behind him; Nat holds towards
+/// Han for `b` × 2 frames and jumps (held `h` + 4 frames, a toot at the top), then jumps again
+/// once he's on Han's cap. The share of (b, h) on a 12 × 12 grid that gets a boost.
+fn boost_window() -> f32 {
+    let n = 12;
+    let mut wins = 0;
+    for b in 0..n {
+        for h in 0..n {
+            let mut app = app(FLAT);
+            step(&mut app, 2.0);
+            let to = if han(&mut app).x < nat(&mut app).x { LEFT } else { RIGHT };
+            let hid = single::<Han>(&mut app);
+            press(&mut app, to);
+            tap(&mut app);
+            let mut rode = false;
+            for k in 0..90 {
+                app.update();
+                if k == 2 * b {
+                    release(&mut app, to);
+                }
+                if k == h + 4 {
+                    release(&mut app, JUMP);
+                }
+                if k == 18 {
+                    press(&mut app, JUMP);
+                }
+                if nat_body(&mut app).riding == Some(hid) {
+                    rode = true;
+                    break;
+                }
+            }
+            release(&mut app, to);
+            let b0 = heard(&app).boosted;
+            if rode {
+                step(&mut app, 0.1);
+                tap(&mut app);
+                step(&mut app, 0.5);
+            }
+            let ok = heard(&app).boosted > b0;
+            wins += ok as usize;
+            eprint!("{}", if ok { '#' } else if rode { 'r' } else { '.' });
+        }
+        eprintln!();
+    }
+    wins as f32 / (n * n) as f32
+}
+
+#[test]
+#[ignore]
+fn trick_windows() {
+    eprintln!("buddy jump: {:.0}% of timings get a boost", 100.0 * boost_window());
+    eprintln!("trapeze: {:.0}% of timings get across", 100.0 * trapeze_window());
+}

@@ -133,8 +133,9 @@ fn receive(mut commands: Commands, pending: Option<ResMut<Pending>>, mut reader:
 }
 
 /// Han speaks, or Han behind a secret's grate once Nat's found him.
+/// (Side B's glimpse is Nat: Han himself barks there.)
 fn speaks(glimpse: Option<&HanGlimpse>) -> bool {
-    glimpse.is_none_or(|g| g.found)
+    glimpse.is_none_or(|g| g.found && !g.nat)
 }
 
 /// Still reading the bubble on screen?

@@ -383,7 +383,7 @@ mod tests {
 struct BandReadout;
 
 #[derive(Component)]
-struct BandReadoutPanel;
+pub(super) struct BandReadoutPanel;
 
 fn spawn_band_readout(commands: &mut Commands, f: &UiFont) {
     commands
