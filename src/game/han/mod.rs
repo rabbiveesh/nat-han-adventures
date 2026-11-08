@@ -41,9 +41,10 @@
 //!   marches ahead into it, waiting for Nat to keep up ([`ESCORT_LEAD`]). Spray jets (and the
 //!   cans firing them) stop at his body and stay plugged while he escorts Nat through (and [`HAN_PLUG_LINGER`] after:
 //!   [`SprayPlug`]), flies bounce off him, and Nat walking behind him (he's solid from the side
-//!   while he marches, so Nat can't overtake him into the jets) is safe. Into sewage: he splats and sinks, leaving a
-//!   big raft ([`HAN_RAFT_WIDTH`] tiles, [`HAN_RAFT_LIFE_FLOOR`] s × the assist), and
-//!   parachutes back [`HAN_SEWAGE_RESPAWN`] s later. Not Nat's death: nothing counts it.
+//!   while he marches, so Nat can't overtake him into the jets) is safe. At a pool there's no waiting: as Nat runs
+//!   up to it Han cannonballs in and becomes the pool float ([`HanFloat`]: a
+//!   [`HAN_RAFT_WIDTH`]-tile raft Nat paddles across, fuelled by nuggets), and parachutes back
+//!   [`HAN_SEWAGE_RESPAWN`] s after he climbs out. Not Nat's death: nothing counts it.
 //! - **Overuse**: more than [`overuse_limit`] boosts in a row and his back goes ("My back! I'm
 //!   union, Nat!"): a [`breather`] with no boosts. No limit inside chain chasms.
 //! - **Eagerness** ([`Assists::han_eagerness`](super::Assists)) scales all of it: brace and
@@ -56,7 +57,9 @@ mod world;
 use bevy::prelude::*;
 
 pub use brain::{DRIP_BERTH, HanBrain, HanMode, HanNav, nav_cell, stand};
-pub use world::{FlySpin, HanRaft, SprayPlug, han_raft_life};
+pub use world::{
+    CANNONBALL_LINE, FLOAT_FUEL, FLOAT_LOW, FLOAT_REFUEL, FLOAT_SPEED, FlySpin, GLUB_LINE, HanFloat, HanRaft, SprayPlug, han_raft_life,
+};
 
 use super::{ActiveLevel, GameSet};
 use crate::level::{TILE, Topic};
@@ -65,7 +68,7 @@ pub use crate::level::buddy::{HAN_MARCH_SPEED, HAN_RUN_SPEED, HAN_TOOTS, HanPhys
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
             FixedUpdate,
-            (brain::think, world::han_hazards)
+            (world::drift_floats, brain::think, world::han_hazards)
                 .chain()
                 .in_set(GameSet::World)
                 .after(super::platforms::move_platforms)

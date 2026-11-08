@@ -1,0 +1,17 @@
+# NATHAN_START=140 scripts/record-run --capture out.mp4 scripts/tours/pool-float.timeline 5
+# Level 5's sewer pool: Han the pool float. Run up (Han cannonballs in), teeny-hop aboard,
+# paddle him across, teeny-hop the floating spikes (a nugget over them), hop off.
+wait 2.5
+hold Right 0.55
+wait 1.0
+tap Space 70ms
+hold Right 300ms
+wait 0.5
+press Right
+wait 0.5
+tap Space 70ms
+wait 1.2
+tap Space 70ms
+wait 1.2
+release Right
+wait 4

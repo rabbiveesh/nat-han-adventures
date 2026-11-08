@@ -679,6 +679,7 @@ fn player_step(
     crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Player>, Without<MovingPlatform>)>,
     mut smashed: MessageWriter<BrickSmashed>,
     mut sprung: MessageWriter<Sprung>,
+    floats: Query<(), With<super::han::HanFloat>>,
 ) {
     let dt = time.delta_secs();
     if dt <= 0.0 {
@@ -693,7 +694,9 @@ fn player_step(
         ctl.facing = axis;
     }
     let run = groove.run_scale();
-    let target = axis * RUN_SPEED * run;
+    // Aboard Han's float, Left/Right paddle the float (`han::world::drift_floats`): Nat stays put.
+    let paddling = body.on_ground && body.riding.is_some_and(|e| floats.contains(e));
+    let target = if paddling { 0.0 } else { axis * RUN_SPEED * run };
     // Slipping on grease (no sweaty grip): can't brake, steers weakly, can't jump.
     let slipping = body.on_ground && ctl.on_grease && !groove.grip();
     ctl.since_landing += dt;
@@ -819,6 +822,10 @@ fn player_step(
     // --- Move: gravity, carriers, collisions.
     let mut carriers: Vec<Carrier> =
         platforms.iter().map(|(e, p, prev, plat)| Carrier::platform(e, p.0, prev.0, plat.width)).collect();
+    // (A hop off Han's float keeps none of his speed: Han kicks to stay under Nat instead.)
+    for c in &mut carriers {
+        c.launches &= !floats.contains(c.id);
+    }
     let mut blockers = Vec::new();
     for (e, p, prev, head) in &han {
         carriers.extend(han_carrier(e, p.0, prev.0, head));

@@ -140,8 +140,9 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   choruses): `src/game/secret.rs`. How a NAT ALONE level is built (the design checklist every level
   follows, per-level notes, lessons): `docs/level-design.md`; `scripts/held-gaps <tour>` checks its flow rule.
 - `src/ui/` title, level select, HUD, the band's counter strip (`strip.rs`: charge, then Down
-  calls the band) and its lesson cards (`lesson.rs`: every mechanic, since Han only barks 1-3 words; `NATHAN_LESSONS=0` turns them off; off in
-  capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.
+  calls the band) and its teaching (`lesson.rs`: nothing freezes; the levels teach what you can see, one line under the strip
+  teaches each band counter, the call and Han's head trick (back after deaths at a spot), a key bubble over Nat teaches the
+  toot; the cards are a manual in the pause menu; `NATHAN_LESSONS=0` turns the lines off; off in capture unless `=1`), pause, results, victory, Han's speech bubble. `src/save.rs` progress.
 - `src/capture/` deterministic video capture (native dev, the `capture` feature): frame-stepped
   time, screenshots, lockstep audio, the input timeline (Dev loop 4).
 - `src/bin/editor/` the native music editor (`cargo run --bin editor`; the `editor` feature, in

@@ -41,15 +41,21 @@ Status: built (see "As built" at the end for the decisions and numbers).
 - **Han in sewage**: liquid still gets him — he **splats and sinks** like Nat, leaving a **splat
   raft** at that spot (same as Nat's liquid-death raft: floats ~12 s, then sinks), and
   **parachutes back in** a few seconds later. It is **not** Nat's death: no effect on the band's
-  death counters, the death count or the adaptive engine. Combined with "lemme check that"
-  (stand still facing a sewage pool → he wades in), the player can use him to **make a raft**
-  ("I'm fine! I'm a professional!"). Bottomless drains (under the long quartal gaps) leave no
+  death counters, the death count or the adaptive engine ("I'm fine! I'm a professional!"). Bottomless drains (under the long quartal gaps) leave no
   raft, so this can't bridge those.
-- **Han's raft is bigger and longer-lived** than Nat's (≈3 tiles, ≈30 s vs Nat's 1 tile, 12 s).
-  **Buddy raft puzzles**: a long sewage pool with **spikes on the ceiling** (no jumping across)
-  and too wide to stain-bridge alone — your own rafts sink before you can walk back from the
-  respawn for the next one; Han's raft is the answer. The validator needs a time model for
-  these (respawn → walk-back time vs raft lifetime).
+- **Han the pool float** (2026-11, replacing "stand still and he wades in": you played by
+  waiting). Run up to a pool (within 3 tiles, moving toward it) and Han cannonballs in
+  ("Cannonball!") and floats on his back, a 3-tile raft creeping across. Hop on and he's a
+  little boat: Left/Right paddle him either way (100 px/s; Nat stays put on him), nothing held
+  and he stops. He kicks for 8 s with Nat aboard, nuggets grabbed aboard add 2.5 s, he
+  shivers when low and sinks when dry ("Glub!"; Nat goes in). Hopping off him keeps none of
+  his speed; he kicks to stay under Nat in the air (up to 170 px/s), so a hop forward over
+  something lands back on him. Buddy raft pools have their **spike ceiling two rows up** (a
+  full jump hits it) and **floating spikes** to teeny-hop, nuggets over them. Nobody aboard
+  for 1.5 s (you got off, or he crossed without you) and he climbs out; he's back by
+  parachute and dives again on the next run-up. `src/game/han/world.rs` (`HanFloat`,
+  `drift_floats`); `tests/han.rs`, `tests/han_campaign.rs`; `scripts/tours/pool-float.timeline`.
+  Side B keeps the plain sinking raft.
 - **Raft lifetimes slide with the adaptive assist dial** (up to ~2×) but **never below a floor**
   (Nat 12 s, Han 30 s). **Solvability is always computed with the floors**, so assists only
   loosen things that are already provably solvable.
@@ -203,8 +209,8 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   2.0 / 1.5 / 0.7 s (lazy / neutral / eager), outside the band zones. It's an escort: Han never leads by more than
   1.5 tiles, he's solid from the side so Nat can't overtake him into the jets, every jet he's
   plugged stays plugged while he escorts (and 0.5 s after); flies circle away from him.
-- **Sewage**: sinks 1 s, gone 3 s, parachutes back ("I'm fine! I'm a professional!"); his raft
-  is 3 tiles from the splat on, 30 s x `raft_life_mult`. Not Nat's death.
+- **Sewage**: sinks 1 s, gone 3 s (held while he's the pool float), parachutes back ("I'm fine!
+  I'm a professional!"); his raft is 3 tiles from the splat on. Not Nat's death.
 - **Overuse**: 3 / 5 / 7 boosts in a row (lazy / neutral / eager; reset after 1.2 s on real
   ground or 4 s without a boost) → "My back! I'm union, Nat!", a breather of 3 to 1.5 s with
   no boosts (his head still holds you). No limit inside `chain` marks.

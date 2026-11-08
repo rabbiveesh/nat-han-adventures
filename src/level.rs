@@ -493,7 +493,7 @@ pub enum Topic {
     /// Fired-up chasms: the band fired up, Han's running throw off his head at the edge, a toot
     /// (`chain`).
     Chain,
-    /// Buddy raft pools: Han wades in and leaves a big raft (`buddyraft`).
+    /// Buddy raft pools: Han cannonballs in and Nat paddles him across (`buddyraft`).
     BuddyRaft,
     /// Breakable bricks `%` (`brick`).
     Brick,

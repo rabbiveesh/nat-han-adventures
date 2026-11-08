@@ -488,51 +488,74 @@ fn play_raft_pool(what: &str, level: &Level, m: GateMark) {
     let far = (shore + 1..).find(|&c| level.tile(c, r + 1) != nat_han_adventures::level::Tile::Liquid).unwrap();
     put::<Player>(&mut app, stand(level, shore - 2, r));
     wait_for_han(&mut app, what);
-    put::<Player>(&mut app, stand(level, shore, r));
-    step(&mut app, 0.1);
+    // Run up to the edge: Han cannonballs in.
     RIGHT.press(app.world_mut());
-    step(&mut app, 0.05);
-    RIGHT.release(app.world_mut());
-    let mut rafts = 0;
-    // Each time Han's made a raft, walk to its end and wait for the next one.
-    for _ in 0..(60.0 / DT) as usize {
-        app.update();
-        let p = pos::<Player>(&mut app);
-        if std::env::var("HAN_TRACE").is_ok() {
-            let h = pos::<Han>(&mut app);
-            let e = single::<Han>(&mut app);
-            let mode = app.world().get::<HanBrain>(e).unwrap().mode;
-            eprintln!("{what}: nat {p} han {h} {mode:?} deaths {}", deaths(&app));
-        }
-        if p.x > (far as f32 + 0.5) * TILE {
+    for _ in 0..(5.0 / DT) as usize {
+        if pos::<Player>(&mut app).x >= (shore as f32 + 0.3) * TILE {
             break;
         }
-        // How far right is safe: the shore, then the rafts end to end.
-        let mut safe = ((shore as f32 + 1.0) * TILE - 6.0).max(p.x);
-        let mut platforms: Vec<(f32, f32)> = app
-            .world_mut()
-            .query_filtered::<&MovingPlatform, With<HanRaft>>()
-            .iter(app.world())
-            .map(|mp| (mp.base.x - mp.width as f32 * TILE / 2.0, mp.base.x + mp.width as f32 * TILE / 2.0))
-            .collect();
-        rafts = rafts.max(platforms.len());
-        platforms.sort_by(|a, b| a.0.total_cmp(&b.0));
-        for (a, b) in platforms {
-            if a <= safe + 7.0 {
-                safe = safe.max(b - 6.0);
+        app.update();
+    }
+    RIGHT.release(app.world_mut());
+    let mut float = None;
+    for _ in 0..(4.0 / DT) as usize {
+        app.update();
+        float = app.world_mut().query_filtered::<Entity, With<HanFloat>>().iter(app.world()).next();
+        if float.is_some() {
+            break;
+        }
+    }
+    let float = float.unwrap_or_else(|| panic!("{what}: Han never cannonballed in"));
+    // Hop on: a teeny hop (the spikes are low).
+    RIGHT.press(app.world_mut());
+    tap(&mut app);
+    step(&mut app, 0.06);
+    JUMP.release(app.world_mut());
+    let mut aboard = false;
+    for _ in 0..90 {
+        app.update();
+        if body::<Player>(&mut app).riding == Some(float) {
+            aboard = true;
+            break;
+        }
+    }
+    let fp = app.world_mut().query::<(&HanFloat, &Pos)>().iter(app.world()).next().map(|(f, p)| (*f, p.0));
+    assert!(aboard, "{what}: never got aboard (Nat at {}, shore {shore} row {r}, float {fp:?}, deaths {})", pos::<Player>(&mut app), deaths(&app));
+    JUMP.release(app.world_mut());
+    // Paddle across, teeny-hopping the floating spikes, and hop off at the far bank.
+    for _ in 0..(20.0 / DT) as usize {
+        app.update();
+        let p = pos::<Player>(&mut app);
+        let b = body::<Player>(&mut app);
+        if std::env::var("HAN_TRACE").is_ok() {
+            let fp = app.world_mut().query::<(&HanFloat, &Pos)>().iter(app.world()).next().map(|(f, p)| (f.vel, p.0));
+            eprintln!("{what}: nat {p} v{} g{} riding {:?} deaths {} float {fp:?}", b.vel, b.on_ground as u8, b.riding.is_some(), deaths(&app));
+        }
+        if deaths(&app) > 0 || (p.x > (far as f32 + 0.5) * TILE && b.on_ground) {
+            break;
+        }
+        if b.riding != Some(float) {
+            continue;
+        }
+        // Floating spikes just ahead: a teeny hop (the ceiling's low), Han coasting on under.
+        let spikes = ((p.x + 12.0) / TILE).floor() as i32;
+        let ahead = ((p.x + 6.0 + 1.0 * TILE) / TILE).floor() as i32;
+        if level.tile(spikes, r) == nat_han_adventures::level::Tile::SpikesUp || ahead >= far {
+            // (Right held: Nat hops forward, Han kicks along under him.)
+            tap(&mut app);
+            step(&mut app, 0.07);
+            JUMP.release(app.world_mut());
+            for _ in 0..60 {
+                app.update();
+                if body::<Player>(&mut app).on_ground || deaths(&app) > 0 {
+                    break;
+                }
             }
-        }
-        if safe >= far as f32 * TILE - 6.0 {
-            safe = (far as f32 + 2.0) * TILE;
-        }
-        if p.x < safe - 4.0 {
-            RIGHT.press(app.world_mut());
         } else {
-            RIGHT.release(app.world_mut());
+            RIGHT.press(app.world_mut());
         }
     }
     let p = pos::<Player>(&mut app);
-    assert!(rafts >= 2, "{what}: Han made {rafts} rafts");
     assert_eq!(deaths(&app), 0, "{what}: sank at {p}");
     assert!(p.x > (far as f32 + 0.5) * TILE, "{what}: across at {p} (far shore col {far})");
 }

@@ -6,7 +6,7 @@
 //! window height, like the game camera. Text is Press Start 2P at multiples of 8px.
 
 use bevy::prelude::*;
-use bevy::text::{FontSmoothing, FontSize};
+use bevy::text::{FontSize, FontSmoothing};
 use bevy::window::PrimaryWindow;
 
 use crate::art::{SpriteId, Sprites};
@@ -25,7 +25,7 @@ mod strip;
 mod title;
 mod victory;
 
-pub use lesson::{Lesson, Lessons, LessonsOff};
+pub use lesson::{HINT_SECS, Hint, Lesson, Lessons, LessonsOff};
 
 /// The game's name ("Nat Han Adventures"), shown on the title screen and in the credits,
 /// split in two lines so it fits the 24px title font.

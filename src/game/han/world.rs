@@ -6,10 +6,13 @@ use bevy::prelude::*;
 
 use super::brain::{HanBrain, HanMode};
 use super::{FLY_LINE, HAN_PLUG_LINGER, HAN_SQUASH_RESPAWN, SQUASH_LINE, HAN_RAFT_WIDTH, HAN_SINK_TIME, HanAnim, JET_LINES};
-use crate::events::HanSays;
+use leafwing_input_manager::prelude::*;
+
+use crate::events::{HanSays, NuggetCollected};
+use crate::input::Action;
 use crate::game::crushers::{CrusherBlock, squashed};
 use crate::game::{
-    ActiveLevel, Assists, Body, Fly, Han, LevelEntity, MovingPlatform, Pos, PrevPos, Raft,
+    ActiveLevel, Assists, Body, Dead, Fly, Han, LevelEntity, Player, MovingPlatform, Pos, PrevPos, Raft,
     CAN_HEIGHT, CAN_WIDTH, SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
 };
 use crate::level::{PlatformKind, TILE, Tile};
@@ -73,6 +76,159 @@ impl Default for FlySpin {
 #[reflect(Component)]
 pub struct HanRaft;
 
+/// Han the pool float: as Nat runs up to a pool, Han cannonballs in and floats on his back,
+/// creeping across ([`FLOAT_CREEP`]) until Nat hops aboard. Then Nat steers him like a little
+/// boat: Left/Right paddle him either way ([`FLOAT_SPEED`]), nothing held and he stops; while Nat
+/// hops (teeny hops: the pools have low spikes) he kicks to stay under him. He can
+/// only kick for [`FLOAT_FUEL`] s; nuggets grabbed aboard top him up ([`FLOAT_REFUEL`]). Low, he
+/// shivers; dry, he sinks (GLUB) and whoever's on him goes in. Nobody aboard at the far
+/// bank (or he was left behind) and he climbs out after [`FLOAT_BEACHED`] s; he's back by
+/// parachute and cannonballs in again on the next run-up.
+#[derive(Component, Debug, Clone, Copy, Reflect)]
+#[reflect(Component)]
+pub struct HanFloat {
+    /// The way he cannonballed in (+1 right, -1 left): where he creeps before Nat's aboard.
+    pub dir: f32,
+    /// Velocity now (px/s, + right).
+    pub vel: f32,
+    /// The surface row of the pool.
+    pub row: i32,
+    /// The surface height (world y of the raft's center when afloat).
+    pub surface: f32,
+    /// Nat has been aboard.
+    pub boarded: bool,
+    /// Kicks left (s).
+    pub fuel: f32,
+    /// How far he's sunk (px).
+    pub sunk: f32,
+    /// Time with nobody aboard since Nat left him, or at the far bank unboarded (s).
+    pub idle: f32,
+}
+
+impl HanFloat {
+    pub fn new(dir: f32, row: i32, surface: f32) -> Self {
+        HanFloat { dir, vel: 0.0, row, surface, boarded: false, fuel: FLOAT_FUEL, sunk: 0.0, idle: 0.0 }
+    }
+}
+
+/// Drift before Nat's aboard (px/s): slow enough to hop on.
+pub const FLOAT_CREEP: f32 = 24.0;
+/// Paddling speed with Nat aboard (px/s).
+pub const FLOAT_SPEED: f32 = 100.0;
+/// Nat hopping within this far (px) across of him: he kicks to stay under Nat, up to
+/// [`FLOAT_CHASE`] px/s.
+pub const FLOAT_TRACK: f32 = 2.0 * TILE;
+pub const FLOAT_CHASE: f32 = 170.0;
+/// How quickly the float changes speed (px/s²).
+pub const FLOAT_ACCEL: f32 = 500.0;
+/// Kicks in a full float (s; it only drains with Nat aboard), and per nugget grabbed aboard.
+pub const FLOAT_FUEL: f32 = 8.0;
+pub const FLOAT_REFUEL: f32 = 2.5;
+/// Below this much fuel (s) he shivers (a warning); dry, he sinks at [`FLOAT_SINK`] px/s and
+/// is gone at [`FLOAT_GONE`] px under.
+pub const FLOAT_LOW: f32 = 2.0;
+pub const FLOAT_SINK: f32 = 24.0;
+pub const FLOAT_GONE: f32 = 14.0;
+/// Nobody aboard this long (s) and Han climbs out.
+pub const FLOAT_BEACHED: f32 = 1.5;
+/// Han's bark as he dives in, and as he sinks.
+pub const CANNONBALL_LINE: &str = "Cannonball!";
+pub const GLUB_LINE: &str = "Glub!";
+
+/// Han's floats: steered by Nat aboard, fuelled by nuggets, and sunk when dry.
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+pub(in crate::game) fn drift_floats(
+    mut commands: Commands,
+    time: Res<Time>,
+    active: Res<ActiveLevel>,
+    input: Option<Single<&ActionState<Action>>>,
+    player: Query<(&Pos, &Body), (With<Player>, Without<Dead>, Without<HanFloat>)>,
+    mut floats: Query<(Entity, &mut HanFloat, &mut MovingPlatform, &mut Pos)>,
+    mut han: Query<&mut HanBrain, With<Han>>,
+    mut nuggets: MessageReader<NuggetCollected>,
+    mut says: MessageWriter<HanSays>,
+) {
+    let dt = time.delta_secs();
+    let grabbed = nuggets.read().count() as f32;
+    if dt <= 0.0 {
+        return;
+    }
+    let level = &active.level;
+    let axis = input.map_or(0.0, |i| i.pressed(&Action::Right) as i32 as f32 - i.pressed(&Action::Left) as i32 as f32);
+    let riding = player.single().ok().and_then(|(_, b)| b.riding);
+    // Nat in the air (hopping off him): where, and how fast across.
+    let nat = player.single().ok().filter(|(_, b)| !b.on_ground).map(|(p, b)| (p.0.x, b.vel.x));
+    for (e, mut f, mut p, mut pos) in &mut floats {
+        let aboard = riding == Some(e);
+        f.boarded |= aboard;
+        if aboard {
+            f.fuel = (f.fuel + grabbed * FLOAT_REFUEL).min(FLOAT_FUEL);
+        }
+        let dry = f.fuel <= 0.0;
+        let target = if dry {
+            0.0
+        } else if aboard {
+            axis * FLOAT_SPEED
+        } else if let Some((nx, nvx)) = nat.filter(|_| f.boarded) {
+            // Nat's hopping (over spikes, for a nugget): Han kicks to stay under him.
+            let dx = nx - pos.0.x;
+            if dx.abs() < FLOAT_TRACK {
+                (nvx + dx * 4.0).clamp(-FLOAT_CHASE, FLOAT_CHASE)
+            } else {
+                0.0
+            }
+        } else if f.boarded {
+            0.0
+        } else {
+            f.dir * FLOAT_CREEP
+        };
+        f.vel = crate::game::physics::move_towards(f.vel, target, FLOAT_ACCEL * dt);
+        // Over the pool only: he stops at either bank.
+        let half = p.width as f32 * TILE / 2.0;
+        let mut x = p.base.x + f.vel * dt;
+        let mut at_bank = false;
+        for side in [-1.0f32, 1.0] {
+            let edge = x + side * half;
+            let col = ((edge - side * 0.01) / TILE).floor() as i32;
+            if level.tile(col, f.row) != Tile::Liquid {
+                let bank = if side > 0.0 { col as f32 * TILE } else { (col + 1) as f32 * TILE };
+                x = bank - side * half;
+                if f.vel * side > 0.0 {
+                    f.vel = 0.0;
+                }
+                at_bank |= f.vel == 0.0 && (target * side > 0.0 || target == 0.0);
+            }
+        }
+        p.base.x = x;
+        // Kicking costs fuel while Nat's aboard; low, he settles; dry, he sinks.
+        if f.boarded && aboard && !dry {
+            f.fuel -= dt;
+            if f.fuel <= 0.0 {
+                says.write(HanSays { text: GLUB_LINE.to_string() });
+            }
+        }
+        // (Low on kicks, he shivers: `visuals`. Any lower in the muck and Nat's feet are in it.)
+        if dry {
+            f.sunk += FLOAT_SINK * dt;
+        }
+        pos.0 = Vec2::new(x, f.surface - f.sunk);
+        p.base = pos.0;
+        // Nobody aboard: once Nat's left him, or he's crossed without Nat, he climbs out.
+        let left_alone = !aboard && (f.boarded || (at_bank && f.vel == 0.0));
+        f.idle = if left_alone { f.idle + dt } else { 0.0 };
+        if f.sunk >= FLOAT_GONE || f.idle >= FLOAT_BEACHED {
+            commands.entity(e).despawn();
+            continue;
+        }
+        // Han's out of the picture while he's the float.
+        if let Ok(mut brain) = han.single_mut()
+            && let HanMode::Gone { t } = brain.mode
+        {
+            brain.mode = HanMode::Gone { t: t.max(0.5) };
+        }
+    }
+}
+
 /// Seconds between Han's jet/fly quips.
 const QUIP_EVERY: f32 = 6.0;
 
@@ -88,7 +244,9 @@ pub(super) fn han_hazards(
     mut says: MessageWriter<HanSays>,
     mut quip: Local<f32>,
     crushers: Query<(&CrusherBlock, &Pos), Without<Han>>,
+    nav: Option<Res<super::brain::HanNav>>,
 ) {
+    let side_b = nav.is_some_and(|n| n.side_b);
     let dt = time.delta_secs();
     *quip -= dt;
     let Ok((pos, body, mut brain, mut anim)) = han.single_mut() else { return };
@@ -210,7 +368,7 @@ pub(super) fn han_hazards(
     }
     let left = level.tile_center(c0.max(0) as usize, top as usize);
     let center = left + Vec2::new((w as f32 - 1.0) * TILE / 2.0, 0.0);
-    commands.spawn((
+    let raft = commands.spawn((
         Name::new("HanRaft"),
         LevelEntity,
         Raft::default(),
@@ -226,7 +384,10 @@ pub(super) fn han_hazards(
         Pos(center),
         PrevPos(center),
         Transform::from_translation(center.extend(1.0)),
-    ));
+    )).id();
+    if !side_b {
+        commands.entity(raft).insert(HanFloat::new(dir as f32, top, center.y));
+    }
 }
 
 /// How long a raft floats: Nat's [`RaftLife`](crate::game::RaftLife), Han's

@@ -2816,7 +2816,8 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
                     && let Some(l) = buddy_rafts(map, p, dir)
                     && !g.reached(l)
                 {
-                    let touched = (p.c0..=p.c1).map(|c| (c, p.row - 1)).collect();
+                    // (Over a floating spike, the teeny hop's cell above it.)
+                    let touched = (p.c0..=p.c1).map(|c| if float_hop(map, p, c) { (c, p.row - 2) } else { (c, p.row - 1) }).collect();
                     found.push((Gate::BuddyRaft, cell, l, touched));
                 }
             }
@@ -2948,7 +2949,17 @@ fn buddy_rafts(map: &Map, p: &Pool, dir: i32) -> Option<Cell> {
         m.set((c, p.row), RAFT, 0);
     }
     let (from, to) = p.shores(dir);
-    (from.0.min(to.0)..=from.0.max(to.0)).all(|c| m.standable((c, p.row - 1))).then_some(to)
+    (from.0.min(to.0)..=from.0.max(to.0)).all(|c| m.standable((c, p.row - 1)) || float_hop(map, p, c)).then_some(to)
+}
+
+/// A lone spike floating on a buddy raft pool (`^` on the surface, open above, Han's float
+/// passing under it on both sides): Nat teeny-hops it as Han kicks along under him.
+fn float_hop(map: &Map, p: &Pool, c: i32) -> bool {
+    let t = |c: i32, r: i32| map.level.tile(c, r);
+    (p.c0 + 1..p.c1).contains(&c)
+        && t(c, p.row - 1) == Tile::SpikesUp
+        && t(c, p.row - 2) == Tile::Empty
+        && [c - 1, c + 1].iter().all(|&k| t(k, p.row - 1) != Tile::SpikesUp)
 }
 
 /// Can some ideal arc in `arcs` from one of `near` land in `beyond` (on `map`)? The first
