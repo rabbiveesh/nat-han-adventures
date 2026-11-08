@@ -13,16 +13,7 @@ use crate::game::{ActiveLevel, Goal, LevelEntity};
 use crate::level::TILE;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_observer(grate_ahead).add_systems(
-        Update,
-        (
-            spawn_seam.run_if(resource_added::<Encore>),
-            update_seam,
-            duck,
-        )
-            .chain()
-            .run_if(resource_exists::<Sprites>),
-    );
+    app.add_observer(grate_ahead).add_systems(Update, (spawn_seam.run_if(resource_added::<Encore>), update_seam, duck).chain().run_if(resource_exists::<Sprites>));
 }
 
 /// The last chord's rubber duck: it pops up under Nat, big, and sinks away.
@@ -32,16 +23,9 @@ fn duck(mut commands: Commands, mut cues: MessageReader<EncoreCue>, sprites: Res
             commands.spawn((
                 Name::new("EncoreDuck"),
                 LevelEntity,
-                Particle {
-                    vel: Vec2::new(0.0, -30.0),
-                    gravity: 0.0,
-                    life: 0.9,
-                    max_life: 0.9,
-                    fade: true,
-                },
+                Particle { vel: Vec2::new(0.0, -30.0), gravity: 0.0, life: 0.9, max_life: 0.9, fade: true },
                 Sprite::from_image(sprites.get(SpriteId::Bumper)),
-                Transform::from_translation((pos + Vec2::new(0.0, TILE)).extend(4.5))
-                    .with_scale(Vec3::splat(2.0)),
+                Transform::from_translation((pos + Vec2::new(0.0, TILE)).extend(4.5)).with_scale(Vec3::splat(2.0)),
             ));
         }
     }
@@ -60,8 +44,7 @@ fn grate(sprites: &Sprites, at: Vec2) -> impl Bundle {
         LevelEntity,
         Grate,
         Sprite::from_image(sprites.get(SpriteId::Grate)),
-        Transform::from_translation(at.extend(0.15))
-            .with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
+        Transform::from_translation(at.extend(0.15)).with_rotation(Quat::from_rotation_z(std::f32::consts::FRAC_PI_2)),
     )
 }
 
@@ -74,9 +57,7 @@ fn grate_ahead(
     sprites: Option<Res<Sprites>>,
     mut commands: Commands,
 ) {
-    let (Some(active), Some(sprites)) = (active, sprites) else {
-        return;
-    };
+    let (Some(active), Some(sprites)) = (active, sprites) else { return };
     if encore::is_solo_finale(solo.as_deref()) {
         let s = encore::seam(&active.level);
         commands.spawn(grate(&sprites, Vec2::new(s.hole, s.bottom + TILE / 2.0)));
@@ -90,10 +71,7 @@ fn grate_ahead(
                 Name::new("SeamBeam"),
                 LevelEntity,
                 Beam,
-                Sprite::from_color(
-                    Color::srgba(1.0, 0.95, 0.7, *alpha),
-                    Vec2::new(GRATE_WIDTH - 4.0, h),
-                ),
+                Sprite::from_color(Color::srgba(1.0, 0.95, 0.7, *alpha), Vec2::new(GRATE_WIDTH - 4.0, h)),
                 Transform::from_translation(Vec3::new(s.hole, floor + h / 2.0, 0.12)),
             ));
         }
@@ -116,18 +94,14 @@ fn spawn_seam(
     sprites: Res<Sprites>,
     grates: Query<(), With<Grate>>,
 ) {
-    let (Some(seam), Some(active)) = (encore.seam, active) else {
-        return;
-    };
+    let (Some(seam), Some(active)) = (encore.seam, active) else { return };
     let level = &active.level;
     let w = level.world;
     let y = seam.bottom + TILE / 2.0;
     let row = level.height as i32 - 1 - (y / TILE).floor() as i32;
     let mut x = seam.x0 + TILE / 2.0;
     while x < seam.x1 {
-        if (x - seam.hole).abs() > GRATE_WIDTH / 2.0
-            && !level.tile((x / TILE).floor() as i32, row).is_solid()
-        {
+        if (x - seam.hole).abs() > GRATE_WIDTH / 2.0 && !level.tile((x / TILE).floor() as i32, row).is_solid() {
             commands.spawn((
                 Name::new("Seam"),
                 LevelEntity,
@@ -141,19 +115,10 @@ fn spawn_seam(
         commands.spawn(grate(&sprites, Vec2::new(seam.hole, y)));
     }
     commands
-        .spawn((
-            Name::new("SeamShutter"),
-            LevelEntity,
-            Shutter,
-            Transform::from_translation(Vec3::new(seam.hole + GRATE_WIDTH, y, 0.1)),
-            Visibility::Hidden,
-        ))
+        .spawn((Name::new("SeamShutter"), LevelEntity, Shutter, Transform::from_translation(Vec3::new(seam.hole + GRATE_WIDTH, y, 0.1)), Visibility::Hidden))
         .with_children(|s| {
             for dx in [-TILE / 2.0, TILE / 2.0] {
-                s.spawn((
-                    Sprite::from_image(sprites.get(SpriteId::GroundTop(w))),
-                    Transform::from_xyz(dx, 0.0, 0.0),
-                ));
+                s.spawn((Sprite::from_image(sprites.get(SpriteId::GroundTop(w))), Transform::from_xyz(dx, 0.0, 0.0)));
             }
         });
 }
@@ -167,28 +132,16 @@ fn update_seam(
     let Some(e) = encore else { return };
     let Some(seam) = e.seam else { return };
     for mut vis in &mut grate {
-        vis.set_if_neq(if e.through {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        });
+        vis.set_if_neq(if e.through { Visibility::Hidden } else { Visibility::Inherited });
     }
     let s = e.shutter();
     for (mut tf, mut vis) in &mut shutter {
         // It slides out from under the ceiling right of the hole.
         tf.translation.x = seam.hole + GRATE_WIDTH * (1.0 - s);
-        vis.set_if_neq(if s > 0.0 {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        });
+        vis.set_if_neq(if s > 0.0 { Visibility::Inherited } else { Visibility::Hidden });
     }
     // Shut: no more light from upstairs.
     for mut vis in &mut beam {
-        vis.set_if_neq(if s > 0.0 {
-            Visibility::Hidden
-        } else {
-            Visibility::Inherited
-        });
+        vis.set_if_neq(if s > 0.0 { Visibility::Hidden } else { Visibility::Inherited });
     }
 }

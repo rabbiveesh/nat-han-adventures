@@ -6,7 +6,7 @@
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
-use bevy::text::{FontSize, FontSmoothing, LineHeight};
+use bevy::text::{FontSmoothing, FontSize, LineHeight};
 use bevy::transform::TransformSystems;
 use bevy::window::PrimaryWindow;
 
@@ -119,26 +119,17 @@ fn revealed(lines: &[String], n: usize) -> String {
     out
 }
 
-fn receive(
-    mut commands: Commands,
-    pending: Option<ResMut<Pending>>,
-    mut reader: MessageReader<HanSays>,
-) {
+fn receive(mut commands: Commands, pending: Option<ResMut<Pending>>, mut reader: MessageReader<HanSays>) {
     let new: Vec<String> = reader.read().map(|m| m.text.clone()).collect();
     if new.is_empty() {
         return;
     }
-    let mut queue = pending
-        .map(|mut p| std::mem::take(&mut p.queue))
-        .unwrap_or_default();
+    let mut queue = pending.map(|mut p| std::mem::take(&mut p.queue)).unwrap_or_default();
     queue.extend(new);
     while queue.len() > QUEUE_MAX {
         queue.pop_front();
     }
-    commands.insert_resource(Pending {
-        queue,
-        wait: WAIT_FOR_HAN,
-    });
+    commands.insert_resource(Pending { queue, wait: WAIT_FOR_HAN });
 }
 
 /// Han speaks, or Han behind a secret's grate once Nat's found him.
@@ -184,81 +175,53 @@ fn spawn_pending(
         return;
     }
     let cols = lines.iter().map(|l| l.chars().count()).max().unwrap_or(1) as f32;
-    let size = Vec2::new(
-        cols * GLYPH + 2.0 * PAD,
-        lines.len() as f32 * LINE - (LINE - GLYPH) + 2.0 * PAD,
-    );
+    let size = Vec2::new(cols * GLYPH + 2.0 * PAD, lines.len() as f32 * LINE - (LINE - GLYPH) + 2.0 * PAD);
     // Rasterize the glyphs at about screen resolution, then scale down to world size: crisp pixels.
-    let k = window.map_or(1.0, |w| {
-        (w.resolution.height() / VIRTUAL_HEIGHT).ceil().max(1.0)
-    });
+    let k = window.map_or(1.0, |w| (w.resolution.height() / VIRTUAL_HEIGHT).ceil().max(1.0));
     let box_center = Vec2::new(0.0, TAIL + size.y / 2.0);
     let rect = |color: Color, size: Vec2, pos: Vec2, z: f32| {
-        (
-            Sprite::from_color(color, size),
-            Transform::from_translation(pos.extend(z)),
-        )
+        (Sprite::from_color(color, size), Transform::from_translation(pos.extend(z)))
     };
 
     commands
         .spawn((
             Name::new("SpeechBubble"),
-            SpeechBubble {
-                lines,
-                age: 0.0,
-                shown: 0,
-            },
+            SpeechBubble { lines, age: 0.0, shown: 0 },
             DespawnOnExit(AppState::Playing),
             Transform::from_xyz(0.0, 0.0, Z),
             Visibility::Hidden,
         ))
         .with_children(|b| {
-            b.spawn((
-                BubbleBox {
-                    half_width: size.x / 2.0 + 1.0,
-                },
-                Transform::default(),
-                Visibility::Inherited,
-            ))
-            .with_children(|bx| {
-                bx.spawn(rect(INK, size + 2.0, box_center, 0.0));
-                bx.spawn(rect(Color::WHITE, size, box_center, 0.1));
-                bx.spawn((
-                    BubbleText,
-                    Text2d::new(""),
-                    TextFont {
-                        font: font.map(|f| f.0.clone()).unwrap_or_default().into(),
-                        font_size: FontSize::Px(GLYPH * k),
-                        font_smoothing: FontSmoothing::None,
-                        ..default()
-                    },
-                    LineHeight::Px(LINE * k),
-                    TextColor(INK),
-                    Anchor::TOP_LEFT,
-                    Transform::from_xyz(-size.x / 2.0 + PAD, TAIL + size.y - PAD, 0.2)
-                        .with_scale(Vec3::splat(1.0 / k)),
-                ));
-            });
+            b.spawn((BubbleBox { half_width: size.x / 2.0 + 1.0 }, Transform::default(), Visibility::Inherited))
+                .with_children(|bx| {
+                    bx.spawn(rect(INK, size + 2.0, box_center, 0.0));
+                    bx.spawn(rect(Color::WHITE, size, box_center, 0.1));
+                    bx.spawn((
+                        BubbleText,
+                        Text2d::new(""),
+                        TextFont {
+                            font: font.map(|f| f.0.clone()).unwrap_or_default().into(),
+                            font_size: FontSize::Px(GLYPH * k),
+                            font_smoothing: FontSmoothing::None,
+                            ..default()
+                        },
+                        LineHeight::Px(LINE * k),
+                        TextColor(INK),
+                        Anchor::TOP_LEFT,
+                        Transform::from_xyz(-size.x / 2.0 + PAD, TAIL + size.y - PAD, 0.2)
+                            .with_scale(Vec3::splat(1.0 / k)),
+                    ));
+                });
             // The tail: a little pixel triangle pointing down at Han, outlined.
             for i in 0..TAIL as usize {
                 let w = 2.0 * i as f32 + 1.0;
                 let y = i as f32 + 0.5;
                 b.spawn(rect(INK, Vec2::new(w + 2.0, 1.0), Vec2::new(0.0, y), 0.0));
-                b.spawn(rect(
-                    Color::WHITE,
-                    Vec2::new(w, 1.0),
-                    Vec2::new(0.0, y),
-                    0.1,
-                ));
+                b.spawn(rect(Color::WHITE, Vec2::new(w, 1.0), Vec2::new(0.0, y), 0.1));
             }
             b.spawn(rect(INK, Vec2::ONE, Vec2::new(0.0, -0.5), 0.0));
             // Open the box's bottom border where the tail joins.
-            b.spawn(rect(
-                Color::WHITE,
-                Vec2::new(2.0 * TAIL - 1.0, 1.0),
-                Vec2::new(0.0, TAIL - 0.5),
-                0.15,
-            ));
+            b.spawn(rect(Color::WHITE, Vec2::new(2.0 * TAIL - 1.0, 1.0), Vec2::new(0.0, TAIL - 0.5), 0.15));
         });
 }
 
@@ -295,48 +258,24 @@ fn typewriter(
 fn follow(
     mut commands: Commands,
     han: Query<
-        (
-            &Transform,
-            &GlobalTransform,
-            Has<ChildOf>,
-            Option<&HanGlimpse>,
-        ),
-        (
-            Or<(With<Han>, With<HanGlimpse>, With<StageHan>)>,
-            Without<SpeechBubble>,
-            Without<BubbleBox>,
-        ),
+        (&Transform, &GlobalTransform, Has<ChildOf>, Option<&HanGlimpse>),
+        (Or<(With<Han>, With<HanGlimpse>, With<StageHan>)>, Without<SpeechBubble>, Without<BubbleBox>),
     >,
-    camera: Query<
-        (&Transform, &Projection),
-        (
-            With<GameCamera>,
-            Without<SpeechBubble>,
-            Without<BubbleBox>,
-            Without<Han>,
-        ),
-    >,
-    mut bubbles: Query<
-        (Entity, &mut Transform, &mut Visibility),
-        (With<SpeechBubble>, Without<BubbleBox>),
-    >,
+    camera: Query<(&Transform, &Projection), (With<GameCamera>, Without<SpeechBubble>, Without<BubbleBox>, Without<Han>)>,
+    mut bubbles: Query<(Entity, &mut Transform, &mut Visibility), (With<SpeechBubble>, Without<BubbleBox>)>,
     mut boxes: Query<(&BubbleBox, &mut Transform), Without<SpeechBubble>>,
     children: Query<&Children>,
 ) {
     let view = camera.iter().next().and_then(|(t, p)| match p {
-        Projection::Orthographic(o) if o.area.width() > 0.0 => Some((
-            t.translation.x + o.area.min.x,
-            t.translation.x + o.area.max.x,
-        )),
+        Projection::Orthographic(o) if o.area.width() > 0.0 => {
+            Some((t.translation.x + o.area.min.x, t.translation.x + o.area.max.x))
+        }
         _ => None,
     });
-    let pos = han.iter().find(|h| speaks(h.3)).map(|(t, g, child, _)| {
-        if child {
-            g.translation()
-        } else {
-            t.translation
-        }
-    });
+    let pos = han
+        .iter()
+        .find(|h| speaks(h.3))
+        .map(|(t, g, child, _)| if child { g.translation() } else { t.translation });
     for (e, mut t, mut vis) in &mut bubbles {
         let Some(p) = pos else {
             commands.entity(e).despawn();
@@ -347,9 +286,7 @@ fn follow(
         vis.set_if_neq(Visibility::Inherited);
         for c in children.iter_descendants(e) {
             if let Ok((bx, mut bt)) = boxes.get_mut(c) {
-                let dx = view.map_or(0.0, |(left, right)| {
-                    clamp_shift(target.x, bx.half_width, left, right)
-                });
+                let dx = view.map_or(0.0, |(left, right)| clamp_shift(target.x, bx.half_width, left, right));
                 bt.translation.x = dx.round();
             }
         }
@@ -359,15 +296,8 @@ fn follow(
 /// How far to slide a box of `half_width` centered at `x` so it fits in `[left, right]` (with a
 /// margin). Never further than the tail can reach, so the tail always touches the box.
 fn clamp_shift(x: f32, half_width: f32, left: f32, right: f32) -> f32 {
-    let (lo, hi) = (
-        left + EDGE_MARGIN + half_width,
-        right - EDGE_MARGIN - half_width,
-    );
-    let dx = if lo > hi {
-        (left + right) / 2.0 - x
-    } else {
-        x.clamp(lo, hi) - x
-    };
+    let (lo, hi) = (left + EDGE_MARGIN + half_width, right - EDGE_MARGIN - half_width);
+    let dx = if lo > hi { (left + right) / 2.0 - x } else { x.clamp(lo, hi) - x };
     let reach = (half_width - TAIL - 1.0).max(0.0);
     dx.clamp(-reach, reach)
 }
@@ -400,10 +330,7 @@ mod tests {
         for l in wrap("a b c d e f g h i j k l m n o p q r s t u v w x y z", 20) {
             assert!(l.chars().count() <= 20);
         }
-        assert_eq!(
-            wrap("aaaaaaaaaaaaaaaaaaaaaaaaa b", 20),
-            vec!["aaaaaaaaaaaaaaaaaaaa", "aaaaa b"]
-        );
+        assert_eq!(wrap("aaaaaaaaaaaaaaaaaaaaaaaaa b", 20), vec!["aaaaaaaaaaaaaaaaaaaa", "aaaaa b"]);
     }
 
     #[test]

@@ -144,13 +144,7 @@ pub struct BeatClock {
 
 impl Default for BeatClock {
     fn default() -> Self {
-        BeatClock {
-            bar: 0,
-            beat: 0,
-            phase: 0.0,
-            beat_secs: 0.5,
-            beats_per_bar: 4,
-        }
+        BeatClock { bar: 0, beat: 0, phase: 0.0, beat_secs: 0.5, beats_per_bar: 4 }
     }
 }
 
@@ -216,21 +210,8 @@ pub struct Groove {
 
 impl PartialEq for Groove {
     fn eq(&self, o: &Self) -> bool {
-        (
-            self.harmony,
-            self.gravity_scale,
-            self.speed_scale,
-            self.time_scale,
-            self.bounce,
-            self.tuning,
-        ) == (
-            o.harmony,
-            o.gravity_scale,
-            o.speed_scale,
-            o.time_scale,
-            o.bounce,
-            o.tuning,
-        )
+        (self.harmony, self.gravity_scale, self.speed_scale, self.time_scale, self.bounce, self.tuning)
+            == (o.harmony, o.gravity_scale, o.speed_scale, o.time_scale, o.bounce, o.tuning)
     }
 }
 
@@ -249,11 +230,7 @@ impl Groove {
             speed_scale: 1.0,
             time_scale: 1.0,
             bounce: filters.just_intonation,
-            tuning: if filters.just_intonation {
-                Tuning::Medley
-            } else {
-                Tuning::Equal
-            },
+            tuning: if filters.just_intonation { Tuning::Medley } else { Tuning::Equal },
             phrase: None,
             sway: 0.0,
             clock: BeatClock::default(),
@@ -261,28 +238,17 @@ impl Groove {
         };
         match filters.harmony {
             Harmony::Original | Harmony::Waltz => plain,
-            Harmony::Coltrane => Groove {
-                gravity_scale: GIANT_STEPS_GRAVITY,
-                speed_scale: GIANT_STEPS_SPEED,
-                ..plain
-            },
-            Harmony::Quartal => Groove {
-                speed_scale: FIRED_UP_SPEED,
-                ..plain
-            },
-            Harmony::MelodicMinor => Groove {
-                time_scale: NERVOUS_TIME,
-                ..plain
-            },
+            Harmony::Coltrane => {
+                Groove { gravity_scale: GIANT_STEPS_GRAVITY, speed_scale: GIANT_STEPS_SPEED, ..plain }
+            }
+            Harmony::Quartal => Groove { speed_scale: FIRED_UP_SPEED, ..plain },
+            Harmony::MelodicMinor => Groove { time_scale: NERVOUS_TIME, ..plain },
         }
     }
 
     /// The physics of a harmony, without the laughing band.
     pub fn of(harmony: Harmony) -> Self {
-        Self::new(Filters {
-            harmony,
-            just_intonation: false,
-        })
+        Self::new(Filters { harmony, just_intonation: false })
     }
 
     /// The same groove with the music at `clock`.
@@ -325,10 +291,7 @@ impl Groove {
 
     /// The same groove in the laughing band's `phrase` (tests; the audio plugin writes it).
     pub fn in_phrase(self, phrase: Tuning) -> Self {
-        Groove {
-            phrase: Some(phrase),
-            ..self
-        }
+        Groove { phrase: Some(phrase), ..self }
     }
 
     /// The laughing band's phrase nudging the physics now, if any (see the module docs).
@@ -351,11 +314,7 @@ impl Groove {
 
     /// Nat's run speed multiplier now: [`Groove::speed_scale`] and the drunk sway.
     pub fn run_scale(&self) -> f32 {
-        let sway = if self.drunk() {
-            1.0 - DRUNK_SWAY * (1.0 - self.sway.clamp(-1.0, 1.0)) / 2.0
-        } else {
-            1.0
-        };
+        let sway = if self.drunk() { 1.0 - DRUNK_SWAY * (1.0 - self.sway.clamp(-1.0, 1.0)) / 2.0 } else { 1.0 };
         self.speed_scale * sway
     }
 
@@ -377,20 +336,12 @@ impl Groove {
 
     /// Nat's ground jump speed multiplier (melting: lower).
     pub fn jump_scale(&self) -> f32 {
-        if self.nudge() == Some(Nudge::Melting) {
-            MELTING_JUMP
-        } else {
-            1.0
-        }
+        if self.nudge() == Some(Nudge::Melting) { MELTING_JUMP } else { 1.0 }
     }
 
     /// Nat's drawn size (melting: smaller).
     pub fn nat_size(&self) -> f32 {
-        if self.nudge() == Some(Nudge::Melting) {
-            MELTING_SIZE
-        } else {
-            1.0
-        }
+        if self.nudge() == Some(Nudge::Melting) { MELTING_SIZE } else { 1.0 }
     }
 
     /// Ground braking multiplier `since_landing` seconds after Nat landed (seasick: slippery
@@ -418,10 +369,7 @@ impl Groove {
         // the exact top at best.)
         let step = crate::game::tuning::GRAVITY * self.gravity_now() / 60.0;
         let rise = (vy - step).max(0.0);
-        (rise * rise + base * base)
-            .sqrt()
-            .min(base * OVERTONE_TOOT)
-            .max(base)
+        (rise * rise + base * base).sqrt().min(base * OVERTONE_TOOT).max(base)
     }
 
     /// Waltz: are the spray cans firing (beat ONE of the big ONE's bar)?
@@ -446,20 +394,12 @@ impl Groove {
 
     /// How fast the moving platforms' clock runs (×game time).
     pub fn platform_rate(&self) -> f32 {
-        if self.waltz() {
-            self.waltz_glide_rate()
-        } else {
-            1.0
-        }
+        if self.waltz() { self.waltz_glide_rate() } else { 1.0 }
     }
 
     /// Fly orbits per second (`normal_period`: seconds per orbit outside the waltz).
     pub fn fly_rate(&self, normal_period: f32) -> f32 {
-        if self.waltz() {
-            1.0 / self.clock.bar_secs().max(0.1)
-        } else {
-            1.0 / normal_period
-        }
+        if self.waltz() { 1.0 / self.clock.bar_secs().max(0.1) } else { 1.0 / normal_period }
     }
 }
 
@@ -553,9 +493,7 @@ fn call_the_step(
     for _ in ones.read() {
         count.0 += 1;
         if count.0.is_multiple_of(WALTZ_ONE_LINE_EVERY) {
-            says.write(crate::events::HanSays {
-                text: WALTZ_ONE_LINE.to_string(),
-            });
+            says.write(crate::events::HanSays { text: WALTZ_ONE_LINE.to_string() });
         }
     }
 }
@@ -566,86 +504,32 @@ mod tests {
     use crate::game::tuning::{DOUBLE_JUMP_SPEED, GRAVITY, JUMP_SPEED};
 
     fn laughing(phrase: Tuning) -> Groove {
-        Groove::new(Filters {
-            harmony: Harmony::Original,
-            just_intonation: true,
-        })
-        .in_phrase(phrase)
+        Groove::new(Filters { harmony: Harmony::Original, just_intonation: true }).in_phrase(phrase)
     }
 
     #[test]
     fn each_phrase_has_its_nudge() {
-        assert_eq!(
-            Groove::default().in_phrase(Tuning::Tet7).nudge(),
-            None,
-            "not laughing: no nudge"
-        );
-        assert_eq!(
-            Groove::new(Filters {
-                harmony: Harmony::Original,
-                just_intonation: true
-            })
-            .nudge(),
-            None
-        );
-        let nudges: Vec<_> = crate::audio::tuning::MEDLEY_TUNINGS
-            .iter()
-            .map(|&t| laughing(t).nudge().map(Nudge::label))
-            .collect();
+        assert_eq!(Groove::default().in_phrase(Tuning::Tet7).nudge(), None, "not laughing: no nudge");
+        assert_eq!(Groove::new(Filters { harmony: Harmony::Original, just_intonation: true }).nudge(), None);
+        let nudges: Vec<_> =
+            crate::audio::tuning::MEDLEY_TUNINGS.iter().map(|&t| laughing(t).nudge().map(Nudge::label)).collect();
         assert_eq!(
             nudges,
-            [
-                Some("SOBER FOR A SEC"),
-                Some("OVERTONES!"),
-                Some("SEASICK"),
-                Some("MELTING"),
-                Some("ALIEN")
-            ]
+            [Some("SOBER FOR A SEC"), Some("OVERTONES!"), Some("SEASICK"), Some("MELTING"), Some("ALIEN")]
         );
         // Sober: no bounce, no sway. The rest bounce and sway.
-        let sober = Groove {
-            sway: 1.0,
-            ..laughing(Tuning::Just)
-        };
+        let sober = Groove { sway: 1.0, ..laughing(Tuning::Just) };
         assert!(!sober.bouncy() && sober.run_scale() == 1.0);
-        let drunk = Groove {
-            sway: 1.0,
-            ..laughing(Tuning::Tet7)
-        };
+        let drunk = Groove { sway: 1.0, ..laughing(Tuning::Tet7) };
         assert!(drunk.bouncy());
         assert_eq!(drunk.run_scale(), 1.0, "never faster than sober");
-        assert!(
-            (Groove {
-                sway: -1.0,
-                ..drunk
-            }
-            .run_scale()
-                - (1.0 - DRUNK_SWAY))
-                .abs()
-                < 1e-6
-        );
+        assert!((Groove { sway: -1.0, ..drunk }.run_scale() - (1.0 - DRUNK_SWAY)).abs() < 1e-6);
         // Melting: smaller, lower jumps.
-        assert_eq!(
-            (
-                laughing(Tuning::CarlosAlpha).nat_size(),
-                laughing(Tuning::CarlosAlpha).jump_scale()
-            ),
-            (MELTING_SIZE, MELTING_JUMP)
-        );
+        assert_eq!((laughing(Tuning::CarlosAlpha).nat_size(), laughing(Tuning::CarlosAlpha).jump_scale()), (MELTING_SIZE, MELTING_JUMP));
         // Seasick: slippery for a moment after landing; grip wins.
         let sea = laughing(Tuning::Tet7);
-        assert_eq!(
-            (sea.landing_decel(0.1), sea.landing_decel(SEASICK_SECS)),
-            (SEASICK_DECEL, 1.0)
-        );
-        assert_eq!(
-            Groove {
-                nervous: true,
-                ..sea
-            }
-            .landing_decel(0.1),
-            1.0
-        );
+        assert_eq!((sea.landing_decel(0.1), sea.landing_decel(SEASICK_SECS)), (SEASICK_DECEL, 1.0));
+        assert_eq!(Groove { nervous: true, ..sea }.landing_decel(0.1), 1.0);
         assert_eq!(laughing(Tuning::Harmonic).landing_decel(0.1), 1.0);
     }
 
@@ -654,33 +538,13 @@ mod tests {
         let g = laughing(Tuning::BohlenPierce);
         let at = |beat: f64| g.at(BeatClock::at(beat, 0.5, 4)).gravity_now();
         let pulses: Vec<bool> = (0..20).map(|b| at(b as f64) > 1.0).collect();
-        let want: Vec<bool> = (0..20)
-            .map(|b: u32| (b % 16).is_multiple_of(ALIEN_EVERY))
-            .collect();
-        assert_eq!(
-            pulses, want,
-            "every third beat of the phrase (a new phrase starts the count)"
-        );
-        assert!(
-            (at(3.0) - (1.0 + ALIEN_PULSE)).abs() < 1e-6,
-            "heaviest on the beat"
-        );
+        let want: Vec<bool> = (0..20).map(|b: u32| (b % 16).is_multiple_of(ALIEN_EVERY)).collect();
+        assert_eq!(pulses, want, "every third beat of the phrase (a new phrase starts the count)");
+        assert!((at(3.0) - (1.0 + ALIEN_PULSE)).abs() < 1e-6, "heaviest on the beat");
         assert!(at(3.5) < at(3.0) && at(3.5) > 1.0, "easing off through it");
-        assert_eq!(
-            laughing(Tuning::Harmonic)
-                .at(BeatClock::at(3.0, 0.5, 4))
-                .gravity_now(),
-            1.0
-        );
-        let gs = Groove::new(Filters {
-            harmony: Harmony::Coltrane,
-            just_intonation: true,
-        })
-        .in_phrase(Tuning::BohlenPierce);
-        assert!(
-            (gs.gravity_now() - GIANT_STEPS_GRAVITY * (1.0 + ALIEN_PULSE)).abs() < 1e-6,
-            "on top of the mode's"
-        );
+        assert_eq!(laughing(Tuning::Harmonic).at(BeatClock::at(3.0, 0.5, 4)).gravity_now(), 1.0);
+        let gs = Groove::new(Filters { harmony: Harmony::Coltrane, just_intonation: true }).in_phrase(Tuning::BohlenPierce);
+        assert!((gs.gravity_now() - GIANT_STEPS_GRAVITY * (1.0 + ALIEN_PULSE)).abs() < 1e-6, "on top of the mode's");
     }
 
     /// One ground jump (jump held) with a toot at frame `toot` (Nat's own step order: the toot
@@ -711,50 +575,23 @@ mod tests {
     fn overtones_toot_reaches_nothing_new() {
         let over = laughing(Tuning::Harmonic);
         for gravity in [GRAVITY, GRAVITY * GIANT_STEPS_GRAVITY] {
-            let normal: Vec<Vec<f32>> = (0..90)
-                .map(|t| arc(&Groove::default(), gravity, t))
-                .collect();
+            let normal: Vec<Vec<f32>> = (0..90).map(|t| arc(&Groove::default(), gravity, t)).collect();
             let harmonic: Vec<Vec<f32>> = (0..90).map(|t| arc(&over, gravity, t)).collect();
             let apex = |arcs: &[Vec<f32>]| arcs.iter().flatten().fold(f32::MIN, |a, &b| a.max(b));
-            assert!(
-                apex(&harmonic) <= apex(&normal) + 0.5,
-                "{} > {}",
-                apex(&harmonic),
-                apex(&normal)
-            );
+            assert!(apex(&harmonic) <= apex(&normal) + 0.5, "{} > {}", apex(&harmonic), apex(&normal));
             // Latest frame at or above each height.
-            let last = |arcs: &[Vec<f32>], h: f32| {
-                arcs.iter()
-                    .filter_map(|a| a.iter().rposition(|&y| y >= h))
-                    .max()
-            };
+            let last = |arcs: &[Vec<f32>], h: f32| arcs.iter().filter_map(|a| a.iter().rposition(|&y| y >= h)).max();
             let mut h = -64.0;
             while h < apex(&normal) {
-                assert!(
-                    last(&harmonic, h) <= last(&normal, h),
-                    "at {h}px: {:?} > {:?}",
-                    last(&harmonic, h),
-                    last(&normal, h)
-                );
+                assert!(last(&harmonic, h) <= last(&normal, h), "at {h}px: {:?} > {:?}", last(&harmonic, h), last(&normal, h));
                 h += 1.0;
             }
             // It is stronger: an early toot climbs well above an early normal toot.
             let early = |arcs: &[Vec<f32>]| arcs[2].iter().fold(f32::MIN, |a, &b| a.max(b));
-            assert!(
-                early(&harmonic) > early(&normal) + 16.0,
-                "{} vs {}",
-                early(&harmonic),
-                early(&normal)
-            );
+            assert!(early(&harmonic) > early(&normal) + 16.0, "{} vs {}", early(&harmonic), early(&normal));
         }
         // Falling: just a toot. Never weaker.
-        assert_eq!(
-            over.toot_speed(DOUBLE_JUMP_SPEED, -200.0),
-            DOUBLE_JUMP_SPEED
-        );
-        assert_eq!(
-            over.toot_speed(DOUBLE_JUMP_SPEED, 1000.0),
-            DOUBLE_JUMP_SPEED * OVERTONE_TOOT
-        );
+        assert_eq!(over.toot_speed(DOUBLE_JUMP_SPEED, -200.0), DOUBLE_JUMP_SPEED);
+        assert_eq!(over.toot_speed(DOUBLE_JUMP_SPEED, 1000.0), DOUBLE_JUMP_SPEED * OVERTONE_TOOT);
     }
 }

@@ -32,218 +32,68 @@ const BEFORE_INSTRUMENTS: [(Music, Harmony, bool, u64); 80] = [
     (Music::Title, Harmony::Coltrane, true, 0x31a9664d9592bb6b),
     (Music::Title, Harmony::Quartal, false, 0x2b671a8d1f9cc99e),
     (Music::Title, Harmony::Quartal, true, 0xbcc4a09d7fc82e79),
-    (
-        Music::Title,
-        Harmony::MelodicMinor,
-        false,
-        0x635d168585ee23ee,
-    ),
-    (
-        Music::Title,
-        Harmony::MelodicMinor,
-        true,
-        0xe02cbc18a1244d0f,
-    ),
+    (Music::Title, Harmony::MelodicMinor, false, 0x635d168585ee23ee),
+    (Music::Title, Harmony::MelodicMinor, true, 0xe02cbc18a1244d0f),
     (Music::Title, Harmony::Waltz, false, 0xc4629ce9ec2d1d39),
     (Music::Title, Harmony::Waltz, true, 0xb9567a0f1c86effc),
-    (
-        Music::World(1),
-        Harmony::Original,
-        false,
-        0x8b90be497b40a4b3,
-    ),
+    (Music::World(1), Harmony::Original, false, 0x8b90be497b40a4b3),
     (Music::World(1), Harmony::Original, true, 0x43ad6edd02248143),
-    (
-        Music::World(1),
-        Harmony::Coltrane,
-        false,
-        0xb4a3ac2f58777683,
-    ),
+    (Music::World(1), Harmony::Coltrane, false, 0xb4a3ac2f58777683),
     (Music::World(1), Harmony::Coltrane, true, 0x4837317b4b12e1b7),
     (Music::World(1), Harmony::Quartal, false, 0x38fed3bcb64fa2f5),
     (Music::World(1), Harmony::Quartal, true, 0x8cfbaa648f15e996),
-    (
-        Music::World(1),
-        Harmony::MelodicMinor,
-        false,
-        0x03950af4738f7c15,
-    ),
-    (
-        Music::World(1),
-        Harmony::MelodicMinor,
-        true,
-        0xadff2e8a7e21de34,
-    ),
+    (Music::World(1), Harmony::MelodicMinor, false, 0x03950af4738f7c15),
+    (Music::World(1), Harmony::MelodicMinor, true, 0xadff2e8a7e21de34),
     (Music::World(1), Harmony::Waltz, false, 0xc87f9999c57cc40f),
     (Music::World(1), Harmony::Waltz, true, 0xb277be7695d39aad),
-    (
-        Music::World(2),
-        Harmony::Original,
-        false,
-        0xf8651fc190060f94,
-    ),
+    (Music::World(2), Harmony::Original, false, 0xf8651fc190060f94),
     (Music::World(2), Harmony::Original, true, 0x0fe6f2072ae56b5e),
-    (
-        Music::World(2),
-        Harmony::Coltrane,
-        false,
-        0xeed775813c787c94,
-    ),
+    (Music::World(2), Harmony::Coltrane, false, 0xeed775813c787c94),
     (Music::World(2), Harmony::Coltrane, true, 0x230f8e2808f12590),
     (Music::World(2), Harmony::Quartal, false, 0x2c1a3a3acf5c9520),
     (Music::World(2), Harmony::Quartal, true, 0xbf733bfb4b4cd103),
-    (
-        Music::World(2),
-        Harmony::MelodicMinor,
-        false,
-        0x8eefeebe56aa94f2,
-    ),
-    (
-        Music::World(2),
-        Harmony::MelodicMinor,
-        true,
-        0xc48a8f670fbd04b6,
-    ),
+    (Music::World(2), Harmony::MelodicMinor, false, 0x8eefeebe56aa94f2),
+    (Music::World(2), Harmony::MelodicMinor, true, 0xc48a8f670fbd04b6),
     (Music::World(2), Harmony::Waltz, false, 0x867897bf4df2d788),
     (Music::World(2), Harmony::Waltz, true, 0xf7d7cf8a46287793),
-    (
-        Music::World(3),
-        Harmony::Original,
-        false,
-        0x8bcabd60688a4746,
-    ),
+    (Music::World(3), Harmony::Original, false, 0x8bcabd60688a4746),
     (Music::World(3), Harmony::Original, true, 0xfd8ab91a329f3acf),
-    (
-        Music::World(3),
-        Harmony::Coltrane,
-        false,
-        0xb6a80700930a4611,
-    ),
+    (Music::World(3), Harmony::Coltrane, false, 0xb6a80700930a4611),
     (Music::World(3), Harmony::Coltrane, true, 0x1205c243e7075cff),
     (Music::World(3), Harmony::Quartal, false, 0x3818dddc691507e1),
     (Music::World(3), Harmony::Quartal, true, 0xaed383c68c57ec98),
-    (
-        Music::World(3),
-        Harmony::MelodicMinor,
-        false,
-        0xbd6d40b2aa5c6a71,
-    ),
-    (
-        Music::World(3),
-        Harmony::MelodicMinor,
-        true,
-        0x3601f535803a6cfd,
-    ),
+    (Music::World(3), Harmony::MelodicMinor, false, 0xbd6d40b2aa5c6a71),
+    (Music::World(3), Harmony::MelodicMinor, true, 0x3601f535803a6cfd),
     (Music::World(3), Harmony::Waltz, false, 0x68939ae28ae37b5b),
     (Music::World(3), Harmony::Waltz, true, 0x86b50b799ee881dc),
-    (
-        Music::World(4),
-        Harmony::Original,
-        false,
-        0xa0a67aaae0744427,
-    ),
+    (Music::World(4), Harmony::Original, false, 0xa0a67aaae0744427),
     (Music::World(4), Harmony::Original, true, 0x25febdf163862c2b),
-    (
-        Music::World(4),
-        Harmony::Coltrane,
-        false,
-        0x6f0f3d9d6406c62c,
-    ),
+    (Music::World(4), Harmony::Coltrane, false, 0x6f0f3d9d6406c62c),
     (Music::World(4), Harmony::Coltrane, true, 0xd8343808eb7ed26b),
     (Music::World(4), Harmony::Quartal, false, 0xde8839f8af116ddf),
     (Music::World(4), Harmony::Quartal, true, 0x3aada2cbe4268ca8),
-    (
-        Music::World(4),
-        Harmony::MelodicMinor,
-        false,
-        0x322d51f9d66fa704,
-    ),
-    (
-        Music::World(4),
-        Harmony::MelodicMinor,
-        true,
-        0xe99f2e4db77a5c31,
-    ),
+    (Music::World(4), Harmony::MelodicMinor, false, 0x322d51f9d66fa704),
+    (Music::World(4), Harmony::MelodicMinor, true, 0xe99f2e4db77a5c31),
     (Music::World(4), Harmony::Waltz, false, 0xaffc477a088e9f76),
     (Music::World(4), Harmony::Waltz, true, 0x7b58493b00eb39c2),
-    (
-        Music::World(5),
-        Harmony::Original,
-        false,
-        0x0817d81dc8c0200f,
-    ),
+    (Music::World(5), Harmony::Original, false, 0x0817d81dc8c0200f),
     (Music::World(5), Harmony::Original, true, 0x9dba29925b77635e),
-    (
-        Music::World(5),
-        Harmony::Coltrane,
-        false,
-        0x170aa4d2b7b64f03,
-    ),
+    (Music::World(5), Harmony::Coltrane, false, 0x170aa4d2b7b64f03),
     (Music::World(5), Harmony::Coltrane, true, 0xd656c747d2d24f35),
     (Music::World(5), Harmony::Quartal, false, 0xe5266c19911bd6df),
     (Music::World(5), Harmony::Quartal, true, 0xa44e6262121509f7),
-    (
-        Music::World(5),
-        Harmony::MelodicMinor,
-        false,
-        0xfeb770d02971e724,
-    ),
-    (
-        Music::World(5),
-        Harmony::MelodicMinor,
-        true,
-        0xe49b5433aaf62d1f,
-    ),
+    (Music::World(5), Harmony::MelodicMinor, false, 0xfeb770d02971e724),
+    (Music::World(5), Harmony::MelodicMinor, true, 0xe49b5433aaf62d1f),
     (Music::World(5), Harmony::Waltz, false, 0x0f4b984a62e245d4),
     (Music::World(5), Harmony::Waltz, true, 0x0b8c161d480a2083),
-    (
-        Music::LevelClear,
-        Harmony::Original,
-        false,
-        0x4b6381d0395b35c5,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::Original,
-        true,
-        0xf6de3a9c7df0e62d,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::Coltrane,
-        false,
-        0x106c5779569e73e2,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::Coltrane,
-        true,
-        0x426585f11749d1ca,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::Quartal,
-        false,
-        0x8a63b6735a32b1af,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::Quartal,
-        true,
-        0x552652a6ca527417,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::MelodicMinor,
-        false,
-        0xf8ecf5624a07d315,
-    ),
-    (
-        Music::LevelClear,
-        Harmony::MelodicMinor,
-        true,
-        0xfc3a52c12b3e7032,
-    ),
+    (Music::LevelClear, Harmony::Original, false, 0x4b6381d0395b35c5),
+    (Music::LevelClear, Harmony::Original, true, 0xf6de3a9c7df0e62d),
+    (Music::LevelClear, Harmony::Coltrane, false, 0x106c5779569e73e2),
+    (Music::LevelClear, Harmony::Coltrane, true, 0x426585f11749d1ca),
+    (Music::LevelClear, Harmony::Quartal, false, 0x8a63b6735a32b1af),
+    (Music::LevelClear, Harmony::Quartal, true, 0x552652a6ca527417),
+    (Music::LevelClear, Harmony::MelodicMinor, false, 0xf8ecf5624a07d315),
+    (Music::LevelClear, Harmony::MelodicMinor, true, 0xfc3a52c12b3e7032),
     (Music::LevelClear, Harmony::Waltz, false, 0xd007b6408295b16b),
     (Music::LevelClear, Harmony::Waltz, true, 0x52c46d273b221f5c),
     (Music::Victory, Harmony::Original, false, 0x4e7baa256237229e),
@@ -252,18 +102,8 @@ const BEFORE_INSTRUMENTS: [(Music, Harmony, bool, u64); 80] = [
     (Music::Victory, Harmony::Coltrane, true, 0x35fc0547fe1f3dad),
     (Music::Victory, Harmony::Quartal, false, 0x395a45883426c27e),
     (Music::Victory, Harmony::Quartal, true, 0x9bf829faa3829a2a),
-    (
-        Music::Victory,
-        Harmony::MelodicMinor,
-        false,
-        0x671b02e5736412c9,
-    ),
-    (
-        Music::Victory,
-        Harmony::MelodicMinor,
-        true,
-        0x1c84a92bdd2235fd,
-    ),
+    (Music::Victory, Harmony::MelodicMinor, false, 0x671b02e5736412c9),
+    (Music::Victory, Harmony::MelodicMinor, true, 0x1c84a92bdd2235fd),
     (Music::Victory, Harmony::Waltz, false, 0x5748d5a0df72094a),
     (Music::Victory, Harmony::Waltz, true, 0x859b05d2cf669c6f),
 ];
@@ -272,22 +112,8 @@ const BEFORE_INSTRUMENTS: [(Music, Harmony, bool, u64); 80] = [
 fn the_default_instruments_play_exactly_what_songs_played_before() {
     for (m, harmony, just_intonation, want) in BEFORE_INSTRUMENTS {
         let (_, song) = library::song(m).unwrap();
-        let f = Filters {
-            harmony,
-            just_intonation,
-        };
-        let got = fingerprint(
-            &synth::render_with(
-                song,
-                f,
-                EngineConfig {
-                    seed: 7,
-                    ..EngineConfig::on_grid()
-                },
-            )
-            .unwrap()
-            .frames,
-        );
+        let f = Filters { harmony, just_intonation };
+        let got = fingerprint(&synth::render_with(song, f, EngineConfig { seed: 7, ..EngineConfig::on_grid() }).unwrap().frames);
         assert_eq!(got, want, "{m:?} {f:?}: 0x{got:016x}");
     }
 }
@@ -302,11 +128,7 @@ fn default_is_the_built_in_instrument() {
         let mut bare = song.clone();
         bare.instruments = Default::default();
         bare.instruments_src.clear();
-        assert_eq!(
-            fingerprint(&synth::render_song_on_grid(&bare).unwrap().frames),
-            want,
-            "{stem}: without [instruments]"
-        );
+        assert_eq!(fingerprint(&synth::render_song_on_grid(&bare).unwrap().frames), want, "{stem}: without [instruments]");
         let mut explicit = song.clone();
         for t in &mut explicit.sources {
             if !t.trim().is_empty() {
@@ -314,11 +136,7 @@ fn default_is_the_built_in_instrument() {
             }
         }
         let explicit = SongFile::parse(&explicit.to_text()).unwrap();
-        assert_eq!(
-            fingerprint(&synth::render_song_on_grid(&explicit).unwrap().frames),
-            want,
-            "{stem}: @i default"
-        );
+        assert_eq!(fingerprint(&synth::render_song_on_grid(&explicit).unwrap().frames), want, "{stem}: @i default");
     }
 }
 
@@ -355,9 +173,7 @@ fn peak(x: &[f32]) -> f32 {
 
 /// Upward zero crossings per second.
 fn freq(x: &[f32]) -> f32 {
-    let ups: Vec<usize> = (1..x.len())
-        .filter(|&i| x[i - 1] < 0.0 && x[i] >= 0.0)
-        .collect();
+    let ups: Vec<usize> = (1..x.len()).filter(|&i| x[i - 1] < 0.0 && x[i] >= 0.0).collect();
     if ups.len() < 2 {
         return 0.0;
     }
@@ -376,24 +192,12 @@ fn left(f: &[Frame]) -> Vec<f32> {
 
 #[test]
 fn volume_macros_step_once_per_frame_and_loop() {
-    let s = song(
-        "tick : vol 15 5 | 10 15 | duty 2",
-        "@i tick v15 o5 a1",
-        "",
-        "",
-    );
+    let s = song("tick : vol 15 5 | 10 15 | duty 2", "@i tick v15 o5 a1", "", "");
     let x = left(&render(&s, SR, 512));
     let p: Vec<f32> = (0..8).map(|k| peak(frame(&x, k))).collect();
     let unit = p[0] / 15.0;
-    for (k, want) in [15.0, 5.0, 10.0, 15.0, 10.0, 15.0, 10.0, 15.0]
-        .iter()
-        .enumerate()
-    {
-        assert!(
-            (p[k] / unit - want).abs() < 0.3,
-            "frame {k}: {:?}",
-            p.iter().map(|v| v / unit).collect::<Vec<_>>()
-        );
+    for (k, want) in [15.0, 5.0, 10.0, 15.0, 10.0, 15.0, 10.0, 15.0].iter().enumerate() {
+        assert!((p[k] / unit - want).abs() < 0.3, "frame {k}: {:?}", p.iter().map(|v| v / unit).collect::<Vec<_>>());
     }
 }
 
@@ -408,67 +212,36 @@ fn duty_and_pitch_macros_step_once_per_frame() {
     let s = song("p : pitch 0 12 0 -12 0", "@i p v15 o4 a1", "", "");
     let x = left(&render(&s, SR, 333));
     let f: Vec<f32> = (0..6).map(|k| freq(frame(&x, k))).collect();
-    for (k, want) in [440.0, 880.0, 440.0, 220.0, 440.0, 440.0]
-        .iter()
-        .enumerate()
-    {
+    for (k, want) in [440.0, 880.0, 440.0, 220.0, 440.0, 440.0].iter().enumerate() {
         assert!((f[k] / want - 1.0).abs() < 0.08, "frame {k}: {f:?}");
     }
 }
 
 #[test]
 fn vibrato_waits_its_delay_then_wobbles() {
-    let s = song(
-        "v : vib delay=20 depth=60 speed=5 ramp=1",
-        "",
-        "@i v v15 o4 a1",
-        "",
-    );
+    let s = song("v : vib delay=20 depth=60 speed=5 ramp=1", "", "@i v v15 o4 a1", "");
     let x = left(&render(&s, 2 * SR, 512));
     // Frame-sized windows: steady before the delay, wobbling by tens of cents after.
     let cents = |k: usize| 1200.0 * (freq(frame(&x, k)) / 440.0).log2();
     let before: Vec<f32> = (2..19).map(cents).collect();
     assert!(before.iter().all(|c| c.abs() < 8.0), "{before:?}");
     let after: Vec<f32> = (24..60).map(cents).collect();
-    let (lo, hi) = after
-        .iter()
-        .fold((0.0f32, 0.0f32), |(a, b), c| (a.min(*c), b.max(*c)));
+    let (lo, hi) = after.iter().fold((0.0f32, 0.0f32), |(a, b), c| (a.min(*c), b.max(*c)));
     assert!(hi > 30.0 && lo < -30.0, "{lo} .. {hi}");
 }
 
 #[test]
 fn the_release_plays_after_the_note_unless_the_next_note_cuts_it() {
-    let s = song(
-        "r : vol 15 / 8 8 8 0 | duty 2",
-        "@i r v15 o5 a4 r2.",
-        "",
-        "",
-    );
+    let s = song("r : vol 15 / 8 8 8 0 | duty 2", "@i r v15 o5 a4 r2.", "", "");
     let x = left(&render(&s, 2 * SR, 512));
     let q = SR; // the note ends here (a quarter at 60 bpm)
     let p = |k: usize| peak(&x[q + frame_start(k) + 40..q + frame_start(k + 1) - 40]);
     let unit = peak(&x[2000..q - 1000]) / 15.0;
-    assert!(
-        (p(0) / unit - 8.0).abs() < 0.5 && (p(2) / unit - 8.0).abs() < 0.5,
-        "{} {}",
-        p(0) / unit,
-        p(2) / unit
-    );
-    assert!(
-        peak(&x[q + frame_start(4) + 400..q + frame_start(8)]) < 1e-4,
-        "it ends after the release"
-    );
+    assert!((p(0) / unit - 8.0).abs() < 0.5 && (p(2) / unit - 8.0).abs() < 0.5, "{} {}", p(0) / unit, p(2) / unit);
+    assert!(peak(&x[q + frame_start(4) + 400..q + frame_start(8)]) < 1e-4, "it ends after the release");
     // Straight into the next note: it starts on time, at full level (the tail stops there).
-    let a = left(&render(
-        &song("r : vol 15 / 8 8 8 0", "@i r v15 o5 a4 b4 r2", "", ""),
-        2 * SR,
-        512,
-    ));
-    let b = left(&render(
-        &song("r : vol 15 / 8 8 8 0", "v15 r4 @i r b4 r2", "", ""),
-        2 * SR,
-        512,
-    ));
+    let a = left(&render(&song("r : vol 15 / 8 8 8 0", "@i r v15 o5 a4 b4 r2", "", ""), 2 * SR, 512));
+    let b = left(&render(&song("r : vol 15 / 8 8 8 0", "v15 r4 @i r b4 r2", "", ""), 2 * SR, 512));
     for w in [q + 100..q + 600, q + 1500..q + 4000] {
         let (pa, pb) = (peak(&a[w.clone()]), peak(&b[w.clone()]));
         assert!((pa / pb - 1.0).abs() < 0.03, "{w:?}: {pa} vs {pb}");
@@ -493,44 +266,20 @@ fn kits_change_the_drums() {
     let kit = "boom : kick pitch=-36 decay=12 | snare noise=short decay=12 | hat decay=4 | crash decay=40";
     let len = |x: &[f32]| x.iter().rposition(|v| v.abs() > 1e-3).unwrap_or(0);
     for (drum, longer) in [("k", true), ("s", true), ("h", true)] {
-        let plain = left(&render(
-            &song(kit, "", "", &format!("v15 {drum}1")),
-            SR,
-            512,
-        ));
-        let boom = left(&render(
-            &song(kit, "", "", &format!("@i boom v15 {drum}1")),
-            SR,
-            512,
-        ));
+        let plain = left(&render(&song(kit, "", "", &format!("v15 {drum}1")), SR, 512));
+        let boom = left(&render(&song(kit, "", "", &format!("@i boom v15 {drum}1")), SR, 512));
         assert_ne!(plain, boom, "{drum}");
-        assert_eq!(
-            len(&boom) > len(&plain),
-            longer,
-            "{drum}: {} vs {}",
-            len(&boom),
-            len(&plain)
-        );
+        assert_eq!(len(&boom) > len(&plain), longer, "{drum}: {} vs {}", len(&boom), len(&plain));
     }
     // The crash rings far longer than an open hat.
     let crash = left(&render(&song("", "", "", "v15 x1"), SR, 512));
     let ohat = left(&render(&song("", "", "", "v15 H1"), SR, 512));
-    assert!(
-        len(&crash) > 2 * len(&ohat),
-        "{} vs {}",
-        len(&crash),
-        len(&ohat)
-    );
+    assert!(len(&crash) > 2 * len(&ohat), "{} vs {}", len(&crash), len(&ohat));
 }
 
 #[test]
 fn instruments_can_change_mid_line_and_survive_ties() {
-    let s = song(
-        "a : vol 15\nb : vol 4",
-        "@i a v15 o4 a4 @i b a4 @i a a4& a4",
-        "",
-        "",
-    );
+    let s = song("a : vol 15\nb : vol 4", "@i a v15 o4 a4 @i b a4 @i a a4& a4", "", "");
     let ev = &s.tracks[0].events;
     assert_eq!(ev.iter().map(|e| e.inst).collect::<Vec<_>>(), [1, 2, 1]);
     assert_eq!(ev[2].dur, 2.0, "a tie on one instrument merges");
@@ -545,28 +294,17 @@ fn the_format_rejects_mistakes_with_their_line() {
     let e = |from: &str, to: &str| SongFile::parse(&base.replacen(from, to, 1)).unwrap_err();
     let x = e("vol 15 12", "vol 15 99");
     assert_eq!(x.line, 5, "{x}");
-    assert!(
-        x.msg.contains("[instruments]") && x.msg.contains("lead"),
-        "{x}"
-    );
+    assert!(x.msg.contains("[instruments]") && x.msg.contains("lead"), "{x}");
     let x = e("c1 |", "@i brass c1 |");
     assert_eq!(x.line, 8, "{x}");
-    assert!(
-        x.msg.contains("unknown instrument `brass`") && x.msg.contains("lead"),
-        "{x}"
-    );
+    assert!(x.msg.contains("unknown instrument `brass`") && x.msg.contains("lead"), "{x}");
     assert!(e("c1 |", "@i kit c1 |").msg.contains("kit"));
     assert!(e("k1 |", "@i lead k1 |").msg.contains("kits"));
     assert!(e("c1 |", "@i c1 |").msg.contains("unknown instrument `c1`"));
     assert!(e("c1 |", "c1 @i").msg.contains("needs an instrument name"));
-    assert!(
-        e("kit : kick decay=4", "kit : kick decay=4\npulse1 = kit")
-            .msg
-            .contains("noise")
-    );
+    assert!(e("kit : kick decay=4", "kit : kick decay=4\npulse1 = kit").msg.contains("noise"));
     // A palette round-trips with the text.
-    let s =
-        SongFile::parse(&base.replacen("[pulse1]", "pulse1 = default lead\n[pulse1]", 1)).unwrap();
+    let s = SongFile::parse(&base.replacen("[pulse1]", "pulse1 = default lead\n[pulse1]", 1)).unwrap();
     assert_eq!(s.instruments.palette(0), [0, 1]);
     assert_eq!(SongFile::parse(&s.to_text()).unwrap(), s);
 }
@@ -574,26 +312,13 @@ fn the_format_rejects_mistakes_with_their_line() {
 /// Every instrument keyword, kit drum and parameter is in the cheat sheet.
 #[test]
 fn the_cheat_sheet_covers_instruments() {
-    let rows: Vec<&str> = syntax::CHEAT_SHEET
-        .iter()
-        .flat_map(|(_, r)| r.iter().map(|(s, _)| *s))
-        .collect();
-    let words = |w: &str| {
-        rows.iter()
-            .any(|s| s.split([' ', '|', ':']).any(|x| x == w || x.starts_with(w)))
-    };
-    for k in instrument::TONE_KEYS
-        .iter()
-        .chain(&instrument::KIT_DRUMS)
-        .chain(&instrument::PARAMS)
-    {
+    let rows: Vec<&str> = syntax::CHEAT_SHEET.iter().flat_map(|(_, r)| r.iter().map(|(s, _)| *s)).collect();
+    let words = |w: &str| rows.iter().any(|s| s.split([' ', '|', ':']).any(|x| x == w || x.starts_with(w)));
+    for k in instrument::TONE_KEYS.iter().chain(&instrument::KIT_DRUMS).chain(&instrument::PARAMS) {
         assert!(words(k), "`{k}` isn't in the cheat sheet");
     }
     for k in ["@i", "default", "|", "/", "pulse1 =", "[instruments]", "x"] {
-        assert!(
-            rows.iter().any(|s| s.contains(k)),
-            "`{k}` isn't in the cheat sheet"
-        );
+        assert!(rows.iter().any(|s| s.contains(k)), "`{k}` isn't in the cheat sheet");
     }
 }
 
@@ -618,22 +343,8 @@ fn macros_dont_depend_on_the_block_size() {
 fn songs_with_instruments_dont_depend_on_the_block_size() {
     let file = library::load("tiger_rag").unwrap();
     let run = |block: usize| {
-        let mut e = Engine::with_config(
-            &file,
-            synth::SAMPLE_RATE,
-            EngineConfig {
-                seed: 3,
-                ..EngineConfig::on_grid()
-            },
-        )
-        .unwrap();
-        e.post(Input::SetFreedom {
-            lead: 0.8,
-            comp: 0.8,
-            bass: 0.8,
-            drums: 0.8,
-            dynamics: 0.5,
-        });
+        let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, EngineConfig { seed: 3, ..EngineConfig::on_grid() }).unwrap();
+        e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
         let mut out = vec![Frame::ZERO; 40 * SR];
         for c in out.chunks_mut(block) {
             e.fill(c);

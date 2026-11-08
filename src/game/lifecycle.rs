@@ -49,18 +49,13 @@ fn enter_level(
     let level = match generated {
         Some(g) => g.0.clone(),
         None => {
-            commands.write_message(crate::events::LevelStarted {
-                level: index,
-                restart: false,
-            });
+            commands.write_message(crate::events::LevelStarted { level: index, restart: false });
             levels.0[index].clone()
         }
     };
     let level = load(&mut commands, level, index, &old);
     if !level.intro.is_empty() {
-        says.write(HanSays {
-            text: level.intro.clone(),
-        });
+        says.write(HanSays { text: level.intro.clone() });
     }
 }
 
@@ -112,9 +107,7 @@ fn restart_level(
     if requests.read().count() == 0 {
         return;
     }
-    let index = active
-        .map_or(current.0, |a| a.index)
-        .min(levels.0.len().saturating_sub(1));
+    let index = active.map_or(current.0, |a| a.index).min(levels.0.len().saturating_sub(1));
     // Side B rewinds its own level, NAT ALONE restarts its own (free play restarts a room
     // itself).
     match (generated, side_b) {
@@ -132,10 +125,7 @@ fn restart_level(
         _ => {}
     }
     load(&mut commands, levels.0[index].clone(), index, &old);
-    commands.write_message(crate::events::LevelStarted {
-        level: index,
-        restart: true,
-    });
+    commands.write_message(crate::events::LevelStarted { level: index, restart: true });
 }
 
 /// Despawn whatever is loaded and spawn `level` (story level `index`) fresh, resetting the run.
@@ -159,10 +149,7 @@ fn load(
     // The band starts every level playing it straight (the audio plugin switches back at the
     // next bar line); physics don't wait for it.
     commands.insert_resource(Groove::default());
-    commands.insert_resource(ActiveLevel {
-        index,
-        level: level.clone(),
-    });
+    commands.insert_resource(ActiveLevel { index, level: level.clone() });
     commands.insert_resource(HanNav::default());
     spawn_level(commands, &level);
     level
@@ -186,12 +173,7 @@ fn spawn_level(commands: &mut Commands, level: &Level) {
 
 /// A nugget in cell (col, row).
 pub(super) fn nugget(level: &Level, col: usize, row: usize) -> impl Bundle {
-    (
-        Name::new("Nugget"),
-        LevelEntity,
-        Nugget,
-        Transform::from_translation(level.tile_center(col, row).extend(2.0)),
-    )
+    (Name::new("Nugget"), LevelEntity, Nugget, Transform::from_translation(level.tile_center(col, row).extend(2.0)))
 }
 
 /// Spawn the static part of `level` in columns `cols`: tiles, nuggets, checkpoints, hazards,
@@ -215,13 +197,7 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
             let mut e = commands.spawn((
                 Name::new("Tile"),
                 LevelEntity,
-                LevelTile {
-                    col,
-                    row,
-                    tile,
-                    top,
-                    world: level.world,
-                },
+                LevelTile { col, row, tile, top, world: level.world },
                 Transform::from_translation(level.tile_center(col, row).extend(0.0)),
             ));
             if tile == Tile::Crumble {
@@ -246,10 +222,7 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
                 commands.spawn((
                     Name::new("Checkpoint"),
                     LevelEntity,
-                    Checkpoint {
-                        index: checkpoint_index,
-                        active: false,
-                    },
+                    Checkpoint { index: checkpoint_index, active: false },
                     Transform::from_translation(
                         cell_floor(level, thing.col, thing.row).extend(2.0),
                     ),
@@ -272,10 +245,7 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
                 commands.spawn((
                     Name::new("Spray"),
                     LevelEntity,
-                    Spray {
-                        col: thing.col,
-                        on: false,
-                    },
+                    Spray { col: thing.col, on: false },
                     Transform::from_translation(
                         cell_floor(level, thing.col, thing.row).extend(2.0),
                     ),
@@ -333,6 +303,7 @@ pub fn spawn_region(commands: &mut Commands, level: &Level, cols: std::ops::Rang
             Transform::from_translation(pos.extend(1.0)),
         ));
     }
+
 }
 
 /// The goal flag, the player and Han.
@@ -383,8 +354,7 @@ fn dev_start(level: &Level) -> Option<Vec2> {
     {
         let col: usize = std::env::var("NATHAN_START").ok()?.parse().ok()?;
         let row = (1..level.height).find(|&r| {
-            level.tile(col as i32, r as i32).is_solid()
-                && level.tile(col as i32, r as i32 - 1) == Tile::Empty
+            level.tile(col as i32, r as i32).is_solid() && level.tile(col as i32, r as i32 - 1) == Tile::Empty
         })?;
         Some(stand_pos(level, col, row - 1))
     }

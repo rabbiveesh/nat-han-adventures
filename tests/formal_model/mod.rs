@@ -28,8 +28,8 @@ use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use nat_han_adventures::audio::director::{
-    self, Band, Events, GIANT_STEPS_TOOTS, MUSIC_CHECK_SECS, NERVOUS_DEATHS, SUMMON_HOLD_SECS,
-    WALTZ_MAX_INTERVAL, WALTZ_MIN_INTERVAL,
+    self, Band, Events, GIANT_STEPS_TOOTS, MUSIC_CHECK_SECS, NERVOUS_DEATHS, SUMMON_HOLD_SECS, WALTZ_MAX_INTERVAL,
+    WALTZ_MIN_INTERVAL,
 };
 use nat_han_adventures::audio::{Filters, Harmony};
 use nat_han_adventures::game::Groove;
@@ -102,12 +102,9 @@ impl Act {
 
     fn name(self) -> String {
         match self {
-            Act::Frame(bits) => BITS
-                .iter()
-                .filter(|(b, _)| bits & b != 0)
-                .map(|(_, n)| *n)
-                .collect::<Vec<_>>()
-                .join("+"),
+            Act::Frame(bits) => {
+                BITS.iter().filter(|(b, _)| bits & b != 0).map(|(_, n)| *n).collect::<Vec<_>>().join("+")
+            }
             Act::Restart => "restart".into(),
             Act::Wait(n) => format!("wait {}s", n as f32 * TICK),
         }
@@ -144,12 +141,7 @@ pub struct Sim {
 impl Sim {
     /// A level starts at t = 0.
     pub fn new(mutation: Mutation) -> Sim {
-        let mut s = Sim {
-            band: Band::default(),
-            tick: 0,
-            playing: Filters::default(),
-            mutation,
-        };
+        let mut s = Sim { band: Band::default(), tick: 0, playing: Filters::default(), mutation };
         s.restart();
         s
     }
@@ -263,11 +255,7 @@ impl Sim {
                 s.checkpoint_slips.min(director::LAUGHING_SLIPS) as u8,
             ],
             charged: self.band.charged(),
-            hold: self
-                .band
-                .hold
-                .filter(|&(_, until)| until > now)
-                .map(|(h, until)| (h, rel(until))),
+            hold: self.band.hold.filter(|&(_, until)| until > now).map(|(h, until)| (h, rel(until))),
             next_check: rel(self.band.next_check()).max(0),
             since_start: (-rel(self.band.level_start())).min(HORIZON),
             laugh_decay: (s.checkpoint_slips > 0).then(|| rel(self.band.laugh_decay_at()).max(0)),
@@ -282,10 +270,7 @@ impl Sim {
 /// writes: `set_groove` keeps the grip layer, `direct` sets it from the death count).
 pub fn groove_of(playing: Filters, level_deaths: u32, mutation: Mutation) -> Groove {
     let nervous = mutation != Mutation::GripOnlyFromMelodicMinor && level_deaths >= NERVOUS_DEATHS;
-    Groove {
-        nervous,
-        ..Groove::new(playing)
-    }
+    Groove { nervous, ..Groove::new(playing) }
 }
 
 /// The abstract state of a [`Sim`]: everything the director reads, relative to now.
@@ -366,9 +351,7 @@ impl Trace {
         }
         for part in s.split('|') {
             let part = part.trim();
-            let rest = part
-                .strip_prefix("t=")
-                .ok_or_else(|| format!("{part:?}: want t=<secs> <event>"))?;
+            let rest = part.strip_prefix("t=").ok_or_else(|| format!("{part:?}: want t=<secs> <event>"))?;
             let (t, what) = rest.split_once(' ').unwrap_or((rest, "wait"));
             let t: f32 = t.parse().map_err(|_| format!("{part:?}: bad time"))?;
             let at = ticks(t);
@@ -383,12 +366,7 @@ impl Trace {
                 tick = at;
             }
             let (what, n) = match what.split_once('×') {
-                Some((w, n)) => (
-                    w.trim(),
-                    n.trim()
-                        .parse::<u32>()
-                        .map_err(|_| format!("{part:?}: bad count"))?,
-                ),
+                Some((w, n)) => (w.trim(), n.trim().parse::<u32>().map_err(|_| format!("{part:?}: bad count"))?),
                 None => (what.trim(), 1),
             };
             let act = match what {
@@ -441,20 +419,11 @@ pub const PROPERTIES: [(&str, &str); 7] = [
         "b",
         "each summon input (5 toots, 4 quick nuggets, 3 even ground jumps) puts its mode on the call, and a call plays it at once",
     ),
-    (
-        "c",
-        "no flip-flop: with no input the harmony changes at most once, then stays",
-    ),
-    (
-        "d",
-        "holds expire without keep-alive input (no input, or only deaths and checkpoints)",
-    ),
+    ("c", "no flip-flop: with no input the harmony changes at most once, then stays"),
+    ("d", "holds expire without keep-alive input (no input, or only deaths and checkpoints)"),
     ("e", "restart returns to the initial state"),
     ("f", "the laughing band never blocks grip"),
-    (
-        "g",
-        "only a slip starts the laughing band: a plain death (a stain pit, a chute) never does",
-    ),
+    ("g", "only a slip starts the laughing band: a plain death (a stain pit, a chute) never does"),
 ];
 
 /// Respawn and walk back to a chute (ticks): the respawn delay, rounded up.
@@ -480,10 +449,7 @@ pub fn summons() -> Vec<(Harmony, Vec<Act>)> {
     };
     for gap in [0, 1, 4] {
         v.push((Harmony::Coltrane, spaced(Act::TOOT, GIANT_STEPS_TOOTS, gap)));
-        v.push((
-            Harmony::Quartal,
-            spaced(Act::NUGGET, director::FIRED_UP_NUGGETS, gap),
-        ));
+        v.push((Harmony::Quartal, spaced(Act::NUGGET, director::FIRED_UP_NUGGETS, gap)));
     }
     // Even ground jumps: 0.5, 0.75, 1 s apart (on the 0.25 s grid inside 0.35..=1.2 s).
     for gap in 2..=4 {
@@ -507,13 +473,7 @@ pub fn chute_loops() -> Vec<(String, Vec<Act>)> {
                 lap.push(Act::Wait(1));
             }
             lap.push(Act::Wait(4));
-            v.push((
-                format!(
-                    "{k} ghost nugget(s) per lap{}",
-                    if cp { ", checkpoint" } else { "" }
-                ),
-                lap,
-            ));
+            v.push((format!("{k} ghost nugget(s) per lap{}", if cp { ", checkpoint" } else { "" }), lap));
         }
     }
     v
@@ -537,11 +497,7 @@ fn prop_a(s: &Sim) -> Result<(), Violation> {
         return Err(Violation {
             prop: "a",
             witness: Vec::new(),
-            detail: format!(
-                "{} level deaths but no grip (playing {:?})",
-                s.band.stats.level_deaths,
-                s.harmony()
-            ),
+            detail: format!("{} level deaths but no grip (playing {:?})", s.band.stats.level_deaths, s.harmony()),
         });
     }
     for (name, lap) in CHUTE_LOOPS.iter() {
@@ -552,12 +508,7 @@ fn prop_a(s: &Sim) -> Result<(), Violation> {
                 t.apply(a);
                 deaths += matches!(a, Act::Frame(b) if b & (DEATH | SLIP) != 0) as u32;
                 if deaths == NERVOUS_DEATHS && !t.grip() {
-                    let witness = lap
-                        .iter()
-                        .cycle()
-                        .take(lap_no * lap.len() + i + 1)
-                        .copied()
-                        .collect();
+                    let witness = lap.iter().cycle().take(lap_no * lap.len() + i + 1).copied().collect();
                     return Err(Violation {
                         prop: "a",
                         witness,
@@ -588,11 +539,7 @@ fn prop_b(s: &Sim) -> Result<(), Violation> {
             return Err(Violation {
                 prop: "b",
                 witness,
-                detail: format!(
-                    "charging {target:?}: the call would play {:?} (full: {:?})",
-                    t.band.ready(),
-                    t.band.charged()
-                ),
+                detail: format!("charging {target:?}: the call would play {:?} (full: {:?})", t.band.ready(), t.band.charged()),
             });
         }
         if !held {
@@ -605,10 +552,7 @@ fn prop_b(s: &Sim) -> Result<(), Violation> {
             return Err(Violation {
                 prop: "b",
                 witness,
-                detail: format!(
-                    "calling {target:?}: decisions {decided:?}, playing {:?}",
-                    t.harmony()
-                ),
+                detail: format!("calling {target:?}: decisions {decided:?}, playing {:?}", t.harmony()),
             });
         }
     }
@@ -644,10 +588,7 @@ fn quiet(s: &Sim, n: i32) -> Quiet {
             if SETTLED.with_borrow(|set| set.contains(&key)) {
                 break;
             }
-            if decided_at
-                .as_ref()
-                .is_some_and(|(prev, c)| *prev == key.1 && *c == changes.len())
-            {
+            if decided_at.as_ref().is_some_and(|(prev, c)| *prev == key.1 && *c == changes.len()) {
                 SETTLED.with_borrow_mut(|set| set.insert(key));
                 break;
             }
@@ -676,11 +617,7 @@ fn prop_c(s: &Sim, (changes, _): &Quiet) -> Result<(), Violation> {
             detail: format!(
                 "with no input the harmony goes {:?} → {}",
                 s.harmony(),
-                changes
-                    .iter()
-                    .map(|(k, h)| format!("{h:?} (t+{}s)", *k as f32 * TICK))
-                    .collect::<Vec<_>>()
-                    .join(" → ")
+                changes.iter().map(|(k, h)| format!("{h:?} (t+{}s)", *k as f32 * TICK)).collect::<Vec<_>>().join(" → ")
             ),
         });
     }
@@ -702,10 +639,7 @@ fn prop_d(s: &Sim, (_, unheld): &Quiet) -> Result<(), Violation> {
         return Err(Violation {
             prop: "d",
             witness: vec![Act::Wait(HOLD_TICKS as u16 + 1)],
-            detail: format!(
-                "still holding {:?} after {SUMMON_HOLD_SECS}s with no input",
-                s.held()
-            ),
+            detail: format!("still holding {:?} after {SUMMON_HOLD_SECS}s with no input", s.held()),
         });
     }
     // Only deaths and checkpoints (no keep-alive).
@@ -721,9 +655,7 @@ fn prop_d(s: &Sim, (_, unheld): &Quiet) -> Result<(), Violation> {
         return Err(Violation {
             prop: "d",
             witness,
-            detail: format!(
-                "still holding {h:?} after {SUMMON_HOLD_SECS}s of only deaths and checkpoints"
-            ),
+            detail: format!("still holding {h:?} after {SUMMON_HOLD_SECS}s of only deaths and checkpoints"),
         });
     }
     Ok(())
@@ -736,21 +668,14 @@ fn prop_e(s: &Sim, init: &Key) -> Result<(), Violation> {
         return Err(Violation {
             prop: "e",
             witness: vec![Act::Restart],
-            detail: format!(
-                "after a restart: {:?}\n  a fresh level: {:?}",
-                t.key(),
-                init
-            ),
+            detail: format!("after a restart: {:?}\n  a fresh level: {:?}", t.key(), init),
         });
     }
     Ok(())
 }
 
 fn prop_f(s: &Sim) -> Result<(), Violation> {
-    let laughing = Filters {
-        just_intonation: !s.playing.just_intonation,
-        ..s.playing
-    };
+    let laughing = Filters { just_intonation: !s.playing.just_intonation, ..s.playing };
     let other = groove_of(laughing, s.band.stats.level_deaths, s.mutation);
     if other.grip() != s.grip() {
         return Err(Violation {
@@ -773,9 +698,7 @@ fn prop_g(s: &Sim) -> Result<(), Violation> {
     }
     let mut t = s.clone();
     let mut laughed = false;
-    t.apply_with(Act::DEATH, |_, d| {
-        laughed |= d.is_some_and(|f| f.just_intonation)
-    });
+    t.apply_with(Act::DEATH, |_, d| laughed |= d.is_some_and(|f| f.just_intonation));
     if laughed {
         return Err(Violation {
             prop: "g",
@@ -803,11 +726,7 @@ impl Config {
         let mut acts: Vec<Act> = BITS.iter().map(|&(b, _)| Act::Frame(b)).collect();
         acts.push(Act::Restart);
         acts.extend([1, 2, 3, 4, 10, 40, 80].map(Act::Wait));
-        Config {
-            depth,
-            acts,
-            mutation: Mutation::None,
-        }
+        Config { depth, acts, mutation: Mutation::None }
     }
 
     /// Tier 2: also two events in one frame, and finer waits.
@@ -837,11 +756,7 @@ pub struct Counterexample {
 
 impl fmt::Display for Counterexample {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (_, what) = PROPERTIES
-            .iter()
-            .find(|p| p.0 == self.violation.prop)
-            .copied()
-            .unwrap_or(("?", "?"));
+        let (_, what) = PROPERTIES.iter().find(|p| p.0 == self.violation.prop).copied().unwrap_or(("?", "?"));
         let mut all = self.state.clone();
         all.0.extend(&self.violation.witness);
         writeln!(f, "property ({}) fails: {what}", self.violation.prop)?;
@@ -919,14 +834,7 @@ pub fn explore_with(
     let init = root.key();
     let mut seen: HashSet<Key> = HashSet::new();
     seen.insert(init.clone());
-    let mut ex = Exploration {
-        nodes: vec![Node {
-            sim: root,
-            parent: 0,
-            act: None,
-        }],
-        coverage: Coverage::default(),
-    };
+    let mut ex = Exploration { nodes: vec![Node { sim: root, parent: 0, act: None }], coverage: Coverage::default() };
     let mut found: Vec<Counterexample> = Vec::new();
     let mut layer = vec![0usize];
     ex.coverage.layers.push(1);
@@ -952,21 +860,13 @@ pub fn explore_with(
             run(&layer)
         } else {
             std::thread::scope(|scope| {
-                let hs: Vec<_> = layer
-                    .chunks(chunk)
-                    .map(|part| scope.spawn(|| run(part)))
-                    .collect();
-                hs.into_iter()
-                    .flat_map(|h| h.join().expect("check panicked"))
-                    .collect()
+                let hs: Vec<_> = layer.chunks(chunk).map(|part| scope.spawn(|| run(part))).collect();
+                hs.into_iter().flat_map(|h| h.join().expect("check panicked")).collect()
             })
         };
         for (i, v) in fails {
             if !found.iter().any(|c| c.violation.prop == v.prop) {
-                found.push(Counterexample {
-                    state: ex.trace(i),
-                    violation: v,
-                });
+                found.push(Counterexample { state: ex.trace(i), violation: v });
             }
             if first {
                 break;
@@ -986,11 +886,7 @@ pub fn explore_with(
                     continue;
                 }
                 next.push(ex.nodes.len());
-                ex.nodes.push(Node {
-                    sim: s,
-                    parent: i,
-                    act: Some(a),
-                });
+                ex.nodes.push(Node { sim: s, parent: i, act: Some(a) });
             }
         }
         ex.coverage.layers.push(next.len());
@@ -1001,11 +897,7 @@ pub fn explore_with(
     }
     ex.coverage.states = ex.nodes.len();
     ex.coverage.depth = depth;
-    ex.coverage.music = ex
-        .nodes
-        .iter()
-        .map(|n| (n.sim.playing, n.sim.grip()))
-        .collect();
+    ex.coverage.music = ex.nodes.iter().map(|n| (n.sim.playing, n.sim.grip())).collect();
     ex.coverage.elapsed = t0.elapsed();
     (ex, found)
 }
@@ -1017,13 +909,7 @@ pub fn check_trace(state: &str) -> Result<(), String> {
     let mut s = Sim::new(Mutation::None);
     let mut done = Vec::new();
     let check = |s: &Sim, done: &[Act]| {
-        check_state(s, &init).map_err(|v| {
-            Counterexample {
-                state: Trace(done.to_vec()),
-                violation: v,
-            }
-            .to_string()
-        })
+        check_state(s, &init).map_err(|v| Counterexample { state: Trace(done.to_vec()), violation: v }.to_string())
     };
     check(&s, &done)?;
     for &a in &trace.0 {
@@ -1049,13 +935,8 @@ pub fn check_abstraction(depth: usize, probes: usize, len: usize) -> Result<usiz
         seed ^= seed << 17;
         seed
     };
-    let plays: Vec<Vec<Act>> = (0..probes)
-        .map(|_| {
-            (0..len)
-                .map(|_| acts[(rnd() % acts.len() as u64) as usize])
-                .collect()
-        })
-        .collect();
+    let plays: Vec<Vec<Act>> =
+        (0..probes).map(|_| (0..len).map(|_| acts[(rnd() % acts.len() as u64) as usize]).collect()).collect();
     let observe = |s: &Sim, play: &[Act]| {
         let mut t = s.clone();
         let mut seen = Vec::new();

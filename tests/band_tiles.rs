@@ -28,26 +28,15 @@ struct Deaths(Vec<DeathCause>);
 fn game(level: &str, harmony: Harmony) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
-            DT,
-        )))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
         .add_plugins(nat_han_adventures::gameplay)
-        .insert_resource(Levels(vec![
-            Level::parse(level).expect("test level parses"),
-        ]))
+        .insert_resource(Levels(vec![Level::parse(level).expect("test level parses")]))
         .init_resource::<Deaths>()
-        .add_systems(
-            Last,
-            |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| {
-                d.0.extend(r.read().map(|m| m.cause))
-            },
-        );
+        .add_systems(Last, |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| d.0.extend(r.read().map(|m| m.cause)));
     app.finish();
     app.cleanup();
     app.update();
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::Playing);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
     app.update();
     app.update();
     *app.world_mut().resource_mut::<Groove>() = Groove::of(harmony);
@@ -61,11 +50,7 @@ fn step(app: &mut App, secs: f32) {
 }
 
 fn nat(app: &mut App) -> Vec2 {
-    app.world_mut()
-        .query_filtered::<&Pos, With<Player>>()
-        .single(app.world())
-        .unwrap()
-        .0
+    app.world_mut().query_filtered::<&Pos, With<Player>>().single(app.world()).unwrap().0
 }
 
 fn deaths(app: &App) -> Vec<DeathCause> {
@@ -104,14 +89,8 @@ fn fired_up_belts_run_faster() {
         nat(&mut app).x - x0
     };
     let (plain, fired) = (carried(Harmony::Original), carried(Harmony::Quartal));
-    assert!(
-        (plain - BELT_SPEED).abs() < 3.0,
-        "a belt carries {plain:.1} px/s"
-    );
-    assert!(
-        (fired - BELT_SPEED * FIRED_UP_TILES).abs() < 3.0,
-        "fired up, {fired:.1} px/s"
-    );
+    assert!((plain - BELT_SPEED).abs() < 3.0, "a belt carries {plain:.1} px/s");
+    assert!((fired - BELT_SPEED * FIRED_UP_TILES).abs() < 3.0, "fired up, {fired:.1} px/s");
 }
 
 const WIND: &str = "name: Wind
@@ -137,10 +116,7 @@ fn fired_up_wall_fans_blow_harder() {
     };
     let (plain, fired) = (blown(Harmony::Original), blown(Harmony::Quartal));
     assert!(plain > TILE, "a gust blows Nat along: {plain:.1} px");
-    assert!(
-        fired > plain * 1.3,
-        "fired up, harder: {fired:.1} px vs {plain:.1}"
-    );
+    assert!(fired > plain * 1.3, "fired up, harder: {fired:.1} px vs {plain:.1}");
 }
 
 // ─── Giant Steps: fans blow twice as far ────────────────────────────────────
@@ -159,14 +135,8 @@ fn giant_steps_fans_reach_twice_as_far() {
         (top(&mut app, 4.0) - floor) / TILE
     };
     let (plain, giant) = (rise(Harmony::Original), rise(Harmony::Coltrane));
-    assert!(
-        (plain - FAN_REACH as f32).abs() < 1.5,
-        "a fan floats Nat ~{FAN_REACH} tiles: {plain:.2}"
-    );
-    assert!(
-        (giant - GIANT_FAN_REACH as f32).abs() < 1.5,
-        "under Giant Steps ~{GIANT_FAN_REACH}: {giant:.2}"
-    );
+    assert!((plain - FAN_REACH as f32).abs() < 1.5, "a fan floats Nat ~{FAN_REACH} tiles: {plain:.2}");
+    assert!((giant - GIANT_FAN_REACH as f32).abs() < 1.5, "under Giant Steps ~{GIANT_FAN_REACH}: {giant:.2}");
     // A wall fan's gust reaches as far: Nat 11 tiles from it.
     let far = WIND.replace("....P.............G.", "...........P......G.");
     let pushed = |harmony| {
@@ -184,8 +154,7 @@ fn giant_steps_fans_reach_twice_as_far() {
 /// The waltz at `beats` beats in.
 fn waltz_at(app: &mut App, beats: f64) {
     let secs = 60.0 / WALTZ_BPM as f64;
-    *app.world_mut().resource_mut::<Groove>() =
-        Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
+    *app.world_mut().resource_mut::<Groove>() = Groove::of(Harmony::Waltz).at(BeatClock::at(beats, secs, 3));
 }
 
 fn spring_level() -> String {
@@ -230,10 +199,7 @@ fn a_waltz_trampoline_holds_nat_till_one_then_springs_him_higher() {
         app.update();
         held = held.max(nat(&mut app).y - floor);
     }
-    assert!(
-        held < 1.0,
-        "caught off ONE, Nat stays put ({held:.1} px up)"
-    );
+    assert!(held < 1.0, "caught off ONE, Nat stays put ({held:.1} px up)");
     let x = nat(&mut app).x / TILE;
     assert!((5.0..9.0).contains(&x), "on the trampolines (col {x:.1})");
     // On to the next ONE: sprung, higher than the everyday spring.
@@ -245,10 +211,7 @@ fn a_waltz_trampoline_holds_nat_till_one_then_springs_him_higher() {
         high = high.max(nat(&mut app).y - floor);
     }
     let high = high / TILE;
-    assert!(
-        high > plain * 1.6,
-        "sprung on ONE: {high:.2} tiles vs {plain:.2}"
-    );
+    assert!(high > plain * 1.6, "sprung on ONE: {high:.2} tiles vs {plain:.2}");
     assert!(deaths(&app).is_empty());
 }
 
@@ -286,13 +249,7 @@ fn a_waltz_wall_cushion_holds_nat_till_one_then_slings_him_harder() {
         step(&mut app, 0.2);
         let floor = nat(&mut app).y;
         RIGHT.press(app.world_mut());
-        let pad = |app: &mut App| {
-            app.world_mut()
-                .query_filtered::<&Body, With<Player>>()
-                .single(app.world())
-                .unwrap()
-                .pad
-        };
+        let pad = |app: &mut App| app.world_mut().query_filtered::<&Body, With<Player>>().single(app.world()).unwrap().pad;
         while pad(&mut app) == 0.0 {
             tick(&mut app, &mut beats);
         }
@@ -320,14 +277,8 @@ fn a_waltz_wall_cushion_holds_nat_till_one_then_slings_him_harder() {
     assert!(caught < 3.0, "caught off ONE ({caught:.2} beats)");
     assert!(held > 30, "held till ONE: {held} frames");
     let off = fired.rem_euclid(3.0);
-    assert!(
-        !(0.3..2.7).contains(&off),
-        "fired on ONE ({fired:.2} beats)"
-    );
-    assert!(
-        high > plain * 1.4,
-        "slung harder on ONE: {high:.2} tiles vs {plain:.2}"
-    );
+    assert!(!(0.3..2.7).contains(&off), "fired on ONE ({fired:.2} beats)");
+    assert!(high > plain * 1.4, "slung harder on ONE: {high:.2} tiles vs {plain:.2}");
 }
 
 const DUCK: &str = "name: Duck
@@ -371,11 +322,7 @@ fn a_duck_hit_on_one_bats_harder() {
 
 fn run_check(src: &str) -> Report {
     static PHYS: std::sync::OnceLock<Physics> = std::sync::OnceLock::new();
-    check_with(
-        &Level::parse(src).unwrap(),
-        &Options::default(),
-        PHYS.get_or_init(Physics::new),
-    )
+    check_with(&Level::parse(src).unwrap(), &Options::default(), PHYS.get_or_init(Physics::new))
 }
 
 fn gates(r: &Report) -> Vec<Gate> {
@@ -435,11 +382,7 @@ fn gap(w: usize, run: char) -> String {
 /// Reached, and how: the gates crossed (the goal unreachable: `None`).
 fn crossed(src: &str) -> Option<Vec<Gate>> {
     let r = run_check(src);
-    let errs: Vec<_> = r
-        .errs
-        .iter()
-        .filter(|e| !e.contains("nugget") && !e.contains("level is only"))
-        .collect();
+    let errs: Vec<_> = r.errs.iter().filter(|e| !e.contains("nugget") && !e.contains("level is only")).collect();
     if errs.iter().any(|e| e.contains("goal at")) {
         return None;
     }
@@ -455,11 +398,7 @@ fn the_validator_knows_a_fired_up_belt_jumps_further() {
     assert_eq!(crossed(&gap(12, '#')), None);
     assert_eq!(crossed(&gap(11, '}')), Some(vec![]));
     for w in [12, 15] {
-        assert_eq!(
-            crossed(&gap(w, '}')),
-            Some(vec![Gate::LongGap]),
-            "{w} wide off a belt"
-        );
+        assert_eq!(crossed(&gap(w, '}')), Some(vec![Gate::LongGap]), "{w} wide off a belt");
     }
 }
 
@@ -469,17 +408,9 @@ fn the_validator_knows_giant_steps_fans_blow_further() {
     // Steps over a fan.
     for h in [9, 13] {
         assert_eq!(crossed(&wall(h, '#')), None, "{h} tall, no fan");
-        assert_eq!(
-            crossed(&wall(h, '*')),
-            Some(vec![Gate::GiantWall]),
-            "{h} tall over a fan"
-        );
+        assert_eq!(crossed(&wall(h, '*')), Some(vec![Gate::GiantWall]), "{h} tall over a fan");
     }
-    assert_eq!(
-        crossed(&wall(8, '*')),
-        Some(vec![]),
-        "an everyday fan floats Nat up 8"
-    );
+    assert_eq!(crossed(&wall(8, '*')), Some(vec![]), "an everyday fan floats Nat up 8");
 }
 
 #[test]

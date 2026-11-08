@@ -46,26 +46,16 @@ fn log(mut l: ResMut<Log>, mut j: MessageReader<Jumped>, mut d: MessageReader<Pl
 /// per update, the warm-up update done.
 fn app(fps: u32, audio: Option<&Path>) -> App {
     let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        StatesPlugin,
-        InputPlugin,
-        nat_han_adventures::gameplay,
-    ))
-    .insert_resource(TimeUpdateStrategy::ManualDuration(
-        frame_duration(fps).unwrap(),
-    ))
-    .init_resource::<Log>()
-    .add_systems(Last, log);
+    app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin, nat_han_adventures::gameplay))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(frame_duration(fps).unwrap()))
+        .init_resource::<Log>()
+        .add_systems(Last, log);
     if let Some(wav) = audio {
-        app.add_plugins(audio::plugin)
-            .insert_resource(AudioCapture::new(wav, fps).unwrap());
+        app.add_plugins(audio::plugin).insert_resource(AudioCapture::new(wav, fps).unwrap());
     }
     app.finish();
     app.cleanup();
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::Playing);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
     app.update(); // warm-up: Startup, the level spawns, time zero
     app.world_mut().resource_mut::<Log>().frame = 0;
     if audio.is_some() {
@@ -113,25 +103,14 @@ fn flourish(fps: u32) -> Timeline {
 fn the_timeline_drives_the_same_jumps_as_real_keys() {
     for fps in [30, 60] {
         let t = flourish(fps);
-        assert!(
-            (t.duration(fps).as_secs_f64() - 59.3).abs() < 0.05,
-            "{:?}",
-            t.duration(fps)
-        );
+        assert!((t.duration(fps).as_secs_f64() - 59.3).abs() < 0.05, "{:?}", t.duration(fps));
         let via_timeline = play(fps, &t, None).world().resource::<Log>().clone();
         let direct = press_directly(fps, &t).world().resource::<Log>().clone();
         assert_eq!(via_timeline, direct, "fps {fps}");
         let toots = via_timeline.jumps.iter().filter(|j| j.1).count();
         let jumps = via_timeline.jumps.len() - toots;
-        assert!(
-            toots >= 5 && jumps >= 30,
-            "fps {fps}: {jumps} jumps, {toots} toots: {via_timeline:?}"
-        );
-        assert!(
-            via_timeline.deaths.len() >= 3,
-            "fps {fps}: into the pit a few times: {:?}",
-            via_timeline.deaths
-        );
+        assert!(toots >= 5 && jumps >= 30, "fps {fps}: {jumps} jumps, {toots} toots: {via_timeline:?}");
+        assert!(via_timeline.deaths.len() >= 3, "fps {fps}: into the pit a few times: {:?}", via_timeline.deaths);
     }
 }
 
@@ -140,11 +119,7 @@ fn the_timeline_drives_the_same_jumps_as_real_keys() {
 fn the_tour_repeats_exactly() {
     let t = flourish(30);
     let pos = |app: &mut App| {
-        let e = app
-            .world_mut()
-            .query_filtered::<Entity, With<Player>>()
-            .single(app.world())
-            .unwrap();
+        let e = app.world_mut().query_filtered::<Entity, With<Player>>().single(app.world()).unwrap();
         app.world().get::<Transform>(e).unwrap().translation
     };
     let (mut a, mut b) = (play(30, &t, None), play(30, &t, None));
@@ -174,23 +149,13 @@ fn capture_audio_is_exactly_frames_long_and_repeats() {
         assert_eq!(cap.blocks, t.frames);
         cap.finish().unwrap();
         let samples = read_wav(&wav).unwrap();
-        assert_eq!(
-            samples.len() as u64,
-            t.frames * (CAPTURE_RATE / fps) as u64,
-            "fps {fps}"
-        );
-        assert_eq!(
-            Duration::from_secs_f64(samples.len() as f64 / CAPTURE_RATE as f64),
-            t.duration(fps)
-        );
+        assert_eq!(samples.len() as u64, t.frames * (CAPTURE_RATE / fps) as u64, "fps {fps}");
+        assert_eq!(Duration::from_secs_f64(samples.len() as f64 / CAPTURE_RATE as f64), t.duration(fps));
         let peak = samples.iter().flatten().fold(0.0f32, |m, s| m.max(s.abs()));
         assert!(peak > 0.05 && peak <= 1.0, "audible, unclipped: {peak}");
         takes.push(samples);
     }
-    assert!(
-        takes[0] == takes[1],
-        "two takes of the same timeline sound the same"
-    );
+    assert!(takes[0] == takes[1], "two takes of the same timeline sound the same");
     let _ = std::fs::remove_dir_all(dir);
 }
 
@@ -203,42 +168,19 @@ fn capture_smoke_under_xvfb() {
     let tl = dir.join("t.timeline");
     std::fs::write(&tl, "wait 0.3\nhold Space 140ms\nwait 0.56").unwrap();
     let status = std::process::Command::new("xvfb-run")
-        .args([
-            "-a",
-            "-s",
-            "-screen 0 1280x720x24",
-            env!("CARGO_BIN_EXE_nat-han-adventures"),
-        ])
+        .args(["-a", "-s", "-screen 0 1280x720x24", env!("CARGO_BIN_EXE_nat-han-adventures")])
         .env("NATHAN_CAPTURE", &dir)
         .env("NATHAN_CAPTURE_TIMELINE", &tl)
         .env("NATHAN_LEVEL", "1")
         .env("NATHAN_SAVE", dir.join("progress.txt"))
-        .env(
-            "VK_ICD_FILENAMES",
-            "/usr/share/vulkan/icd.d/lvp_icd.x86_64.json",
-        )
-        .env(
-            "ALSA_CONFIG_PATH",
-            concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/alsa-null.conf"),
-        )
+        .env("VK_ICD_FILENAMES", "/usr/share/vulkan/icd.d/lvp_icd.x86_64.json")
+        .env("ALSA_CONFIG_PATH", concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/alsa-null.conf"))
         .status()
         .expect("xvfb-run");
     assert!(status.success());
     let summary = std::fs::read_to_string(dir.join("capture.txt")).unwrap();
-    assert!(
-        summary.contains("frames 30\n") && summary.contains("ok true"),
-        "{summary}"
-    );
-    let pngs = std::fs::read_dir(&dir)
-        .unwrap()
-        .filter(|e| {
-            e.as_ref()
-                .unwrap()
-                .path()
-                .extension()
-                .is_some_and(|x| x == "png")
-        })
-        .count();
+    assert!(summary.contains("frames 30\n") && summary.contains("ok true"), "{summary}");
+    let pngs = std::fs::read_dir(&dir).unwrap().filter(|e| e.as_ref().unwrap().path().extension().is_some_and(|x| x == "png")).count();
     assert_eq!(pngs, 30);
     assert_eq!(read_wav(&dir.join("audio.wav")).unwrap().len(), 30 * 1600);
     let _ = std::fs::remove_dir_all(dir);

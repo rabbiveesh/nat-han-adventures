@@ -67,14 +67,7 @@ impl Canvas {
     pub fn with_height(height: usize) -> Canvas {
         let height = height.max(H);
         let floor = height - (H - FLOOR);
-        let mut c = Canvas {
-            grid: vec![Vec::new(); height],
-            floor,
-            platforms: Vec::new(),
-            hints: Vec::new(),
-            says: Vec::new(),
-            deaths: None,
-        };
+        let mut c = Canvas { grid: vec![Vec::new(); height], floor, platforms: Vec::new(), hints: Vec::new(), says: Vec::new(), deaths: None };
         c.pipe(ENTRY);
         c.set(START_COL, c.stand(), b'P');
         c.set(CHECKPOINT_COL, c.stand(), b'C');
@@ -104,11 +97,7 @@ impl Canvas {
     }
 
     pub fn get(&self, col: usize, row: usize) -> u8 {
-        self.grid
-            .get(row)
-            .and_then(|r| r.get(col))
-            .copied()
-            .unwrap_or(b'.')
+        self.grid.get(row).and_then(|r| r.get(col)).copied().unwrap_or(b'.')
     }
 
     pub fn set(&mut self, col: usize, row: usize, ch: u8) {
@@ -162,10 +151,7 @@ impl Canvas {
     /// The surface row of column `col` (the first ground, grating or hazard tile from the top
     /// below open air), if any.
     pub fn surface(&self, col: usize) -> Option<usize> {
-        (1..self.height()).find(|&r| {
-            matches!(self.get(col, r), b'#' | b'=' | b'_' | b'^' | b'~')
-                && self.get(col, r - 1) != b'#'
-        })
+        (1..self.height()).find(|&r| matches!(self.get(col, r), b'#' | b'=' | b'_' | b'^' | b'~') && self.get(col, r - 1) != b'#')
     }
 
     /// A nugget at (col, row) if the cell is free.
@@ -185,17 +171,7 @@ impl Canvas {
     /// A moving platform with its top tiles at (col.., row), `width` wide. Returns false when the
     /// room already has 9 (one digit each).
     #[allow(clippy::too_many_arguments)]
-    pub fn platform(
-        &mut self,
-        col: usize,
-        row: usize,
-        width: usize,
-        dx: f32,
-        dy: f32,
-        period: f32,
-        phase: f32,
-        kind: PlatformKind,
-    ) -> bool {
+    pub fn platform(&mut self, col: usize, row: usize, width: usize, dx: f32, dy: f32, period: f32, phase: f32, kind: PlatformKind) -> bool {
         let n = self.platforms.len() + 1;
         if n > 9 {
             return false;
@@ -205,9 +181,7 @@ impl Canvas {
             PlatformKind::Plunger => "plunger",
             _ => "tp",
         };
-        self.platforms.push(format!(
-            "{n}: dx={dx} dy={dy} period={period:.2} phase={phase:.2} kind={kind}"
-        ));
+        self.platforms.push(format!("{n}: dx={dx} dy={dy} period={period:.2} phase={phase:.2} kind={kind}"));
         for k in 0..width {
             self.set(col + k, row, b'0' + n as u8);
         }
@@ -222,8 +196,7 @@ impl Canvas {
     /// A hint spot (Han's line the first time Nat comes near).
     pub fn hint(&mut self, col: usize, row: usize, topics: &[Topic], text: &str) {
         let words: Vec<&str> = topics.iter().map(|t| t.word()).collect();
-        self.hints
-            .push(format!("hint@{col},{row} {}: {text}", words.join(" ")));
+        self.hints.push(format!("hint@{col},{row} {}: {text}", words.join(" ")));
     }
 
     /// A checkpoint at (col, row) with Han's line.
@@ -242,18 +215,14 @@ impl Canvas {
                 if self.nuggets() >= min {
                     return;
                 }
-                let Some(top) = self.surface(col) else {
-                    continue;
-                };
+                let Some(top) = self.surface(col) else { continue };
                 if self.get(col, top) != b'#' || top < 4 {
                     continue;
                 }
                 let near_hazard = (col.saturating_sub(2)..=col + 2).any(|c| {
-                    (0..self.height())
-                        .any(|r| matches!(self.get(c, r), b'S' | b'F' | b'^' | b'v' | b'~' | b'_'))
+                    (0..self.height()).any(|r| matches!(self.get(c, r), b'S' | b'F' | b'^' | b'v' | b'~' | b'_'))
                 });
-                let busy = (top - up..top).any(|r| self.get(col, r) != b'.')
-                    || self.get(col, top - 1) != b'.';
+                let busy = (top - up..top).any(|r| self.get(col, r) != b'.') || self.get(col, top - 1) != b'.';
                 if !near_hazard && !busy {
                     self.nugget(col, top - up);
                 }
@@ -276,8 +245,7 @@ impl Canvas {
     /// its calls: `super::alone` puts in exactly those).
     pub fn finish_with(self, world: u8, checkpoint_line: &str, min_nuggets: usize) -> Level {
         let src = self.finish_text(world, checkpoint_line, min_nuggets);
-        Level::parse(&src)
-            .unwrap_or_else(|e| panic!("free play canvas made a bad level ({e}):\n{src}"))
+        Level::parse(&src).unwrap_or_else(|e| panic!("free play canvas made a bad level ({e}):\n{src}"))
     }
 
     /// [`Canvas::finish_with`]'s level text (what `NATHAN_LEVEL_FILE` plays).
@@ -293,8 +261,7 @@ impl Canvas {
             self.ground(2, floor);
             self.nugget(x, stand);
         }
-        self.says
-            .push(format!("say@{CHECKPOINT_COL},{stand}: {checkpoint_line}"));
+        self.says.push(format!("say@{CHECKPOINT_COL},{stand}: {checkpoint_line}"));
         self.pipe(EXIT);
         let goal = self.width() - GOAL_FROM_END;
         self.set(goal, stand, b'G');

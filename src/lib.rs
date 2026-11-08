@@ -43,12 +43,5 @@ pub fn gameplay(app: &mut App) {
 
 /// Everything that only matters when there's a screen and speakers.
 pub fn presentation(app: &mut App) {
-    app.add_plugins((
-        art::plugin,
-        game::visuals_plugin,
-        ui::plugin,
-        audio::plugin,
-        debug::plugin,
-        touch::plugin,
-    ));
+    app.add_plugins((art::plugin, game::visuals_plugin, ui::plugin, audio::plugin, debug::plugin, touch::plugin));
 }

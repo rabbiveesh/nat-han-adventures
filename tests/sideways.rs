@@ -9,10 +9,7 @@ use leafwing_input_manager::prelude::*;
 use nat_han_adventures::{
     events::{DeathCause, PlayerDied},
     game::{Body, Player, Pos},
-    level::{
-        CUSHION_FLING, CUSHION_HOLD, CUSHION_LIFT, Level, Levels, TILE, Tile, cushion_shot,
-        validate,
-    },
+    level::{CUSHION_FLING, CUSHION_HOLD, CUSHION_LIFT, Level, Levels, TILE, Tile, cushion_shot, validate},
     state::AppState,
 };
 
@@ -27,26 +24,15 @@ struct Deaths(Vec<DeathCause>);
 fn game(level: &str) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
-            DT,
-        )))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
         .add_plugins(nat_han_adventures::gameplay)
-        .insert_resource(Levels(vec![
-            Level::parse(level).expect("test level parses"),
-        ]))
+        .insert_resource(Levels(vec![Level::parse(level).expect("test level parses")]))
         .init_resource::<Deaths>()
-        .add_systems(
-            Last,
-            |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| {
-                d.0.extend(r.read().map(|m| m.cause))
-            },
-        );
+        .add_systems(Last, |mut d: ResMut<Deaths>, mut r: MessageReader<PlayerDied>| d.0.extend(r.read().map(|m| m.cause)));
     app.finish();
     app.cleanup();
     app.update();
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::Playing);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
     app.update();
     app.update();
     app
@@ -59,11 +45,7 @@ fn step(app: &mut App, secs: f32) {
 }
 
 fn nat(app: &mut App) -> Vec2 {
-    app.world_mut()
-        .query_filtered::<&Pos, With<Player>>()
-        .single(app.world())
-        .unwrap()
-        .0
+    app.world_mut().query_filtered::<&Pos, With<Player>>().single(app.world()).unwrap().0
 }
 
 fn deaths(app: &App) -> Vec<DeathCause> {
@@ -102,11 +84,7 @@ fn a_wall_fan_pushes_nat_along_its_gust_and_slows_him_against_it() {
     step(&mut app, 0.2);
     let x0 = nat(&mut app).x;
     step(&mut app, 0.5);
-    assert!(
-        nat(&mut app).x > x0 + TILE,
-        "blown right while standing still: {:.2} tiles",
-        (nat(&mut app).x - x0) / TILE
-    );
+    assert!(nat(&mut app).x > x0 + TILE, "blown right while standing still: {:.2} tiles", (nat(&mut app).x - x0) / TILE);
     // Out of it: still.
     let mut app = game(WIND);
     step(&mut app, 0.2);
@@ -120,10 +98,7 @@ fn a_wall_fan_pushes_nat_along_its_gust_and_slows_him_against_it() {
     LEFT.press(app.world_mut());
     step(&mut app, 0.5);
     let went = (x0 - nat(&mut app).x) / TILE;
-    assert!(
-        went > 0.3 && went < 3.0,
-        "slowed against the gust: {went:.2} tiles in 0.5 s"
-    );
+    assert!(went > 0.3 && went < 3.0, "slowed against the gust: {went:.2} tiles in 0.5 s");
 }
 
 const CEILING_FAN: &str = "name: Ceiling fan
@@ -159,10 +134,7 @@ fn a_ceiling_fan_presses_nat_down() {
     let plain = jump_top(&CEILING_FAN.replace('!', "#"));
     let pressed = jump_top(CEILING_FAN);
     assert!(plain > 3.0, "a plain jump rises over 3 tiles: {plain:.2}");
-    assert!(
-        pressed < plain - 1.0,
-        "the downdraft keeps it lower: {pressed:.2} vs {plain:.2}"
-    );
+    assert!(pressed < plain - 1.0, "the downdraft keeps it lower: {pressed:.2} vs {plain:.2}");
 }
 
 const WALL_CUSHION: &str = "name: Wall cushion
@@ -178,11 +150,7 @@ const WALL_CUSHION: &str = "name: Wall cushion
 ";
 
 fn pad(app: &mut App) -> f32 {
-    app.world_mut()
-        .query_filtered::<&Body, With<Player>>()
-        .single(app.world())
-        .unwrap()
-        .pad
+    app.world_mut().query_filtered::<&Body, With<Player>>().single(app.world()).unwrap().pad
 }
 
 /// Run Nat right into the cushion; returns once it has caught him.
@@ -202,11 +170,7 @@ fn run_into_cushion(app: &mut App) {
 fn a_wall_cushion_catches_nat_holds_him_then_slings_him_back() {
     let mut app = game(WALL_CUSHION);
     run_into_cushion(&mut app);
-    assert_eq!(
-        pad(&mut app),
-        -1.0,
-        "the cushion on his right slings him left"
-    );
+    assert_eq!(pad(&mut app), -1.0, "the cushion on his right slings him left");
     // Held still in it (Right still held: aimed into it)...
     let caught_at = nat(&mut app);
     let mut held = 0;
@@ -217,17 +181,10 @@ fn a_wall_cushion_catches_nat_holds_him_then_slings_him_back() {
         assert!(held < 30, "and let go");
     }
     let secs = held as f32 / 60.0;
-    assert!(
-        (CUSHION_HOLD - 0.02..CUSHION_HOLD + 0.04).contains(&secs),
-        "held {secs:.2} s"
-    );
+    assert!((CUSHION_HOLD - 0.02..CUSHION_HOLD + 0.04).contains(&secs), "held {secs:.2} s");
     RIGHT.release(app.world_mut());
     let (top, lo, _) = track(&mut app, 0.8);
-    assert!(
-        lo < caught_at.x - 2.0 * TILE,
-        "slung back left: {:.2} tiles",
-        (caught_at.x - lo) / TILE
-    );
+    assert!(lo < caught_at.x - 2.0 * TILE, "slung back left: {:.2} tiles", (caught_at.x - lo) / TILE);
     assert!(top > caught_at.y + 2.0 * TILE, "and up");
     assert!(deaths(&app).is_empty());
 }
@@ -272,19 +229,10 @@ fn a_wall_cushion_aims_by_what_is_held_as_it_fires() {
     let long = shot(-1.0);
     let (away, up) = cushion_shot(0.0);
     assert_eq!((away, up), (CUSHION_FLING, CUSHION_LIFT));
-    assert!(
-        steep.0 > plain.0 + 2.0,
-        "held into it: steep, {steep:?} vs plain {plain:?}"
-    );
+    assert!(steep.0 > plain.0 + 2.0, "held into it: steep, {steep:?} vs plain {plain:?}");
     assert!(steep.1 < plain.1, "and short, {steep:?} vs plain {plain:?}");
-    assert!(
-        long.0 < plain.0,
-        "held away: low, {long:?} vs plain {plain:?}"
-    );
-    assert!(
-        long.1 > plain.1 + 1.0,
-        "and long, {long:?} vs plain {plain:?}"
-    );
+    assert!(long.0 < plain.0, "held away: low, {long:?} vs plain {plain:?}");
+    assert!(long.1 > plain.1 + 1.0, "and long, {long:?} vs plain {plain:?}");
 }
 
 #[test]
@@ -301,23 +249,12 @@ fn a_jump_fires_a_wall_cushion_early_and_the_toot_comes_back() {
     step(&mut app, 0.25);
     // The jump only fired it; the toot is still there.
     let before = nat(&mut app).y;
-    let vy = |app: &mut App| {
-        app.world_mut()
-            .query_filtered::<&Body, With<Player>>()
-            .single(app.world())
-            .unwrap()
-            .vel
-            .y
-    };
+    let vy = |app: &mut App| app.world_mut().query_filtered::<&Body, With<Player>>().single(app.world()).unwrap().vel.y;
     let falling = vy(&mut app);
     JUMP.press(app.world_mut());
     app.update();
     JUMP.release(app.world_mut());
-    assert!(
-        vy(&mut app) > falling.max(0.0) + 100.0,
-        "tooted ({falling:.0} -> {:.0} px/s)",
-        vy(&mut app)
-    );
+    assert!(vy(&mut app) > falling.max(0.0) + 100.0, "tooted ({falling:.0} -> {:.0} px/s)", vy(&mut app));
     step(&mut app, 0.2);
     assert!(nat(&mut app).y > before, "up again");
 }
@@ -355,10 +292,7 @@ fn a_ceiling_cushion_springs_a_bumped_head_back_down() {
     };
     let plain = fall_after_bump(&CEILING_CUSHION.replace("..m.", "..#."));
     let sprung = fall_after_bump(CEILING_CUSHION);
-    assert!(
-        sprung > plain + 100.0,
-        "slammed back down: {sprung:.0} px/s vs a plain bonk's {plain:.0}"
-    );
+    assert!(sprung > plain + 100.0, "slammed back down: {sprung:.0} px/s vs a plain bonk's {plain:.0}");
 }
 
 const BRUSHES: &str = "name: Brushes
@@ -374,21 +308,9 @@ const BRUSHES: &str = "name: Brushes
 #[test]
 fn wall_brushes_point_away_from_their_wall() {
     let level = Level::parse(BRUSHES).unwrap();
-    assert_eq!(
-        level.tile(13, 4),
-        Tile::SpikesLeft,
-        "the wall's on the right: they point left"
-    );
-    assert_eq!(
-        Level::parse(&BRUSHES.replace("|#", "#|"))
-            .unwrap()
-            .tile(14, 4),
-        Tile::SpikesRight
-    );
-    assert!(
-        Level::parse(&BRUSHES.replace("|#", "|.")).is_err(),
-        "brushes need a wall beside them"
-    );
+    assert_eq!(level.tile(13, 4), Tile::SpikesLeft, "the wall's on the right: they point left");
+    assert_eq!(Level::parse(&BRUSHES.replace("|#", "#|")).unwrap().tile(14, 4), Tile::SpikesRight);
+    assert!(Level::parse(&BRUSHES.replace("|#", "|.")).is_err(), "brushes need a wall beside them");
     // Run into them: splat. No stain (the tile stays).
     let mut app = game(BRUSHES);
     step(&mut app, 0.2);
@@ -397,11 +319,7 @@ fn wall_brushes_point_away_from_their_wall() {
     step(&mut app, 0.2);
     JUMP.release(app.world_mut());
     step(&mut app, 1.4);
-    assert_eq!(
-        deaths(&app).first(),
-        Some(&DeathCause::Spikes),
-        "ran into the brushes"
-    );
+    assert_eq!(deaths(&app).first(), Some(&DeathCause::Spikes), "ran into the brushes");
 }
 
 fn reaches(src: &str) -> bool {
@@ -426,10 +344,7 @@ fn the_validator_crosses_a_gap_on_a_tailwind_only() {
 #######.........####
 ";
     assert!(reaches(gap), "the gust carries the jump over");
-    assert!(
-        !reaches(&gap.replace("......e", "......#")),
-        "no gust, no way over"
-    );
+    assert!(!reaches(&gap.replace("......e", "......#")), "no gust, no way over");
 }
 
 #[test]
@@ -468,9 +383,6 @@ fn the_validator_cant_climb_into_a_ceiling_fans_downdraft() {
 ..P.................
 ####################
 ";
-    assert!(
-        reaches(&shelf.replace("!!!!!!!!!!!!!!!!!!!!", "....................")),
-        "a plain jump onto the shelf"
-    );
+    assert!(reaches(&shelf.replace("!!!!!!!!!!!!!!!!!!!!", "....................")), "a plain jump onto the shelf");
     assert!(!reaches(shelf), "the downdraft keeps Nat off it");
 }

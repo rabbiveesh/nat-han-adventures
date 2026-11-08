@@ -1,8 +1,8 @@
 //! Pixel art, generated at startup from ASCII pixel grids (no image files).
 //! Everything is 16x16 unless noted on the [`SpriteId`] variant.
 
-use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::{asset::RenderAssetUsages, platform::collections::HashMap, prelude::*};
+use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 
 mod backdrops;
 mod buddy;
@@ -148,11 +148,7 @@ impl Sprites {
     /// Frame `i`, wrapping. Missing sprites give the default (white) image.
     pub fn frame(&self, id: SpriteId, i: usize) -> Handle<Image> {
         let f = self.frames(id);
-        if f.is_empty() {
-            Handle::default()
-        } else {
-            f[i % f.len()].clone()
-        }
+        if f.is_empty() { Handle::default() } else { f[i % f.len()].clone() }
     }
 
     pub fn get(&self, id: SpriteId) -> Handle<Image> {
@@ -165,76 +161,17 @@ impl SpriteId {
     pub fn all() -> Vec<SpriteId> {
         use SpriteId::*;
         let mut v = vec![
-            PooIdle,
-            PooRun,
-            PooJump,
-            PooFall,
-            PooSplat,
-            HanIdle,
-            HanRun,
-            HanJump,
-            HanBraced,
-            HanIntercept,
-            HanMarch,
-            HanParachute,
-            HanWinded,
-            HanSplat,
-            HanPaddle,
-            HanRoll,
-            HanRaft,
-            GiantTrim,
-            GiantEmblem,
-            WaltzEmblem,
-            LedgeNotch,
-            PlumberTape,
-            Nugget,
-            CheckpointOff,
-            CheckpointOn,
-            GoalFlag,
-            Throne,
-            SpikesUp,
-            SpikesDown,
-            StainUp,
-            StainDown,
-            StainRaft,
-            Fly,
-            SprayCan,
-            SprayJet,
-            PlatformTp,
-            PlatformDuck,
-            PlatformPlunger,
-            Particle,
-            Note,
-            TootPuff,
-            IconNugget,
-            IconLock,
-            IconHorn,
-            IconNote,
-            IconSweat,
-            Brick,
-            Crumble,
-            Trampoline,
-            CrusherBody,
-            CrusherFace,
-            CrusherStripes,
-            Belt,
-            Fan,
-            Wisp,
-            Bumper,
-            BeatRed,
-            BeatBlue,
-            Grate,
+            PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, HanBraced, HanIntercept,
+            HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
+            WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
+            CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
+            StainRaft, Fly, SprayCan,
+            SprayJet, PlatformTp, PlatformDuck, PlatformPlunger, Particle, Note, TootPuff, IconNugget,
+            IconLock, IconHorn, IconNote, IconSweat, Brick, Crumble, Trampoline, CrusherBody, CrusherFace,
+            CrusherStripes, Belt, Fan, Wisp, Bumper, BeatRed, BeatBlue, Grate,
         ];
         for w in tiles::WORLDS {
-            v.extend([
-                GroundTop(w),
-                GroundFill(w),
-                OneWay(w),
-                LiquidTop(w),
-                LiquidFill(w),
-                Backdrop(w),
-                Grease(w),
-            ]);
+            v.extend([GroundTop(w), GroundFill(w), OneWay(w), LiquidTop(w), LiquidFill(w), Backdrop(w), Grease(w)]);
         }
         v
     }
@@ -246,7 +183,7 @@ impl SpriteId {
             GoalFlag | Grate => (16, 32),
             HanBraced => (16, 20),
             HanParachute => (16, 24),
-            Throne => (32, 32),
+                Throne => (32, 32),
             Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat => (8, 8),
             Particle => (2, 2),
             Note => (6, 7),
@@ -338,11 +275,7 @@ fn build_sprites(mut images: ResMut<Assets<Image>>, mut commands: Commands) {
             .into_iter()
             .map(|px| {
                 images.add(Image::new(
-                    Extent3d {
-                        width: px.w,
-                        height: px.h,
-                        depth_or_array_layers: 1,
-                    },
+                    Extent3d { width: px.w, height: px.h, depth_or_array_layers: 1 },
                     TextureDimension::D2,
                     px.data,
                     TextureFormat::Rgba8UnormSrgb,
@@ -367,10 +300,7 @@ mod tests {
             for (i, f) in frames.iter().enumerate() {
                 assert_eq!((f.w, f.h), id.size(), "{id:?} frame {i}");
                 assert_eq!(f.data.len(), (f.w * f.h * 4) as usize);
-                assert!(
-                    f.data.chunks_exact(4).any(|px| px[3] > 0),
-                    "{id:?} frame {i} is blank"
-                );
+                assert!(f.data.chunks_exact(4).any(|px| px[3] > 0), "{id:?} frame {i} is blank");
             }
         }
     }
@@ -420,12 +350,7 @@ mod tests {
 
     #[test]
     fn grids_are_rectangular_and_use_only_palette_chars() {
-        let all = characters::grids()
-            .into_iter()
-            .chain(items::grids())
-            .chain(tiles::grids())
-            .chain(buddy::grids())
-            .chain(gadgets::grids());
+        let all = characters::grids().into_iter().chain(items::grids()).chain(tiles::grids()).chain(buddy::grids()).chain(gadgets::grids());
         for (name, rows, pal) in all {
             if let Err(e) = palette::try_grid(&rows, pal) {
                 panic!("grid {name}: {e:?}");
@@ -440,11 +365,7 @@ mod tests {
                 continue;
             }
             for f in render(id) {
-                assert!(
-                    f.colour_count() <= 12,
-                    "{id:?} uses {} colours",
-                    f.colour_count()
-                );
+                assert!(f.colour_count() <= 12, "{id:?} uses {} colours", f.colour_count());
             }
         }
     }
@@ -454,11 +375,7 @@ mod tests {
     #[test]
     fn ground_tiles_are_solid_at_the_edges() {
         for w in tiles::WORLDS {
-            for id in [
-                SpriteId::GroundTop(w),
-                SpriteId::GroundFill(w),
-                SpriteId::LiquidFill(w),
-            ] {
+            for id in [SpriteId::GroundTop(w), SpriteId::GroundFill(w), SpriteId::LiquidFill(w)] {
                 let f = &render(id)[0];
                 for i in 0..16 {
                     assert_eq!(f.get(0, i)[3], 255, "{id:?}");

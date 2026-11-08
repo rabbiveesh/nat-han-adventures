@@ -58,27 +58,26 @@ use bevy::prelude::*;
 
 pub use brain::{HanBrain, HanMode, HanNav, nav_cell, stand};
 pub use world::{
-    CANNONBALL_LINE, FLOAT_FUEL, FLOAT_LOW, FLOAT_REFUEL, FLOAT_SPEED, FlySpin, GLUB_LINE,
-    HanFloat, HanRaft, SprayPlug, han_raft_life,
+    CANNONBALL_LINE, FLOAT_FUEL, FLOAT_LOW, FLOAT_REFUEL, FLOAT_SPEED, FlySpin, GLUB_LINE, HanFloat, HanRaft, SprayPlug, han_raft_life,
 };
 
 use super::{ActiveLevel, GameSet};
-pub use crate::level::buddy::{HAN_MARCH_SPEED, HAN_RUN_SPEED, HAN_TOOTS, HanPhys};
 use crate::level::{TILE, Topic};
+pub use crate::level::buddy::{HAN_MARCH_SPEED, HAN_RUN_SPEED, HAN_TOOTS, HanPhys};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
-        FixedUpdate,
-        (world::drift_floats, brain::think, world::han_hazards)
-            .chain()
-            .in_set(GameSet::World)
-            .after(super::platforms::move_platforms)
-            .after(super::crushers::move_crushers)
-            .after(super::hazards::float_rafts)
-            .after(super::hazards::move_flies)
-            .after(super::hazards::update_sprays),
-    )
-    .add_systems(FixedUpdate, nervous_line.in_set(GameSet::Interact));
+            FixedUpdate,
+            (world::drift_floats, brain::think, world::han_hazards)
+                .chain()
+                .in_set(GameSet::World)
+                .after(super::platforms::move_platforms)
+                .after(super::crushers::move_crushers)
+                .after(super::hazards::float_rafts)
+                .after(super::hazards::move_flies)
+                .after(super::hazards::update_sprays),
+        )
+        .add_systems(FixedUpdate, nervous_line.in_set(GameSet::Interact));
 }
 
 /// Han's follow slot: this far (px) behind Nat.
@@ -165,14 +164,7 @@ pub const JET_LINES: &[&str] = &["Pssht! Ha!", "Lavender?", "Tickles!"];
 pub const FLY_LINE: &str = "Shoo! Shoo!";
 
 /// What Han says when the player splats (every 3rd death).
-pub const DEATH_LINES: &[&str] = &[
-    "Oof, Nat!",
-    "Not plumbing!",
-    "Shake it off!",
-    "On the invoice!",
-    "Happens!",
-    "Around, Nat!",
-];
+pub const DEATH_LINES: &[&str] = &["Oof, Nat!", "Not plumbing!", "Shake it off!", "On the invoice!", "Happens!", "Around, Nat!"];
 
 /// What Han says when the band turns nervous (3+ deaths) on a level with grease: sweaty grip.
 pub const GRIP_LINE: &str = "Sweaty grip!";
@@ -183,11 +175,7 @@ pub const NERVOUS_LINE: &str = "Slow-mo! Breathe.";
 /// before Han goes ahead: 2.0 s lazy, 1.5 s neutral, 0.7 s eager.
 pub fn go_ahead_delay(e: f32) -> f32 {
     let e = e.clamp(0.0, 1.0);
-    if e <= 0.5 {
-        2.0 - e
-    } else {
-        1.5 - 1.6 * (e - 0.5)
-    }
+    if e <= 0.5 { 2.0 - e } else { 1.5 - 1.6 * (e - 0.5) }
 }
 
 /// Boosts in a row before his back goes: 3 lazy, 5 neutral, 7 eager.
@@ -217,10 +205,7 @@ pub fn spawn_spot(level: &crate::level::Level, start: Vec2) -> Vec2 {
         .into_iter()
         .map(|dx| start + Vec2::new(dx, 0.0))
         .find(|p| {
-            let (a, b) = (
-                level.cell_at(*p - half + 0.5),
-                level.cell_at(*p + half - 0.5),
-            );
+            let (a, b) = (level.cell_at(*p - half + 0.5), level.cell_at(*p + half - 0.5));
             (a.0..=b.0).all(|c| (b.1..=a.1).all(|r| !level.tile(c, r).is_solid()))
         })
         .unwrap_or(start)
@@ -280,14 +265,8 @@ fn nervous_line(
     }
     *was = groove.harmony;
     if groove.grip() {
-        let text = if active.level.has_grease() {
-            GRIP_LINE
-        } else {
-            NERVOUS_LINE
-        };
-        says.write(crate::events::HanSays {
-            text: text.to_string(),
-        });
+        let text = if active.level.has_grease() { GRIP_LINE } else { NERVOUS_LINE };
+        says.write(crate::events::HanSays { text: text.to_string() });
     }
 }
 
@@ -299,28 +278,17 @@ mod tests {
     /// Han is nearly silent: everything he says (intros aside) is a bark.
     #[test]
     fn han_only_barks() {
-        let topics = crate::level::Topic::ALL
+        let topics = crate::level::Topic::ALL.into_iter().flat_map(|t| grumble_lines(t).iter());
+        let lines = [LEMME_LINE, PRO_LINE, BACK_WARN_LINE, UNION_LINE, FLY_LINE, GRIP_LINE, NERVOUS_LINE, BOING_LINE]
             .into_iter()
-            .flat_map(|t| grumble_lines(t).iter());
-        let lines = [
-            LEMME_LINE,
-            PRO_LINE,
-            BACK_WARN_LINE,
-            UNION_LINE,
-            FLY_LINE,
-            GRIP_LINE,
-            NERVOUS_LINE,
-            BOING_LINE,
-        ]
-        .into_iter()
-        .chain(GRUMBLE_LINES.iter().copied())
-        .chain(topics.copied())
-        .chain(JET_LINES.iter().copied())
-        .chain(DEATH_LINES.iter().copied())
-        .chain(crate::game::pickups::CHECKPOINT_QUIPS.iter().copied())
-        .chain(crate::freeplay::generate::CHECKPOINT_LINES.iter().copied())
-        .chain(crate::freeplay::generate::CALIBRATION_LINES.iter().copied())
-        .chain([crate::game::groove::WALTZ_ONE_LINE]);
+            .chain(GRUMBLE_LINES.iter().copied())
+            .chain(topics.copied())
+            .chain(JET_LINES.iter().copied())
+            .chain(DEATH_LINES.iter().copied())
+            .chain(crate::game::pickups::CHECKPOINT_QUIPS.iter().copied())
+            .chain(crate::freeplay::generate::CHECKPOINT_LINES.iter().copied())
+            .chain(crate::freeplay::generate::CALIBRATION_LINES.iter().copied())
+            .chain([crate::game::groove::WALTZ_ONE_LINE]);
         for l in lines {
             assert!(is_bark(l), "{l:?}");
         }

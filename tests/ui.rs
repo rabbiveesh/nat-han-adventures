@@ -48,13 +48,8 @@ fn level_complete_records_progress() {
     go(&mut app, AppState::LevelSelect);
     app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
     go(&mut app, AppState::Playing);
-    *app.world_mut().resource_mut::<LevelRun>() = LevelRun {
-        nuggets: 3,
-        nuggets_total: 5,
-        time: 42.0,
-        checkpoint: None,
-        deaths: 2,
-    };
+    *app.world_mut().resource_mut::<LevelRun>() =
+        LevelRun { nuggets: 3, nuggets_total: 5, time: 42.0, checkpoint: None, deaths: 2 };
     go(&mut app, AppState::LevelComplete);
     let p = app.world().resource::<Progress>();
     assert_eq!(p.unlocked, 2);
@@ -63,31 +58,21 @@ fn level_complete_records_progress() {
 }
 
 fn bubbles(app: &mut App) -> usize {
-    app.world_mut()
-        .query_filtered::<(), With<Text2d>>()
-        .iter(app.world())
-        .count()
+    app.world_mut().query_filtered::<(), With<Text2d>>().iter(app.world()).count()
 }
 
 #[test]
 fn speech_bubble_follows_han_and_tolerates_his_absence() {
     let mut app = app();
     // No Han: the line is dropped quietly.
-    app.world_mut().write_message(HanSays {
-        text: "Anyone there?".into(),
-    });
+    app.world_mut().write_message(HanSays { text: "Anyone there?".into() });
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(bubbles(&mut app), 0);
 
-    let han = app
-        .world_mut()
-        .spawn((Han, Transform::from_xyz(100.0, 50.0, 4.0)))
-        .id();
-    app.world_mut().write_message(HanSays {
-        text: "Mind the brushes, kid. They bite!".into(),
-    });
+    let han = app.world_mut().spawn((Han, Transform::from_xyz(100.0, 50.0, 4.0))).id();
+    app.world_mut().write_message(HanSays { text: "Mind the brushes, kid. They bite!".into() });
     app.update();
     app.update();
     assert_eq!(bubbles(&mut app), 1);
@@ -112,19 +97,14 @@ fn a_hint_spot_teaches_its_counter_with_a_line() {
     use nat_han_adventures::ui::{HINT_SECS, Lesson, Lessons};
 
     let mut app = app();
-    app.insert_resource(TimeUpdateStrategy::ManualDuration(
-        std::time::Duration::from_secs_f64(1.0 / 60.0),
-    ));
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs_f64(1.0 / 60.0)));
     go(&mut app, AppState::LevelSelect);
     app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
     go(&mut app, AppState::Playing);
     let play_state = |app: &App| *app.world().resource::<State<PlayState>>().get();
     // Nat hears the giant wall's hint.
     let mut q = app.world_mut().query::<&mut HintSpot>();
-    let mut spot = q
-        .iter_mut(app.world_mut())
-        .find(|h| h.topics.contains(&Topic::Giant))
-        .expect("level 1 teaches the giant wall");
+    let mut spot = q.iter_mut(app.world_mut()).find(|h| h.topics.contains(&Topic::Giant)).expect("level 1 teaches the giant wall");
     spot.said = true;
     app.update();
     app.update();

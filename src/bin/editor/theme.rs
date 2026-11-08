@@ -1,8 +1,6 @@
 //! The look: the approved mockup's dark chiptune palette, monospace everywhere.
 
-use bevy_egui::egui::{
-    self, Color32, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle,
-};
+use bevy_egui::egui::{self, Color32, FontData, FontDefinitions, FontFamily, FontId, Stroke, TextStyle};
 
 pub const BG: Color32 = Color32::from_rgb(0x14, 0x10, 0x0c);
 pub const PANEL: Color32 = Color32::from_rgb(0x1d, 0x17, 0x12);
@@ -55,13 +53,9 @@ pub fn install(ctx: &egui::Context) {
     let mut fonts = FontDefinitions::default();
     fonts.font_data.insert(
         PIXEL.into(),
-        std::sync::Arc::new(FontData::from_static(include_bytes!(
-            "../../../assets/fonts/PressStart2P-Regular.ttf"
-        ))),
+        std::sync::Arc::new(FontData::from_static(include_bytes!("../../../assets/fonts/PressStart2P-Regular.ttf"))),
     );
-    fonts
-        .families
-        .insert(FontFamily::Name(PIXEL.into()), vec![PIXEL.into()]);
+    fonts.families.insert(FontFamily::Name(PIXEL.into()), vec![PIXEL.into()]);
     // Monospace for everything (the mockup is all IBM Plex Mono).
     let mono = fonts.families[&FontFamily::Monospace].clone();
     fonts.families.insert(FontFamily::Proportional, mono);
@@ -90,13 +84,7 @@ pub fn install(ctx: &egui::Context) {
         v.selection.stroke = Stroke::new(1.0, GOLD);
         v.hyperlink_color = GOLD;
         v.text_cursor.stroke = Stroke::new(2.0, GOLD);
-        for w in [
-            &mut v.widgets.noninteractive,
-            &mut v.widgets.inactive,
-            &mut v.widgets.hovered,
-            &mut v.widgets.active,
-            &mut v.widgets.open,
-        ] {
+        for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
             w.corner_radius = egui::CornerRadius::same(4);
         }
         v.widgets.noninteractive.bg_fill = PANEL;
@@ -129,20 +117,8 @@ pub fn caption(ui: &mut egui::Ui, text: &str) {
 
 /// A toggle chip (gold when on).
 pub fn chip(ui: &mut egui::Ui, on: bool, enabled: bool, label: &str) -> egui::Response {
-    let (fill, fg, stroke) = if on {
-        (GOLD, BG, GOLD)
-    } else {
-        (RAISED, TEXT_DIM, LINE)
-    };
-    let text = egui::RichText::new(label)
-        .color(if enabled { fg } else { TEXT_GHOST })
-        .size(11.0);
+    let (fill, fg, stroke) = if on { (GOLD, BG, GOLD) } else { (RAISED, TEXT_DIM, LINE) };
+    let text = egui::RichText::new(label).color(if enabled { fg } else { TEXT_GHOST }).size(11.0);
     let text = if on { text.strong() } else { text };
-    ui.add_enabled(
-        enabled,
-        egui::Button::new(text)
-            .fill(fill)
-            .stroke(Stroke::new(1.0, stroke))
-            .corner_radius(4),
-    )
+    ui.add_enabled(enabled, egui::Button::new(text).fill(fill).stroke(Stroke::new(1.0, stroke)).corner_radius(4))
 }

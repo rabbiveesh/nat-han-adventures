@@ -46,14 +46,7 @@ pub fn han_moves() -> Vec<HanMove> {
     let mut out = Vec::new();
     for hold in [INF, 0.1] {
         for t in toots {
-            out.push(HanMove {
-                dir: 0.0,
-                edge: false,
-                jump: true,
-                hold,
-                release: INF,
-                toots: t,
-            });
+            out.push(HanMove { dir: 0.0, edge: false, jump: true, hold, release: INF, toots: t });
         }
     }
     for dir in [-1.0, 1.0] {
@@ -61,26 +54,12 @@ pub fn han_moves() -> Vec<HanMove> {
             for t in toots {
                 for hold in [INF, 0.1] {
                     for edge in [false, true] {
-                        out.push(HanMove {
-                            dir,
-                            edge,
-                            jump: true,
-                            hold,
-                            release,
-                            toots: t,
-                        });
+                        out.push(HanMove { dir, edge, jump: true, hold, release, toots: t });
                     }
                 }
                 let walk_off = [[INF; 3], [0.15, INF, INF], [0.15, 0.47, INF]];
                 let toots = walk_off[toots.iter().position(|x| *x == t).unwrap_or(0)];
-                out.push(HanMove {
-                    dir,
-                    edge: true,
-                    jump: false,
-                    hold: INF,
-                    release,
-                    toots,
-                });
+                out.push(HanMove { dir, edge: true, jump: false, hold: INF, release, toots });
             }
         }
     }
@@ -167,31 +146,14 @@ pub struct Nav {
 
 impl Nav {
     pub fn new(mode: Mode) -> Nav {
-        Nav {
-            mode,
-            env: Env::han(mode),
-            moves: han_moves(),
-            cache: HashMap::new(),
-            expanded: 0,
-            buf: Vec::new(),
-        }
+        Nav { mode, env: Env::han(mode), moves: han_moves(), cache: HashMap::new(), expanded: 0, buf: Vec::new() }
     }
 
     /// Side B (Han alone): Nat's physics and one toot ([`Env::han_side_b`]), so only the moves
     /// with at most one toot.
     pub fn side_b(mode: Mode) -> Nav {
-        let moves = han_moves()
-            .into_iter()
-            .filter(|m| m.toot_count() <= 1)
-            .collect();
-        Nav {
-            mode,
-            env: Env::han_side_b(mode),
-            moves,
-            cache: HashMap::new(),
-            expanded: 0,
-            buf: Vec::new(),
-        }
+        let moves = han_moves().into_iter().filter(|m| m.toot_count() <= 1).collect();
+        Nav { mode, env: Env::han_side_b(mode), moves, cache: HashMap::new(), expanded: 0, buf: Vec::new() }
     }
 
     pub fn moves(&self) -> &[HanMove] {
@@ -231,30 +193,18 @@ impl Nav {
         for d in [-1, 1] {
             let n = (cell.0 + d, cell.1);
             if Nav::node(map, level, n) {
-                out.push(Edge {
-                    to: n,
-                    step: Step::Walk,
-                    secs: WALK_SECS,
-                    air: 0.0,
-                });
+                out.push(Edge { to: n, step: Step::Walk, secs: WALK_SECS, air: 0.0 });
             }
         }
         for (k, m) in self.moves.iter().enumerate() {
-            let Some(f) = flight(map, &self.env, cell, m) else {
-                continue;
-            };
+            let Some(f) = flight(map, &self.env, cell, m) else { continue };
             let (outcome, t) = fly_timed(map, &self.env, &f, &mut self.buf);
             if let Outcome::Land(to) = outcome
                 && to != cell
                 && !map.han_keeps_out(to)
             {
                 let secs = t + JUMP_COST + TOOT_COST * m.toot_count() as f32;
-                let edge = Edge {
-                    to,
-                    step: Step::Move(k as u16),
-                    secs,
-                    air: t,
-                };
+                let edge = Edge { to, step: Step::Move(k as u16), secs, air: t };
                 match out.iter_mut().find(|e| e.to == to) {
                     Some(e) if e.secs > secs => *e = edge,
                     Some(_) => {}
@@ -268,14 +218,7 @@ impl Nav {
     /// Where move `m` from `cell` lands if Han takes off at `x` already running at `vx` (px/s)
     /// instead of from a standstill at its take-off point: a rolling take-off, so he needn't
     /// stop before every jump. Ground jumps only.
-    pub fn lands_rolling(
-        &mut self,
-        map: &Map,
-        cell: Cell,
-        m: &HanMove,
-        x: f32,
-        vx: f32,
-    ) -> Option<Cell> {
+    pub fn lands_rolling(&mut self, map: &Map, cell: Cell, m: &HanMove, x: f32, vx: f32) -> Option<Cell> {
         if !m.jump {
             return None;
         }
@@ -310,13 +253,7 @@ impl Nav {
     /// [`Nav::route`], and the reachable cell nearest `to` it saw (fewest columns away, then
     /// fewest rows, then quickest): with [`Route::NoRoute`] the search saw every cell reachable
     /// from `from`, so that's as close as Han can get (Side B's frontier).
-    pub fn route_or_nearest(
-        &mut self,
-        map: &Map,
-        from: Cell,
-        to: Cell,
-        budget: usize,
-    ) -> (Route, Cell) {
+    pub fn route_or_nearest(&mut self, map: &Map, from: Cell, to: Cell, budget: usize) -> (Route, Cell) {
         if from == to {
             return (Route::Found(Vec::new()), from);
         }
@@ -359,10 +296,7 @@ impl Nav {
                 continue;
             }
             let key = ((c.0 - to.0).abs(), (c.1 - to.1).abs(), best[&c].0);
-            if key.0 < nearest.0.0
-                || (key.0 == nearest.0.0
-                    && (key.1 < nearest.0.1 || (key.1 == nearest.0.1 && key.2 < nearest.0.2)))
-            {
+            if key.0 < nearest.0.0 || (key.0 == nearest.0.0 && (key.1 < nearest.0.1 || (key.1 == nearest.0.1 && key.2 < nearest.0.2))) {
                 nearest = (key, c);
             }
             if !self.cached(c) {

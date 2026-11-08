@@ -8,10 +8,7 @@
 //! `BOT_CALL`. Check the result with `tests/showcase.rs` (`SHOWCASE_LEVEL`/`SHOWCASE_TOUR`).
 #![cfg(feature = "capture")]
 
-use bevy::{
-    input::InputPlugin, input::keyboard::KeyboardInput, prelude::*, state::app::StatesPlugin,
-    time::TimeUpdateStrategy,
-};
+use bevy::{input::InputPlugin, input::keyboard::KeyboardInput, prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
 use nat_han_adventures::{
     audio::{self, capture::AudioCapture},
     capture::{frame_duration, timeline::keyboard_input},
@@ -59,13 +56,7 @@ impl Bot {
     fn standable(&self, col: i32, row: i32) -> bool {
         matches!(
             self.level.tile(col, row),
-            Tile::Solid
-                | Tile::OneWay
-                | Tile::Crumble
-                | Tile::Trampoline
-                | Tile::BeltLeft
-                | Tile::BeltRight
-                | Tile::Grease
+            Tile::Solid | Tile::OneWay | Tile::Crumble | Tile::Trampoline | Tile::BeltLeft | Tile::BeltRight | Tile::Grease
         )
     }
 
@@ -93,15 +84,7 @@ fn lands_safe(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32) -> bool {
 
 /// [`lands_safe`], tooting after `toot` seconds; `walk`: starting on the ground, walking on
 /// until it ends.
-fn lands_safe_tooting(
-    b: &Bot,
-    pos: Vec2,
-    vel: Vec2,
-    half: Vec2,
-    floor: i32,
-    toot: Option<f32>,
-    mut walk: bool,
-) -> bool {
+fn lands_safe_tooting(b: &Bot, pos: Vec2, vel: Vec2, half: Vec2, floor: i32, toot: Option<f32>, mut walk: bool) -> bool {
     let rows = b.level.height as f32;
     let (mut p, mut v) = (pos, vel);
     let top_speed = vel.x.max(150.0);
@@ -113,20 +96,11 @@ fn lands_safe_tooting(
         v.x = (v.x + 1000.0 * dt).min(top_speed);
         if walk {
             let feet = rows - (p.y - half.y) / TILE;
-            let (l, r) = (
-                ((p.x - half.x) / TILE + 0.02).floor() as i32,
-                ((p.x + half.x) / TILE - 0.02).floor() as i32,
-            );
+            let (l, r) = (((p.x - half.x) / TILE + 0.02).floor() as i32, ((p.x + half.x) / TILE - 0.02).floor() as i32);
             walk = (l..=r).any(|col| b.standable(col, feet.round() as i32));
             if walk {
                 p.x += v.x * dt;
-                if b.level
-                    .tile(
-                        ((p.x + half.x) / TILE).floor() as i32,
-                        feet.round() as i32 - 1,
-                    )
-                    .is_solid()
-                {
+                if b.level.tile(((p.x + half.x) / TILE).floor() as i32, feet.round() as i32 - 1).is_solid() {
                     return false;
                 }
                 continue;
@@ -139,14 +113,8 @@ fn lands_safe_tooting(
         if feet >= rows {
             return false;
         }
-        let (l, r) = (
-            ((p.x - half.x) / TILE + 0.02).floor() as i32,
-            ((p.x + half.x) / TILE - 0.02).floor() as i32,
-        );
-        let (top, bottom) = (
-            (rows - (p.y + half.y) / TILE).floor() as i32,
-            (feet - 0.02).floor() as i32,
-        );
+        let (l, r) = (((p.x - half.x) / TILE + 0.02).floor() as i32, ((p.x + half.x) / TILE - 0.02).floor() as i32);
+        let (top, bottom) = ((rows - (p.y + half.y) / TILE).floor() as i32, (feet - 0.02).floor() as i32);
         for col in l..=r {
             for row in top..=bottom {
                 let t = b.level.tile(col, row);
@@ -198,11 +166,7 @@ fn drive(
     b.plats = plats.iter().cloned().collect();
     b.ptime = clock.platform_time;
     // (A beat to start, as the tours do: the game takes a moment to take keys.)
-    let Ok((pos, body)) = nat
-        .single()
-        .map_err(drop)
-        .and_then(|n| if b.frame < 9 { Err(()) } else { Ok(n) })
-    else {
+    let Ok((pos, body)) = nat.single().map_err(drop).and_then(|n| if b.frame < 9 { Err(()) } else { Ok(n) }) else {
         b.frame += 1;
         return;
     };
@@ -250,9 +214,7 @@ fn drive(
         // A jump lands somewhere, maybe with a toot at or after its top.
         let jump_lands = |b: &Bot| {
             lands_safe(b, pos.0, jump, body.half, stand + 4)
-                || [0.27, 0.4, 0.5].iter().any(|&t| {
-                    lands_safe_tooting(b, pos.0, jump, body.half, stand + 4, Some(t), false)
-                })
+                || [0.27, 0.4, 0.5].iter().any(|&t| lands_safe_tooting(b, pos.0, jump, body.half, stand + 4, Some(t), false))
         };
         if body.riding.is_some() {
             // On a ferry or a lift: ride it until a jump lands.
@@ -267,22 +229,13 @@ fn drive(
         }
         // A pit or a wall (or something deadly) right ahead: jump.
         let pit = !b.ground_below(front + 1, stand, 3);
-        let wall = b.level.tile(front + 1, stand).is_solid()
-            || b.level.tile(front + 1, stand - 1).is_solid();
+        let wall = b.level.tile(front + 1, stand).is_solid() || b.level.tile(front + 1, stand - 1).is_solid();
         let deadly = (stand..=stand + 1).any(|r| b.level.tile(front + 1, r).is_deadly());
         // (Over a pit: walk off instead when only that lands somewhere, e.g. off an awning
         // onto the roof below it; or wait at the edge for a ferry.)
         let (mut walk_instead, mut wait) = (false, false);
         if pit && !wall && !deadly && !jump_lands(b) {
-            walk_instead = lands_safe_tooting(
-                b,
-                pos.0,
-                Vec2::new(body.vel.x.max(0.0), 0.0),
-                body.half,
-                stand + 4,
-                None,
-                true,
-            );
+            walk_instead = lands_safe_tooting(b, pos.0, Vec2::new(body.vel.x.max(0.0), 0.0), body.half, stand + 4, None, true);
             wait = !walk_instead && b.waited < 5 * FPS as u64;
         }
         b.waited = if wait { b.waited + 1 } else { 0 };
@@ -304,20 +257,10 @@ fn drive(
             // Toot as late as still works (the later, the farther), or at the takeoff's height
             // when nothing works.
             let now = lands_safe_tooting(b, pos.0, vel, body.half, floor, Some(0.0), false);
-            let later = lands_safe_tooting(
-                b,
-                pos.0,
-                vel,
-                body.half,
-                floor,
-                Some(2.0 / FPS as f32),
-                false,
-            );
+            let later = lands_safe_tooting(b, pos.0, vel, body.half, floor, Some(2.0 / FPS as f32), false);
             let low = feet >= b.takeoff as f32 + 1.0;
             if b.trace {
-                eprintln!(
-                    "  falling col {x:.2} feet {feet:.2} safe {safe} toot now {now} later {later}"
-                );
+                eprintln!("  falling col {x:.2} feet {feet:.2} safe {safe} toot now {now} later {later}");
             }
             if !safe && ((now && !later) || (!now && !later && low)) {
                 b.tooted = true;
@@ -332,33 +275,18 @@ fn drive(
 #[test]
 #[ignore]
 fn bot_plays_a_level() {
-    let Ok(path) = std::env::var("BOT_LEVEL") else {
-        return;
-    };
+    let Ok(path) = std::env::var("BOT_LEVEL") else { return };
     let level = Level::parse(&std::fs::read_to_string(&path).unwrap()).unwrap();
-    let secs: f32 = std::env::var("BOT_SECS")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(70.0);
+    let secs: f32 = std::env::var("BOT_SECS").ok().and_then(|s| s.parse().ok()).unwrap_or(70.0);
     let wav = std::env::temp_dir().join(format!("nathan-bot-{}.wav", std::process::id()));
     let mut app = App::new();
-    app.add_plugins((
-        MinimalPlugins,
-        StatesPlugin,
-        InputPlugin,
-        nat_han_adventures::gameplay,
-    ))
-    .insert_resource(TimeUpdateStrategy::ManualDuration(
-        frame_duration(FPS).unwrap(),
-    ))
-    .insert_resource(Levels(vec![level.clone()]));
-    app.add_plugins(audio::plugin)
-        .insert_resource(AudioCapture::new(&wav, FPS).unwrap());
+    app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin, nat_han_adventures::gameplay))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(frame_duration(FPS).unwrap()))
+        .insert_resource(Levels(vec![level.clone()]));
+    app.add_plugins(audio::plugin).insert_resource(AudioCapture::new(&wav, FPS).unwrap());
     app.finish();
     app.cleanup();
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::Playing);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
     app.update();
     app.world_mut().resource_mut::<AudioCapture>().recording = true;
     let call = std::env::var("BOT_CALL").ok().and_then(|c| c.parse().ok());
@@ -380,18 +308,12 @@ fn bot_plays_a_level() {
         gravity: nat_han_adventures::game::tuning::GRAVITY,
     })
     .add_systems(PreUpdate, drive.before(bevy::input::InputSystems))
-    .add_systems(
-        Last,
-        |mut b: ResMut<Bot>, mut r: MessageReader<PlayerDied>| {
-            let rows = b.level.height as f32;
-            let f = b.frame;
-            let ds: Vec<_> = r
-                .read()
-                .map(|m| (f, m.pos.x / TILE, rows - m.pos.y / TILE))
-                .collect();
-            b.deaths.extend(ds);
-        },
-    );
+    .add_systems(Last, |mut b: ResMut<Bot>, mut r: MessageReader<PlayerDied>| {
+        let rows = b.level.height as f32;
+        let f = b.frame;
+        let ds: Vec<_> = r.read().map(|m| (f, m.pos.x / TILE, rows - m.pos.y / TILE)).collect();
+        b.deaths.extend(ds);
+    });
     let mut goal = None;
     for frame in 0..(secs * FPS as f32) as u64 {
         app.update();
@@ -420,9 +342,6 @@ fn bot_plays_a_level() {
     eprintln!(
         "goal: {:?} s, deaths (s, col, row): {:?}",
         goal.map(|g| g as f32 / FPS as f32),
-        bot.deaths
-            .iter()
-            .map(|&(f, c, r)| (f as f32 / FPS as f32, c, r))
-            .collect::<Vec<_>>()
+        bot.deaths.iter().map(|&(f, c, r)| (f as f32 / FPS as f32, c, r)).collect::<Vec<_>>()
     );
 }

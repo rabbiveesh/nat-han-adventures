@@ -78,16 +78,14 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
 use super::{
-    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_HOLD, Crusher, FAN_LIFT, FAN_RISE,
-    FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH, GateMark, Granted, HAN_BERTH, Level,
-    MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST,
-    WIND_SPEED, cushion_shot,
+    BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_HOLD, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
+    GateMark, Granted, cushion_shot, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
 use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
 use crate::game::{
-    ALIEN_PULSE, BOOST_SPEED, BeatClock, DRUNK_SWAY, Groove, KICK_CARRY, MELTING_JUMP,
-    RAFT_LIFE_FLOOR, SPRAY_CYCLE, THROW_CARRY, THROW_SPEED, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED,
-    WALTZ_ONE_WINDOW, WEAK_BOOST_SPEED, spray_on, tuning::*,
+    ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, DRUNK_SWAY, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
+    WEAK_BOOST_SPEED, spray_on,
+    tuning::*,
 };
 
 pub const NUGGETS: std::ops::RangeInclusive<usize> = 15..=40;
@@ -151,22 +149,12 @@ pub enum Mode {
     Nervous,
 }
 
-pub const MODES: [Mode; 5] = [
-    Mode::Normal,
-    Mode::GiantSteps,
-    Mode::FiredUp,
-    Mode::Waltz,
-    Mode::Nervous,
-];
+pub const MODES: [Mode; 5] = [Mode::Normal, Mode::GiantSteps, Mode::FiredUp, Mode::Waltz, Mode::Nervous];
 
 impl Mode {
     /// The Han tricks this mode grants in their gates' zones.
     pub fn granted(self) -> Granted {
-        Granted {
-            giant_steps: self == Mode::GiantSteps,
-            grip: self == Mode::Nervous,
-            waltz: self == Mode::Waltz,
-        }
+        Granted { giant_steps: self == Mode::GiantSteps, grip: self == Mode::Nervous, waltz: self == Mode::Waltz }
     }
 
     pub fn groove(self) -> Groove {
@@ -184,8 +172,7 @@ impl Mode {
         let g = self.groove();
         if g.waltz() {
             let beat = 60.0 / WALTZ_BPM as f64;
-            g.at(BeatClock::at(t as f64 / beat, beat, 3))
-                .waltz_spray_on()
+            g.at(BeatClock::at(t as f64 / beat, beat, 3)).waltz_spray_on()
         } else {
             spray_on(0, t)
         }
@@ -193,11 +180,7 @@ impl Mode {
 
     /// How long the jets' pattern takes to repeat.
     pub fn jets_period(self) -> f32 {
-        if self == Mode::Waltz {
-            2.0 * 3.0 * 60.0 / WALTZ_BPM
-        } else {
-            SPRAY_CYCLE
-        }
+        if self == Mode::Waltz { 2.0 * 3.0 * 60.0 / WALTZ_BPM } else { SPRAY_CYCLE }
     }
 }
 
@@ -232,10 +215,7 @@ pub enum Gate {
 impl Gate {
     /// Han's gates (he's what crosses them).
     pub fn needs_han(self) -> bool {
-        matches!(
-            self,
-            Gate::MegaWall | Gate::ClingShaft | Gate::Trapeze | Gate::ChainChasm | Gate::BuddyRaft
-        )
+        matches!(self, Gate::MegaWall | Gate::ClingShaft | Gate::Trapeze | Gate::ChainChasm | Gate::BuddyRaft)
     }
 
     /// Han's gates whose mark is a band zone (his boost weak there but with their mode).
@@ -372,27 +352,12 @@ pub struct Tiles {
 }
 
 impl Tiles {
-    pub const NORMAL: Tiles = Tiles {
-        belt: 1.0,
-        gust: 1.0,
-        far: false,
-        spring: 1.0,
-        fling: 1.0,
-        bat: 1.0,
-    };
+    pub const NORMAL: Tiles = Tiles { belt: 1.0, gust: 1.0, far: false, spring: 1.0, fling: 1.0, bat: 1.0 };
 
     pub fn of(mode: Mode, ideal: bool) -> Tiles {
         match mode {
-            Mode::FiredUp => Tiles {
-                belt: FIRED_UP_TILES,
-                gust: FIRED_UP_TILES,
-                ..Tiles::NORMAL
-            },
-            Mode::GiantSteps => Tiles {
-                far: true,
-                bat: GIANT_CUSHION_BAT,
-                ..Tiles::NORMAL
-            },
+            Mode::FiredUp => Tiles { belt: FIRED_UP_TILES, gust: FIRED_UP_TILES, ..Tiles::NORMAL },
+            Mode::GiantSteps => Tiles { far: true, bat: GIANT_CUSHION_BAT, ..Tiles::NORMAL },
             Mode::Waltz => Tiles {
                 spring: WALTZ_SPRING_BOOST,
                 fling: if ideal { WALTZ_SPRING_BOOST } else { 1.0 },
@@ -434,11 +399,7 @@ impl Env {
             vx: RUN_SPEED * g.speed_scale * if ideal { 1.0 } else { 0.9 },
             overhang: if ideal { PLAYER_SIZE.0 - 0.5 } else { 8.0 },
             boost: if waltz { WALTZ_ONE_BOOST } else { 1.0 },
-            toot: if waltz {
-                WALTZ_ONE_TOOT_SPEED
-            } else {
-                DOUBLE_JUMP_SPEED
-            },
+            toot: if waltz { WALTZ_ONE_TOOT_SPEED } else { DOUBLE_JUMP_SPEED },
             grip: g.grip(),
             carry: match (waltz, ideal) {
                 (true, true) => glide_on_one(),
@@ -491,21 +452,11 @@ impl Env {
     /// Han on Side B ([`HanPhys::side_b`]: Nat's physics, one toot), for his navigation there.
     pub fn han_side_b(mode: Mode) -> Env {
         let p = HanPhys::side_b(&mode.groove());
-        Env {
-            vx: p.speed,
-            ..Env::han(mode)
-        }
-        .with_fall(p)
+        Env { vx: p.speed, ..Env::han(mode) }.with_fall(p)
     }
 
     fn with_fall(self, p: HanPhys) -> Env {
-        Env {
-            gravity: p.fall.gravity,
-            max_fall: p.fall.max_fall,
-            air_accel: p.air_accel,
-            toot: p.toot_speed,
-            ..self
-        }
+        Env { gravity: p.fall.gravity, max_fall: p.fall.max_fall, air_accel: p.air_accel, toot: p.toot_speed, ..self }
     }
 }
 
@@ -652,8 +603,7 @@ impl<'a> Map<'a> {
     pub fn new(level: &'a Level) -> Self {
         let (w, h) = (level.width as i32, level.height as i32);
         let mut flags = vec![0u32; (w * h) as usize];
-        let at =
-            |c: i32, r: i32| (c >= 0 && r >= 0 && c < w && r < h).then(|| (r * w + c) as usize);
+        let at = |c: i32, r: i32| (c >= 0 && r >= 0 && c < w && r < h).then(|| (r * w + c) as usize);
         for r in 0..h {
             for c in 0..w {
                 flags[(r * w + c) as usize] = match level.tile(c, r) {
@@ -676,9 +626,7 @@ impl<'a> Map<'a> {
                     Tile::SpikesRight => SPIKE_R,
                     // Beat blocks come and go with the bars: fine to land on and jump off (a
                     // bar is long), no place to linger, never in your way for long.
-                    Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff => {
-                        ONEWAY | CRUMBLE
-                    }
+                    Tile::BeatRed | Tile::BeatRedOff | Tile::BeatBlue | Tile::BeatBlueOff => ONEWAY | CRUMBLE,
                 } | {
                     let bits = |(x, y): (i32, i32)| {
                         (if y > 0 { UPDRAFT } else { 0 })
@@ -686,8 +634,7 @@ impl<'a> Map<'a> {
                             | (if x > 0 { WIND_E } else { 0 })
                             | (if x < 0 { WIND_W } else { 0 })
                     };
-                    bits(level.wind(c, r))
-                        | bits(level.wind_within(c, r, GIANT_FAN_REACH)) << FAR_SHIFT
+                    bits(level.wind(c, r)) | bits(level.wind_within(c, r, GIANT_FAN_REACH)) << FAR_SHIFT
                 };
             }
         }
@@ -698,11 +645,7 @@ impl<'a> Map<'a> {
             let home: Vec<Cell> = Crusher::home(d).collect();
             for cell in Crusher::sweep(d) {
                 if let Some(i) = at(cell.0, cell.1) {
-                    flags[i] |= if home.contains(&cell) {
-                        SOLID
-                    } else {
-                        CRUSH | deadly
-                    };
+                    flags[i] |= if home.contains(&cell) { SOLID } else { CRUSH | deadly };
                 }
             }
             let (dc, dr) = d.dir.step();
@@ -740,9 +683,7 @@ impl<'a> Map<'a> {
             let speed = |f: f32| top * 2.0 * (f.clamp(0.0, 1.0) * (1.0 - f.clamp(0.0, 1.0))).sqrt();
             for s in 0..=steps {
                 let f = s as f32 / steps as f32;
-                let v = speed(f)
-                    .max(speed(f - 1.0 / steps as f32))
-                    .max(speed(f + 1.0 / steps as f32));
+                let v = speed(f).max(speed(f - 1.0 / steps as f32)).max(speed(f + 1.0 / steps as f32));
                 let left = p.col as f32 + p.dx * f;
                 let r = (p.row as f32 - p.dy * f).round() as i32 - 1;
                 for c in left.floor() as i32..=(left + p.width as f32 - 1.0).ceil() as i32 {
@@ -785,11 +726,7 @@ impl<'a> Map<'a> {
         for (c, r) in cans {
             match can_rows.last_mut() {
                 Some(w) if w.row == r && w.c1 + 1 == c => w.c1 = c,
-                _ => can_rows.push(CanRow {
-                    row: r,
-                    c0: c,
-                    c1: c,
-                }),
+                _ => can_rows.push(CanRow { row: r, c0: c, c1: c }),
             }
         }
         can_rows.retain(|w| w.cans() >= CAN_ROW_MIN);
@@ -833,10 +770,7 @@ impl<'a> Map<'a> {
             chasms,
             has_grease: level.has_grease(),
             has_springs: level.tiles.iter().any(|t| {
-                matches!(t, Tile::Trampoline | Tile::CushionDown)
-                    || t.fan().is_some()
-                    || t.bumper() != 0.0
-                    || t.fling() != 0.0
+                matches!(t, Tile::Trampoline | Tile::CushionDown) || t.fan().is_some() || t.bumper() != 0.0 || t.fling() != 0.0
             }),
             // (Ducks or wall cushions facing each other.)
             shafts: (0..h)
@@ -845,11 +779,7 @@ impl<'a> Map<'a> {
                 .flat_map(|(c, r)| {
                     let k = (1..=PIN_SHAFT)
                         .find(|&k| level.tile(c + k, r) != Tile::Empty)
-                        .filter(|&k| {
-                            k > 1
-                                && level.tile(c + k, r).bumper() + level.tile(c + k, r).fling()
-                                    < 0.0
-                        });
+                        .filter(|&k| k > 1 && level.tile(c + k, r).bumper() + level.tile(c + k, r).fling() < 0.0);
                     (1..k.unwrap_or(1)).map(move |j| (c + j, r))
                 })
                 .collect(),
@@ -857,9 +787,7 @@ impl<'a> Map<'a> {
                 .flat_map(|r| (0..w).map(move |c| (c, r)))
                 .filter(|&(c, r)| {
                     let t = level.tile(c, r);
-                    t.fling() != 0.0
-                        || t.fan().is_some()
-                        || matches!(t, Tile::CushionDown | Tile::SpikesLeft | Tile::SpikesRight)
+                    t.fling() != 0.0 || t.fan().is_some() || matches!(t, Tile::CushionDown | Tile::SpikesLeft | Tile::SpikesRight)
                 })
                 .collect(),
             kicks: (0..h)
@@ -936,8 +864,7 @@ impl<'a> Map<'a> {
     /// Is Han's boost weak in `cell`, with what the band plays `granted` (marked, or found in
     /// a room)? See [`Level::weak_boost`].
     pub fn weak_boost(&self, cell: Cell, granted: Granted) -> bool {
-        self.level.weak_boost(cell, granted)
-            || self.derived.iter().any(|g| g.weakens(cell, granted))
+        self.level.weak_boost(cell, granted) || self.derived.iter().any(|g| g.weakens(cell, granted))
     }
 
     /// Is `cell` in a band zone (marked, or found in a room)? See [`Level::in_band_zone`].
@@ -948,16 +875,12 @@ impl<'a> Map<'a> {
     /// Does Han keep out of `cell` (marked, or found in a room)? See [`Level::han_keeps_out`].
     pub fn han_keeps_out(&self, cell: Cell) -> bool {
         self.level.han_keeps_out(cell)
-            || self
-                .derived
-                .iter()
-                .any(|g| g.topic == Topic::Grip && self.greasy(cell) && g.berth().contains(cell))
+            || self.derived.iter().any(|g| g.topic == Topic::Grip && self.greasy(cell) && g.berth().contains(cell))
     }
 
     /// Does a player box centered at (x, y) overlap anything solid?
     pub fn overlaps_solid(&self, x: f32, y: f32) -> bool {
-        cells(x - HALF_W, x + HALF_W)
-            .any(|c| cells(y - HALF_H, y + HALF_H).any(|r| self.is_solid(c, r)))
+        cells(x - HALF_W, x + HALF_W).any(|c| cells(y - HALF_H, y + HALF_H).any(|r| self.is_solid(c, r)))
     }
 
     /// A trampoline at (c, r)?
@@ -972,11 +895,7 @@ impl<'a> Map<'a> {
 
     /// A bumper's face at (c, r) (-1 its left, 1 its right, 0 none).
     fn bumper(&self, c: i32, r: i32) -> f32 {
-        if self.f(c, r) & BUMPER == 0 {
-            0.0
-        } else {
-            self.level.tile(c, r).bumper()
-        }
+        if self.f(c, r) & BUMPER == 0 { 0.0 } else { self.level.tile(c, r).bumper() }
     }
 
     /// Could a pinball flight ([`pinball`]) start in `cell`: a pinball shaft within
@@ -984,17 +903,9 @@ impl<'a> Map<'a> {
     /// off a cushion refills the toot, brushes stick out into the way: what to do next is a
     /// choice made in the air)?
     fn near_pinball(&self, (c, r): Cell) -> bool {
-        self.shafts
-            .iter()
-            .any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
-            || self
-                .steer
-                .iter()
-                .any(|s| (s.0 - c).abs() <= PIN_STEER && (s.1 - r).abs() <= PIN_STEER)
-            || self
-                .kicks
-                .iter()
-                .any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
+        self.shafts.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
+            || self.steer.iter().any(|s| (s.0 - c).abs() <= PIN_STEER && (s.1 - r).abs() <= PIN_STEER)
+            || self.kicks.iter().any(|s| (s.0 - c).abs() <= PIN_NEAR && (s.1 - r).abs() <= PIN_NEAR)
     }
 
     /// The gusts the box centered at (x, y) is in (the game's `step_body` looks at its
@@ -1012,11 +923,7 @@ impl<'a> Map<'a> {
 
     /// A wall cushion's face at (c, r) (-1 its left, 1 its right, 0 none).
     fn fling(&self, c: i32, r: i32) -> f32 {
-        if self.f(c, r) & CUSHION == 0 {
-            0.0
-        } else {
-            self.level.tile(c, r).fling()
-        }
+        if self.f(c, r) & CUSHION == 0 { 0.0 } else { self.level.tile(c, r).fling() }
     }
 
     /// A ceiling cushion at (c, r)?
@@ -1026,11 +933,7 @@ impl<'a> Map<'a> {
 
     /// The conveyor belt's speed (px/s) under `cell` (0: not on one).
     pub fn belt(&self, (c, r): Cell) -> f32 {
-        if self.f(c, r + 1) & BELT == 0 {
-            0.0
-        } else {
-            self.level.tile(c, r + 1).belt()
-        }
+        if self.f(c, r + 1) & BELT == 0 { 0.0 } else { self.level.tile(c, r + 1).belt() }
     }
 
     fn floor(&self, c: i32, r: i32) -> Floor {
@@ -1102,8 +1005,7 @@ impl<'a> Map<'a> {
                     || (f & SPIKE_DOWN != 0 && y0 < ty + TILE / 2.0);
                 // Wall brushes: deadly, no stain (they stick out sideways).
                 let tx = c as f32 * TILE;
-                other |= (f & SPIKE_R != 0 && x1 > tx + TILE / 2.0)
-                    || (f & SPIKE_L != 0 && x0 < tx + TILE / 2.0);
+                other |= (f & SPIKE_R != 0 && x1 > tx + TILE / 2.0) || (f & SPIKE_L != 0 && x0 < tx + TILE / 2.0);
                 if hit {
                     let d = (c as f32 * TILE + 8.0 - x).abs() + (ty + 8.0 - y).abs();
                     if stainable.is_none_or(|(b, _)| d < b) {
@@ -1195,12 +1097,9 @@ impl<'a> Map<'a> {
 /// rows above every column (hanging from solid ground).
 fn find_pools(level: &Level) -> Vec<Pool> {
     let (w, h) = (level.width as i32, level.height as i32);
-    let surface =
-        |c: i32, r: i32| level.tile(c, r) == Tile::Liquid && level.tile(c, r - 1) != Tile::Liquid;
+    let surface = |c: i32, r: i32| level.tile(c, r) == Tile::Liquid && level.tile(c, r - 1) != Tile::Liquid;
     let spiked = |c: i32, r: i32| {
-        (2..=4).any(|k| {
-            level.tile(c, r - k) == Tile::SpikesDown && level.tile(c, r - k - 1).is_solid()
-        })
+        (2..=4).any(|k| level.tile(c, r - k) == Tile::SpikesDown && level.tile(c, r - k - 1).is_solid())
     };
     let mut out = Vec::new();
     for r in 1..h {
@@ -1278,29 +1177,13 @@ pub struct Strategy {
 
 /// The jumps a human might try.
 pub fn strategies() -> Vec<Strategy> {
-    let toots = [
-        None,
-        Some(0.12),
-        Some(0.2),
-        Some(0.27),
-        Some(0.36),
-        Some(0.5),
-    ];
+    let toots = [None, Some(0.12), Some(0.2), Some(0.27), Some(0.36), Some(0.5)];
     let mut out = Vec::new();
     // Straight up (and maybe toot).
     for hold in [f32::INFINITY, 0.12, 0.05] {
         for toot in toots {
             let release = f32::INFINITY;
-            out.push(Strategy {
-                dir: 0.0,
-                jump: true,
-                hold,
-                vx0: 0.0,
-                toot,
-                edge: false,
-                release,
-                carry: 0.0,
-            });
+            out.push(Strategy { dir: 0.0, jump: true, hold, vx0: 0.0, toot, edge: false, release, carry: 0.0 });
         }
     }
     for dir in [-1.0, 1.0] {
@@ -1310,31 +1193,13 @@ pub fn strategies() -> Vec<Strategy> {
                 for hold in [f32::INFINITY, 0.12, 0.05] {
                     for vx0 in [0.0, dir] {
                         for edge in [false, true] {
-                            out.push(Strategy {
-                                dir,
-                                jump: true,
-                                hold,
-                                vx0,
-                                toot,
-                                edge,
-                                release,
-                                carry: 0.0,
-                            });
+                            out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release, carry: 0.0 });
                         }
                     }
                 }
                 // Running off a ledge (coyote jumps are covered by edge jumps).
                 let hold = f32::INFINITY;
-                out.push(Strategy {
-                    dir,
-                    jump: false,
-                    hold,
-                    vx0: dir,
-                    toot,
-                    edge: true,
-                    release,
-                    carry: 0.0,
-                });
+                out.push(Strategy { dir, jump: false, hold, vx0: dir, toot, edge: true, release, carry: 0.0 });
             }
         }
     }
@@ -1343,48 +1208,19 @@ pub fn strategies() -> Vec<Strategy> {
 
 /// Jumps for proving something is impossible: full holds, every toot timing (one per frame).
 pub fn ideal_strategies() -> Vec<Strategy> {
-    let toots: Vec<Option<f32>> = std::iter::once(None)
-        .chain((3..=80).map(|f| Some(f as f32 / 60.0)))
-        .collect();
+    let toots: Vec<Option<f32>> = std::iter::once(None).chain((3..=80).map(|f| Some(f as f32 / 60.0))).collect();
     let mut out = Vec::new();
     let release = f32::INFINITY;
     let hold = f32::INFINITY;
     for &toot in &toots {
-        out.push(Strategy {
-            dir: 0.0,
-            jump: true,
-            hold,
-            vx0: 0.0,
-            toot,
-            edge: false,
-            release,
-            carry: 0.0,
-        });
+        out.push(Strategy { dir: 0.0, jump: true, hold, vx0: 0.0, toot, edge: false, release, carry: 0.0 });
         for dir in [-1.0, 1.0] {
             for vx0 in [0.0, dir] {
                 for edge in [false, true] {
-                    out.push(Strategy {
-                        dir,
-                        jump: true,
-                        hold,
-                        vx0,
-                        toot,
-                        edge,
-                        release,
-                        carry: 0.0,
-                    });
+                    out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release, carry: 0.0 });
                 }
             }
-            out.push(Strategy {
-                dir,
-                jump: false,
-                hold,
-                vx0: dir,
-                toot,
-                edge: true,
-                release,
-                carry: 0.0,
-            });
+            out.push(Strategy { dir, jump: false, hold, vx0: dir, toot, edge: true, release, carry: 0.0 });
         }
     }
     out
@@ -1437,38 +1273,19 @@ impl Arcs {
 
     /// Plunger boosts off Han (the jumping strategies of `strategies`).
     pub fn boost(env: Env, strategies: Vec<Strategy>) -> Arcs {
-        Arcs::with_launch(
-            env,
-            strategies.into_iter().filter(|s| s.jump).collect(),
-            Launch::Boost,
-        )
+        Arcs::with_launch(env, strategies.into_iter().filter(|s| s.jump).collect(), Launch::Boost)
     }
 
     /// Weak boosts off Han in a band zone (and steps off his head: the edge strategies that
     /// don't jump). `env`'s toot is the full one (a weak boost refreshes it).
     pub fn weak(env: Env, strategies: Vec<Strategy>) -> Arcs {
-        let env = Env {
-            toot: DOUBLE_JUMP_SPEED,
-            ..env
-        };
-        Arcs::with_launch(
-            env,
-            strategies
-                .into_iter()
-                .filter(|s| s.jump || s.edge)
-                .collect(),
-            Launch::Weak,
-        )
+        let env = Env { toot: DOUBLE_JUMP_SPEED, ..env };
+        Arcs::with_launch(env, strategies.into_iter().filter(|s| s.jump || s.edge).collect(), Launch::Weak)
     }
 
     fn with_launch(env: Env, strategies: Vec<Strategy>, launch: Launch) -> Arcs {
-        let y0 = if launch == Launch::Ground {
-            0.0
-        } else {
-            ON_HAN
-        };
-        let mut strategies: Vec<Strategy> =
-            strategies.into_iter().filter(|s| s.carry == 0.0).collect();
+        let y0 = if launch == Launch::Ground { 0.0 } else { ON_HAN };
+        let mut strategies: Vec<Strategy> = strategies.into_iter().filter(|s| s.carry == 0.0).collect();
         if launch == Launch::Boost && env.throw {
             // Thrown towards where Nat faces: his key's way, or either way with no key held.
             strategies = strategies
@@ -1477,69 +1294,38 @@ impl Arcs {
                     let signs: &[f32] = if s.dir == 0.0 { &[-1.0, 1.0] } else { &[0.0] };
                     signs.iter().map(move |&sign| {
                         let facing = if s.dir == 0.0 { sign } else { s.dir };
-                        Strategy {
-                            carry: facing * THROW_CARRY,
-                            ..s
-                        }
+                        Strategy { carry: facing * THROW_CARRY, ..s }
                     })
                 })
                 .collect();
         }
         if launch == Launch::Boost && env.kick != 0.0 {
-            strategies = strategies
-                .into_iter()
-                .map(|s| Strategy {
-                    carry: env.kick,
-                    ..s
-                })
-                .collect();
+            strategies = strategies.into_iter().map(|s| Strategy { carry: env.kick, ..s }).collect();
         }
         let plain = strategies.len();
         if launch == Launch::Ground && env.carry > 0.0 {
-            let step = if env.ideal {
-                CARRY_STEP_IDEAL
-            } else {
-                CARRY_STEP_HUMAN
-            };
-            let speeds: Vec<f32> = (1..)
-                .map(|k| k as f32 * step)
-                .take_while(|&v| v < env.carry_cap + step)
-                .map(|v| v.min(env.carry_cap))
-                .collect();
+            let step = if env.ideal { CARRY_STEP_IDEAL } else { CARRY_STEP_HUMAN };
+            let speeds: Vec<f32> =
+                (1..).map(|k| k as f32 * step).take_while(|&v| v < env.carry_cap + step).map(|v| v.min(env.carry_cap)).collect();
             for k in 0..plain {
                 let s = strategies[k];
                 for &v in &speeds {
                     for sign in [-1.0, 1.0] {
                         if s.dir == 0.0 || s.dir == sign {
-                            strategies.push(Strategy {
-                                carry: sign * v,
-                                ..s
-                            });
+                            strategies.push(Strategy { carry: sign * v, ..s });
                         }
                     }
                 }
             }
         }
-        let envelope = strategies
-            .iter()
-            .map(|s| free_envelope(&env, &Flight::of(&env, s, launch, 0.0, y0)))
-            .collect();
-        Arcs {
-            env,
-            strategies,
-            plain,
-            launch,
-            envelope,
-        }
+        let envelope =
+            strategies.iter().map(|s| free_envelope(&env, &Flight::of(&env, s, launch, 0.0, y0))).collect();
+        Arcs { env, strategies, plain, launch, envelope }
     }
 
     /// The strategies that may apply in `cell`: the carried ones only on a platform's path.
     pub fn at(&self, map: &Map, cell: Cell) -> &[Strategy] {
-        if map.carry(cell) > 0.0 {
-            &self.strategies
-        } else {
-            &self.strategies[..self.plain]
-        }
+        if map.carry(cell) > 0.0 { &self.strategies } else { &self.strategies[..self.plain] }
     }
 
     /// Can strategy `k` from `from` (x0 = the take-off box center) possibly land in row `r`,
@@ -1549,14 +1335,9 @@ impl Arcs {
         if !(DR_MIN..=DR_MAX).contains(&dr) {
             return true;
         }
-        let Some((lo, hi)) = self.envelope[k][(dr - DR_MIN) as usize] else {
-            return false;
-        };
+        let Some((lo, hi)) = self.envelope[k][(dr - DR_MIN) as usize] else { return false };
         // The box (center in [x0+lo, x0+hi]) must overlap one of the columns.
-        let (a, b) = (
-            c0 as f32 * TILE - HALF_W - 1.0,
-            (c1 + 1) as f32 * TILE + HALF_W + 1.0,
-        );
+        let (a, b) = (c0 as f32 * TILE - HALF_W - 1.0, (c1 + 1) as f32 * TILE + HALF_W + 1.0);
         x0 + hi > a && x0 + lo < b
     }
 
@@ -1566,9 +1347,7 @@ impl Arcs {
         if !(DR_MIN..=DR_MAX).contains(&dr) {
             return true;
         }
-        let Some((lo, hi)) = self.envelope[k][(dr - DR_MIN) as usize] else {
-            return false;
-        };
+        let Some((lo, hi)) = self.envelope[k][(dr - DR_MIN) as usize] else { return false };
         // The columns a box centered in [x0+lo, x0+hi] overlaps.
         let c0 = ((x0 + lo - HALF_W - 1.0) / TILE).floor() as i32;
         let c1 = ((x0 + hi + HALF_W + 1.0) / TILE).floor() as i32;
@@ -1585,12 +1364,7 @@ impl Arcs {
             Launch::Ground => take_off(map, &self.env, cell, s)?,
         };
         let floor = (cell.1 + 1) as f32 * TILE;
-        let y0 = floor - HALF_H
-            + if self.launch == Launch::Ground {
-                0.0
-            } else {
-                ON_HAN
-            };
+        let y0 = floor - HALF_H + if self.launch == Launch::Ground { 0.0 } else { ON_HAN };
         Some(Flight::of(&self.env, s, self.launch, x0, y0))
     }
 }
@@ -1633,11 +1407,7 @@ impl Flight {
             release: s.release,
             hold: s.hold,
             cut: !s.jump,
-            toots: [
-                s.toot.unwrap_or(f32::INFINITY),
-                f32::INFINITY,
-                f32::INFINITY,
-            ],
+            toots: [s.toot.unwrap_or(f32::INFINITY), f32::INFINITY, f32::INFINITY],
             toot_speed: env.toot,
             carry: s.carry,
         }
@@ -1647,23 +1417,11 @@ impl Flight {
 /// The in-air controls of one step of `f` at time `t` (after the step): input, jump cut,
 /// toots, gravity. Shared by the free-flight envelopes and [`fly`].
 #[inline(always)]
-fn air_controls(
-    env: &Env,
-    f: &Flight,
-    t: f32,
-    vx: &mut f32,
-    vy: &mut f32,
-    cut: &mut bool,
-    tooted: &mut [bool; 3],
-) {
+fn air_controls(env: &Env, f: &Flight, t: f32, vx: &mut f32, vy: &mut f32, cut: &mut bool, tooted: &mut [bool; 3]) {
     let input = if t < f.release { f.dir } else { 0.0 };
     let target = input * env.vx;
     let dv = env.air_accel * DT;
-    *vx = if (target - *vx).abs() <= dv {
-        target
-    } else {
-        *vx + dv * (target - *vx).signum()
-    };
+    *vx = if (target - *vx).abs() <= dv { target } else { *vx + dv * (target - *vx).signum() };
     if !*cut && t >= f.hold {
         *cut = true;
         if *vy < 0.0 {
@@ -1734,11 +1492,7 @@ fn take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> Option<f32> {
         // As fast as the platform under the cell goes (ideal: the next step up, a human's:
         // the step at or below).
         let most = (map.carry((c, r)) * env.carry).min(env.carry_cap);
-        let ok = if env.ideal {
-            s.carry.abs() - CARRY_STEP_IDEAL < most
-        } else {
-            s.carry.abs() <= most + 0.01
-        };
+        let ok = if env.ideal { s.carry.abs() - CARRY_STEP_IDEAL < most } else { s.carry.abs() <= most + 0.01 };
         if !ok {
             return None;
         }
@@ -1771,14 +1525,7 @@ fn weak_take_off(map: &Map, env: &Env, (c, r): Cell, s: &Strategy) -> f32 {
 }
 
 /// One arc from cell (c, r); the cells the box touched go into `touched`.
-fn simulate(
-    map: &Map,
-    env: &Env,
-    (c, r): Cell,
-    s: &Strategy,
-    x0: f32,
-    touched: &mut Vec<Cell>,
-) -> Outcome {
+fn simulate(map: &Map, env: &Env, (c, r): Cell, s: &Strategy, x0: f32, touched: &mut Vec<Cell>) -> Outcome {
     let y0 = (r + 1) as f32 * TILE - HALF_H;
     let mut f = Flight::of(env, s, Launch::Ground, x0, y0);
     // Off a conveyor belt: its speed comes along (Nat keeps it, Han doesn't).
@@ -1794,12 +1541,7 @@ pub(crate) fn fly(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> 
 }
 
 /// [`fly`], and how long (s) the flight took.
-pub(crate) fn fly_timed(
-    map: &Map,
-    env: &Env,
-    f: &Flight,
-    touched: &mut Vec<Cell>,
-) -> (Outcome, f32) {
+pub(crate) fn fly_timed(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outcome, f32) {
     let o = fly_inner(map, env, f, touched);
     (o.0, o.1)
 }
@@ -1809,15 +1551,7 @@ fn fly_inner(map: &Map, env: &Env, f: &Flight, touched: &mut Vec<Cell>) -> (Outc
     if map.deadly(f.x0, f.y0) || map.overlaps_solid(f.x0, f.y0) {
         return (Outcome::Nothing, 0.0);
     }
-    let mut b = Body {
-        x: f.x0,
-        y: f.y0,
-        vx: f.vx0,
-        vy: f.vy0,
-        carry: f.carry,
-        cut: f.cut,
-        ..Body::default()
-    };
+    let mut b = Body { x: f.x0, y: f.y0, vx: f.vx0, vy: f.vy0, carry: f.carry, cut: f.cut, ..Body::default() };
     let mut tooted = [false; 3];
     let mut toots = f.toots;
     let mut smashed: Vec<Cell> = Vec::new();
@@ -1882,13 +1616,7 @@ struct Moved {
 /// (bumpers bat it back), the vertical one (trampolines bounce it, bricks smash from below,
 /// gone for the rest of the flight: `smashed`), hazards. The game's `step_body`; the cells the
 /// box is in go into `touched`.
-fn move_body(
-    map: &Map,
-    env: &Env,
-    b: &mut Body,
-    smashed: &mut Vec<Cell>,
-    touched: &mut Vec<Cell>,
-) -> Moved {
+fn move_body(map: &Map, env: &Env, b: &mut Body, smashed: &mut Vec<Cell>, touched: &mut Vec<Cell>) -> Moved {
     let solid = |smashed: &[Cell], c: i32, r: i32| map.is_solid(c, r) && !smashed.contains(&(c, r));
     let mut refilled = false;
     let tiles = env.tiles;
@@ -1898,10 +1626,7 @@ fn move_body(
     if slung {
         if b.hold > 1 && !b.fire {
             b.hold -= 1;
-            return Moved {
-                refilled,
-                end: None,
-            };
+            return Moved { refilled, end: None };
         }
         let (away, up) = cushion_shot(b.aim * b.pad);
         b.carry = b.pad * away * tiles.fling;
@@ -1939,11 +1664,7 @@ fn move_body(
                 if map.fling(col, row) == -moving.signum() {
                     flung = map.fling(col, row);
                 }
-                b.x = if moving > 0.0 {
-                    col as f32 * TILE - HALF_W
-                } else {
-                    (col + 1) as f32 * TILE + HALF_W
-                };
+                b.x = if moving > 0.0 { col as f32 * TILE - HALF_W } else { (col + 1) as f32 * TILE + HALF_W };
             }
         }
     }
@@ -1969,10 +1690,7 @@ fn move_body(
                 touched.push((col, row));
             }
         }
-        return Moved {
-            refilled,
-            end: None,
-        };
+        return Moved { refilled, end: None };
     }
 
     // Vertical move.
@@ -1996,14 +1714,7 @@ fn move_body(
                     hit = Some(col);
                 }
                 if floor && k < 4 {
-                    under[k] = Some((
-                        col,
-                        if map.spring(col, row) {
-                            Tile::Trampoline
-                        } else {
-                            Tile::Solid
-                        },
-                    ));
+                    under[k] = Some((col, if map.spring(col, row) { Tile::Trampoline } else { Tile::Solid }));
                 }
             }
             if let Some(col) = hit {
@@ -2059,10 +1770,7 @@ fn move_body(
     }
 
     if let Some(death) = map.hazard(b.x, b.y) {
-        return Moved {
-            refilled,
-            end: Some(Outcome::Died(death)),
-        };
+        return Moved { refilled, end: Some(Outcome::Died(death)) };
     }
     for col in cells(b.x - HALF_W, b.x + HALF_W) {
         for row in cells(b.y - HALF_H, b.y + HALF_H) {
@@ -2070,11 +1778,7 @@ fn move_body(
         }
     }
     let end = landed.map(|cell| {
-        if map.standable(cell) && !smashed.contains(&(cell.0, cell.1 + 1)) {
-            Outcome::Land(cell)
-        } else {
-            Outcome::Nothing
-        }
+        if map.standable(cell) && !smashed.contains(&(cell.0, cell.1 + 1)) { Outcome::Land(cell) } else { Outcome::Nothing }
     });
     Moved { refilled, end }
 }
@@ -2170,13 +1874,7 @@ impl PinMemo {
             | ((ball.b.pad + 1.0) as u64) << 52
             | (ball.b.hold.min(63) as u64) << 54;
         *self.ids.entry(key).or_insert_with(|| {
-            self.nodes.push(PinNode {
-                ball,
-                next: None,
-                preds: Vec::new(),
-                good: false,
-                seen: 0,
-            });
+            self.nodes.push(PinNode { ball, next: None, preds: Vec::new(), good: false, seen: 0 });
             (self.nodes.len() - 1) as u32
         })
     }
@@ -2219,14 +1917,10 @@ impl PinMemo {
             }
         }
         self.nodes[id as usize].next = Some(next);
-        let goes_on = self.nodes[id as usize]
-            .next
-            .iter()
-            .flatten()
-            .any(|(_, to)| match to {
-                PinNext::Air(n) => self.nodes[*n as usize].good,
-                PinNext::End(_) => false,
-            });
+        let goes_on = self.nodes[id as usize].next.iter().flatten().any(|(_, to)| match to {
+            PinNext::Air(n) => self.nodes[*n as usize].good,
+            PinNext::End(_) => false,
+        });
         if lands || goes_on {
             self.make_good(map, env, id, g);
         }
@@ -2253,13 +1947,7 @@ impl PinMemo {
                 }
             }
             for (u, keys) in into {
-                pin_stretch(
-                    map,
-                    env,
-                    &mut self.nodes[u as usize].ball.clone(),
-                    keys,
-                    &mut touched,
-                );
+                pin_stretch(map, env, &mut self.nodes[u as usize].ball.clone(), keys, &mut touched);
                 for &t in &touched {
                     g.touch(t);
                 }
@@ -2280,22 +1968,9 @@ impl PinMemo {
 /// into `g`.
 fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin {
     let mut memo = std::mem::take(&mut g.pin);
-    let key = (
-        env.gravity.to_bits(),
-        env.tiles.belt.to_bits(),
-        env.tiles.gust.to_bits(),
-        env.tiles.far,
-        env.tiles.spring.to_bits(),
-        env.tiles.fling.to_bits(),
-        env.tiles.bat.to_bits(),
-    );
+    let key = (env.gravity.to_bits(), env.tiles.belt.to_bits(), env.tiles.gust.to_bits(), env.tiles.far, env.tiles.spring.to_bits(), env.tiles.fling.to_bits(), env.tiles.bat.to_bits());
     if memo.flags != map.flags || memo.toots != toots || memo.env != Some(key) {
-        memo = PinMemo {
-            flags: map.flags.clone(),
-            toots,
-            env: Some(key),
-            ..PinMemo::default()
-        };
+        memo = PinMemo { flags: map.flags.clone(), toots, env: Some(key), ..PinMemo::default() };
     }
     memo.walks += 1;
     let walk = memo.walks;
@@ -2303,47 +1978,23 @@ fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin 
     let (c, r) = from;
     let x = c as f32 * TILE + 8.0;
     let y = (r + 1) as f32 * TILE - HALF_H;
-    let belt = if env.carry > 0.0 {
-        map.belt(from) * env.tiles.belt
-    } else {
-        0.0
-    };
+    let belt = if env.carry > 0.0 { map.belt(from) * env.tiles.belt } else { 0.0 };
     let mut starts = Vec::new();
     for dir in [-1.0, 0.0, 1.0] {
         if env.grip || !map.greasy(from) {
-            starts.push(Body {
-                x,
-                y,
-                vx: dir * env.vx,
-                vy: -JUMP_SPEED * env.boost,
-                carry: belt,
-                cut: false,
-                ..Body::default()
-            });
+            starts.push(Body { x, y, vx: dir * env.vx, vy: -JUMP_SPEED * env.boost, carry: belt, cut: false, ..Body::default() });
         }
         // Stepping off the ledge.
         let n = (c + dir as i32, r);
         if dir != 0.0 && !map.is_solid(n.0, n.1) && !map.standable(n) {
             let x = x + dir * (8.0 + env.overhang - HALF_W);
-            starts.push(Body {
-                x,
-                y,
-                vx: dir * env.vx,
-                vy: 0.0,
-                carry: belt,
-                cut: true,
-                ..Body::default()
-            });
+            starts.push(Body { x, y, vx: dir * env.vx, vy: 0.0, carry: belt, cut: true, ..Body::default() });
         }
     }
     let mut queue: Vec<u32> = Vec::new();
     for b in starts {
         if !map.deadly(b.x, b.y) && !map.overlaps_solid(b.x, b.y) {
-            let id = memo.intern(Ball {
-                b,
-                toot: toots,
-                smashed: Vec::new(),
-            });
+            let id = memo.intern(Ball { b, toot: toots, smashed: Vec::new() });
             if memo.nodes[id as usize].seen != walk {
                 memo.nodes[id as usize].seen = walk;
                 queue.push(id);
@@ -2389,13 +2040,7 @@ fn pinball(map: &Map, env: &Env, toots: bool, from: Cell, g: &mut Graph) -> Pin 
 
 /// Fly `ball` one stretch of [`PIN_FRAMES`] frames with `keys`; the cells the box touched go
 /// into `touched`. `None`: still flying.
-fn pin_stretch(
-    map: &Map,
-    env: &Env,
-    ball: &mut Ball,
-    keys: Keys,
-    touched: &mut Vec<Cell>,
-) -> Option<Outcome> {
+fn pin_stretch(map: &Map, env: &Env, ball: &mut Ball, keys: Keys, touched: &mut Vec<Cell>) -> Option<Outcome> {
     touched.clear();
     let mut frame = Vec::new();
     for k in 0..PIN_FRAMES {
@@ -2417,11 +2062,7 @@ fn pin_stretch(
         // The controls ([`air_controls`]): the key's way, the jump let go, a toot, gravity.
         let target = keys.dir as f32 * env.vx;
         let dv = env.air_accel * DT;
-        b.vx = if (target - b.vx).abs() <= dv {
-            target
-        } else {
-            b.vx + dv * (target - b.vx).signum()
-        };
+        b.vx = if (target - b.vx).abs() <= dv { target } else { b.vx + dv * (target - b.vx).signum() };
         if k == 0 && keys.release && !b.cut {
             b.cut = true;
             if b.vy < 0.0 {
@@ -2503,9 +2144,7 @@ impl Graph {
     }
 
     fn edges(&self, cell: Cell) -> &[Cell] {
-        self.idx(cell)
-            .and_then(|i| self.edges[i].as_deref())
-            .unwrap_or(&[])
+        self.idx(cell).and_then(|i| self.edges[i].as_deref()).unwrap_or(&[])
     }
 
     /// Reached before crossing `i` (from the start, or through an earlier crossing).
@@ -2515,13 +2154,7 @@ impl Graph {
 }
 
 /// Follow every normal-physics arc from `seeds`, adding to `g`; returns the cells added.
-fn explore(
-    map: &Map,
-    arcs: &Arcs,
-    seeds: Vec<Cell>,
-    origin: Option<usize>,
-    g: &mut Graph,
-) -> Vec<Cell> {
+fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &mut Graph) -> Vec<Cell> {
     let mut added = Vec::new();
     let mut queue = seeds;
     let mut buf = Vec::new();
@@ -2553,9 +2186,7 @@ fn explore(
             }
         }
         for s in arcs.at(map, cell) {
-            let Some(x0) = take_off(map, &arcs.env, cell, s) else {
-                continue;
-            };
+            let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
             match simulate(map, &arcs.env, cell, s, x0, &mut buf) {
                 Outcome::Land(land) => {
                     if !out.contains(&land) {
@@ -2643,9 +2274,7 @@ fn ready(map: &Map, g: &Graph, mode: Mode, cell: Cell, dir: i32) -> bool {
                 .map(|t| (t.col as i32, t.row as i32))
                 .filter(|&(c, r)| {
                     let back = (cell.0 - c) * dir;
-                    (0..=NUGGET_LINE_REACH).contains(&back)
-                        && (cell.1 - 4..=cell.1 + 1).contains(&r)
-                        && g.touched((c, r))
+                    (0..=NUGGET_LINE_REACH).contains(&back) && (cell.1 - 4..=cell.1 + 1).contains(&r) && g.touched((c, r))
                 })
                 .map(|(c, _)| (cell.0 - c) * dir)
                 .collect();
@@ -2695,21 +2324,10 @@ pub struct Physics {
 
 impl Physics {
     pub fn new() -> Physics {
-        let human = MODES
-            .iter()
-            .map(|&m| Arcs::new(Env::new(m, false), strategies()))
-            .collect();
-        let ideal = MODES
-            .iter()
-            .map(|&m| Arcs::new(Env::new(m, true), ideal_strategies()))
-            .collect();
-        let no_toot = Arcs::new(
-            Env::new(Mode::Normal, false),
-            strategies()
-                .into_iter()
-                .filter(|s| s.toot.is_none())
-                .collect(),
-        );
+        let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), strategies())).collect();
+        let ideal = MODES.iter().map(|&m| Arcs::new(Env::new(m, true), ideal_strategies())).collect();
+        let no_toot =
+            Arcs::new(Env::new(Mode::Normal, false), strategies().into_iter().filter(|s| s.toot.is_none()).collect());
         let boost = Arcs::boost(
             Env::new(Mode::Normal, false),
             strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
@@ -2724,19 +2342,13 @@ impl Physics {
         );
         let kick = [1.0, -1.0].map(|away| {
             Arcs::boost(
-                Env {
-                    kick: away * KICK_CARRY,
-                    ..Env::new(Mode::Nervous, false)
-                },
+                Env { kick: away * KICK_CARRY, ..Env::new(Mode::Nervous, false) },
                 strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
             )
         });
         let trapeze = [1.0, -1.0].map(|dir| {
             Arcs::boost(
-                Env {
-                    kick: dir * TRAPEZE_SPEED * HUMAN_CARRY,
-                    ..Env::new(Mode::Normal, false)
-                },
+                Env { kick: dir * TRAPEZE_SPEED * HUMAN_CARRY, ..Env::new(Mode::Normal, false) },
                 strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
             )
         });
@@ -2750,20 +2362,7 @@ impl Physics {
             .collect();
         let glide = Arcs::new(Env::glide(false), strategies());
         let glide_ideal = Arcs::new(Env::glide(true), ideal_strategies());
-        Physics {
-            human,
-            ideal,
-            glide,
-            glide_ideal,
-            no_toot,
-            boost,
-            throw,
-            mega,
-            kick,
-            trapeze,
-            boost_ideal,
-            weak_ideal,
-        }
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
     }
 
     /// Physics whose reachability tries only `human` jumps (the proofs keep every ideal one).
@@ -2771,44 +2370,12 @@ impl Physics {
     /// [`strategies`] too: free play (`crate::freeplay`) validates rooms with a lean set, fast
     /// enough to do while the game runs.
     pub fn with_human(human: Vec<Strategy>) -> Physics {
-        let ideal = MODES
-            .iter()
-            .map(|&m| Arcs::new(Env::new(m, true), ideal_strategies()))
-            .collect();
-        let no_toot = Arcs::new(
-            Env::new(Mode::Normal, false),
-            human.iter().copied().filter(|s| s.toot.is_none()).collect(),
-        );
+        let ideal = MODES.iter().map(|&m| Arcs::new(Env::new(m, true), ideal_strategies())).collect();
+        let no_toot = Arcs::new(Env::new(Mode::Normal, false), human.iter().copied().filter(|s| s.toot.is_none()).collect());
         let glide = Arcs::new(Env::glide(false), human.clone());
-        let human = MODES
-            .iter()
-            .map(|&m| Arcs::new(Env::new(m, false), human.clone()))
-            .collect();
-        let Physics {
-            boost,
-            throw,
-            mega,
-            kick,
-            trapeze,
-            boost_ideal,
-            weak_ideal,
-            glide_ideal,
-            ..
-        } = Physics::new();
-        Physics {
-            human,
-            ideal,
-            glide,
-            glide_ideal,
-            no_toot,
-            boost,
-            throw,
-            mega,
-            kick,
-            trapeze,
-            boost_ideal,
-            weak_ideal,
-        }
+        let human = MODES.iter().map(|&m| Arcs::new(Env::new(m, false), human.clone())).collect();
+        let Physics { boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal, glide_ideal, .. } = Physics::new();
+        Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
     }
 
     /// The physics of the laughing band's phrases that take something away, each with its
@@ -2818,83 +2385,25 @@ impl Physics {
     /// never reach past normal physics (`crate::game::groove`). Every level must stay beatable
     /// in each (`tests/levels.rs`).
     pub fn laughing() -> [(&'static str, Physics); 2] {
-        const {
-            assert!(
-                DRUNK_SWAY <= 0.1,
-                "the sway's slowest must stay above the human margin"
-            )
-        };
+        const { assert!(DRUNK_SWAY <= 0.1, "the sway's slowest must stay above the human margin") };
         let with = |nudge: &dyn Fn(Env) -> Env| {
-            let Physics {
-                human,
-                no_toot,
-                boost,
-                throw,
-                mega,
-                kick,
-                trapeze,
-                ideal,
-                glide,
-                glide_ideal,
-                boost_ideal,
-                weak_ideal,
-            } = Physics::new();
-            let human = human
-                .into_iter()
-                .map(|a| Arcs::new(nudge(a.env), a.strategies))
-                .collect();
+            let Physics { human, no_toot, boost, throw, mega, kick, trapeze, ideal, glide, glide_ideal, boost_ideal, weak_ideal } =
+                Physics::new();
+            let human = human.into_iter().map(|a| Arcs::new(nudge(a.env), a.strategies)).collect();
             let no_toot = Arcs::new(nudge(no_toot.env), no_toot.strategies);
             let boost = Arcs::boost(nudge(boost.env), boost.strategies);
             // (From the plain strategies: the throw's are already signed with its carry.)
-            let throw = Arcs::boost(
-                nudge(throw.env),
-                strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
-            );
+            let throw = Arcs::boost(nudge(throw.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect());
             let mega = Arcs::boost(nudge(mega.env), mega.strategies);
             // (From the plain strategies: the kicks' are already carried.)
-            let kick = kick.map(|k| {
-                Arcs::boost(
-                    nudge(k.env),
-                    strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
-                )
-            });
-            let trapeze = trapeze.map(|k| {
-                Arcs::boost(
-                    nudge(k.env),
-                    strategies().into_iter().filter(|s| s.vx0 == 0.0).collect(),
-                )
-            });
+            let kick = kick.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
+            let trapeze = trapeze.map(|k| Arcs::boost(nudge(k.env), strategies().into_iter().filter(|s| s.vx0 == 0.0).collect()));
             let glide = Arcs::new(nudge(glide.env), glide.strategies);
-            Physics {
-                human,
-                ideal,
-                glide,
-                glide_ideal,
-                no_toot,
-                boost,
-                throw,
-                mega,
-                kick,
-                trapeze,
-                boost_ideal,
-                weak_ideal,
-            }
+            Physics { human, ideal, glide, glide_ideal, no_toot, boost, throw, mega, kick, trapeze, boost_ideal, weak_ideal }
         };
         [
-            (
-                "melting",
-                with(&|e| Env {
-                    boost: e.boost * MELTING_JUMP,
-                    ..e
-                }),
-            ),
-            (
-                "alien",
-                with(&|e| Env {
-                    gravity: e.gravity * (1.0 + ALIEN_PULSE),
-                    ..e
-                }),
-            ),
+            ("melting", with(&|e| Env { boost: e.boost * MELTING_JUMP, ..e })),
+            ("alien", with(&|e| Env { gravity: e.gravity * (1.0 + ALIEN_PULSE), ..e })),
         ]
     }
 
@@ -2902,13 +2411,7 @@ impl Physics {
     /// instead of [`WEAK_BOOST_SPEED`]: for testing the boost proof.
     pub fn with_weak_boost(mut self, speed: f32) -> Physics {
         for (_, a) in &mut self.weak_ideal {
-            *a = Arcs::weak(
-                Env {
-                    boost: speed / WEAK_BOOST_SPEED,
-                    ..a.env
-                },
-                a.strategies.clone(),
-            );
+            *a = Arcs::weak(Env { boost: speed / WEAK_BOOST_SPEED, ..a.env }, a.strategies.clone());
         }
         self
     }
@@ -2923,11 +2426,7 @@ impl Physics {
 
     /// Every ideal way to jump in `m`: the waltz's jumps on ONE and its glide launches.
     pub fn ideal_all(&self, m: Mode) -> Vec<&Arcs> {
-        if m == Mode::Waltz {
-            vec![self.ideal(m), &self.glide_ideal]
-        } else {
-            vec![self.ideal(m)]
-        }
+        if m == Mode::Waltz { vec![self.ideal(m), &self.glide_ideal] } else { vec![self.ideal(m)] }
     }
 }
 
@@ -2940,15 +2439,7 @@ impl Default for Physics {
 /// Stain pit search: the fewest splats (beam search, at most [`MAX_PIT_DEATHS`]) that let
 /// normal jumps past `pit`. Returns the stains, the take-off cell and the first cell past it.
 fn cross_pit(map: &Map, phys: &Physics, g: &Graph, pit: &Pit) -> Option<(Vec<Cell>, Cell, Cell)> {
-    cross_dying(
-        map,
-        phys.human(Mode::Normal),
-        g,
-        &|c| g.reached(c),
-        &|_| true,
-        &|d| pit.contains(d),
-        MAX_PIT_DEATHS,
-    )
+    cross_dying(map, phys.human(Mode::Normal), g, &|c| g.reached(c), &|_| true, &|d| pit.contains(d), MAX_PIT_DEATHS)
 }
 
 /// The fewest splats in cells `pit` contains (spikes: stains; liquid: rafts) that let `arcs`
@@ -2999,12 +2490,7 @@ fn cross_dying(
         open: Vec<(Cell, Cell)>,
         fresh: Vec<(Cell, Cell)>,
     }
-    let mut beam = vec![State {
-        stains: Vec::new(),
-        reached: HashSet::new(),
-        open: start.clone(),
-        fresh: start,
-    }];
+    let mut beam = vec![State { stains: Vec::new(), reached: HashSet::new(), open: start.clone(), fresh: start }];
     let mut buf = Vec::new();
     for _depth in 0..max_deaths {
         let mut next: Vec<(usize, State)> = Vec::new();
@@ -3012,11 +2498,8 @@ fn cross_dying(
         for st in &beam {
             // The farthest splats from where they're jumped from first (a stain helps most at
             // the end of a jump), at most PIT_TARGETS of them.
-            let mut targets: Vec<(i32, Cell)> = st
-                .fresh
-                .iter()
-                .map(|&(d, f)| (-((d.0 - f.0).abs() + (d.1 - f.1).abs()), d))
-                .collect();
+            let mut targets: Vec<(i32, Cell)> =
+                st.fresh.iter().map(|&(d, f)| (-((d.0 - f.0).abs() + (d.1 - f.1).abs()), d)).collect();
             targets.sort();
             let mut picked: Vec<Cell> = Vec::new();
             for (_, d) in targets {
@@ -3045,9 +2528,7 @@ fn cross_dying(
                 let mut queue: Vec<Cell> = Vec::new();
                 for &from in &froms {
                     for s in arcs.at(&m, from) {
-                        let Some(x0) = take_off(&m, &arcs.env, from, s) else {
-                            continue;
-                        };
+                        let Some(x0) = take_off(&m, &arcs.env, from, s) else { continue };
                         if let Outcome::Land(l) = simulate(&m, &arcs.env, from, s, x0, &mut buf)
                             && !known(l)
                             && reached.insert(l)
@@ -3074,14 +2555,10 @@ fn cross_dying(
                         }
                     }
                     for s in arcs.at(&m, cell) {
-                        let Some(x0) = take_off(&m, &arcs.env, cell, s) else {
-                            continue;
-                        };
+                        let Some(x0) = take_off(&m, &arcs.env, cell, s) else { continue };
                         match simulate(&m, &arcs.env, cell, s, x0, &mut buf) {
                             Outcome::Land(l) if !known(l) && reached.insert(l) => queue.push(l),
-                            Outcome::Died(Some(dc))
-                                if pit.contains(dc) && !stains.contains(&dc) =>
-                            {
+                            Outcome::Died(Some(dc)) if pit.contains(dc) && !stains.contains(&dc) => {
                                 open.push((dc, cell))
                             }
                             _ => {}
@@ -3098,23 +2575,12 @@ fn cross_dying(
                         open.push(o);
                     }
                 }
-                let fresh: Vec<(Cell, Cell)> = open
-                    .iter()
-                    .copied()
-                    .filter(|o| !st.open.iter().any(|p| p.0 == o.0))
-                    .collect();
+                let fresh: Vec<(Cell, Cell)> =
+                    open.iter().copied().filter(|o| !st.open.iter().any(|p| p.0 == o.0)).collect();
                 let mut cells: Vec<Cell> = fresh.iter().map(|o| o.0).collect();
                 cells.sort();
                 cells.dedup();
-                next.push((
-                    cells.len(),
-                    State {
-                        stains,
-                        reached,
-                        open,
-                        fresh,
-                    },
-                ));
+                next.push((cells.len(), State { stains, reached, open, fresh }));
             }
         }
         next.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.stains.cmp(&b.1.stains)));
@@ -3138,12 +2604,7 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
     let mut buddy_tried: Vec<bool> = vec![false; (map.w * map.h) as usize];
     let mut buf = Vec::new();
     loop {
-        let mut todo: Vec<Cell> = g
-            .order
-            .iter()
-            .copied()
-            .filter(|&c| !tried[g.idx(c).unwrap()])
-            .collect();
+        let mut todo: Vec<Cell> = g.order.iter().copied().filter(|&c| !tried[g.idx(c).unwrap()]).collect();
         if todo.is_empty() {
             // Nothing new: splat into a stain pit.
             let mut crossed = false;
@@ -3166,14 +2627,7 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                     }
                     let new = explore(map, phys.human(Mode::Normal), seeds, Some(i), &mut g);
                     derive_mark(map, Gate::StainPit, from, to);
-                    crossings.push(Crossing {
-                        gate: Gate::StainPit,
-                        from,
-                        to,
-                        new,
-                        stains,
-                        flags,
-                    });
+                    crossings.push(Crossing { gate: Gate::StainPit, from, to, new, stains, flags });
                     crossed = true;
                     break;
                 }
@@ -3226,25 +2680,16 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                     if on_one && !springs || !on_one && !ok[(s.dir as i32 + 1) as usize] {
                         continue;
                     }
-                    let Some(x0) = take_off(map, &arcs.env, cell, s) else {
-                        continue;
-                    };
+                    let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
                     if let Outcome::Land(land) = simulate(map, &arcs.env, cell, s, x0, &mut buf)
                         && !g.reached(land)
                     {
                         if on_one {
                             // Only if the spring on ONE is what got there: the same jump with
                             // the trampolines' everyday spring doesn't.
-                            let plain = Env {
-                                tiles: Tiles {
-                                    spring: 1.0,
-                                    ..arcs.env.tiles
-                                },
-                                ..arcs.env
-                            };
+                            let plain = Env { tiles: Tiles { spring: 1.0, ..arcs.env.tiles }, ..arcs.env };
                             let mut scratch = Vec::new();
-                            if matches!(simulate(map, &plain, cell, s, x0, &mut scratch), Outcome::Land(l) if !g.reached(l))
-                            {
+                            if matches!(simulate(map, &plain, cell, s, x0, &mut scratch), Outcome::Land(l) if !g.reached(l)) {
                                 continue;
                             }
                             found.push((Gate::SpringOnOne, cell, land, buf.clone()));
@@ -3264,13 +2709,7 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
 type Found = (Gate, Cell, Cell, Vec<Cell>);
 
 /// Add the crossings `found` (those still leading somewhere new) and explore past them.
-fn take(
-    map: &mut Map,
-    phys: &Physics,
-    g: &mut Graph,
-    crossings: &mut Vec<Crossing>,
-    found: Vec<Found>,
-) {
+fn take(map: &mut Map, phys: &Physics, g: &mut Graph, crossings: &mut Vec<Crossing>, found: Vec<Found>) {
     for (gate, from, to, touched) in found {
         if g.reached(to) {
             continue;
@@ -3282,21 +2721,8 @@ fn take(
             g.touch(t);
         }
         let flags = map.flags.clone();
-        let new = explore(
-            map,
-            phys.human(Mode::Normal),
-            vec![to],
-            Some(crossings.len()),
-            g,
-        );
-        crossings.push(Crossing {
-            gate,
-            from,
-            to,
-            new,
-            stains: Vec::new(),
-            flags,
-        });
+        let new = explore(map, phys.human(Mode::Normal), vec![to], Some(crossings.len()), g);
+        crossings.push(Crossing { gate, from, to, new, stains: Vec::new(), flags });
     }
 }
 
@@ -3329,10 +2755,7 @@ fn derive_mark(map: &mut Map, gate: Gate, from: Cell, to: Cell) {
 /// can be), and neither Han nor Nat on his head is in a band zone (there it's the weak boost,
 /// no good for Han's gates, and he doesn't go ahead).
 fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
-    g.reached(cell)
-        && map.han_allowed(cell)
-        && map.han_allowed((cell.0, cell.1 - 1))
-        && !map.han_keeps_out(cell)
+    g.reached(cell) && map.han_allowed(cell) && map.han_allowed((cell.0, cell.1 - 1)) && !map.han_keeps_out(cell)
 }
 
 /// Han's gates from reached cells not tried yet: cling shafts (nervous), trapezes (the waltz),
@@ -3342,12 +2765,7 @@ fn han_at(map: &Map, g: &Graph, cell: Cell) -> bool {
 fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<Found> {
     let mut found = Vec::new();
     let mut buf = Vec::new();
-    let mut cells: Vec<Cell> = g
-        .order
-        .iter()
-        .copied()
-        .filter(|&c| !tried[g.idx(c).unwrap()])
-        .collect();
+    let mut cells: Vec<Cell> = g.order.iter().copied().filter(|&c| !tried[g.idx(c).unwrap()]).collect();
     cells.sort();
     for &cell in &cells {
         tried[g.idx(cell).unwrap()] = true;
@@ -3365,16 +2783,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
         }
         // (A generated room has no marks yet: there the mega-boost goes from anywhere, and its
         // mark is derived when it's found.)
-        let mega_at = |c: Cell| {
-            (map.derive_marks || map.in_band_zone(c))
-                && !map.weak_boost(
-                    c,
-                    Granted {
-                        giant_steps: true,
-                        ..Granted::NONE
-                    },
-                )
-        };
+        let mega_at = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { giant_steps: true, ..Granted::NONE });
         if g.reached(cell)
             && mega_at(cell)
             && mega_at((cell.0, cell.1 - 1))
@@ -3382,9 +2791,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
             && ready(map, g, Mode::GiantSteps, cell, 0)
         {
             for s in &phys.mega.strategies {
-                let Some(f) = phys.mega.flight(map, cell, s) else {
-                    continue;
-                };
+                let Some(f) = phys.mega.flight(map, cell, s) else { continue };
                 if let Outcome::Land(l) = fly(map, &phys.mega.env, &f, &mut buf)
                     && !g.reached(l)
                 {
@@ -3396,9 +2803,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
             continue;
         }
         for s in &phys.boost.strategies {
-            let Some(f) = phys.boost.flight(map, cell, s) else {
-                continue;
-            };
+            let Some(f) = phys.boost.flight(map, cell, s) else { continue };
             if let Outcome::Land(l) = fly(map, &phys.boost.env, &f, &mut buf)
                 && !g.reached(l)
             {
@@ -3412,15 +2817,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
                     && !g.reached(l)
                 {
                     // (Over a floating spike, the teeny hop's cell above it.)
-                    let touched = (p.c0..=p.c1)
-                        .map(|c| {
-                            if float_hop(map, p, c) {
-                                (c, p.row - 2)
-                            } else {
-                                (c, p.row - 1)
-                            }
-                        })
-                        .collect();
+                    let touched = (p.c0..=p.c1).map(|c| if float_hop(map, p, c) { (c, p.row - 2) } else { (c, p.row - 1) }).collect();
                     found.push((Gate::BuddyRaft, cell, l, touched));
                 }
             }
@@ -3430,16 +2827,11 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
                 // Han standing at the edge (or a few steps back), the band fired up: the throw.
                 let edge = if dir > 0 { ch.c0 - 1 } else { ch.c1 + 1 };
                 let back = (edge - cell.0) * dir;
-                if cell.1 != ch.row
-                    || !(0..RUN_UP as i32).contains(&back)
-                    || !ready(map, g, Mode::FiredUp, cell, dir)
-                {
+                if cell.1 != ch.row || !(0..RUN_UP as i32).contains(&back) || !ready(map, g, Mode::FiredUp, cell, dir) {
                     continue;
                 }
                 for s in phys.throw.strategies.iter().filter(|s| s.dir == dir as f32) {
-                    let Some(f) = phys.throw.flight(map, cell, s) else {
-                        continue;
-                    };
+                    let Some(f) = phys.throw.flight(map, cell, s) else { continue };
                     if let Outcome::Land(l) = fly(map, &phys.throw.env, &f, &mut buf)
                         && (l.0 - if dir > 0 { ch.c1 } else { ch.c0 }) * dir > 0
                         && !g.reached(l)
@@ -3456,25 +2848,10 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
 /// A cling shaft from floor cell `cell`: Han climbs a wall of the shaft and clings
 /// [`CLING_ROWS`] up it (the band nervous: a death to splat on reached, for the grip), Nat hops
 /// onto his head from the floor, and kicks off it, away from the wall.
-fn cling_found(
-    map: &Map,
-    phys: &Physics,
-    g: &Graph,
-    cell: Cell,
-    buf: &mut Vec<Cell>,
-) -> Vec<Found> {
+fn cling_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
     let mut found = Vec::new();
     // (A generated room has no marks yet: there Han clings anywhere, and the mark is derived.)
-    let zone = |c: Cell| {
-        (map.derive_marks || map.in_band_zone(c))
-            && !map.weak_boost(
-                c,
-                Granted {
-                    grip: true,
-                    ..Granted::NONE
-                },
-            )
-    };
+    let zone = |c: Cell| (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { grip: true, ..Granted::NONE });
     if !g.reached(cell) || !map.standable(cell) || g.deaths.is_empty() || map.han_keeps_out(cell) {
         return found;
     }
@@ -3492,16 +2869,11 @@ fn cling_found(
         perch_map.set(h, VIRT, 0);
         let perch = (h.0, h.1 - 1);
         let nervous = phys.human(Mode::Nervous);
-        let hops = (-2..=2)
-            .map(|d| (cell.0 + d, cell.1))
-            .filter(|&c| g.reached(c))
-            .any(|from| {
-                nervous.at(&perch_map, from).iter().any(|s| {
-                    nervous.flight(&perch_map, from, s).is_some_and(|f| {
-                        fly(&perch_map, &nervous.env, &f, buf) == Outcome::Land(perch)
-                    })
-                })
-            });
+        let hops = (-2..=2).map(|d| (cell.0 + d, cell.1)).filter(|&c| g.reached(c)).any(|from| {
+            nervous.at(&perch_map, from).iter().any(|s| {
+                nervous.flight(&perch_map, from, s).is_some_and(|f| fly(&perch_map, &nervous.env, &f, buf) == Outcome::Land(perch))
+            })
+        });
         if !hops {
             continue;
         }
@@ -3510,9 +2882,7 @@ fn cling_found(
         han_map.set((h.0, h.1 + 1), VIRT, 0);
         let kick = &phys.kick[k];
         for s in &kick.strategies {
-            let Some(f) = kick.flight(&han_map, h, s) else {
-                continue;
-            };
+            let Some(f) = kick.flight(&han_map, h, s) else { continue };
             if let Outcome::Land(l) = fly(&han_map, &kick.env, &f, buf)
                 && !g.reached(l)
                 && l != h
@@ -3527,37 +2897,17 @@ fn cling_found(
 /// A trapeze off lip cell `cell` (the waltz): Han's plunger stuck in the ceiling over the gap
 /// ([`trapeze_swing`]), Nat hops onto his cap at the bottom of the swing from the floor near
 /// the lip, and jumps off it on ONE: a full boost and the swing's speed.
-fn trapeze_found(
-    map: &Map,
-    phys: &Physics,
-    g: &Graph,
-    cell: Cell,
-    buf: &mut Vec<Cell>,
-) -> Vec<Found> {
+fn trapeze_found(map: &Map, phys: &Physics, g: &Graph, cell: Cell, buf: &mut Vec<Cell>) -> Vec<Found> {
     let mut found = Vec::new();
     // (A generated room has no marks yet: there Han swings anywhere, and the mark is derived.)
     let zone = |c: Cell| {
-        (map.derive_marks || map.in_band_zone(c))
-            && !map.weak_boost(
-                c,
-                Granted {
-                    waltz: true,
-                    ..Granted::NONE
-                },
-            )
+        (map.derive_marks || map.in_band_zone(c)) && !map.weak_boost(c, Granted { waltz: true, ..Granted::NONE })
     };
-    if !g.reached(cell)
-        || !map.standable(cell)
-        || map.han_keeps_out(cell)
-        || !zone(cell)
-        || !waltz_runway(map, g, cell)
-    {
+    if !g.reached(cell) || !map.standable(cell) || map.han_keeps_out(cell) || !zone(cell) || !waltz_runway(map, g, cell) {
         return found;
     }
     for (k, dir) in [1, -1].into_iter().enumerate() {
-        let Some((ax, han, _)) = trapeze_swing(|c, r| map.is_solid(c, r), cell, dir) else {
-            continue;
-        };
+        let Some((ax, han, _)) = trapeze_swing(|c, r| map.is_solid(c, r), cell, dir) else { continue };
         let perch = (ax, han - 1);
         if !zone(perch) || !zone((ax, han)) {
             continue;
@@ -3566,24 +2916,17 @@ fn trapeze_found(
         let mut perch_map = map.clone();
         perch_map.set((ax, han), VIRT, 0);
         let normal = phys.human(Mode::Normal);
-        let hops = (-2..=0)
-            .map(|d| (cell.0 + d * dir, cell.1))
-            .filter(|&c| g.reached(c))
-            .any(|from| {
-                normal.at(&perch_map, from).iter().any(|s| {
-                    normal.flight(&perch_map, from, s).is_some_and(|f| {
-                        fly(&perch_map, &normal.env, &f, buf) == Outcome::Land(perch)
-                    })
-                })
-            });
+        let hops = (-2..=0).map(|d| (cell.0 + d * dir, cell.1)).filter(|&c| g.reached(c)).any(|from| {
+            normal.at(&perch_map, from).iter().any(|s| {
+                normal.flight(&perch_map, from, s).is_some_and(|f| fly(&perch_map, &normal.env, &f, buf) == Outcome::Land(perch))
+            })
+        });
         if !hops {
             continue;
         }
         let arcs = &phys.trapeze[k];
         for s in &arcs.strategies {
-            let Some(f) = arcs.flight(&perch_map, perch, s) else {
-                continue;
-            };
+            let Some(f) = arcs.flight(&perch_map, perch, s) else { continue };
             if let Outcome::Land(l) = fly(&perch_map, &arcs.env, &f, buf)
                 && !g.reached(l)
                 && l != perch
@@ -3606,9 +2949,7 @@ fn buddy_rafts(map: &Map, p: &Pool, dir: i32) -> Option<Cell> {
         m.set((c, p.row), RAFT, 0);
     }
     let (from, to) = p.shores(dir);
-    (from.0.min(to.0)..=from.0.max(to.0))
-        .all(|c| m.standable((c, p.row - 1)) || float_hop(map, p, c))
-        .then_some(to)
+    (from.0.min(to.0)..=from.0.max(to.0)).all(|c| m.standable((c, p.row - 1)) || float_hop(map, p, c)).then_some(to)
 }
 
 /// A lone spike floating on a buddy raft pool (`^` on the surface, open above, Han's float
@@ -3618,9 +2959,7 @@ fn float_hop(map: &Map, p: &Pool, c: i32) -> bool {
     (p.c0 + 1..p.c1).contains(&c)
         && t(c, p.row - 1) == Tile::SpikesUp
         && t(c, p.row - 2) == Tile::Empty
-        && [c - 1, c + 1]
-            .iter()
-            .all(|&k| t(k, p.row - 1) != Tile::SpikesUp)
+        && [c - 1, c + 1].iter().all(|&k| t(k, p.row - 1) != Tile::SpikesUp)
 }
 
 /// Can some ideal arc in `arcs` from one of `near` land in `beyond` (on `map`)? The first
@@ -3649,14 +2988,8 @@ fn leak(
         let mut next = Vec::new();
         for &from in &frontier {
             for (k, s) in arcs.at(map, from).iter().enumerate() {
-                let Some(f) = arcs.flight(map, from, s) else {
-                    continue;
-                };
-                if !map.has_springs
-                    && !rows
-                        .iter()
-                        .any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1))
-                {
+                let Some(f) = arcs.flight(map, from, s) else { continue };
+                if !map.has_springs && !rows.iter().any(|(&r, &(c0, c1))| arcs.may_land(k, from, f.x0, r, c0, c1)) {
                     continue;
                 }
                 if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
@@ -3688,44 +3021,24 @@ fn leak(
 /// Problems with crossing `i`: it must be impossible in every other mode (and, for a stain pit,
 /// in every mode without its stains), even with ideal input, from anywhere near its take-off
 /// reached before it; and a mode gate must not open to normal physics after splats.
-fn exclusive(
-    map: &Map,
-    phys: &Physics,
-    g: &Graph,
-    crossings: &[Crossing],
-    i: usize,
-) -> Vec<String> {
+fn exclusive(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: usize) -> Vec<String> {
     let c = &crossings[i];
     let beyond: HashSet<Cell> = c.new.iter().copied().collect();
     let near: Vec<Cell> = g
         .order
         .iter()
         .copied()
-        .filter(|&cell| {
-            g.before(cell, i) && (cell.0 - c.from.0).abs() <= 12 && (cell.1 - c.from.1).abs() <= 8
-        })
+        .filter(|&cell| g.before(cell, i) && (cell.0 - c.from.0).abs() <= 12 && (cell.1 - c.from.1).abs() <= 8)
         .collect();
-    let before = Map {
-        flags: c.flags.clone(),
-        ..map.clone()
-    };
+    let before = Map { flags: c.flags.clone(), ..map.clone() };
     let mut errs = Vec::new();
-    let what = format!(
-        "{} from col {} row {} (to col {} row {})",
-        c.gate.name(),
-        c.from.0,
-        c.from.1,
-        c.to.0,
-        c.to.1
-    );
+    let what = format!("{} from col {} row {} (to col {} row {})", c.gate.name(), c.from.0, c.from.1, c.to.0, c.to.1);
     for mode in MODES {
         if Some(mode) == c.gate.mode() || (mode == Mode::Nervous && !map.has_grease) {
             continue;
         }
-        if let Some((from, to)) = phys
-            .ideal_all(mode)
-            .into_iter()
-            .find_map(|a| leak(&before, a, &near, &beyond, &HashSet::new()))
+        if let Some((from, to)) =
+            phys.ideal_all(mode).into_iter().find_map(|a| leak(&before, a, &near, &beyond, &HashSet::new()))
         {
             errs.push(format!(
                 "{what} is passable with {mode:?} physics too: col {} row {} -> col {} row {}",
@@ -3741,11 +3054,7 @@ fn exclusive(
         let mut tops = HashSet::new();
         for (&d, (o, _)) in &g.deaths {
             let pool = c.gate == Gate::BuddyRaft && before.f(d.0, d.1) & LIQUID != 0;
-            if !pool
-                && o.is_none_or(|o| o < i)
-                && (d.0 - c.from.0).abs() <= 16
-                && (d.1 - c.from.1).abs() <= 10
-            {
+            if !pool && o.is_none_or(|o| o < i) && (d.0 - c.from.0).abs() <= 16 && (d.1 - c.from.1).abs() <= 10 {
                 tops.extend(stained.splat(d));
             }
         }
@@ -3755,10 +3064,8 @@ fn exclusive(
                 if Some(mode) == c.gate.mode() {
                     continue;
                 }
-                if let Some((f, to)) = phys
-                    .ideal_all(mode)
-                    .into_iter()
-                    .find_map(|a| leak(&stained, a, &near, &beyond, &tops))
+                if let Some((f, to)) =
+                    phys.ideal_all(mode).into_iter().find_map(|a| leak(&stained, a, &near, &beyond, &tops))
                 {
                     errs.push(format!(
                         "{what} is passable with {mode:?} physics after splat stains/rafts: col {} row {} -> col {} row {}",
@@ -3780,11 +3087,7 @@ fn exclusive(
             // The fired-up band's: no plunger boost off Han standing anywhere near crosses in
             // another mode (and none catches Nat in mid-air there). The fired-up band alone
             // can't either (above: it's every mode's leak).
-            let cands: Vec<Cell> = near
-                .iter()
-                .copied()
-                .filter(|&n| before.han_allowed(n))
-                .collect();
+            let cands: Vec<Cell> = near.iter().copied().filter(|&n| before.han_allowed(n)).collect();
             for (mode, arcs) in phys.boost_ideal.iter().filter(|(m, _)| *m != Mode::FiredUp) {
                 if let Some((f, to)) = leak(&before, arcs, &cands, &beyond, &HashSet::new()) {
                     errs.push(format!(
@@ -3811,22 +3114,17 @@ const CATCH_DROP: i32 = 4;
 /// over a chasm (flood-filled, so not through walls, from his floor) up to
 /// [`CHASM_CATCH_ROWS`] above it, [`CATCH_DROP`] below and [`CATCH_COLS`] to either side.
 fn han_air(map: &Map, h: Cell) -> Vec<Cell> {
-    let inside = |(x, y): Cell| {
-        (x - h.0).abs() <= CATCH_COLS && (h.1 - CHASM_CATCH_ROWS..=h.1 + CATCH_DROP).contains(&y)
-    };
+    let inside = |(x, y): Cell| (x - h.0).abs() <= CATCH_COLS && (h.1 - CHASM_CATCH_ROWS..=h.1 + CATCH_DROP).contains(&y);
     let mut seen: HashSet<Cell> = HashSet::from([h]);
     let mut todo = vec![h];
     while let Some((x, y)) = todo.pop() {
         for n in [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)] {
-            if inside(n) && !map.is_solid(n.0, n.1) && !map.deadly_tile(n.0, n.1) && seen.insert(n)
-            {
+            if inside(n) && !map.is_solid(n.0, n.1) && !map.deadly_tile(n.0, n.1) && seen.insert(n) {
                 todo.push(n);
             }
         }
     }
-    seen.into_iter()
-        .filter(|&(x, y)| (x, y) == h || map.level.in_chasm(x))
-        .collect()
+    seen.into_iter().filter(|&(x, y)| (x, y) == h || map.level.in_chasm(x)).collect()
 }
 
 /// How far (columns, rows) around a gate's take-off the boost proof looks for Nat and Han.
@@ -3853,22 +3151,10 @@ pub const BOOST_ROWS: i32 = 12;
 ///
 /// Every arc landing past the gate is a leak. (The gate's own mode is left out for weak boosts
 /// and jumps: there the band is playing.)
-fn boost_leak(
-    map: &Map,
-    phys: &Physics,
-    g: &Graph,
-    i: usize,
-    c: &Crossing,
-    beyond: &HashSet<Cell>,
-) -> Option<String> {
+fn boost_leak(map: &Map, phys: &Physics, g: &Graph, i: usize, c: &Crossing, beyond: &HashSet<Cell>) -> Option<String> {
     let at = c.from;
     let window = |(x, y): Cell| (x - at.0).abs() <= BOOST_COLS && (y - at.1).abs() <= BOOST_ROWS;
-    let reached: Vec<Cell> = g
-        .order
-        .iter()
-        .copied()
-        .filter(|&cell| g.before(cell, i) && window(cell))
-        .collect();
+    let reached: Vec<Cell> = g.order.iter().copied().filter(|&cell| g.before(cell, i) && window(cell)).collect();
     let mut unreached: HashSet<Cell> = HashSet::new();
     for y in at.1 - BOOST_ROWS..=at.1 + BOOST_ROWS {
         for x in at.0 - BOOST_COLS..=at.0 + BOOST_COLS {
@@ -3883,16 +3169,10 @@ fn boost_leak(
     let near_side = |(x, _): Cell| dir == 0 || (x - c.to.0) * dir < 0;
     // (A mega wall's zone is a full boost's while Giant Steps plays, a cling shaft's with the
     // grip, a trapeze's in the waltz.)
-    let zone = |(x, y): Cell, m: Mode| {
-        map.weak_boost((x, y), m.granted()) || map.weak_boost((x, y - 1), m.granted())
-    };
-    let weak_at =
-        |cell: Cell, m: Mode| zone(cell, m) && map.standable(cell) && !map.han_keeps_out(cell);
+    let zone = |(x, y): Cell, m: Mode| map.weak_boost((x, y), m.granted()) || map.weak_boost((x, y - 1), m.granted());
+    let weak_at = |cell: Cell, m: Mode| zone(cell, m) && map.standable(cell) && !map.han_keeps_out(cell);
     let full_at = |cell: Cell, m: Mode| {
-        !zone(cell, m)
-            && !map.is_solid(cell.0, cell.1)
-            && !map.deadly_tile(cell.0, cell.1)
-            && !map.han_keeps_out(cell)
+        !zone(cell, m) && !map.is_solid(cell.0, cell.1) && !map.deadly_tile(cell.0, cell.1) && !map.han_keeps_out(cell)
     };
     // Landing targets (per row, the columns), for the envelopes.
     let mut rows: HashMap<i32, Vec<i32>> = HashMap::new();
@@ -3911,14 +3191,8 @@ fn boost_leak(
     // One launch: a landing past the gate, or (into `new`) the unreached cells it gets Nat to.
     let mut fly_from = |arcs: &Arcs, from: Cell, new: &mut Vec<Cell>, m: Mode| -> Option<Cell> {
         for (k, s) in arcs.at(map, from).iter().enumerate() {
-            let Some(f) = arcs.flight(map, from, s) else {
-                continue;
-            };
-            if !map.has_springs
-                && !rows
-                    .iter()
-                    .any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols))
-            {
+            let Some(f) = arcs.flight(map, from, s) else { continue };
+            if !map.has_springs && !rows.iter().any(|(r, cols)| arcs.may_land_on(k, from, f.x0, *r, cols)) {
                 continue;
             }
             if let Outcome::Land(l) = fly(map, &arcs.env, &f, &mut buf) {
@@ -3930,21 +3204,11 @@ fn boost_leak(
                 }
             }
             // Passing through a zone cell: Han may be standing there to catch him.
-            new.extend(
-                buf.iter()
-                    .copied()
-                    .filter(|&t| unreached.contains(&t) && weak_at(t, m)),
-            );
+            new.extend(buf.iter().copied().filter(|&t| unreached.contains(&t) && weak_at(t, m)));
         }
         None
     };
-    let name = |m: Mode| {
-        if m == Mode::Normal {
-            "normal, waltz or nervous".to_string()
-        } else {
-            format!("{m:?}")
-        }
-    };
+    let name = |m: Mode| if m == Mode::Normal { "normal, waltz or nervous".to_string() } else { format!("{m:?}") };
     let own = |m: Mode| Some(m) == c.gate.band();
     // Han's floors to start with, and the air around each where he may catch Nat: where Nat
     // stands before the gate, and the unreached ledges in a zone this side of it whose air Nat
@@ -3958,8 +3222,7 @@ fn boost_leak(
             nat_air.insert((x, y - k));
         }
     }
-    let mut first_floors: Vec<(Cell, Vec<Cell>)> =
-        reached.iter().map(|&h| (h, han_air(map, h))).collect();
+    let mut first_floors: Vec<(Cell, Vec<Cell>)> = reached.iter().map(|&h| (h, han_air(map, h))).collect();
     for &u in &unreached {
         if near_side(u) && map.in_band_zone(u) {
             let air = han_air(map, u);
@@ -3974,17 +3237,8 @@ fn boost_leak(
         if c.gate.zoned_han() && own(mode) {
             continue;
         }
-        let weak = phys
-            .weak_ideal
-            .iter()
-            .find(|(m, _)| *m == mode)
-            .map(|(_, a)| a)
-            .filter(|_| !own(mode));
-        let alike = if mode == Mode::Normal {
-            vec![Mode::Normal, Mode::Waltz, Mode::Nervous]
-        } else {
-            vec![mode]
-        };
+        let weak = phys.weak_ideal.iter().find(|(m, _)| *m == mode).map(|(_, a)| a).filter(|_| !own(mode));
+        let alike = if mode == Mode::Normal { vec![Mode::Normal, Mode::Waltz, Mode::Nervous] } else { vec![mode] };
         let ground: Vec<&Arcs> = alike
             .into_iter()
             .filter(|&m| !own(m) && (m != Mode::Nervous || map.has_grease))
@@ -4002,23 +3256,13 @@ fn boost_leak(
             for (h, air) in std::mem::take(&mut floors) {
                 for a in air {
                     // His head holds Nat in mid-air only while the band's fired up.
-                    if (mode != Mode::FiredUp && a != h)
-                        || !full_at(a, mode)
-                        || near_side(a) != near_side(h)
-                        || !full_tried.insert(a)
-                    {
+                    if (mode != Mode::FiredUp && a != h) || !full_at(a, mode) || near_side(a) != near_side(h) || !full_tried.insert(a) {
                         continue;
                     }
                     if let Some(l) = fly_from(full, a, &mut new, mode) {
                         return Some(format!(
                             "is passable with a full plunger boost ({}) off Han at col {} row {} (from his floor at col {} row {}) -> col {} row {}: mark it (`gate:`) so his boost is weak there",
-                            name(mode),
-                            a.0,
-                            a.1,
-                            h.0,
-                            h.1,
-                            l.0,
-                            l.1
+                            name(mode), a.0, a.1, h.0, h.1, l.0, l.1
                         ));
                     }
                 }
@@ -4028,25 +3272,15 @@ fn boost_leak(
                     queue.push((l, true));
                 }
             }
-            let Some((cell, fresh)) = queue.pop() else {
-                break;
-            };
+            let Some((cell, fresh)) = queue.pop() else { break };
             if let Some(weak) = weak
                 && weak_at(cell, mode)
                 && let Some(l) = fly_from(weak, cell, &mut new, mode)
             {
-                let how = if fresh {
-                    " (got to by a chain of boosts)"
-                } else {
-                    ""
-                };
+                let how = if fresh { " (got to by a chain of boosts)" } else { "" };
                 return Some(format!(
                     "is passable with a weak plunger boost ({}) off Han at col {} row {}{how} -> col {} row {}: his band-zone boost must not open it",
-                    name(mode),
-                    cell.0,
-                    cell.1,
-                    l.0,
-                    l.1
+                    name(mode), cell.0, cell.1, l.0, l.1
                 ));
             }
             if fresh {
@@ -4056,11 +3290,7 @@ fn boost_leak(
                     if let Some(l) = fly_from(arcs, cell, &mut new, mode) {
                         return Some(format!(
                             "is passable with a chain of plunger boosts ({}) off Han to col {} row {}, then a jump -> col {} row {}",
-                            name(mode),
-                            cell.0,
-                            cell.1,
-                            l.0,
-                            l.1
+                            name(mode), cell.0, cell.1, l.0, l.1
                         ));
                     }
                 }
@@ -4069,9 +3299,7 @@ fn boost_leak(
                     if beyond.contains(&n) {
                         return Some(format!(
                             "is passable with a chain of plunger boosts ({}) off Han to col {} row {}, then a walk",
-                            name(mode),
-                            cell.0,
-                            cell.1
+                            name(mode), cell.0, cell.1
                         ));
                     }
                     if unreached.contains(&n) {
@@ -4088,51 +3316,28 @@ fn boost_leak(
 /// play), each needing a respawn and a walk back from the nearest respawn point before it, must
 /// take longer than a raft floats ([`RAFT_LIFE_FLOOR`]: every raft has to still be there for
 /// the last walk across).
-fn nat_rafts(
-    map: &Map,
-    phys: &Physics,
-    g: &Graph,
-    crossings: &[Crossing],
-    i: usize,
-) -> Vec<String> {
+fn nat_rafts(map: &Map, phys: &Physics, g: &Graph, crossings: &[Crossing], i: usize) -> Vec<String> {
     let c = &crossings[i];
-    let Some(pool) = map
-        .pools
-        .iter()
-        .find(|p| p.shores(1).0 == c.from || p.shores(-1).0 == c.from)
-    else {
-        return vec![format!(
-            "buddy raft pool from col {} row {}: no pool there",
-            c.from.0, c.from.1
-        )];
+    let Some(pool) = map.pools.iter().find(|p| p.shores(1).0 == c.from || p.shores(-1).0 == c.from) else {
+        return vec![format!("buddy raft pool from col {} row {}: no pool there", c.from.0, c.from.1)];
     };
     let start = (map.level.start.0 as i32, map.level.start.1 as i32);
     let respawns: Vec<Cell> = std::iter::once(start)
-        .chain(
-            map.level
-                .checkpoints()
-                .map(|t| (t.col as i32, t.row as i32)),
-        )
+        .chain(map.level.checkpoints().map(|t| (t.col as i32, t.row as i32)))
         .filter(|&r| g.before(r, i))
         .collect();
-    let walk = respawns
-        .iter()
-        .filter_map(|&r| distances(g, r).get(&c.from).copied())
-        .min();
+    let walk = respawns.iter().filter_map(|&r| distances(g, r).get(&c.from).copied()).min();
     let Some(walk) = walk else { return Vec::new() };
     let mut errs = Vec::new();
     for mode in [Mode::Normal, Mode::FiredUp] {
         // Short hops under the ceiling spikes: the human jumps have them (the ideal set is
         // full-height jumps only); the walk back is timed at full speed.
         let arcs = phys.human(mode);
-        let trip =
-            crate::game::tuning::RESPAWN_DELAY + walk as f32 * TILE / Env::new(mode, true).vx;
+        let trip = crate::game::tuning::RESPAWN_DELAY + walk as f32 * TILE / Env::new(mode, true).vx;
         let contains = |d: Cell| pool.contains(d);
         let known = |cell: Cell| g.before(cell, i);
         let past = |cell: Cell| c.new.contains(&cell);
-        if let Some((rafts, _, _)) =
-            cross_dying(map, arcs, g, &known, &past, &contains, MAX_NAT_RAFTS)
-        {
+        if let Some((rafts, _, _)) = cross_dying(map, arcs, g, &known, &past, &contains, MAX_NAT_RAFTS) {
             let k = rafts.len() as f32;
             if k * trip < RAFT_LIFE_FLOOR {
                 errs.push(format!(
@@ -4184,8 +3389,7 @@ fn grease_runs(map: &Map) -> Vec<String> {
     for r in 0..map.h {
         let mut c = 0;
         while c < map.w {
-            let slick =
-                |c: i32| map.greasy((c, r)) && !map.is_solid(c, r) && !map.deadly_tile(c, r);
+            let slick = |c: i32| map.greasy((c, r)) && !map.is_solid(c, r) && !map.deadly_tile(c, r);
             if slick(c) {
                 let c0 = c;
                 while slick(c + 1) {
@@ -4218,8 +3422,7 @@ pub struct Lesson {
 impl Lesson {
     /// The hint is heard no later than the mechanic and not long before it.
     pub fn taught(&self) -> bool {
-        self.hint
-            .is_some_and(|(_, d)| d <= self.dist && self.dist - d <= HINT_LEAD)
+        self.hint.is_some_and(|(_, d)| d <= self.dist && self.dist - d <= HINT_LEAD)
     }
 }
 
@@ -4253,18 +3456,12 @@ pub struct Options {
 
 fn line_errors(level: &Level) -> Vec<String> {
     let mut errs = Vec::new();
-    let cps: Vec<Cell> = level
-        .checkpoints()
-        .map(|t| (t.col as i32, t.row as i32))
-        .collect();
+    let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
     let lines = level.checkpoint_lines();
     for (k, l) in lines.iter().enumerate() {
         // (Nat alone: nobody to say it.)
         if l.is_none() && !level.solo {
-            errs.push(format!(
-                "checkpoint at col {} row {} has no line (say@)",
-                cps[k].0, cps[k].1
-            ));
+            errs.push(format!("checkpoint at col {} row {} has no line (say@)", cps[k].0, cps[k].1));
         }
     }
     let used = level.say_at.len() + level.says.len();
@@ -4304,17 +3501,12 @@ fn line_errors(level: &Level) -> Vec<String> {
         .chain(level.secret.iter().map(|s| &s.text));
     for line in barks {
         if !super::is_bark(line) {
-            errs.push(format!(
-                "Han barks at most {MAX_BARK_WORDS} words: {line:?}"
-            ));
+            errs.push(format!("Han barks at most {MAX_BARK_WORDS} words: {line:?}"));
         }
     }
     for h in &level.hints {
         if h.topics.is_empty() {
-            errs.push(format!(
-                "hint@{},{} names no topic: its lesson card teaches it, not Han",
-                h.col, h.row
-            ));
+            errs.push(format!("hint@{},{} names no topic: its lesson card teaches it, not Han", h.col, h.row));
         }
     }
     errs
@@ -4342,11 +3534,7 @@ pub fn check_room(level: &Level, phys: &Physics) -> Report {
 /// and tests.
 pub fn reachable(level: &Level, cell: Cell) -> bool {
     let mut map = Map::new(level);
-    let (g, _) = reach(
-        &mut map,
-        &Physics::default(),
-        (level.start.0 as i32, level.start.1 as i32),
-    );
+    let (g, _) = reach(&mut map, &Physics::default(), (level.start.0 as i32, level.start.1 as i32));
     g.reached(cell)
 }
 
@@ -4356,13 +3544,7 @@ pub fn reachable_plain(level: &Level, cell: Cell) -> bool {
     let map = Map::new(level);
     let phys = Physics::default();
     let mut g = Graph::new(map.w, map.h);
-    explore(
-        &map,
-        phys.human(Mode::Normal),
-        vec![(level.start.0 as i32, level.start.1 as i32)],
-        None,
-        &mut g,
-    );
+    explore(&map, phys.human(Mode::Normal), vec![(level.start.0 as i32, level.start.1 as i32)], None, &mut g);
     g.reached(cell)
 }
 
@@ -4370,10 +3552,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let mut errs = line_errors(level);
     let mut map = Map::new(level);
     map.derive_marks = !check_deaths;
-    let cps: Vec<Cell> = level
-        .checkpoints()
-        .map(|t| (t.col as i32, t.row as i32))
-        .collect();
+    let cps: Vec<Cell> = level.checkpoints().map(|t| (t.col as i32, t.row as i32)).collect();
     // Nat alone may play a short level without a checkpoint.
     if !(if level.solo { 0..=3 } else { 1..=3 }).contains(&cps.len()) {
         errs.push(format!("{} checkpoints (want 1..=3)", cps.len()));
@@ -4388,38 +3567,24 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
 
     let start = (level.start.0 as i32, level.start.1 as i32);
     let goal = (level.goal.0 as i32, level.goal.1 as i32);
-    for (what, cell) in [("start P", start), ("goal G", goal)]
-        .into_iter()
-        .chain(cps.iter().map(|&c| ("checkpoint", c)))
+    for (what, cell) in [("start P", start), ("goal G", goal)].into_iter().chain(cps.iter().map(|&c| ("checkpoint", c)))
     {
         if !map.standable(cell) {
-            errs.push(format!(
-                "{what} at col {} row {} is not standing on safe ground",
-                cell.0, cell.1
-            ));
+            errs.push(format!("{what} at col {} row {} is not standing on safe ground", cell.0, cell.1));
         }
         if map.f(cell.0, cell.1) & SPRAY != 0 {
-            errs.push(format!(
-                "{what} at col {} row {} is in a spray jet",
-                cell.0, cell.1
-            ));
+            errs.push(format!("{what} at col {} row {} is in a spray jet", cell.0, cell.1));
         }
     }
     if map.is_solid(goal.0, goal.1 - 1) {
-        errs.push(format!(
-            "goal flag at col {} row {} has no room (2 tiles tall)",
-            goal.0, goal.1
-        ));
+        errs.push(format!("goal flag at col {} row {} has no room (2 tiles tall)", goal.0, goal.1));
     }
     // Safe start: nothing deadly within 3 tiles.
     for dc in -3..=3 {
         for dr in -3..=3 {
             let c = (start.0 + dc, start.1 + dr);
             if map.f(c.0, c.1) & (DEADLY_TILE | SPRAY) != 0 {
-                errs.push(format!(
-                    "hazard at col {} row {} next to the start",
-                    c.0, c.1
-                ));
+                errs.push(format!("hazard at col {} row {} next to the start", c.0, c.1));
             }
         }
     }
@@ -4429,40 +3594,25 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     }
     errs.extend(grease_runs(&map));
     for p in &level.platforms {
-        let (c0, c1) = (
-            p.col as f32 + p.dx.min(0.0),
-            (p.col + p.width - 1) as f32 + p.dx.max(0.0),
-        );
+        let (c0, c1) = (p.col as f32 + p.dx.min(0.0), (p.col + p.width - 1) as f32 + p.dx.max(0.0));
         let (r0, r1) = (p.row as f32 - p.dy.max(0.0), p.row as f32 - p.dy.min(0.0));
         if c0 < 0.0 || c1 > (level.width - 1) as f32 || r0 < 0.0 || r1 > (level.height - 1) as f32 {
-            errs.push(format!(
-                "platform at col {} row {} travels out of bounds",
-                p.col, p.row
-            ));
+            errs.push(format!("platform at col {} row {} travels out of bounds", p.col, p.row));
         }
     }
     if !errs.is_empty() {
         // Structural problems: reachability would just add noise.
-        return Report {
-            errs,
-            ..Report::default()
-        };
+        return Report { errs, ..Report::default() };
     }
 
     let base = map.clone();
     let (g, crossings) = reach(&mut map, phys, start);
     if !g.reached(goal) {
-        errs.push(format!(
-            "goal at col {} row {} is unreachable from the start",
-            goal.0, goal.1
-        ));
+        errs.push(format!("goal at col {} row {} is unreachable from the start", goal.0, goal.1));
     }
     for &c in &cps {
         if !g.reached(c) {
-            errs.push(format!(
-                "checkpoint at col {} row {} is unreachable",
-                c.0, c.1
-            ));
+            errs.push(format!("checkpoint at col {} row {} is unreachable", c.0, c.1));
         }
     }
     let lost: Vec<String> = level
@@ -4472,22 +3622,12 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         .map(|t| format!("(col {} row {})", t.col, t.row))
         .collect();
     if lost.len() * 10 > n {
-        errs.push(format!(
-            "{} of {n} nuggets unreachable: {}",
-            lost.len(),
-            lost.join(" ")
-        ));
+        errs.push(format!("{} of {n} nuggets unreachable: {}", lost.len(), lost.join(" ")));
     }
     for (k, pit) in map.pits.iter().enumerate() {
         let near = g.deaths.keys().any(|d| pit.contains(*d));
-        let crossed = crossings
-            .iter()
-            .any(|c| c.gate == Gate::StainPit && c.stains.iter().all(|s| pit.contains(*s)));
-        if near
-            && !crossed
-            && !g.reached((pit.c1 + 1, pit.row))
-            && !g.reached((pit.c0 - 1, pit.row))
-        {
+        let crossed = crossings.iter().any(|c| c.gate == Gate::StainPit && c.stains.iter().all(|s| pit.contains(*s)));
+        if near && !crossed && !g.reached((pit.c1 + 1, pit.row)) && !g.reached((pit.c0 - 1, pit.row)) {
             errs.push(format!(
                 "stain pit {k} at col {}..={} row {} can't be crossed with ≤{MAX_PIT_DEATHS} splats",
                 pit.c0, pit.c1, pit.row
@@ -4501,23 +3641,13 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     if map.derive_marks {
         marks.extend(map.derived.iter().copied());
         marks.extend(
-            crossings
-                .iter()
-                .filter(|c| c.gate.needs_han() && !c.gate.zoned_han())
-                .map(|c| mark_of(c.gate, c.from, c.to)),
+            crossings.iter().filter(|c| c.gate.needs_han() && !c.gate.zoned_han()).map(|c| mark_of(c.gate, c.from, c.to)),
         );
     }
     // (Nat alone: the marks only tame Han's boost, and there's no Han.)
-    for c in crossings
-        .iter()
-        .filter(|_| !map.derive_marks && !level.solo)
-    {
+    for c in crossings.iter().filter(|_| !map.derive_marks && !level.solo) {
         let t = c.gate.topic();
-        if !level
-            .gates
-            .iter()
-            .any(|m| m.topic == t && m.contains(c.from) && m.contains(c.to))
-        {
+        if !level.gates.iter().any(|m| m.topic == t && m.contains(c.from) && m.contains(c.to)) {
             errs.push(format!(
                 "{} from col {} row {} to col {} row {} isn't in a `gate: {} <c0>,<r0> <c1>,<r1>` mark",
                 c.gate.name(),
@@ -4530,10 +3660,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         }
     }
     for m in level.gates.iter().filter(|_| !map.derive_marks) {
-        if !crossings
-            .iter()
-            .any(|c| c.gate.topic() == m.topic && m.contains(c.from))
-        {
+        if !crossings.iter().any(|c| c.gate.topic() == m.topic && m.contains(c.from)) {
             errs.push(format!(
                 "`gate: {} {},{} {},{}` holds no {} crossing",
                 m.topic.word(),
@@ -4550,14 +3677,8 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     if let Some(s) = &level.secret {
         let r2 = (super::SECRET_RADIUS / TILE).powi(2);
         let (sc, sr) = (s.col as i32, s.row as i32);
-        if !g
-            .order
-            .iter()
-            .any(|c| (((c.0 - sc).pow(2) + (c.1 - sr).pow(2)) as f32) <= r2)
-        {
-            errs.push(format!(
-                "secret@{sc},{sr}: Nat never gets close enough to find it"
-            ));
+        if !g.order.iter().any(|c| (((c.0 - sc).pow(2) + (c.1 - sr).pow(2)) as f32) <= r2) {
+            errs.push(format!("secret@{sc},{sr}: Nat never gets close enough to find it"));
         }
     }
 
@@ -4609,16 +3730,8 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             c.from.1,
             c.to.0,
             c.to.1,
-            if on_way {
-                "on the way to the goal"
-            } else {
-                "detour"
-            },
-            if splats > 0 {
-                format!(", {splats} splats")
-            } else {
-                String::new()
-            }
+            if on_way { "on the way to the goal" } else { "detour" },
+            if splats > 0 { format!(", {splats} splats") } else { String::new() }
         );
         gates.push((c.gate, on_way, nuggets, splats));
     }
@@ -4633,10 +3746,8 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let from_start = distances(&g, start);
     let mut segments = Vec::new();
     if errs.is_empty() {
-        let mut order: Vec<(u32, Cell)> = cps
-            .iter()
-            .map(|&c| (from_start.get(&c).copied().unwrap_or(u32::MAX), c))
-            .collect();
+        let mut order: Vec<(u32, Cell)> =
+            cps.iter().map(|&c| (from_start.get(&c).copied().unwrap_or(u32::MAX), c)).collect();
         order.sort();
         let mut chain = vec![start];
         chain.extend(order.iter().map(|&(_, c)| c));
@@ -4648,17 +3759,12 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
                     "segment {:?} -> {:?} costs {d} tiles (> {MAX_SEGMENT}): add a checkpoint",
                     w[0], w[1]
                 )),
-                None => errs.push(format!(
-                    "can't get from {:?} to {:?} (respawn chain)",
-                    w[0], w[1]
-                )),
+                None => errs.push(format!("can't get from {:?} to {:?} (respawn chain)", w[0], w[1])),
             }
         }
         // Where you die on purpose, the walk back is short.
-        let respawns: Vec<HashMap<Cell, u32>> = std::iter::once(start)
-            .chain(cps.iter().copied())
-            .map(|p| distances(&g, p))
-            .collect();
+        let respawns: Vec<HashMap<Cell, u32>> =
+            std::iter::once(start).chain(cps.iter().copied()).map(|p| distances(&g, p)).collect();
         for c in &crossings {
             if !matches!(c.gate, Gate::StainPit | Gate::GreaseChute) {
                 continue;
@@ -4677,9 +3783,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
 
     let lessons = lessons(level, &base, &map, phys, &g, &crossings, &from_start);
     for l in &lessons {
-        if let Some((h, hd)) = l.hint
-            && !l.taught()
-        {
+        if let Some((h, hd)) = l.hint && !l.taught() {
             errs.push(format!(
                 "hint@{},{} for {} is heard at path cost {hd}, but the {} is at col {} row {} (cost {}): it must come before, by at most {HINT_LEAD}",
                 h.0,
@@ -4695,12 +3799,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     for h in &level.hints {
         for t in &h.topics {
             if !lessons.iter().any(|l| l.topic == *t) {
-                errs.push(format!(
-                    "hint@{},{} teaches {} but the level has none",
-                    h.col,
-                    h.row,
-                    t.word()
-                ));
+                errs.push(format!("hint@{},{} teaches {} but the level has none", h.col, h.row, t.word()));
             }
         }
     }
@@ -4717,16 +3816,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             dump(level, &map, &g, &crossings)
         )
     });
-    Report {
-        errs,
-        gates,
-        gated_goal: !to_goal.is_empty(),
-        deaths,
-        lessons,
-        segments,
-        dump,
-        marks,
-    }
+    Report { errs, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
 }
 
 /// Every mechanic's first appearance (by path cost from the start), with its best hint.
@@ -4770,9 +3860,7 @@ fn lessons(
             _ => continue,
         };
         for &cell in &g.order {
-            if (cell.0 - t.col as i32).abs() <= THING_NEAR
-                && (cell.1 - t.row as i32).abs() <= THING_NEAR
-            {
+            if (cell.0 - t.col as i32).abs() <= THING_NEAR && (cell.1 - t.row as i32).abs() <= THING_NEAR {
                 see(topic, cell);
             }
         }
@@ -4788,9 +3876,7 @@ fn lessons(
                 Tile::BeltLeft | Tile::BeltRight => near.push((Topic::Belt, (c, r))),
                 Tile::Fan => near.push((Topic::Fan, (c, r))),
                 Tile::FanDown | Tile::FanRight | Tile::FanLeft => near.push((Topic::Wind, (c, r))),
-                Tile::CushionLeft | Tile::CushionRight | Tile::CushionDown => {
-                    near.push((Topic::Fling, (c, r)))
-                }
+                Tile::CushionLeft | Tile::CushionRight | Tile::CushionDown => near.push((Topic::Fling, (c, r))),
                 Tile::BumperLeft | Tile::BumperRight => near.push((Topic::Bumper, (c, r))),
                 t if t.is_beat() => near.push((Topic::Beat, (c, r))),
                 _ => {}
@@ -4815,19 +3901,14 @@ fn lessons(
         let start = (level.start.0 as i32, level.start.1 as i32);
         let mut a = Graph::new(base.w, base.h);
         explore(base, &phys.no_toot, vec![start], None, &mut a);
-        let mut cells: Vec<(u32, Cell)> = a
-            .order
-            .iter()
-            .filter_map(|&c| dist.get(&c).map(|&d| (d, c)))
-            .collect();
+        let mut cells: Vec<(u32, Cell)> =
+            a.order.iter().filter_map(|&c| dist.get(&c).map(|&d| (d, c))).collect();
         cells.sort();
         let arcs = phys.human(Mode::Normal);
         let mut buf = Vec::new();
         'cells: for (_, cell) in cells {
             for s in arcs.strategies.iter().filter(|s| s.toot.is_some()) {
-                let Some(x0) = take_off(base, &arcs.env, cell, s) else {
-                    continue;
-                };
+                let Some(x0) = take_off(base, &arcs.env, cell, s) else { continue };
                 if let Outcome::Land(l) = simulate(base, &arcs.env, cell, s, x0, &mut buf)
                     && !a.reached(l)
                 {
@@ -4863,12 +3944,7 @@ fn lessons(
                 .max_by_key(|h| h.1)
                 .or_else(|| heard.iter().min_by_key(|h| h.1))
                 .copied();
-            Lesson {
-                topic,
-                at,
-                dist: d,
-                hint,
-            }
+            Lesson { topic, at, dist: d, hint }
         })
         .collect();
     out.sort_by_key(|l| (l.dist, l.topic));
@@ -4942,15 +4018,10 @@ fn dump(level: &Level, map: &Map, g: &Graph, crossings: &[Crossing]) -> String {
         }
     }
     rows[level.start.1][level.start.0] = 'P';
-    rows[level.goal.1][level.goal.0] = if g.reached((level.goal.0 as i32, level.goal.1 as i32)) {
-        'G'
-    } else {
-        '!'
-    };
+    rows[level.goal.1][level.goal.0] =
+        if g.reached((level.goal.0 as i32, level.goal.1 as i32)) { 'G' } else { '!' };
     let mut s = String::new();
-    let ruler: String = (0..level.width)
-        .map(|c| if c % 10 == 0 { '|' } else { ' ' })
-        .collect();
+    let ruler: String = (0..level.width).map(|c| if c % 10 == 0 { '|' } else { ' ' }).collect();
     s += &format!("    {ruler}\n");
     for (r, row) in rows.iter().enumerate() {
         s += &format!("{r:>3} {}\n", row.iter().collect::<String>());

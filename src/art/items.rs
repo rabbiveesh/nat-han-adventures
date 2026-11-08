@@ -103,7 +103,14 @@ pub fn flip_y(p: &Pixels) -> Pixels {
 }
 
 const ICON_NUGGET: &[&str] = &[
-    "..kkk...", ".kywyk..", "kyyyyYk.", "kyyyYYok", "kYyYYook", ".kYYook.", "..kkkk..", "........",
+    "..kkk...",
+    ".kywyk..",
+    "kyyyyYk.",
+    "kyyyYYok",
+    "kYyYYook",
+    ".kYYook.",
+    "..kkkk..",
+    "........",
 ];
 
 pub fn icon_nugget() -> Vec<Pixels> {
@@ -112,27 +119,39 @@ pub fn icon_nugget() -> Vec<Pixels> {
 
 /// The band counters' icons (the HUD strip): the horn (toots), a note (hops in threes), a
 /// sweat drop (deaths). The nugget counter uses [`icon_nugget`].
-const HORN_PAL: Palette = &[
-    ('k', OUTLINE),
-    ('g', hex(0xf0be3c)),
-    ('G', hex(0xaa6e14)),
-    ('c', hex(0xfff0cc)),
-];
+const HORN_PAL: Palette =
+    &[('k', OUTLINE), ('g', hex(0xf0be3c)), ('G', hex(0xaa6e14)), ('c', hex(0xfff0cc))];
 const ICON_HORN: &[&str] = &[
-    "........", ".......k", "..c.c.kg", "kkkkkkgg", "gggggGGg", "kkkkkkgg", ".......k", "........",
+    "........",
+    ".......k",
+    "..c.c.kg",
+    "kkkkkkgg",
+    "gggggGGg",
+    "kkkkkkgg",
+    ".......k",
+    "........",
 ];
 const ICON_NOTE_PAL: Palette = &[('k', OUTLINE), ('c', hex(0xfff0cc))];
 const ICON_NOTE: &[&str] = &[
-    "...kk...", "..kcck..", "..kckck.", "..kc.kck", ".kkc..k.", "kcccck..", "kcccck..", ".kkkk...",
+    "...kk...",
+    "..kcck..",
+    "..kckck.",
+    "..kc.kck",
+    ".kkc..k.",
+    "kcccck..",
+    "kcccck..",
+    ".kkkk...",
 ];
-const SWEAT_PAL: Palette = &[
-    ('k', OUTLINE),
-    ('b', hex(0x9fd8ff)),
-    ('B', hex(0x5a9ad0)),
-    ('w', hex(0xffffff)),
-];
+const SWEAT_PAL: Palette = &[('k', OUTLINE), ('b', hex(0x9fd8ff)), ('B', hex(0x5a9ad0)), ('w', hex(0xffffff))];
 const ICON_SWEAT: &[&str] = &[
-    "...k....", "..kbk...", "..kbk...", ".kbbbk..", "kbwbbBk.", "kbbbbBk.", ".kBBBk..", "..kkk...",
+    "...k....",
+    "..kbk...",
+    "..kbk...",
+    ".kbbbk..",
+    "kbwbbBk.",
+    "kbbbbBk.",
+    ".kBBBk..",
+    "..kkk...",
 ];
 
 pub fn icon_horn() -> Vec<Pixels> {
@@ -147,14 +166,16 @@ pub fn icon_sweat() -> Vec<Pixels> {
     vec![grid(ICON_SWEAT, SWEAT_PAL)]
 }
 
-const LOCK_PAL: Palette = &[
-    ('k', hex(0x1b1420)),
-    ('g', hex(0xc0c4d0)),
-    ('G', hex(0x707488)),
-    ('w', hex(0xffffff)),
-];
+const LOCK_PAL: Palette = &[('k', hex(0x1b1420)), ('g', hex(0xc0c4d0)), ('G', hex(0x707488)), ('w', hex(0xffffff))];
 const ICON_LOCK: &[&str] = &[
-    "..kkkk..", ".kG..Gk.", ".kG..Gk.", "kkkkkkkk", "kwgggggk", "kgggkggk", "kGGGkGGk", "kkkkkkkk",
+    "..kkkk..",
+    ".kG..Gk.",
+    ".kG..Gk.",
+    "kkkkkkkk",
+    "kwgggggk",
+    "kgggkggk",
+    "kGGGkGGk",
+    "kkkkkkkk",
 ];
 
 pub fn icon_lock() -> Vec<Pixels> {
@@ -189,25 +210,10 @@ const TP_TOP: &[&str] = &[
     "kgGk...kkkk.kw..",
 ];
 /// Untouched: a short tail of paper tucked against the roll.
-const TP_OFF: &[&str] = &[
-    "kgGk.........kk.",
-    "kgGk............",
-    "kggGGk..........",
-    "kkkkkk..........",
-];
+const TP_OFF: &[&str] = &["kgGk.........kk.", "kgGk............", "kggGGk..........", "kkkkkk.........."];
 /// Touched: the paper has unrolled all the way to the floor and flutters.
-const TP_ON_A: &[&str] = &[
-    "kgGk........kw..",
-    "kgGk.......kw...",
-    "kggGGk.....kw...",
-    "kkkkkk...kwwwWk.",
-];
-const TP_ON_B: &[&str] = &[
-    "kgGk.........kw.",
-    "kgGk.........kw.",
-    "kggGGk......kw..",
-    "kkkkkk...kwwwWk.",
-];
+const TP_ON_A: &[&str] = &["kgGk........kw..", "kgGk.......kw...", "kggGGk.....kw...", "kkkkkk...kwwwWk."];
+const TP_ON_B: &[&str] = &["kgGk.........kw.", "kgGk.........kw.", "kggGGk......kw..", "kkkkkk...kwwwWk."];
 
 fn tp(bottom: &[&'static str], sparkle: Option<(i32, i32)>) -> Pixels {
     let mut rows: Vec<&str> = TP_TOP.to_vec();
@@ -275,10 +281,7 @@ const FLAG: &[&str] = &[
 
 pub fn goal_flag() -> Vec<Pixels> {
     let mut rows: Vec<&str> = GOAL_CAP.to_vec();
-    rows.extend(std::iter::repeat_n(
-        GOAL_HANDLE,
-        32 - GOAL_CAP.len() - GOAL_CUP.len(),
-    ));
+    rows.extend(std::iter::repeat_n(GOAL_HANDLE, 32 - GOAL_CAP.len() - GOAL_CUP.len()));
     rows.extend_from_slice(GOAL_CUP);
     let base = grid(&rows, GOAL_PAL);
     let flag = grid(FLAG, GOAL_PAL);
@@ -363,7 +366,14 @@ const BRUSH_PAL: Palette = &[
 
 /// One upturned brush, 8 wide; two per tile.
 const BRUSH: &[&str] = &[
-    "w..w..w.", "Wk.W.kW.", ".WkWkW..", ".kWwWk..", "..kwk...", ".kbbbk..", ".kbBBk..", "kkkkkkk.",
+    "w..w..w.",
+    "Wk.W.kW.",
+    ".WkWkW..",
+    ".kWwWk..",
+    "..kwk...",
+    ".kbbbk..",
+    ".kbBBk..",
+    "kkkkkkk.",
 ];
 
 pub fn spikes_up() -> Vec<Pixels> {
@@ -388,11 +398,23 @@ const FLY_PAL: Palette = &[
 
 const FLY: [&[&str]; 2] = [
     &[
-        ".kk.kk..", "kcckcck.", ".kckck..", ".kkkkkkk", "kgGggkrr", "kGgggkrr", ".kkkkkk.",
+        ".kk.kk..",
+        "kcckcck.",
+        ".kckck..",
+        ".kkkkkkk",
+        "kgGggkrr",
+        "kGgggkrr",
+        ".kkkkkk.",
         "..k.k...",
     ],
     &[
-        "........", "........", "kkkkkk..", "kccccckk", "kgGggkrr", "kGgggkrr", ".kkkkkk.",
+        "........",
+        "........",
+        "kkkkkk..",
+        "kccccckk",
+        "kgGggkrr",
+        "kGgggkrr",
+        ".kkkkkk.",
         "..k.k...",
     ],
 ];
@@ -434,11 +456,7 @@ pub fn spray_can() -> Vec<Pixels> {
     vec![grid(SPRAY_CAN, CAN_PAL)]
 }
 
-const MIST_PAL: Palette = &[
-    ('w', hex(0xffffff)),
-    ('p', hex(0xf8c0e8)),
-    ('l', hex(0xc090e0)),
-];
+const MIST_PAL: Palette = &[('w', hex(0xffffff)), ('p', hex(0xf8c0e8)), ('l', hex(0xc090e0))];
 const SPRAY_JET: &[&str] = &[
     "......pwwp......",
     ".....pwwwwp.....",
@@ -472,12 +490,7 @@ pub fn spray_jet() -> Vec<Pixels> {
 
 // ---------------------------------------------------------------- moving platforms
 
-const TPROLL_PAL: Palette = &[
-    ('k', hex(0x3a3a50)),
-    ('w', hex(0xffffff)),
-    ('W', hex(0xdde2ee)),
-    ('s', hex(0xa8b0c8)),
-];
+const TPROLL_PAL: Palette = &[('k', hex(0x3a3a50)), ('w', hex(0xffffff)), ('W', hex(0xdde2ee)), ('s', hex(0xa8b0c8))];
 const PLATFORM_TP: &[&str] = &[
     "kkkkkkkkkkkkkkkk",
     "wwwwwwwWwwwwwwwW",
@@ -489,13 +502,7 @@ const PLATFORM_TP: &[&str] = &[
     "kkkkkkkkkkkkkkkk",
 ];
 
-const DUCK_PAL: Palette = &[
-    ('k', hex(0x4a2a08)),
-    ('y', hex(0xffd83a)),
-    ('Y', hex(0xe0a020)),
-    ('o', hex(0xff8020)),
-    ('w', hex(0xffffff)),
-];
+const DUCK_PAL: Palette = &[('k', hex(0x4a2a08)), ('y', hex(0xffd83a)), ('Y', hex(0xe0a020)), ('o', hex(0xff8020)), ('w', hex(0xffffff))];
 const PLATFORM_DUCK: &[&str] = &[
     "..........kkkk..",
     ".........kyyyyk.",
@@ -507,13 +514,7 @@ const PLATFORM_DUCK: &[&str] = &[
     ".kYYYYYYYYYYYYk.",
 ];
 
-const PLUNGER_PAL: Palette = &[
-    ('k', hex(0x2a1018)),
-    ('r', hex(0xd8303a)),
-    ('l', hex(0xff8a8a)),
-    ('R', hex(0x8a1a2a)),
-    ('t', hex(0xd8a868)),
-];
+const PLUNGER_PAL: Palette = &[('k', hex(0x2a1018)), ('r', hex(0xd8303a)), ('l', hex(0xff8a8a)), ('R', hex(0x8a1a2a)), ('t', hex(0xd8a868))];
 const PLATFORM_PLUNGER: &[&str] = &[
     "kkkkkkkkkkkkkkkk",
     "rrllrrrrrrrrrrRr",
@@ -610,7 +611,13 @@ pub fn particle() -> Vec<Pixels> {
 
 const NOTE_PAL: Palette = &[('w', hex(0xffffff))];
 const NOTE: &[&str] = &[
-    "..ww..", "..w.w.", "..w..w", "..w...", ".ww...", "www...", ".w....",
+    "..ww..",
+    "..w.w.",
+    "..w..w",
+    "..w...",
+    ".ww...",
+    "www...",
+    ".w....",
 ];
 
 pub fn note() -> Vec<Pixels> {
@@ -623,21 +630,9 @@ pub fn toot_puff() -> Vec<Pixels> {
     let mid = hex(0xbfeea0);
     let dark = hex(0x86c46a);
     // (radius scale, alpha, dither keep-threshold out of 16)
-    let frames = [
-        (0.5f32, 255u8, 16u32),
-        (0.8, 235, 16),
-        (1.0, 180, 16),
-        (1.12, 110, 13),
-    ];
+    let frames = [(0.5f32, 255u8, 16u32), (0.8, 235, 16), (1.0, 180, 16), (1.12, 110, 13)];
     // Overlapping lobes making a round cloud.
-    let lobes = [
-        (8.0f32, 8.0f32, 4.0f32),
-        (4.5, 9.0, 3.0),
-        (11.5, 9.0, 3.0),
-        (6.5, 5.0, 3.0),
-        (10.0, 5.5, 2.5),
-        (8.0, 11.0, 3.0),
-    ];
+    let lobes = [(8.0f32, 8.0f32, 4.0f32), (4.5, 9.0, 3.0), (11.5, 9.0, 3.0), (6.5, 5.0, 3.0), (10.0, 5.5, 2.5), (8.0, 11.0, 3.0)];
     frames
         .iter()
         .map(|&(s, a, keep)| {
@@ -660,13 +655,7 @@ pub fn toot_puff() -> Vec<Pixels> {
                     if best < 0.0 || hash2(x / 2, y / 2, 7) % 16 >= keep {
                         continue;
                     }
-                    let c = if best < 1.0 {
-                        dark
-                    } else if hi {
-                        light
-                    } else {
-                        mid
-                    };
+                    let c = if best < 1.0 { dark } else if hi { light } else { mid };
                     p.set(x, y, c);
                 }
             }

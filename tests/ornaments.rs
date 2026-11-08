@@ -9,8 +9,8 @@ use nat_han_adventures::audio::{
     live::{
         Engine, EngineConfig, Input,
         band::{Fill, Flourish, HitKind},
-        engine::CommittedBar,
         feel::Feel,
+        engine::CommittedBar,
         library,
         musician::{PhrasePlan, Role},
         ornament::{Harm, Orn, Orns},
@@ -35,33 +35,13 @@ impl Bar {
 }
 
 fn freedom(f: f32) -> Input {
-    Input::SetFreedom {
-        lead: f,
-        comp: f,
-        bass: f,
-        drums: f,
-        dynamics: 0.0,
-    }
+    Input::SetFreedom { lead: f, comp: f, bass: f, drums: f, dynamics: 0.0 }
 }
 
 /// Play `song` for `bars` bars (`inputs(k)` posted as bar `k` is about to be decided), and
 /// collect every bar as it's committed.
-fn play(
-    song: &SongFile,
-    seed: u64,
-    setup: &[Input],
-    inputs: impl Fn(u64) -> Vec<Input>,
-    bars: u64,
-) -> (Engine, Vec<Bar>) {
-    let mut e = Engine::with_config(
-        song,
-        synth::SAMPLE_RATE,
-        EngineConfig {
-            seed,
-            ..EngineConfig::on_grid()
-        },
-    )
-    .unwrap();
+fn play(song: &SongFile, seed: u64, setup: &[Input], inputs: impl Fn(u64) -> Vec<Input>, bars: u64) -> (Engine, Vec<Bar>) {
+    let mut e = Engine::with_config(song, synth::SAMPLE_RATE, EngineConfig { seed, ..EngineConfig::on_grid() }).unwrap();
     for i in setup {
         e.post(*i);
     }
@@ -77,11 +57,7 @@ fn play(
         let s = e.state();
         let have = out.len() as u64;
         for c in s.upcoming.iter().filter(|c| c.slot.index >= have) {
-            let ev = e
-                .pending_events()
-                .filter(|x| x.bar == c.slot.index)
-                .copied()
-                .collect();
+            let ev = e.pending_events().filter(|x| x.bar == c.slot.index).copied().collect();
             let plans = s.musicians.map(|m| m.plan);
             out.push(Bar { c: *c, ev, plans });
             for i in inputs(c.slot.index + 1) {
@@ -96,23 +72,14 @@ fn song(m: Music) -> &'static SongFile {
     library::song(m).unwrap().1
 }
 
-const LOOPING: [Music; 7] = [
-    Music::Title,
-    Music::World(1),
-    Music::World(2),
-    Music::World(3),
-    Music::World(4),
-    Music::World(5),
-    Music::Victory,
-];
+const LOOPING: [Music; 7] = [Music::Title, Music::World(1), Music::World(2), Music::World(3), Music::World(4), Music::World(5), Music::Victory];
 
 /// Freedom 0 is the written part, whatever the game does (the cues need freedom to play).
 #[test]
 fn freedom_zero_is_exactly_as_written() {
     for m in [Music::World(2), Music::World(4)] {
         let render = |inputs: &dyn Fn(u64) -> Vec<Input>| {
-            let mut e =
-                Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig::on_grid()).unwrap();
+            let mut e = Engine::with_config(song(m), synth::SAMPLE_RATE, EngineConfig::on_grid()).unwrap();
             e.post(freedom(0.0));
             let mut out = vec![Frame::ZERO; 40 * 32_000];
             for (k, c) in out.chunks_mut(32_000).enumerate() {
@@ -130,15 +97,10 @@ fn freedom_zero_is_exactly_as_written() {
             9 => vec![Input::Checkpoint],
             _ => vec![],
         });
-        assert!(
-            quiet == busy,
-            "{m:?}: the cues changed the written parts at freedom 0"
-        );
+        assert!(quiet == busy, "{m:?}: the cues changed the written parts at freedom 0");
         // And the written parts are what the offline renderer plays (the engine at 0).
         let (_, bars) = play(song(m), 1, &[freedom(0.0)], |_| vec![], 8);
-        assert!(bars.iter().all(|b| b.c.orns.iter().all(|o| o.is_empty())
-            && b.c.band.hits == 0
-            && b.c.band.subs == [None, None]));
+        assert!(bars.iter().all(|b| b.c.orns.iter().all(|o| o.is_empty()) && b.c.band.hits == 0 && b.c.band.subs == [None, None]));
     }
 }
 
@@ -147,25 +109,8 @@ fn freedom_zero_is_exactly_as_written() {
 fn ornaments_are_deterministic_per_seed() {
     let s = song(Music::World(3));
     let notes = |seed: u64| {
-        let (_, bars) = play(
-            s,
-            seed,
-            &[freedom(0.8)],
-            |k| {
-                if k == 5 {
-                    vec![Input::Toot, Input::Death]
-                } else {
-                    vec![]
-                }
-            },
-            24,
-        );
-        bars.iter()
-            .flat_map(|b| {
-                b.ev.iter()
-                    .map(|e| (e.ch, e.start, e.end, e.sound, e.volume, e.inst, e.fx))
-            })
-            .collect::<Vec<_>>()
+        let (_, bars) = play(s, seed, &[freedom(0.8)], |k| if k == 5 { vec![Input::Toot, Input::Death] } else { vec![] }, 24);
+        bars.iter().flat_map(|b| b.ev.iter().map(|e| (e.ch, e.start, e.end, e.sound, e.volume, e.inst, e.fx))).collect::<Vec<_>>()
     };
     assert_eq!(notes(4), notes(4));
     assert_ne!(notes(4), notes(5));
@@ -179,27 +124,9 @@ fn notes_of(e: &NoteEvent) -> &[u8] {
 #[test]
 fn ornaments_stay_in_range() {
     for (k, m) in LOOPING.into_iter().enumerate() {
-        let h = [
-            Harmony::Original,
-            Harmony::Coltrane,
-            Harmony::Waltz,
-            Harmony::MelodicMinor,
-            Harmony::Quartal,
-        ][k % 5];
+        let h = [Harmony::Original, Harmony::Coltrane, Harmony::Waltz, Harmony::MelodicMinor, Harmony::Quartal][k % 5];
         for f in [0.5, 1.0] {
-            let (_, bars) = play(
-                song(m),
-                k as u64,
-                &[
-                    freedom(f),
-                    Input::SetFilters(Filters {
-                        harmony: h,
-                        just_intonation: false,
-                    }),
-                ],
-                |_| vec![],
-                36,
-            );
+            let (_, bars) = play(song(m), k as u64, &[freedom(f), Input::SetFilters(Filters { harmony: h, just_intonation: false })], |_| vec![], 36);
             for b in &bars {
                 for e in &b.ev {
                     let (lo, hi) = match e.ch {
@@ -209,13 +136,7 @@ fn ornaments_stay_in_range() {
                         _ => (0, 127),
                     };
                     for &n in notes_of(e) {
-                        assert!(
-                            (lo..=hi).contains(&n),
-                            "{m:?} {h:?} {f}: ch {} note {n} in bar {} ({})",
-                            e.ch,
-                            b.c.slot.index,
-                            b.c.orns[e.ch as usize].names()
-                        );
+                        assert!((lo..=hi).contains(&n), "{m:?} {h:?} {f}: ch {} note {n} in bar {} ({})", e.ch, b.c.slot.index, b.c.orns[e.ch as usize].names());
                     }
                     assert!(e.end > e.start, "{m:?}: an empty event");
                 }
@@ -223,11 +144,7 @@ fn ornaments_stay_in_range() {
                 for ch in 0..3 {
                     let v: Vec<&NoteEvent> = b.ch(ch).collect();
                     for w in v.windows(2) {
-                        assert!(
-                            w[0].end <= w[1].start,
-                            "{m:?} {h:?} ch {ch} bar {}: overlap",
-                            b.c.slot.index
-                        );
+                        assert!(w[0].end <= w[1].start, "{m:?} {h:?} ch {ch} bar {}: overlap", b.c.slot.index);
                     }
                 }
             }
@@ -247,15 +164,8 @@ fn written(m: Music, setup: &[Input], bars: u64) -> Vec<Bar> {
 #[test]
 fn the_lead_resolves_phrase_ends() {
     for m in LOOPING {
-        for (h, f) in [
-            (Harmony::Original, 0.5),
-            (Harmony::Coltrane, 0.8),
-            (Harmony::Original, 1.0),
-        ] {
-            let setup = [Input::SetFilters(Filters {
-                harmony: h,
-                just_intonation: false,
-            })];
+        for (h, f) in [(Harmony::Original, 0.5), (Harmony::Coltrane, 0.8), (Harmony::Original, 1.0)] {
+            let setup = [Input::SetFilters(Filters { harmony: h, just_intonation: false })];
             let plain = written(m, &setup, 34);
             let mut s = setup.to_vec();
             s.push(freedom(f));
@@ -264,38 +174,23 @@ fn the_lead_resolves_phrase_ends() {
             let shape = e.shape();
             for (k, b) in bars.iter().enumerate().take(33) {
                 let Some(p) = b.plans[0] else { continue };
-                if p.last_bar() != b.c.slot.index
-                    || b.c.orns[0].is_empty()
-                    || b.c.orns[0].has(Orn::LayOut)
-                {
+                if p.last_bar() != b.c.slot.index || b.c.orns[0].is_empty() || b.c.orns[0].has(Orn::LayOut) {
                     continue;
                 }
                 // A measured soloist ends where their numbers say: tensions, chromatic notes.
                 if b.c.orns[0].has(Orn::Solo) && b.c.soloist.profile().is_some_and(|p| p.aims()) {
                     continue;
                 }
-                let Some(last) = b.ch(0).filter(|e| matches!(e.sound, Sound::Note(_))).last()
-                else {
-                    continue;
-                };
-                let Sound::Note(n) = last.sound else {
-                    unreachable!()
-                };
+                let Some(last) = b.ch(0).filter(|e| matches!(e.sound, Sound::Note(_))).last() else { continue };
+                let Sound::Note(n) = last.sound else { unreachable!() };
                 let harm: Harm = match arr.harm_at(last.beat) {
                     Some(x) => x,
                     None => continue,
                 };
-                let sub =
-                    b.c.band
-                        .sub_at(last.beat - b.c.slot.song_bar as f64 * shape.bar_beats);
-                let chord_tone = harm.is_chord_tone(n)
-                    || sub.is_some_and(|s| Harm::new(s.chord).is_chord_tone(n));
-                let as_written = plain[k]
-                    .ch(0)
-                    .any(|w| w.start == last.start && w.sound == last.sound);
-                let next = plain
-                    .get(k + 1)
-                    .and_then(|nb| nb.ch(0).find_map(|w| w.sound.notes().first().copied()));
+                let sub = b.c.band.sub_at(last.beat - b.c.slot.song_bar as f64 * shape.bar_beats);
+                let chord_tone = harm.is_chord_tone(n) || sub.is_some_and(|s| Harm::new(s.chord).is_chord_tone(n));
+                let as_written = plain[k].ch(0).any(|w| w.start == last.start && w.sound == last.sound);
+                let next = plain.get(k + 1).and_then(|nb| nb.ch(0).find_map(|w| w.sound.notes().first().copied()));
                 let steps_on = next.is_some_and(|t| (t as i32 - n as i32).abs() <= 2);
                 assert!(
                     chord_tone || as_written || steps_on,
@@ -324,19 +219,11 @@ fn the_head_stays_recognizable_up_to_half_freedom() {
                 // The written pitch class sounds early in the written note (under a grace,
                 // a turn or a mordent, an octave away: it's still the tune).
                 let window = w.start..w.start + ((w.end - w.start) / 2).max(1);
-                kept += b.ch(0).any(|e| {
-                    e.start < window.end
-                        && e.end > window.start
-                        && e.sound.notes().iter().any(|x| x % 12 == n % 12)
-                }) as u32;
+                kept += b.ch(0).any(|e| e.start < window.end && e.end > window.start && e.sound.notes().iter().any(|x| x % 12 == n % 12)) as u32;
             }
         }
         let frac = kept as f64 / total.max(1) as f64;
-        assert!(
-            frac >= 0.8,
-            "{m:?}: only {:.0}% of the tune left at 0.5",
-            frac * 100.0
-        );
+        assert!(frac >= 0.8, "{m:?}: only {:.0}% of the tune left at 0.5", frac * 100.0);
     }
 }
 
@@ -346,23 +233,13 @@ fn the_head_stays_recognizable_up_to_half_freedom() {
 fn a_neutral_band_is_audibly_alive() {
     for m in LOOPING {
         let (_, bars) = play(song(m), 7, &[freedom(0.35)], |_| vec![], 32);
-        let busy = bars
-            .iter()
-            .filter(|b| b.c.orns[0].0 | b.c.orns[1].0 | b.c.orns[2].0 != 0)
-            .count();
+        let busy = bars.iter().filter(|b| b.c.orns[0].0 | b.c.orns[1].0 | b.c.orns[2].0 != 0).count();
         let all = Orns(bars.iter().flat_map(|b| b.c.orns).fold(0, |a, o| a | o.0));
-        assert!(
-            busy * 10 >= bars.len() * 7,
-            "{m:?}: only {busy}/{} bars ornamented",
-            bars.len()
-        );
+        assert!(busy * 10 >= bars.len() * 7, "{m:?}: only {busy}/{} bars ornamented", bars.len());
         assert!(all.iter().count() >= 9, "{m:?}: only {}", all.names());
         // The lead decorates in most bars.
         let lead = bars.iter().filter(|b| !b.c.orns[0].is_empty()).count();
-        assert!(
-            lead * 2 >= bars.len(),
-            "{m:?}: the lead ornaments only {lead} bars"
-        );
+        assert!(lead * 2 >= bars.len(), "{m:?}: the lead ornaments only {lead} bars");
     }
 }
 
@@ -374,37 +251,20 @@ fn hits_line_up_across_comp_bass_and_drums() {
     for m in LOOPING {
         let (_, bars) = play(song(m), 11, &[freedom(0.7)], |_| vec![], 40);
         for b in bars.iter().filter(|b| b.c.band.hits != 0) {
-            let line = b.c.slot.song_bar as f64
-                * if b.c.harmony == Harmony::Waltz {
-                    3.0
-                } else {
-                    4.0
-                };
+            let line = b.c.slot.song_bar as f64 * if b.c.harmony == Harmony::Waltz { 3.0 } else { 4.0 };
             for hb in b.c.band.hit_beats() {
                 let at = |ev: &NoteEvent| ev.beat - line;
                 let near = |ev: &&NoteEvent| (at(ev) - hb).abs() < 1e-6;
                 let comp = b.ch(1).find(near);
                 let bass = b.ch(2).find(near);
-                let kick = b
-                    .ch(3)
-                    .find(|e| near(e) && e.sound == Sound::Drum(Drum::Kick));
-                assert!(
-                    comp.is_some() && bass.is_some() && kick.is_some(),
-                    "{m:?} bar {}: hit at {hb}: comp {comp:?} bass {bass:?} kick {kick:?}",
-                    b.c.slot.index
-                );
+                let kick = b.ch(3).find(|e| near(e) && e.sound == Sound::Drum(Drum::Kick));
+                assert!(comp.is_some() && bass.is_some() && kick.is_some(), "{m:?} bar {}: hit at {hb}: comp {comp:?} bass {bass:?} kick {kick:?}", b.c.slot.index);
                 let (c, ba, k) = (comp.unwrap(), bass.unwrap(), kick.unwrap());
-                assert!(
-                    c.start == ba.start && ba.start == k.start,
-                    "{m:?}: hit samples differ"
-                );
+                assert!(c.start == ba.start && ba.start == k.start, "{m:?}: hit samples differ");
                 seen += 1;
                 // The bass rests after an anticipation (the root rings to the bar line).
                 if b.c.band.hit_kind == HitKind::Anticipation {
-                    assert!(
-                        b.ch(2).all(|e| e.start <= ba.start),
-                        "{m:?}: the bass played on after the hit"
-                    );
+                    assert!(b.ch(2).all(|e| e.start <= ba.start), "{m:?}: the bass played on after the hit");
                 }
             }
         }
@@ -425,36 +285,18 @@ fn the_reharm_keeps_bass_and_comp_together() {
                 let line = b.c.slot.song_bar as f64 * 4.0;
                 for s in b.c.band.subs.iter().flatten() {
                     let h = Harm::new(s.chord);
-                    let in_sub = |e: &&NoteEvent| {
-                        e.beat - line >= s.from - 1e-6 && e.beat - line < s.to - 1e-6
-                    };
+                    let in_sub = |e: &&NoteEvent| e.beat - line >= s.from - 1e-6 && e.beat - line < s.to - 1e-6;
                     let bass = b.ch(2).find(|e| (e.beat - line - s.from).abs() < 1e-6);
                     if b.c.band.hits == 0 {
-                        let bass = bass.unwrap_or_else(|| {
-                            panic!("{m:?} bar {}: no bass note at the sub", b.c.slot.index)
-                        });
-                        assert_eq!(
-                            bass.sound.notes()[0] % 12,
-                            s.chord.root,
-                            "{m:?} bar {}: the bass missed the sub's root",
-                            b.c.slot.index
-                        );
+                        let bass = bass.unwrap_or_else(|| panic!("{m:?} bar {}: no bass note at the sub", b.c.slot.index));
+                        assert_eq!(bass.sound.notes()[0] % 12, s.chord.root, "{m:?} bar {}: the bass missed the sub's root", b.c.slot.index);
                     }
                     for e in b.ch(1).filter(in_sub) {
                         // (A soli's lines pass through other notes: `tests/choruses.rs`.)
                         if b.c.band.hits != 0 || b.c.band.soli.is_some() {
                             continue;
                         }
-                        assert!(
-                            e.sound
-                                .notes()
-                                .iter()
-                                .all(|&n| h.is_chord_tone(n) || b.c.orns[1].has(Orn::Polychord)),
-                            "{m:?} bar {}: comp {:?} over {}",
-                            b.c.slot.index,
-                            e.sound,
-                            s.chord
-                        );
+                        assert!(e.sound.notes().iter().all(|&n| h.is_chord_tone(n) || b.c.orns[1].has(Orn::Polychord)), "{m:?} bar {}: comp {:?} over {}", b.c.slot.index, e.sound, s.chord);
                     }
                     seen += 1;
                 }
@@ -473,107 +315,66 @@ fn side_slips_and_planing_have_their_intervals() {
     for m in LOOPING {
         let plain = written(m, &[], 40);
         for f in [0.55, 0.8] {
-            let (e, bars) = play(song(m), 21, &[freedom(f)], |_| vec![], 40);
-            let arr = e.arrangement(Harmony::Original).unwrap();
-            let bar_beats = e.shape().bar_beats;
-            // The harmony at song beat `at` of bar `b`, as the band played it.
-            let harm = |b: &Bar, at: f64| {
-                b.c.band
-                    .sub_at(at - b.c.slot.song_bar as f64 * bar_beats)
-                    .map(|s| Harm::new(s.chord))
-                    .or_else(|| arr.harm_at(at))
-                    .expect("a chart")
-            };
-            for (p, b) in plain.iter().zip(&bars) {
-                // (A feel plays the line straight: not the written grid.)
-                if b.c.band.feel != Feel::Swing {
-                    continue;
-                }
-                let o = b.c.orns[0];
-                if o.has(Orn::SideSlip) {
-                    let mut moved = 0;
-                    for (w, e) in p.ch(0).zip(b.ch(0)) {
-                        let (Sound::Note(a), Sound::Note(z)) = (w.sound, e.sound) else {
-                            continue;
-                        };
-                        assert_eq!(
-                            w.start, e.start,
-                            "{m:?} bar {}: a side-slip moved a note in time",
-                            b.c.slot.index
-                        );
-                        let d = z as i32 - a as i32;
-                        assert!(d.abs() <= 1, "{m:?} bar {}: slipped by {d}", b.c.slot.index);
-                        if d != 0 {
-                            let h = harm(b, e.beat);
-                            assert_eq!(
-                                h.chord.family(),
-                                Family::Dominant,
-                                "{m:?} bar {}: a side-slip over {}",
-                                b.c.slot.index,
-                                h.chord
-                            );
-                        }
-                        moved += (d != 0) as u32;
-                    }
-                    assert!(moved > 0);
-                    slips += 1;
-                }
-                if o.has(Orn::Planing) {
-                    for (w, e) in p.ch(0).zip(b.ch(0)) {
-                        let (Sound::Note(a), Sound::Arp(arp)) = (w.sound, e.sound) else {
-                            continue;
-                        };
-                        let n = arp.notes();
-                        assert_eq!(*n.last().unwrap(), a, "{m:?}: the tune isn't on top");
-                        let iv: Vec<i32> =
-                            n.windows(2).map(|x| x[1] as i32 - x[0] as i32).collect();
-                        assert!(
-                            iv.iter().all(|&i| i == 5) || iv.iter().all(|&i| (1..=4).contains(&i)),
-                            "{m:?}: planed {n:?}"
-                        );
+        let (e, bars) = play(song(m), 21, &[freedom(f)], |_| vec![], 40);
+        let arr = e.arrangement(Harmony::Original).unwrap();
+        let bar_beats = e.shape().bar_beats;
+        // The harmony at song beat `at` of bar `b`, as the band played it.
+        let harm = |b: &Bar, at: f64| b.c.band.sub_at(at - b.c.slot.song_bar as f64 * bar_beats).map(|s| Harm::new(s.chord)).or_else(|| arr.harm_at(at)).expect("a chart");
+        for (p, b) in plain.iter().zip(&bars) {
+            // (A feel plays the line straight: not the written grid.)
+            if b.c.band.feel != Feel::Swing {
+                continue;
+            }
+            let o = b.c.orns[0];
+            if o.has(Orn::SideSlip) {
+                let mut moved = 0;
+                for (w, e) in p.ch(0).zip(b.ch(0)) {
+                    let (Sound::Note(a), Sound::Note(z)) = (w.sound, e.sound) else { continue };
+                    assert_eq!(w.start, e.start, "{m:?} bar {}: a side-slip moved a note in time", b.c.slot.index);
+                    let d = z as i32 - a as i32;
+                    assert!(d.abs() <= 1, "{m:?} bar {}: slipped by {d}", b.c.slot.index);
+                    if d != 0 {
                         let h = harm(b, e.beat);
-                        assert_eq!(
-                            h.chord.family(),
-                            Family::Dominant,
-                            "{m:?} bar {}: planing over {}",
-                            b.c.slot.index,
-                            h.chord
-                        );
+                        assert_eq!(h.chord.family(), Family::Dominant, "{m:?} bar {}: a side-slip over {}", b.c.slot.index, h.chord);
                     }
-                    planes += 1;
+                    moved += (d != 0) as u32;
                 }
-                // The bass's slip into the next phrase: its root a semitone off, on the last 8th.
-                if b.c.orns[2].has(Orn::SlipBass)
-                    && let Some(next) = arr.harm_at((b.c.slot.song_bar + 1) as f64 * bar_beats)
-                    && let Some(last) = b.ch(2).last()
-                    && let Sound::Note(n) = last.sound
-                {
-                    let off = (n as i32 - next.chord.bass_pc() as i32).rem_euclid(12);
-                    assert!(
-                        off == 1 || off == 11,
-                        "{m:?} bar {}: slipped {n} into {}",
-                        b.c.slot.index,
-                        next.chord
-                    );
-                    bass_slips += 1;
+                assert!(moved > 0);
+                slips += 1;
+            }
+            if o.has(Orn::Planing) {
+                for (w, e) in p.ch(0).zip(b.ch(0)) {
+                    let (Sound::Note(a), Sound::Arp(arp)) = (w.sound, e.sound) else { continue };
+                    let n = arp.notes();
+                    assert_eq!(*n.last().unwrap(), a, "{m:?}: the tune isn't on top");
+                    let iv: Vec<i32> = n.windows(2).map(|x| x[1] as i32 - x[0] as i32).collect();
+                    assert!(iv.iter().all(|&i| i == 5) || iv.iter().all(|&i| (1..=4).contains(&i)), "{m:?}: planed {n:?}");
+                    let h = harm(b, e.beat);
+                    assert_eq!(h.chord.family(), Family::Dominant, "{m:?} bar {}: planing over {}", b.c.slot.index, h.chord);
                 }
+                planes += 1;
+            }
+            // The bass's slip into the next phrase: its root a semitone off, on the last 8th.
+            if b.c.orns[2].has(Orn::SlipBass)
+                && let Some(next) = arr.harm_at((b.c.slot.song_bar + 1) as f64 * bar_beats)
+                && let Some(last) = b.ch(2).last()
+                && let Sound::Note(n) = last.sound
+            {
+                let off = (n as i32 - next.chord.bass_pc() as i32).rem_euclid(12);
+                assert!(off == 1 || off == 11, "{m:?} bar {}: slipped {n} into {}", b.c.slot.index, next.chord);
+                bass_slips += 1;
             }
         }
+        }
     }
-    assert!(
-        slips > 0 && planes > 0 && bass_slips > 0,
-        "slips {slips}, planes {planes}, bass slips {bass_slips}"
-    );
+    assert!(slips > 0 && planes > 0 && bass_slips > 0, "slips {slips}, planes {planes}, bass slips {bass_slips}");
 }
 
 /// The game's big moments: a summon crashes and fills; a checkpoint fills short; a death gets
 /// the lead's wah-wah.
 #[test]
 fn big_moments_get_a_flourish() {
-    let coltrane = Filters {
-        harmony: Harmony::Coltrane,
-        just_intonation: false,
-    };
+    let coltrane = Filters { harmony: Harmony::Coltrane, just_intonation: false };
     let (_, bars) = play(
         song(Music::World(1)),
         2,
@@ -588,11 +389,7 @@ fn big_moments_get_a_flourish() {
     );
     let b = |k: usize| &bars[k];
     assert_eq!(b(4).c.band.flourish, Flourish::Checkpoint);
-    assert!(
-        b(4).c.orns[3].has(Orn::ShortFill) || b(4).c.orns[3].has(Orn::Fill),
-        "{}",
-        b(4).c.orns[3].names()
-    );
+    assert!(b(4).c.orns[3].has(Orn::ShortFill) || b(4).c.orns[3].has(Orn::Fill), "{}", b(4).c.orns[3].names());
     assert!(b(5).c.band.crash);
     assert_eq!(b(8).c.band.flourish, Flourish::Death);
     assert!(b(8).c.orns[0].has(Orn::WahWah));
@@ -600,22 +397,12 @@ fn big_moments_get_a_flourish() {
     assert_eq!(wah.len(), 4);
     assert!(wah.windows(2).all(|w| w[1] + 1 == w[0]), "wah-wah {wah:?}");
     assert!(b(8).ch(0).all(|e| e.fx.wah));
-    let switch = bars
-        .iter()
-        .position(|x| x.c.harmony == Harmony::Coltrane)
-        .unwrap();
+    let switch = bars.iter().position(|x| x.c.harmony == Harmony::Coltrane).unwrap();
     let s = b(switch);
     assert_eq!(s.c.band.flourish, Flourish::Summon);
     assert!(s.c.band.crash && s.c.band.fill == Fill::Full);
-    assert!(
-        s.c.orns[3].has(Orn::Crash) && s.c.orns[3].has(Orn::Fill),
-        "{}",
-        s.c.orns[3].names()
-    );
-    assert!(
-        s.ch(3)
-            .any(|e| e.sound == Sound::Drum(Drum::Crash) && e.start == s.c.slot.start)
-    );
+    assert!(s.c.orns[3].has(Orn::Crash) && s.c.orns[3].has(Orn::Fill), "{}", s.c.orns[3].names());
+    assert!(s.ch(3).any(|e| e.sound == Sound::Drum(Drum::Crash) && e.start == s.c.slot.start));
 }
 
 /// Musicians switch to an alternate from their palette for a phrase, and back (and play a
@@ -636,44 +423,22 @@ fn musicians_switch_instruments_and_back() {
                     // Only the written instrument, a palette entry, or the feel's.
                     let extra = insts.feel_extras.contains(&e.inst) && !feel.is_empty();
                     assert!(
-                        e.inst == 0
-                            || pal.contains(&e.inst)
-                            || feel.contains(&e.inst)
-                            || extra
-                            || s.tracks[ch as usize]
-                                .events
-                                .iter()
-                                .any(|w| w.inst == e.inst),
+                        e.inst == 0 || pal.contains(&e.inst) || feel.contains(&e.inst) || extra || s.tracks[ch as usize].events.iter().any(|w| w.inst == e.inst),
                         "{m:?}: instrument {}",
                         e.inst
                     );
                     if !feel.is_empty() {
-                        assert!(
-                            feel.contains(&e.inst) || extra,
-                            "{m:?} bar {}: a {:?} bar on {}",
-                            b.c.slot.index,
-                            b.c.band.feel,
-                            insts.name(e.inst)
-                        );
+                        assert!(feel.contains(&e.inst) || extra, "{m:?} bar {}: a {:?} bar on {}", b.c.slot.index, b.c.band.feel, insts.name(e.inst));
                     }
                 }
                 if b.c.orns[ch as usize].has(Orn::Switch) {
-                    assert!(
-                        b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)),
-                        "{m:?} bar {} {r:?}: {:?}",
-                        b.c.slot.index,
-                        b.ch(ch).map(|e| (e.inst, e.beat)).collect::<Vec<_>>()
-                    );
+                    assert!(b.ch(ch).all(|e| e.inst != 0 && pal.contains(&e.inst)), "{m:?} bar {} {r:?}: {:?}", b.c.slot.index, b.ch(ch).map(|e| (e.inst, e.beat)).collect::<Vec<_>>());
                     switched += 1;
                 }
             }
         }
         // And back: some bars after a switch are on the base again.
-        let lead_insts: Vec<u8> = bars
-            .iter()
-            .filter(|b| b.c.band.feel == Feel::Swing)
-            .flat_map(|b| b.ch(0).map(|e| e.inst))
-            .collect();
+        let lead_insts: Vec<u8> = bars.iter().filter(|b| b.c.band.feel == Feel::Swing).flat_map(|b| b.ch(0).map(|e| e.inst)).collect();
         if lead_insts.iter().any(|&i| i != 0) {
             assert!(lead_insts.contains(&0), "{m:?}: the lead never came back");
         }
@@ -686,40 +451,20 @@ fn musicians_switch_instruments_and_back() {
 /// half steps and skips on the triplet (his rhythm measured), Watkins (behind Sonny) leaps.
 #[test]
 fn each_soloist_gets_their_bassist() {
-    use nat_han_adventures::audio::live::{
-        chorus::{Call, Chorus},
-        soloist::Soloist,
-    };
+    use nat_han_adventures::audio::live::{chorus::{Call, Chorus}, soloist::Soloist};
     let stats = |s: Soloist| {
-        let (mut moves, mut repeats, mut halves, mut leaps, mut beats, mut triplets) =
-            (0, 0, 0, 0, 0, 0);
+        let (mut moves, mut repeats, mut halves, mut leaps, mut beats, mut triplets) = (0, 0, 0, 0, 0, 0);
         for seed in 1..4 {
-            let setup = [
-                freedom(0.6),
-                Input::ForceSoloist(Some(s)),
-                Input::ForceChorus(Some(Call {
-                    chorus: Chorus::Blowing,
-                    key_up: false,
-                })),
-            ];
+            let setup = [freedom(0.6), Input::ForceSoloist(Some(s)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
             let (_, bars) = play(song(Music::World(1)), seed, &setup, |_| vec![], 96);
             for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
                 let line: Vec<&NoteEvent> = b.ch(2).collect();
                 // Skips: notes off the beat, and those on its last triplet.
                 let beat = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
                 beats += 4;
-                triplets += line
-                    .iter()
-                    .filter(|e| {
-                        ((e.start - b.c.slot.start) as f64 / beat).fract() > 0.6
-                            && ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.72
-                    })
-                    .count();
+                triplets += line.iter().filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() > 0.6 && ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.72).count();
                 // Beat to beat, as the database measured them (one note a beat).
-                let on: Vec<&&NoteEvent> = line
-                    .iter()
-                    .filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05)
-                    .collect();
+                let on: Vec<&&NoteEvent> = line.iter().filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05).collect();
                 for w in on.windows(2) {
                     let d = (notes_of(w[1])[0] as i32 - notes_of(w[0])[0] as i32).abs();
                     moves += 1;
@@ -731,47 +476,15 @@ fn each_soloist_gets_their_bassist() {
         }
         assert!(moves > 100, "{s:?}: {moves} walking moves");
         let f = |x: usize| x as f32 / moves as f32;
-        let out = (
-            f(repeats),
-            f(halves),
-            f(leaps),
-            triplets as f32 / beats as f32,
-        );
-        eprintln!(
-            "{s:?}: repeats {:.2}, half steps {:.2}, 4ths-5ths {:.2}, triplet skips {:.2}",
-            out.0, out.1, out.2, out.3
-        );
+        let out = (f(repeats), f(halves), f(leaps), triplets as f32 / beats as f32);
+        eprintln!("{s:?}: repeats {:.2}, half steps {:.2}, 4ths-5ths {:.2}, triplet skips {:.2}", out.0, out.1, out.2, out.3);
         out
     };
-    let (pc, jg, dw) = (
-        stats(Soloist::Miles),
-        stats(Soloist::Trane),
-        stats(Soloist::Sonny),
-    );
-    assert!(
-        jg.0 > 2.0 * pc.0,
-        "Garrison repeats ({:.2}), Chambers doesn't ({:.2})",
-        jg.0,
-        pc.0
-    );
-    assert!(
-        pc.1 > jg.1,
-        "Chambers' half steps ({:.2}) against Garrison's ({:.2})",
-        pc.1,
-        jg.1
-    );
-    assert!(
-        dw.2 > pc.2 && dw.0 < pc.0 + 0.05,
-        "Watkins leaps ({:.2}) more than Chambers ({:.2})",
-        dw.2,
-        pc.2
-    );
-    assert!(
-        pc.3 > 0.05 && pc.3 > 3.0 * jg.3,
-        "Chambers' skips on the triplet ({:.2}), the others' on the 8th ({:.2})",
-        pc.3,
-        jg.3
-    );
+    let (pc, jg, dw) = (stats(Soloist::Miles), stats(Soloist::Trane), stats(Soloist::Sonny));
+    assert!(jg.0 > 2.0 * pc.0, "Garrison repeats ({:.2}), Chambers doesn't ({:.2})", jg.0, pc.0);
+    assert!(pc.1 > jg.1, "Chambers' half steps ({:.2}) against Garrison's ({:.2})", pc.1, jg.1);
+    assert!(dw.2 > pc.2 && dw.0 < pc.0 + 0.05, "Watkins leaps ({:.2}) more than Chambers ({:.2})", dw.2, pc.2);
+    assert!(pc.3 > 0.05 && pc.3 > 3.0 * jg.3, "Chambers' skips on the triplet ({:.2}), the others' on the 8th ({:.2})", pc.3, jg.3);
 }
 
 /// A tune can name its own bassist: Tommy Bryant walks Sunny Side in paired quarters (beat 2
@@ -781,68 +494,31 @@ fn sunny_side_gets_bryants_paired_quarters() {
     use nat_han_adventures::audio::live::chorus::{Call, Chorus};
     let file = SongFile::parse(library::text("sunny_side").unwrap()).unwrap();
     assert_eq!(file.bassist.as_deref(), Some("bryant"));
-    let setup = [
-        freedom(0.6),
-        Input::ForceChorus(Some(Call {
-            chorus: Chorus::Blowing,
-            key_up: false,
-        })),
-    ];
+    let setup = [freedom(0.6), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
     let (_, bars) = play(&file, 3, &setup, |_| vec![], 96);
     let (mut walking, mut paired) = (0, 0);
     for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
         let beat = (b.c.slot.end - b.c.slot.start) as f64 / 4.0;
-        let on: Vec<u8> = b
-            .ch(2)
-            .filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05)
-            .map(|e| notes_of(e)[0])
-            .collect();
+        let on: Vec<u8> = b.ch(2).filter(|e| ((e.start - b.c.slot.start) as f64 / beat).fract() < 0.05).map(|e| notes_of(e)[0]).collect();
         walking += 1;
         paired += (on.len() == 4 && on[0] == on[1] && on[2] == on[3]) as usize;
     }
     let share = paired as f32 / walking as f32;
-    assert!(
-        walking > 20 && (0.12..0.5).contains(&share),
-        "{paired} of {walking} walking bars paired"
-    );
+    assert!(walking > 20 && (0.12..0.5).contains(&share), "{paired} of {walking} walking bars paired");
 }
 
 /// The band listens to its soloist: in a soloist's breath the comp answers, and only there
 /// (the lead's notes never under the answer's stabs).
 #[test]
 fn the_comp_answers_the_soloist() {
-    use nat_han_adventures::audio::live::{
-        chorus::{Call, Chorus},
-        soloist::Soloist,
-    };
-    let setup = [
-        freedom(0.8),
-        Input::ForceSoloist(Some(Soloist::Miles)),
-        Input::ForceChorus(Some(Call {
-            chorus: Chorus::Blowing,
-            key_up: false,
-        })),
-    ];
+    use nat_han_adventures::audio::live::{chorus::{Call, Chorus}, soloist::Soloist};
+    let setup = [freedom(0.8), Input::ForceSoloist(Some(Soloist::Miles)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
     let (_, bars) = play(song(Music::World(1)), 3, &setup, |_| vec![], 192);
-    let answered: Vec<&Bar> = bars
-        .iter()
-        .filter(|b| b.c.orns[1].has(Orn::CompAnswer))
-        .collect();
-    assert!(
-        answered.len() >= 3,
-        "{} answers in 192 bars",
-        answered.len()
-    );
+    let answered: Vec<&Bar> = bars.iter().filter(|b| b.c.orns[1].has(Orn::CompAnswer)).collect();
+    assert!(answered.len() >= 3, "{} answers in 192 bars", answered.len());
     for b in answered {
         let lead: Vec<(u64, u64)> = b.ch(0).map(|e| (e.start, e.end)).collect();
-        let stabs = b
-            .ch(1)
-            .filter(|e| lead.iter().all(|&(s, z)| e.start >= z || e.start + 1 < s))
-            .count();
-        assert!(
-            stabs >= 1,
-            "bar {}: an answer clear of the lead",
-            b.c.slot.index
-        );
+        let stabs = b.ch(1).filter(|e| lead.iter().all(|&(s, z)| e.start >= z || e.start + 1 < s)).count();
+        assert!(stabs >= 1, "bar {}: an answer clear of the lead", b.c.slot.index);
     }
 }

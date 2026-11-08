@@ -254,41 +254,11 @@ const PLANT_ONEWAY: &[&str] = &[
 ];
 
 const WORLD_DATA: [World; 5] = [
-    World {
-        pal: BATH_PAL,
-        fill: BATH_FILL,
-        cap: BATH_CAP,
-        oneway: BATH_ONEWAY,
-        fill_shade: 0.8,
-    },
-    World {
-        pal: PIPE_PAL,
-        fill: PIPE_FILL,
-        cap: PIPE_CAP,
-        oneway: PIPE_ONEWAY,
-        fill_shade: 0.6,
-    },
-    World {
-        pal: SEWER_PAL,
-        fill: SEWER_FILL,
-        cap: SEWER_CAP,
-        oneway: SEWER_ONEWAY,
-        fill_shade: 0.85,
-    },
-    World {
-        pal: SEPTIC_PAL,
-        fill: SEPTIC_FILL,
-        cap: SEPTIC_CAP,
-        oneway: SEPTIC_ONEWAY,
-        fill_shade: 0.72,
-    },
-    World {
-        pal: PLANT_PAL,
-        fill: PLANT_FILL,
-        cap: PLANT_CAP,
-        oneway: PLANT_ONEWAY,
-        fill_shade: 0.7,
-    },
+    World { pal: BATH_PAL, fill: BATH_FILL, cap: BATH_CAP, oneway: BATH_ONEWAY, fill_shade: 0.8 },
+    World { pal: PIPE_PAL, fill: PIPE_FILL, cap: PIPE_CAP, oneway: PIPE_ONEWAY, fill_shade: 0.6 },
+    World { pal: SEWER_PAL, fill: SEWER_FILL, cap: SEWER_CAP, oneway: SEWER_ONEWAY, fill_shade: 0.85 },
+    World { pal: SEPTIC_PAL, fill: SEPTIC_FILL, cap: SEPTIC_CAP, oneway: SEPTIC_ONEWAY, fill_shade: 0.72 },
+    World { pal: PLANT_PAL, fill: PLANT_FILL, cap: PLANT_CAP, oneway: PLANT_ONEWAY, fill_shade: 0.7 },
 ];
 
 pub fn ground_fill(w: u8) -> Vec<Pixels> {
@@ -353,7 +323,12 @@ const LIQUID_COLOURS: [[Rgba; 4]; 5] = [
 
 /// Surface wave, 8 wide (tiles twice per tile), rows 0..=5 of LiquidTop.
 const WAVE: &[&str] = &[
-    "........", "...ww...", ".wwLLww.", "wLLmmLLw", "LmmmmmmL", "mmmmmmmm",
+    "........",
+    "...ww...",
+    ".wwLLww.",
+    "wLLmmLLw",
+    "LmmmmmmL",
+    "mmmmmmmm",
 ];
 /// Liquid body, 16x16, tiles in every direction (bubbles `L`, dither `d`).
 const BODY: &[&str] = &[

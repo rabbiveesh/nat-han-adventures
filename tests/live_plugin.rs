@@ -29,20 +29,10 @@ fn the_sound_plays_engines() {
     let mut direct = engine("tiger_rag");
     let mut want = vec![nat_han_adventures::audio::Frame::ZERO; n];
     direct.fill(&mut want);
-    assert!(
-        out[3..]
-            .iter()
-            .zip(&want)
-            .all(|(a, b)| a.left == b.left && a.right == b.right),
-        "not a passthrough"
-    );
+    assert!(out[3..].iter().zip(&want).all(|(a, b)| a.left == b.left && a.right == b.right), "not a passthrough");
     let p = handle.published();
     assert!(p.playing);
-    assert!(
-        (p.clock.position.sample as i64 - n as i64).abs() <= 130,
-        "{:?}",
-        p.clock.position
-    );
+    assert!((p.clock.position.sample as i64 - n as i64).abs() <= 130, "{:?}", p.clock.position);
     assert!(p.ahead_secs > 0.0 && p.ahead_secs < 0.01);
 
     // 48 kHz: the same music (same loudness), resampled.
@@ -50,18 +40,10 @@ fn the_sound_plays_engines() {
     for chunk in hi.chunks_mut(128) {
         sound.process(chunk, 1.0 / 48_000.0, &info);
     }
-    let rms =
-        |x: &[f32]| (x.iter().map(|&l| (l as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
-    let left = |x: &[_]| {
-        x.iter()
-            .map(|f: &nat_han_adventures::audio::Frame| f.left)
-            .collect::<Vec<f32>>()
-    };
+    let rms = |x: &[f32]| (x.iter().map(|&l| (l as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
+    let left = |x: &[_]| x.iter().map(|f: &nat_han_adventures::audio::Frame| f.left).collect::<Vec<f32>>();
     let hi_left: Vec<f32> = hi.iter().map(|f| f.left).collect();
-    assert!(
-        hi.iter()
-            .all(|f| f.left.is_finite() && f.left.abs() <= 1.05)
-    );
+    assert!(hi.iter().all(|f| f.left.is_finite() && f.left.abs() <= 1.05));
     assert!(rms(&hi_left) > 0.3 * rms(&left(&want)) && rms(&hi_left) < 3.0 * rms(&left(&want)));
 
     // Crossfade to another song, then stop.
@@ -71,21 +53,12 @@ fn the_sound_plays_engines() {
         sound.process(chunk, 1.0 / 48_000.0, &info);
     }
     let p = handle.published();
-    assert!(
-        p.state
-            .upcoming
-            .iter()
-            .any(|b| b.harmony == Harmony::Quartal),
-        "input reached the new engine"
-    );
+    assert!(p.state.upcoming.iter().any(|b| b.harmony == Harmony::Quartal), "input reached the new engine");
     handle.stop(0.1);
     for chunk in hi.chunks_mut(128) {
         sound.process(chunk, 1.0 / 48_000.0, &info);
     }
-    assert!(
-        hi[10_000..].iter().all(|f| f.left == 0.0 && f.right == 0.0),
-        "stopped"
-    );
+    assert!(hi[10_000..].iter().all(|f| f.left == 0.0 && f.right == 0.0), "stopped");
     assert!(!handle.published().playing);
     handle.collect_garbage();
     drop(handle);

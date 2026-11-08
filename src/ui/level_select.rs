@@ -7,26 +7,25 @@ use bevy::prelude::*;
 use leafwing_input_manager::prelude::*;
 
 use super::{palette::*, *};
-use crate::game::sideb::{self, SIDE_B_COUNT, SideBLevel};
-use crate::game::solo::{self, SOLO_COUNT};
 use crate::input::Action;
 use crate::level::{LEVEL_COUNT, Levels};
+use crate::game::sideb::{self, SIDE_B_COUNT, SideBLevel};
+use crate::game::solo::{self, SOLO_COUNT};
 use crate::save::Progress;
 use crate::state::{AppState, CurrentLevel, Shelf};
 
 const COLS: usize = 5;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::LevelSelect), init_cursor)
-        .add_systems(
-            Update,
-            (
-                spawn.run_if(not(any_with_component::<LevelSelectScreen>)),
-                (input, cheat, highlight).chain(),
-            )
-                .chain()
-                .run_if(in_state(AppState::LevelSelect)),
-        );
+    app.add_systems(OnEnter(AppState::LevelSelect), init_cursor).add_systems(
+        Update,
+        (
+            spawn.run_if(not(any_with_component::<LevelSelectScreen>)),
+            (input, cheat, highlight).chain(),
+        )
+            .chain()
+            .run_if(in_state(AppState::LevelSelect)),
+    );
 }
 
 /// The highlighted level.
@@ -63,12 +62,7 @@ fn unlocked(shelf: Shelf, progress: &Progress, i: usize) -> bool {
     }
 }
 
-fn init_cursor(
-    mut commands: Commands,
-    current: Res<CurrentLevel>,
-    progress: Res<Progress>,
-    shelf: Res<Shelf>,
-) {
+fn init_cursor(mut commands: Commands, current: Res<CurrentLevel>, progress: Res<Progress>, shelf: Res<Shelf>) {
     // Start on the last level played, or the newest unlocked one.
     let i = match *shelf {
         Shelf::Story if current.0 > 0 => current.0,
@@ -103,21 +97,8 @@ fn spawn(
                 Shelf::SideB => "SIDE B",
                 Shelf::Solo => "NAT ALONE",
             };
-            root.spawn((
-                label(f, title, 16.0, GOLD),
-                Node {
-                    margin: UiRect::bottom(px(6.0)),
-                    ..default()
-                },
-            ));
-            root.spawn((
-                label(f, "", 8.0, DIM_CREAM),
-                Detail::World,
-                Node {
-                    margin: UiRect::bottom(px(8.0)),
-                    ..default()
-                },
-            ));
+            root.spawn((label(f, title, 16.0, GOLD), Node { margin: UiRect::bottom(px(6.0)), ..default() }));
+            root.spawn((label(f, "", 8.0, DIM_CREAM), Detail::World, Node { margin: UiRect::bottom(px(8.0)), ..default() }));
             // The grid.
             root.spawn(Node {
                 display: Display::Grid,
@@ -144,22 +125,12 @@ fn spawn(
                         Outline::new(px(1.0), px(0.0), Color::NONE),
                     ))
                     .with_children(|cell| {
-                        cell.spawn(label(
-                            f,
-                            format!("{}", i + 1),
-                            16.0,
-                            if unlocked { CREAM } else { DIM_CREAM },
-                        ));
+                        cell.spawn(label(f, format!("{}", i + 1), 16.0, if unlocked { CREAM } else { DIM_CREAM }));
                         if !unlocked {
                             cell.spawn(icon(sprites, SpriteId::IconLock, 8.0, 8.0));
                         } else if shelf == Shelf::SideB {
                             match progress.side_b_rewinds[i] {
-                                Some(r) => cell.spawn(label(
-                                    f,
-                                    format!("R{r}"),
-                                    8.0,
-                                    if r == 0 { GOLD } else { CREAM },
-                                )),
+                                Some(r) => cell.spawn(label(f, format!("R{r}"), 8.0, if r == 0 { GOLD } else { CREAM })),
                                 None => cell.spawn(label(f, "NEW", 8.0, GREEN)),
                             };
                         } else if shelf == Shelf::Solo {
@@ -182,21 +153,14 @@ fn spawn(
                 }
             });
             // Details of the highlighted level.
-            root.spawn(panel(Node {
-                margin: UiRect::top(px(10.0)),
-                width: px(272.0),
-                ..column(6.0, 6.0)
-            }))
+            root.spawn(panel(Node { margin: UiRect::top(px(10.0)), width: px(272.0), ..column(6.0, 6.0) }))
             .with_children(|p| {
                 p.spawn((label(f, "", 8.0, GOLD), Detail::Name));
                 p.spawn((label(f, "", 8.0, CREAM), Detail::Best));
             });
             root.spawn((
                 label(f, "ARROWS:MOVE  ENTER:GO  ESC:BACK", 8.0, DIM_CREAM),
-                Node {
-                    margin: UiRect::top(px(10.0)),
-                    ..default()
-                },
+                Node { margin: UiRect::top(px(10.0)), ..default() },
             ));
         });
 }
@@ -253,9 +217,7 @@ fn cheat(
     }
     match *shelf {
         Shelf::Story if progress.unlocked < LEVEL_COUNT => progress.unlocked = LEVEL_COUNT,
-        Shelf::SideB if progress.side_b_unlocked < SIDE_B_COUNT => {
-            progress.side_b_unlocked = SIDE_B_COUNT
-        }
+        Shelf::SideB if progress.side_b_unlocked < SIDE_B_COUNT => progress.side_b_unlocked = SIDE_B_COUNT,
         Shelf::Solo if progress.solo_unlocked < SOLO_COUNT => progress.solo_unlocked = SOLO_COUNT,
         _ => return,
     }
@@ -289,27 +251,21 @@ fn highlight(
             solo_detail(d, &progress, i)
         } else {
             match d {
-                Detail::World => {
-                    let w = level.map_or(1, |l| l.world);
-                    format!("WORLD {w}: {}", world_name(w))
+            Detail::World => {
+                let w = level.map_or(1, |l| l.world);
+                format!("WORLD {w}: {}", world_name(w))
+            }
+            Detail::Name => format!("{}. {}", i + 1, level.map_or("???", |l| l.name.as_str()).to_uppercase()),
+            Detail::Best => {
+                if !progress.is_unlocked(i) {
+                    format!("LOCKED: BEAT LEVEL {i} FIRST")
+                } else if let (Some(n), Some(t)) = (progress.best_nuggets[i], progress.best_time[i]) {
+                    let total = level.map_or(0, |l| l.nugget_count());
+                    format!("BEST: {n}/{total} NUGGETS  {}", format_time(t))
+                } else {
+                    "NOT FLUSHED YET".to_string()
                 }
-                Detail::Name => format!(
-                    "{}. {}",
-                    i + 1,
-                    level.map_or("???", |l| l.name.as_str()).to_uppercase()
-                ),
-                Detail::Best => {
-                    if !progress.is_unlocked(i) {
-                        format!("LOCKED: BEAT LEVEL {i} FIRST")
-                    } else if let (Some(n), Some(t)) =
-                        (progress.best_nuggets[i], progress.best_time[i])
-                    {
-                        let total = level.map_or(0, |l| l.nugget_count());
-                        format!("BEST: {n}/{total} NUGGETS  {}", format_time(t))
-                    } else {
-                        "NOT FLUSHED YET".to_string()
-                    }
-                }
+            }
             }
         };
         if text.0 != s {
@@ -338,11 +294,7 @@ fn solo_detail(d: &Detail, progress: &Progress, i: usize) -> String {
         Detail::Name => format!("{}. {}", i + 1, solo::name(i).to_uppercase()),
         Detail::Best => match (progress.solo_nuggets[i], progress.solo_time[i]) {
             _ if i >= progress.solo_unlocked => format!("LOCKED: BEAT LEVEL {i} FIRST"),
-            (Some(n), Some(t)) => format!(
-                "BEST: {n}/{} NUGGETS  {}",
-                solo::load(i).nugget_count(),
-                format_time(t)
-            ),
+            (Some(n), Some(t)) => format!("BEST: {n}/{} NUGGETS  {}", solo::load(i).nugget_count(), format_time(t)),
             _ => "NOT FLUSHED YET".to_string(),
         },
     }

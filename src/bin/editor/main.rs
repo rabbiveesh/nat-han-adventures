@@ -71,13 +71,7 @@ struct Args {
 }
 
 fn args() -> Result<Args, String> {
-    let mut a = Args {
-        size: (1440, 900),
-        wait: 4.0,
-        fps: 30.0,
-        secs: 30.0,
-        ..Args::default()
-    };
+    let mut a = Args { size: (1440, 900), wait: 4.0, fps: 30.0, secs: 30.0, ..Args::default() };
     let mut it = std::env::args().skip(1);
     while let Some(arg) = it.next() {
         let mut val = || it.next().ok_or(format!("{arg} needs a value"));
@@ -85,95 +79,35 @@ fn args() -> Result<Args, String> {
             "--song" => a.song = Some(val()?),
             "--view" => a.view = Some(View::parse(&val()?).ok_or("--view tracker|piano|text")?),
             "--play" => a.play = true,
-            "--from-bar" => {
-                a.from_bar = val()?
-                    .parse::<usize>()
-                    .map_err(|e| e.to_string())?
-                    .saturating_sub(1)
-            }
-            "--toots" => {
-                a.toots = val()?
-                    .parse()
-                    .map_err(|e: std::num::ParseIntError| e.to_string())?
-            }
-            "--force" => {
-                a.force = Some(
-                    Filters::parse(&val()?)
-                        .ok_or("--force coltrane|quartal|melodic|waltz|original[+ji]")?,
-                )
-            }
-            "--feel" => {
-                a.feel = Some(Feel::parse(&val()?).ok_or("--feel swing|bossa|samba|rock|funk")?)
-            }
-            "--chorus" => {
-                a.chorus = Some(Chorus::parse(&val()?).ok_or(
-                    "--chorus head|two-feel|blowing|stop-time|breaks|riffs|strolling|soli|shout",
-                )?)
-            }
-            "--soloist" => {
-                a.soloist = Some(
-                    Soloist::parse(&val()?)
-                        .ok_or("--soloist band|miles|trane|bird|sonny|wayne|pops|funk|latin")?,
-                )
-            }
+            "--from-bar" => a.from_bar = val()?.parse::<usize>().map_err(|e| e.to_string())?.saturating_sub(1),
+            "--toots" => a.toots = val()?.parse().map_err(|e: std::num::ParseIntError| e.to_string())?,
+            "--force" => a.force = Some(Filters::parse(&val()?).ok_or("--force coltrane|quartal|melodic|waltz|original[+ji]")?),
+            "--feel" => a.feel = Some(Feel::parse(&val()?).ok_or("--feel swing|bossa|samba|rock|funk")?),
+            "--chorus" => a.chorus = Some(Chorus::parse(&val()?).ok_or("--chorus head|two-feel|blowing|stop-time|breaks|riffs|strolling|soli|shout")?),
+            "--soloist" => a.soloist = Some(Soloist::parse(&val()?).ok_or("--soloist band|miles|trane|bird|sonny|wayne|pops|funk|latin")?),
             "--on-grid" => a.grid = true,
-            "--auto" => {
-                a.auto = Some(
-                    val()?
-                        .parse()
-                        .map_err(|e: std::num::ParseFloatError| e.to_string())?,
-                )
-            }
+            "--auto" => a.auto = Some(val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
             "--rec" => a.rec = true,
             "--as-played" => a.as_played = true,
             "--size" => {
                 let v = val()?;
                 let (w, h) = v.split_once('x').ok_or("--size WxH")?;
-                a.size = (
-                    w.parse().map_err(|_| "--size WxH")?,
-                    h.parse().map_err(|_| "--size WxH")?,
-                );
+                a.size = (w.parse().map_err(|_| "--size WxH")?, h.parse().map_err(|_| "--size WxH")?);
             }
             "--screenshot" => a.screenshot = Some(PathBuf::from(val()?)),
-            "--wait" => {
-                a.wait = val()?
-                    .parse()
-                    .map_err(|e: std::num::ParseFloatError| e.to_string())?
-            }
+            "--wait" => a.wait = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--check" => a.check = true,
             "--capture" => a.capture = Some(PathBuf::from(val()?)),
-            "--freedom" => {
-                a.freedom = Some(
-                    val()?
-                        .parse()
-                        .map_err(|e: std::num::ParseFloatError| e.to_string())?,
-                )
-            }
-            "--fps" => {
-                a.fps = val()?
-                    .parse()
-                    .map_err(|e: std::num::ParseFloatError| e.to_string())?
-            }
-            "--secs" => {
-                a.secs = val()?
-                    .parse()
-                    .map_err(|e: std::num::ParseFloatError| e.to_string())?
-            }
+            "--freedom" => a.freedom = Some(val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?),
+            "--fps" => a.fps = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
+            "--secs" => a.secs = val()?.parse().map_err(|e: std::num::ParseFloatError| e.to_string())?,
             "--replace" => {
                 let v = val()?;
                 let (f, w) = v.split_once("=>").ok_or("--replace FIND=>WITH")?;
                 a.replace.push((f.to_string(), w.to_string()));
             }
             "--help" | "-h" => {
-                println!(
-                    "{}",
-                    include_str!("main.rs")
-                        .lines()
-                        .take_while(|l| l.starts_with("//!"))
-                        .map(|l| l.trim_start_matches("//!").trim_start())
-                        .collect::<Vec<_>>()
-                        .join("\n")
-                );
+                println!("{}", include_str!("main.rs").lines().take_while(|l| l.starts_with("//!")).map(|l| l.trim_start_matches("//!").trim_start()).collect::<Vec<_>>().join("\n"));
                 std::process::exit(0);
             }
             other => return Err(format!("unknown option {other} (try --help)")),
@@ -193,8 +127,7 @@ fn check() -> Result<String, String> {
             return Err(format!("music/{}.song: {e}", s.stem));
         }
         for ch in 0..4 {
-            doc.canonicalize(ch)
-                .map_err(|e| format!("{} channel {ch}: {e}", s.stem))?;
+            doc.canonicalize(ch).map_err(|e| format!("{} channel {ch}: {e}", s.stem))?;
         }
     }
     Ok(format!("{} songs ok", songs.len()))
@@ -275,10 +208,7 @@ fn main() {
         }))
         .add_plugins(EguiPlugin::default())
         .insert_non_send(ed)
-        .insert_resource(Clock {
-            fps: a.capture.as_ref().map(|_| a.fps as f64),
-            frame: 0,
-        })
+        .insert_resource(Clock { fps: a.capture.as_ref().map(|_| a.fps as f64), frame: 0 })
         .insert_resource(a)
         .add_systems(Startup, |mut commands: Commands| {
             commands.spawn(Camera2d);
@@ -304,13 +234,7 @@ impl Clock {
     }
 }
 
-fn ui(
-    mut contexts: EguiContexts,
-    mut ed: NonSendMut<Editor>,
-    time: Res<Time<Real>>,
-    clock: Res<Clock>,
-    mut styled: Local<bool>,
-) -> Result {
+fn ui(mut contexts: EguiContexts, mut ed: NonSendMut<Editor>, time: Res<Time<Real>>, clock: Res<Clock>, mut styled: Local<bool>) -> Result {
     let ctx = contexts.ctx_mut()?;
     if !*styled {
         // New fonts bind from the next pass.
@@ -339,9 +263,7 @@ fn script(
         // Every frame saved (from the second, when the fonts are in), then the sound.
         if clock.frame >= 2 {
             let path = dir.join(format!("f{:05}.png", clock.frame - 2));
-            commands
-                .spawn(Screenshot::primary_window())
-                .observe(save_to_disk(path));
+            commands.spawn(Screenshot::primary_window()).observe(save_to_disk(path));
         }
         clock.frame += 1;
         if t > args.secs + 0.2 {
@@ -372,9 +294,7 @@ fn script(
     if let Some(path) = &args.screenshot {
         if *stage == 2 && t > args.wait {
             *stage = 3;
-            commands
-                .spawn(Screenshot::primary_window())
-                .observe(save_to_disk(path.clone()));
+            commands.spawn(Screenshot::primary_window()).observe(save_to_disk(path.clone()));
         }
         if *stage == 3 && t > args.wait + 2.0 {
             exit.write(AppExit::Success);

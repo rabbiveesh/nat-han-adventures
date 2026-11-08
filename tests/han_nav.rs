@@ -27,10 +27,7 @@ fn nav_graph_costs() {
         let mut far = start;
         for r in 0..level.height as i32 {
             for c in 0..level.width as i32 {
-                if Nav::node(&map, &level, (c, r))
-                    && (c - start.0).abs() > (far.0 - start.0).abs()
-                    && (c - start.0).abs() < 40
-                {
+                if Nav::node(&map, &level, (c, r)) && (c - start.0).abs() > (far.0 - start.0).abs() && (c - start.0).abs() < 40 {
                     far = (c, r);
                 }
             }
@@ -66,12 +63,6 @@ fn lazy_routes_are_cheap() {
         let to = (start.0 + 6, start.1);
         let t = Instant::now();
         let r = nav.route(&map, start, to, 400);
-        eprintln!(
-            "{}: cold 6-tile route {:?} in {:.2?}, {} cells simulated",
-            level.name,
-            matches!(r, Route::Found(_)),
-            t.elapsed(),
-            nav.expanded
-        );
+        eprintln!("{}: cold 6-tile route {:?} in {:.2?}, {} cells simulated", level.name, matches!(r, Route::Found(_)), t.elapsed(), nav.expanded);
     }
 }

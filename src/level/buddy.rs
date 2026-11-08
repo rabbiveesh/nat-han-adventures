@@ -11,9 +11,8 @@ use bevy::prelude::*;
 use super::{Level, TILE};
 use crate::audio::Harmony;
 use crate::game::{
-    BOOST_SPEED, Body, Carrier, Contact, FIRED_UP_SPEED, Fall, GIANT_STEPS_GRAVITY,
-    GIANT_STEPS_SPEED, Groove, HanHead, THROW_CARRY, THROW_SPEED, TileMood, WEAK_BOOST_SPEED,
-    han_carrier, move_towards, step_body, tuning::*,
+    BOOST_SPEED, Body, Carrier, Contact, FIRED_UP_SPEED, Fall, WEAK_BOOST_SPEED, GIANT_STEPS_GRAVITY, GIANT_STEPS_SPEED, Groove, THROW_CARRY, THROW_SPEED, han_carrier, move_towards,
+    step_body, tuning::*, HanHead, TileMood,
 };
 
 /// Han's top running speed (px/s): a touch faster than Nat's, so he can catch up.
@@ -70,11 +69,7 @@ impl HanPhys {
     /// - laughing band: he rolls and bounces.
     pub fn of(groove: &Groove) -> HanPhys {
         let gs = groove.harmony == Harmony::Coltrane;
-        let gravity = if gs {
-            GRAVITY * GIANT_STEPS_GRAVITY * HAN_GS_FLOAT
-        } else {
-            GRAVITY
-        };
+        let gravity = if gs { GRAVITY * GIANT_STEPS_GRAVITY * HAN_GS_FLOAT } else { GRAVITY };
         let speed = if gs {
             GIANT_STEPS_SPEED
         } else if groove.fired_up() {
@@ -83,11 +78,7 @@ impl HanPhys {
             1.0
         };
         HanPhys {
-            fall: Fall {
-                gravity,
-                max_fall: MAX_FALL * (gravity / GRAVITY).sqrt(),
-                tiles: TileMood::of(groove),
-            },
+            fall: Fall { gravity, max_fall: MAX_FALL * (gravity / GRAVITY).sqrt(), tiles: TileMood::of(groove) },
             speed: HAN_RUN_SPEED * speed,
             ground_accel: GROUND_ACCEL * speed,
             air_accel: AIR_ACCEL * speed,
@@ -104,11 +95,7 @@ impl HanPhys {
     pub fn side_b(groove: &Groove) -> HanPhys {
         let g = groove;
         HanPhys {
-            fall: Fall {
-                gravity: GRAVITY * g.gravity_scale,
-                max_fall: MAX_FALL * g.fall_scale(),
-                tiles: TileMood::of(g),
-            },
+            fall: Fall { gravity: GRAVITY * g.gravity_scale, max_fall: MAX_FALL * g.fall_scale(), tiles: TileMood::of(g) },
             speed: RUN_SPEED * g.speed_scale,
             ground_accel: GROUND_ACCEL * g.speed_scale,
             air_accel: AIR_ACCEL * g.speed_scale,
@@ -156,10 +143,7 @@ pub struct HanCtl {
 
 impl Default for HanCtl {
     fn default() -> Self {
-        HanCtl {
-            toots_left: HAN_TOOTS,
-            cut_armed: false,
-        }
+        HanCtl { toots_left: HAN_TOOTS, cut_armed: false }
     }
 }
 
@@ -191,11 +175,7 @@ pub fn drive(
     let target = input.dir * phys.speed * speed;
     let accel = speed.max(1.0)
         * if body.on_ground {
-            if input.dir == 0.0 || input.dir * body.vel.x < 0.0 {
-                GROUND_DECEL
-            } else {
-                phys.ground_accel
-            }
+            if input.dir == 0.0 || input.dir * body.vel.x < 0.0 { GROUND_DECEL } else { phys.ground_accel }
         } else {
             phys.air_accel
         };
@@ -226,8 +206,7 @@ pub fn drive(
     if contact.ground {
         ctl.toots_left = phys.toots;
         if phys.bounce && !contact.was_on_ground && contact.fall_speed > BOUNCE_MIN {
-            body.vel.y = (contact.fall_speed * crate::game::BOUNCE_RESTITUTION)
-                .min(crate::game::BOUNCE_SPEED * HAN_ROLL_BOUNCE);
+            body.vel.y = (contact.fall_speed * crate::game::BOUNCE_RESTITUTION).min(crate::game::BOUNCE_SPEED * HAN_ROLL_BOUNCE);
             body.on_ground = false;
             body.riding = None;
             out.bounced = true;
@@ -256,22 +235,14 @@ pub fn time_to_fall_to(nat: &Kin, y: f32, gravity: f32) -> Option<f32> {
     let v = nat.vel.y;
     // h + v t - g t²/2 = 0, the later root.
     let d = v * v + 2.0 * gravity * h;
-    (d >= 0.0)
-        .then(|| (v + d.sqrt()) / gravity)
-        .filter(|t| *t >= 0.0)
+    (d >= 0.0).then(|| (v + d.sqrt()) / gravity).filter(|t| *t >= 0.0)
 }
 
 /// The goalkeeper: get under a Nat in the air so he can land on Han's head (and boost off it).
 /// Runs to where Nat will come down to head height, jumps off ledges rather than walking off
 /// them (`floor_ahead`: is there ground a step ahead in the direction he's running), and toots
 /// to rise into Nat's path when he's sinking below it.
-pub fn intercept(
-    han: &Kin,
-    nat: &Kin,
-    toots_left: u8,
-    gravity: f32,
-    floor_ahead: bool,
-) -> HanInput {
+pub fn intercept(han: &Kin, nat: &Kin, toots_left: u8, gravity: f32, floor_ahead: bool) -> HanInput {
     let head = han.pos.y + HALF.y;
     let feet = nat.pos.y - HALF.y;
     let above = feet - head;
@@ -279,14 +250,8 @@ pub fn intercept(
     let x_to = nat.pos.x + nat.vel.x * t;
     let dx = x_to - han.pos.x;
     // On the ground, brake in time to stop under him (a fired-up Han dives fast).
-    let stopping = han.grounded
-        && han.vel.x * dx > 0.0
-        && dx.abs() < han.vel.x * han.vel.x / (2.0 * GROUND_DECEL);
-    let dir = if dx.abs() > 1.5 && !stopping {
-        dx.signum()
-    } else {
-        0.0
-    };
+    let stopping = han.grounded && han.vel.x * dx > 0.0 && dx.abs() < han.vel.x * han.vel.x / (2.0 * GROUND_DECEL);
+    let dir = if dx.abs() > 1.5 && !stopping { dx.signum() } else { 0.0 };
     let running_off = han.grounded && dir != 0.0 && !floor_ahead;
     let high = above > 2.5 * TILE && dx.abs() < 2.5 * TILE && nat.vel.y < 60.0;
     let jump = han.grounded && (running_off || high);
@@ -306,13 +271,7 @@ pub fn intercept(
         && above > 8.0
         && above < 5.0 * TILE
         && under;
-    HanInput {
-        dir,
-        speed: HAN_DIVE,
-        jump,
-        hold,
-        toot,
-    }
+    HanInput { dir, speed: HAN_DIVE, jump, hold, toot }
 }
 
 /// A fired-up chasm: walk row `row`, open (bottomless) columns `c0..=c1`.
@@ -377,11 +336,7 @@ pub const TRAPEZE_SPEED: f32 = 240.0;
 /// A trapeze off the lip cell `lip` (Nat standing on its floor, the gap on side `dir`): the
 /// column of the swing's bottom, the row Han's head tops out in there (Nat rides in the row
 /// above), and the ceiling row his plunger sticks into. `solid(col, row)` is the level.
-pub fn trapeze_swing(
-    solid: impl Fn(i32, i32) -> bool,
-    lip: (i32, i32),
-    dir: i32,
-) -> Option<(i32, i32, i32)> {
+pub fn trapeze_swing(solid: impl Fn(i32, i32) -> bool, lip: (i32, i32), dir: i32) -> Option<(i32, i32, i32)> {
     let ax = lip.0 + dir * TRAPEZE_OUT;
     let han = lip.1 - TRAPEZE_LIFT + 1;
     let nat = han - 1;
@@ -390,9 +345,7 @@ pub fn trapeze_swing(
     if !open || !solid(lip.0, lip.1 + 1) || solid(lip.0 + dir, lip.1 + 1) {
         return None;
     }
-    let ceiling = (nat - 1 - TRAPEZE_ROPE.1..nat - 1)
-        .rev()
-        .find(|&r| solid(ax, r))?;
+    let ceiling = (nat - 1 - TRAPEZE_ROPE.1..nat - 1).rev().find(|&r| solid(ax, r))?;
     (han - ceiling - 1 >= TRAPEZE_ROPE.0).then_some((ax, han, ceiling))
 }
 
@@ -459,13 +412,7 @@ pub fn chain_try(
     hb.vel.x = nb.vel.x;
     let mut hctl = HanCtl::default();
     let han_id = Entity::from_raw_u32(1).unwrap_or(Entity::PLACEHOLDER);
-    let mut head = HanHead {
-        solid: true,
-        boost: true,
-        block: false,
-        weak: false,
-        kick: 0.0,
-    };
+    let mut head = HanHead { solid: true, boost: true, block: false, weak: false, kick: 0.0 };
     let mut han_floor = han.y;
     let (mut jumped, mut has_toot, mut toots, mut t, mut last_launch, mut tooted_since) =
         (false, true, 0u32, 0.0f32, 0.0f32, false);
@@ -480,52 +427,21 @@ pub fn chain_try(
         let speed = RUN_SPEED * groove.speed_scale;
         // --- Han first (he moves before Nat in the game), on last step's Nat.
         let han_prev = han;
-        let hk = Kin {
-            pos: han,
-            vel: hb.vel,
-            grounded: hb.on_ground,
-        };
-        let nk = Kin {
-            pos: nat,
-            vel: nb.vel,
-            grounded: nb.on_ground,
-        };
+        let hk = Kin { pos: han, vel: hb.vel, grounded: hb.on_ground };
+        let nk = Kin { pos: nat, vel: nb.vel, grounded: nb.on_ground };
         let phys = HanPhys::of(&groove);
         let ahead = han + Vec2::new(d * (HALF.x + 4.0), -HALF.y - 2.0);
         let (ac, ar) = level.cell_at(ahead);
-        let floor_ahead = {
-            let t = level.tile(ac, ar);
-            t.is_solid() || t.is_one_way()
-        };
+        let floor_ahead = { let t = level.tile(ac, ar); t.is_solid() || t.is_one_way() };
         let mut input = if nb.riding == Some(han_id) {
             HanInput::default() // braced: no taxi rides
         } else {
-            intercept(
-                &hk,
-                &nk,
-                hctl.toots_left,
-                Fall::of(&groove).gravity,
-                floor_ahead,
-            )
+            intercept(&hk, &nk, hctl.toots_left, Fall::of(&groove).gravity, floor_ahead)
         };
         if !jumped {
-            input = HanInput {
-                dir: d,
-                speed: 1.0,
-                ..default()
-            };
+            input = HanInput { dir: d, speed: 1.0, ..default() };
         }
-        drive(
-            level,
-            &mut han,
-            &mut hb,
-            &mut hctl,
-            input,
-            &phys,
-            &[],
-            &[],
-            DT,
-        );
+        drive(level, &mut han, &mut hb, &mut hctl, input, &phys, &[], &[], DT);
         if hb.on_ground {
             han_floor = han.y;
         }
@@ -535,25 +451,11 @@ pub fn chain_try(
             || (marks == ChasmMarks::AsFound
                 && (chasm.c0..=chasm.c1).contains(&feet.0)
                 && !level.gates.iter().any(|g| g.topic == super::Topic::Chain));
-        head.solid = head_holds(
-            hb.on_ground,
-            han.y - han_floor,
-            zone,
-            over,
-            groove.fired_up(),
-        ) && !level.han_keeps_out(feet);
+        head.solid =
+            head_holds(hb.on_ground, han.y - han_floor, zone, over, groove.fired_up()) && !level.han_keeps_out(feet);
         head.weak = zone;
         // --- Nat.
-        nb.vel.x = move_towards(
-            nb.vel.x,
-            d * speed,
-            if nb.on_ground {
-                GROUND_ACCEL
-            } else {
-                AIR_ACCEL
-            } * groove.speed_scale
-                * DT,
-        );
+        nb.vel.x = move_towards(nb.vel.x, d * speed, if nb.on_ground { GROUND_ACCEL } else { AIR_ACCEL } * groove.speed_scale * DT);
         let on_han = nb.riding == Some(han_id);
         if !jumped && nat.x * d >= (edge_x - d * 4.0) * d {
             nb.vel.y = JUMP_SPEED;
@@ -587,19 +489,8 @@ pub fn chain_try(
                 gs_at = t + delay;
             }
         }
-        let carriers: Vec<Carrier> = han_carrier(han_id, han, han_prev, &head)
-            .into_iter()
-            .collect();
-        let contact = step_body(
-            level,
-            &mut nat,
-            &mut nb,
-            Fall::of(&groove),
-            &carriers,
-            &[],
-            &[],
-            DT,
-        );
+        let carriers: Vec<Carrier> = han_carrier(han_id, han, han_prev, &head).into_iter().collect();
+        let contact = step_body(level, &mut nat, &mut nb, Fall::of(&groove), &carriers, &[], &[], DT);
         if nat.y + HALF.y < 0.0 {
             return None; // fell out of the level
         }

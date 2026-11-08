@@ -19,18 +19,13 @@ use bevy::prelude::*;
 
 use super::physics::{Body, Carrier, Dead, Finished};
 use super::{ActiveLevel, GameSet, Groove, Han, LevelTile, Player, Pos, SimClock};
-use crate::level::{
-    CRUMBLE_BACK, CRUMBLE_DELAY, CrushDir, CrushTime, Crusher, CrusherDef, Level, TILE, Tile,
-};
+use crate::level::{CRUMBLE_BACK, CRUMBLE_DELAY, CrushDir, CrushTime, Crusher, CrusherDef, Level, TILE, Tile};
 
 pub(super) fn plugin(app: &mut App) {
     app.add_message::<BrickSmashed>()
         .add_message::<Sprung>()
         .add_message::<CrusherThud>()
-        .add_systems(
-            FixedUpdate,
-            (move_crushers, beat_blocks).in_set(GameSet::World),
-        )
+        .add_systems(FixedUpdate, (move_crushers, beat_blocks).in_set(GameSet::World))
         .add_systems(FixedUpdate, crumble.in_set(GameSet::Interact))
         .add_systems(FixedUpdate, sounds.in_set(GameSet::Sync));
 }
@@ -67,12 +62,7 @@ impl CrusherBlock {
     pub fn new(level: &Level, def: CrusherDef) -> CrusherBlock {
         let a = level.tile_center(def.col, def.row);
         let b = level.tile_center(def.col + def.w - 1, def.row + def.h - 1);
-        CrusherBlock {
-            def,
-            home: (a + b) / 2.0,
-            half: Vec2::new(def.w as f32, def.h as f32) * TILE / 2.0,
-            slamming: false,
-        }
+        CrusherBlock { def, home: (a + b) / 2.0, half: Vec2::new(def.w as f32, def.h as f32) * TILE / 2.0, slamming: false }
     }
 
     /// Where its center is at `t`.
@@ -109,34 +99,20 @@ impl CrusherBlock {
 /// Overlapping it by more than [`super::FORGIVE`] each way.
 pub fn squashed(pos: Vec2, half: Vec2, (min, max): (Vec2, Vec2)) -> bool {
     let f = super::FORGIVE;
-    pos.x + half.x - f > min.x
-        && pos.x - half.x + f < max.x
-        && pos.y + half.y - f > min.y
-        && pos.y - half.y + f < max.y
+    pos.x + half.x - f > min.x && pos.x - half.x + f < max.x && pos.y + half.y - f > min.y && pos.y - half.y + f < max.y
 }
 
 /// When it is for the crushers: the sim clock, and the music's bars.
 pub fn crush_time(clock: &SimClock, groove: &Groove) -> CrushTime {
     let c = &groove.clock;
     let bars = c.bar as f32 + (c.beat as f32 + c.phase) / c.beats_per_bar.max(1) as f32;
-    CrushTime {
-        sim: clock.time,
-        bars,
-        bar_secs: c.bar_secs(),
-    }
+    CrushTime { sim: clock.time, bars, bar_secs: c.bar_secs() }
 }
 
 /// Should a body (center `pos`, half extents `half`) on foot, heading `dir` at `speed` px/s,
 /// wait before stepping into this crusher's sweep at `t`? Yes unless it's resting
 /// at home long enough to get past it. (Already in the sweep: no, get out.) Han's reflex.
-pub fn wait_for(
-    block: &CrusherBlock,
-    pos: Vec2,
-    half: Vec2,
-    dir: f32,
-    speed: f32,
-    t: CrushTime,
-) -> bool {
+pub fn wait_for(block: &CrusherBlock, pos: Vec2, half: Vec2, dir: f32, speed: f32, t: CrushTime) -> bool {
     let (a0, a1) = block.bounds(block.home);
     let d = block.def.travel as f32 * TILE;
     let far = block.home
@@ -147,17 +123,11 @@ pub fn wait_for(
         };
     let (b0, b1) = block.bounds(far);
     let (min, max) = (a0.min(b0), a1.max(b1));
-    let overlaps = |p: Vec2| {
-        p.x + half.x > min.x && p.x - half.x < max.x && p.y + half.y > min.y && p.y - half.y < max.y
-    };
+    let overlaps = |p: Vec2| p.x + half.x > min.x && p.x - half.x < max.x && p.y + half.y > min.y && p.y - half.y < max.y;
     if dir == 0.0 || overlaps(pos) || !overlaps(pos + Vec2::new(dir * 6.0, 0.0)) {
         return false;
     }
-    let dist = if dir > 0.0 {
-        max.x - (pos.x - half.x)
-    } else {
-        (pos.x + half.x) - min.x
-    } + 2.0;
+    let dist = if dir > 0.0 { max.x - (pos.x - half.x) } else { (pos.x + half.x) - min.x } + 2.0;
     let need = dist / speed.max(1.0) + 0.15;
     Crusher::rest_left(&block.def, t).is_none_or(|left| left < need)
 }
@@ -178,11 +148,7 @@ pub struct Sprung {
 }
 
 /// Empty the brick tiles a body smashed through.
-pub fn smash(
-    active: &mut ActiveLevel,
-    cells: impl Iterator<Item = (i32, i32)>,
-    out: &mut MessageWriter<BrickSmashed>,
-) {
+pub fn smash(active: &mut ActiveLevel, cells: impl Iterator<Item = (i32, i32)>, out: &mut MessageWriter<BrickSmashed>) {
     for (c, r) in cells {
         let level = &mut active.level;
         if c < 0 || r < 0 || c >= level.width as i32 || r >= level.height as i32 {
@@ -191,11 +157,7 @@ pub fn smash(
         let i = r as usize * level.width + c as usize;
         if level.tiles[i] == Tile::Brick {
             level.tiles[i] = Tile::Empty;
-            out.write(BrickSmashed {
-                col: c as usize,
-                row: r as usize,
-                pos: level.tile_center(c as usize, r as usize),
-            });
+            out.write(BrickSmashed { col: c as usize, row: r as usize, pos: level.tile_center(c as usize, r as usize) });
         }
     }
 }
@@ -227,11 +189,7 @@ pub(super) fn move_crushers(
                     CrushDir::Left => (at - Vec2::new(block.half.x, 0.0), block.half.y),
                     CrushDir::Right => (at + Vec2::new(block.half.x, 0.0), block.half.y),
                 };
-                thuds.write(CrusherThud {
-                    face,
-                    dir: block.def.dir,
-                    half,
-                });
+                thuds.write(CrusherThud { face, dir: block.def.dir, half });
             }
             block.slamming = slamming;
         }
@@ -262,14 +220,7 @@ fn crumble(
     time: Res<Time>,
     mut active: ResMut<ActiveLevel>,
     mut tiles: Query<(&LevelTile, &mut Crumble)>,
-    bodies: Query<
-        (&Pos, &Body),
-        (
-            Or<(With<Player>, With<Han>)>,
-            Without<Dead>,
-            Without<Finished>,
-        ),
-    >,
+    bodies: Query<(&Pos, &Body), (Or<(With<Player>, With<Han>)>, Without<Dead>, Without<Finished>)>,
 ) {
     let dt = time.delta_secs();
     let level = &active.level;
@@ -300,10 +251,7 @@ fn crumble(
             Crumble::Fallen(s) if s + dt >= CRUMBLE_BACK => {
                 let c = level.tile_center(t.col, t.row);
                 let (min, max) = (c - TILE / 2.0, c + TILE / 2.0);
-                if inside
-                    .iter()
-                    .any(|&(a, b)| a.x < max.x && b.x > min.x && a.y < max.y && b.y > min.y)
-                {
+                if inside.iter().any(|&(a, b)| a.x < max.x && b.x > min.x && a.y < max.y && b.y > min.y) {
                     Crumble::Fallen(s + dt)
                 } else {
                     changes.push((t.row * level.width + t.col, Tile::Crumble));
@@ -333,22 +281,12 @@ pub(super) fn beat_blocks(
     let level = &active.level;
     // (A scan is a few thousand compares: cheaper than keeping a list in step with level loads.)
     cells.clear();
-    cells.extend(
-        level
-            .tiles
-            .iter()
-            .enumerate()
-            .filter(|(_, t)| t.is_beat())
-            .map(|(i, _)| i),
-    );
+    cells.extend(level.tiles.iter().enumerate().filter(|(_, t)| t.is_beat()).map(|(i, _)| i));
     if cells.is_empty() {
         return;
     }
     let odd = groove.clock.bar % 2 == 1;
-    let inside: Vec<(Vec2, Vec2)> = bodies
-        .iter()
-        .map(|(p, b)| (p.0 - b.half, p.0 + b.half))
-        .collect();
+    let inside: Vec<(Vec2, Vec2)> = bodies.iter().map(|(p, b)| (p.0 - b.half, p.0 + b.half)).collect();
     let mut changes: Vec<(usize, Tile)> = Vec::new();
     for &i in cells.iter() {
         let now = level.tiles[i];
@@ -359,10 +297,7 @@ pub(super) fn beat_blocks(
         if next.is_solid() {
             let c = level.tile_center(i % level.width, i / level.width);
             let (min, max) = (c - TILE / 2.0, c + TILE / 2.0);
-            if inside
-                .iter()
-                .any(|&(a, b)| a.x < max.x && b.x > min.x && a.y < max.y && b.y > min.y)
-            {
+            if inside.iter().any(|&(a, b)| a.x < max.x && b.x > min.x && a.y < max.y && b.y > min.y) {
                 continue;
             }
         }

@@ -98,13 +98,7 @@ fn set(c: &mut Canvas, d: &mut Dice, band: Band, motif: Motif) -> Built {
     let chart = Chart::new(d, band, motif);
     let f = c.floor();
     let k = f - CANAL_RISE;
-    let mut s = Lay {
-        motif,
-        top: f,
-        nuggets: 0,
-        budget: 0,
-        ferries: 0,
-    };
+    let mut s = Lay { motif, top: f, nuggets: 0, budget: 0, ferries: 0 };
     for &(role, len) in &chart.sections {
         match role {
             // Up from the floor to the canal's level over the head.
@@ -130,10 +124,7 @@ fn set(c: &mut Canvas, d: &mut Dice, band: Band, motif: Motif) -> Built {
             }
         }
     }
-    Built {
-        hint: None,
-        checkpoint: None,
-    }
+    Built { hint: None, checkpoint: None }
 }
 
 /// Laying a section's beats: the current roof's surface row, nuggets placed so far.
@@ -162,11 +153,7 @@ impl Lay {
     /// Step the roofs to row `to` (hops of up to 2 over short gaps).
     fn settle(&mut self, c: &mut Canvas, to: usize) {
         while self.top != to {
-            let next = if self.top > to {
-                self.top - (self.top - to).min(2)
-            } else {
-                self.top + (to - self.top).min(3)
-            };
+            let next = if self.top > to { self.top - (self.top - to).min(2) } else { self.top + (to - self.top).min(3) };
             c.pool(2);
             c.ground(3, next);
             self.top = next;
@@ -202,11 +189,7 @@ impl Lay {
         while c.width() + 4 < end {
             let p = (c.width() - x0) as f32 / len as f32;
             // (The shout climbs and comes back down: a swell to the exit.)
-            let swell = if shout {
-                (4.0 * (p * std::f32::consts::PI).sin()).round() as usize
-            } else {
-                0
-            };
+            let swell = if shout { (4.0 * (p * std::f32::consts::PI).sin()).round() as usize } else { 0 };
             let aim = (from as f32 + (to as f32 - from as f32) * p).round() as usize - swell;
             // Wander about the aim, up to 2 tiles either side.
             let (lo, hi) = (lo.max(aim.saturating_sub(2)), hi.min(aim + 2));
@@ -235,11 +218,7 @@ impl Lay {
                 0 => {
                     let g = d.int(2, 3 + (band >= 6) as i32) as usize;
                     let up = if g >= 4 { 1 } else { 2 };
-                    let want = if self.top > aim {
-                        -(up as i32)
-                    } else {
-                        d.int(-1, 2)
-                    };
+                    let want = if self.top > aim { -(up as i32) } else { d.int(-1, 2) };
                     let next = self.step(want, up, lo, hi);
                     let x = c.width();
                     c.pool(g);
@@ -289,54 +268,18 @@ impl Lay {
     /// fits under them, a toot doesn't. Nuggets ride along.
     fn ferry(&mut self, c: &mut Canvas, d: &mut Dice, band: Band, convoy: bool, rush: bool) {
         let pw = if rush { 2 } else { lerpi(band, 3.0, 2.0) };
-        let w = if convoy {
-            d.int(11, 13) as usize
-        } else {
-            d.int(6, 8) as usize
-        };
-        let period = d.u() * 0.4
-            + if rush {
-                lerp(band, 3.0, 2.2)
-            } else {
-                lerp(band, 3.8, 2.8)
-            };
+        let w = if convoy { d.int(11, 13) as usize } else { d.int(6, 8) as usize };
+        let period = d.u() * 0.4 + if rush { lerp(band, 3.0, 2.2) } else { lerp(band, 3.8, 2.8) };
         let x = c.width();
         c.pool(w);
         let top = self.top;
         if convoy {
             let half = w / 2;
-            c.platform(
-                x,
-                top,
-                pw,
-                (half - pw) as f32,
-                0.0,
-                period,
-                d.u(),
-                PlatformKind::Duck,
-            );
-            c.platform(
-                x + half,
-                top,
-                pw,
-                (w - half - pw) as f32,
-                0.0,
-                period,
-                d.u(),
-                PlatformKind::Duck,
-            );
+            c.platform(x, top, pw, (half - pw) as f32, 0.0, period, d.u(), PlatformKind::Duck);
+            c.platform(x + half, top, pw, (w - half - pw) as f32, 0.0, period, d.u(), PlatformKind::Duck);
             self.ferries -= 2;
         } else {
-            c.platform(
-                x,
-                top,
-                pw,
-                (w - pw) as f32,
-                0.0,
-                period,
-                d.u(),
-                PlatformKind::Duck,
-            );
+            c.platform(x, top, pw, (w - pw) as f32, 0.0, period, d.u(), PlatformKind::Duck);
             self.ferries -= 1;
         }
         // Spikes hanging overhead (no pipe: nothing to climb onto), not over the first and last
@@ -355,16 +298,7 @@ impl Lay {
         let period = d.u() * 0.4 + lerp(band, 3.4, 2.6);
         let x = c.width();
         c.pit(pw + 1);
-        c.platform(
-            x,
-            self.top,
-            pw,
-            0.0,
-            h as f32,
-            period,
-            d.u(),
-            PlatformKind::Plunger,
-        );
+        c.platform(x, self.top, pw, 0.0, h as f32, period, d.u(), PlatformKind::Plunger);
         self.ferries -= 1;
         let top = self.top - h;
         self.land(c, 3, top, false);
@@ -376,10 +310,7 @@ impl Lay {
     fn step(&self, want: i32, up: usize, lo: usize, hi: usize) -> usize {
         let (reach_lo, reach_hi) = (self.top.saturating_sub(up), self.top + 3);
         let next = (self.top as i32 - want).clamp(reach_lo as i32, reach_hi as i32) as usize;
-        next.clamp(
-            lo.max(reach_lo).min(reach_hi),
-            hi.min(reach_hi).max(reach_lo),
-        )
+        next.clamp(lo.max(reach_lo).min(reach_hi), hi.min(reach_hi).max(reach_lo))
     }
 
     /// A landing roof `w` wide at row `top`: a building, or a crumbling slab over the canal.
@@ -401,18 +332,14 @@ impl Lay {
 /// surface with nothing on or over them) and the share of the body's columns that are plain.
 pub fn density(level: &crate::level::Level) -> (usize, f32) {
     use crate::level::Tile;
-    let surface =
-        |col: usize| (1..level.height).find(|&r| level.tile(col as i32, r as i32) != Tile::Empty);
+    let surface = |col: usize| (1..level.height).find(|&r| level.tile(col as i32, r as i32) != Tile::Empty);
     let thing_at = |col: usize| level.things.iter().any(|t| t.col == col);
     let (mut longest, mut run, mut plain) = (0, 0, 0);
     let mut prev = None;
     let body = super::canvas::ENTRY..level.width.saturating_sub(super::canvas::EXIT);
     for col in body.clone() {
         let s = surface(col);
-        let flat = s.is_some()
-            && s == prev
-            && level.tile(col as i32, s.unwrap() as i32) == Tile::Solid
-            && !thing_at(col);
+        let flat = s.is_some() && s == prev && level.tile(col as i32, s.unwrap() as i32) == Tile::Solid && !thing_at(col);
         if flat {
             run += 1;
             plain += 1;

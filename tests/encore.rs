@@ -10,13 +10,10 @@ use bevy::{input::InputPlugin, prelude::*, state::app::StatesPlugin, time::TimeU
 use leafwing_input_manager::prelude::*;
 use nat_han_adventures::{
     events::*,
-    game::encore::{
-        CONTINUED_SECS, ENDING_TIMEOUT, Encore, EncorePhase, FLUSH_SECS, Gag, LAP_SECS, SLAM_SECS,
-        StageHan, UPSTAIRS_SECS,
-    },
-    game::sideb::CallMode,
+    game::encore::{CONTINUED_SECS, ENDING_TIMEOUT, Encore, EncorePhase, FLUSH_SECS, Gag, LAP_SECS, SLAM_SECS, StageHan, UPSTAIRS_SECS},
     game::solo::{SOLO_COUNT, SoloRun},
     game::{GeneratedLevel, secret::HanGlimpse},
+    game::sideb::CallMode,
     game::{Han, HanAnim, HanPose, LevelRun, Player, Pos},
     level::{LEVEL_COUNT, Level, Levels},
     state::{AppState, CurrentLevel},
@@ -63,39 +60,22 @@ fn solo_app(n: usize) -> App {
 fn app_with(level: usize, solo: Option<usize>) -> App {
     let mut app = App::new();
     app.add_plugins((MinimalPlugins, StatesPlugin, InputPlugin))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
-            DT,
-        )))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(DT)))
         .add_plugins(nat_han_adventures::gameplay)
-        .insert_resource(Levels(vec![
-            Level::parse(STAGE).expect("test level parses");
-            LEVEL_COUNT
-        ]))
+        .insert_resource(Levels(vec![Level::parse(STAGE).expect("test level parses"); LEVEL_COUNT]))
         .insert_resource(CurrentLevel(level));
-    for counter in [
-        count::<LevelCompleted>,
-        count::<CallMode>,
-        count::<FinalHit>,
-    ] {
+    for counter in [count::<LevelCompleted>, count::<CallMode>, count::<FinalHit>] {
         counter(&mut app);
     }
-    app.insert_resource(Cues::default()).add_systems(
-        Last,
-        |mut r: MessageReader<EncoreCue>, mut c: ResMut<Cues>| c.0.extend(r.read().copied()),
-    );
+    app.insert_resource(Cues::default()).add_systems(Last, |mut r: MessageReader<EncoreCue>, mut c: ResMut<Cues>| c.0.extend(r.read().copied()));
     app.finish();
     app.cleanup();
     app.update();
     // (After the title's entered: it leaves NAT ALONE.)
     if let Some(n) = solo {
-        app.insert_resource(SoloRun(n))
-            .insert_resource(GeneratedLevel(
-                Level::parse(SOLO_STAGE).expect("solo stage parses"),
-            ));
+        app.insert_resource(SoloRun(n)).insert_resource(GeneratedLevel(Level::parse(SOLO_STAGE).expect("solo stage parses")));
     }
-    app.world_mut()
-        .resource_mut::<NextState<AppState>>()
-        .set(AppState::Playing);
+    app.world_mut().resource_mut::<NextState<AppState>>().set(AppState::Playing);
     app.update();
     app.update();
     app
@@ -109,9 +89,7 @@ struct Count<M>(usize, std::marker::PhantomData<M>);
 
 fn count<M: Message>(app: &mut App) {
     app.insert_resource(Count::<M>(0, default()))
-        .add_systems(Last, |mut r: MessageReader<M>, mut c: ResMut<Count<M>>| {
-            c.0 += r.read().count()
-        });
+        .add_systems(Last, |mut r: MessageReader<M>, mut c: ResMut<Count<M>>| c.0 += r.read().count());
 }
 
 fn counted<M: Message>(app: &App) -> usize {
@@ -144,11 +122,7 @@ fn phase(app: &App) -> Option<EncorePhase> {
 }
 
 fn pos<C: Component>(app: &mut App) -> Vec2 {
-    app.world_mut()
-        .query_filtered::<&Pos, With<C>>()
-        .single(app.world())
-        .unwrap()
-        .0
+    app.world_mut().query_filtered::<&Pos, With<C>>().single(app.world()).unwrap().0
 }
 
 fn tap(app: &mut App, key: KeyCode) {
@@ -193,33 +167,17 @@ fn the_last_goal_starts_an_encore_that_ends_in_the_throne() {
     step(&mut app, 3.0);
     // Nat's in the bowl, and Han landed short of it.
     let e = app.world().resource::<Encore>().clone();
-    assert!(
-        matches!(e.phase, EncorePhase::Flushing | EncorePhase::Continued),
-        "{:?}",
-        e.phase
-    );
+    assert!(matches!(e.phase, EncorePhase::Flushing | EncorePhase::Continued), "{:?}", e.phase);
     assert!(pos::<Player>(&mut app).distance(e.bowl()) < 20.0);
     let han = pos::<Han>(&mut app);
-    assert!(
-        (han.x - e.bowl().x).abs() >= 16.0,
-        "Han misses: {han} vs bowl {}",
-        e.bowl()
-    );
+    assert!((han.x - e.bowl().x).abs() >= 16.0, "Han misses: {han} vs bowl {}", e.bowl());
     assert!(han.distance(han_from) > 1.0, "Han dived");
-    let anim = *app
-        .world_mut()
-        .query_filtered::<&HanAnim, With<Han>>()
-        .single(app.world())
-        .unwrap();
+    let anim = *app.world_mut().query_filtered::<&HanAnim, With<Han>>().single(app.world()).unwrap();
     assert_ne!(anim.pose, HanPose::Run);
     step(&mut app, FLUSH_SECS + CONTINUED_SECS);
     assert_eq!(state(&app), AppState::LevelComplete);
     assert_eq!(counted::<LevelCompleted>(&app), 1);
-    assert_eq!(
-        app.world().resource::<LevelRun>().time,
-        time_at_goal,
-        "the results count up to the goal"
-    );
+    assert_eq!(app.world().resource::<LevelRun>().time, time_at_goal, "the results count up to the goal");
     let cues = &app.world().resource::<Cues>().0;
     assert_eq!(cues.first(), Some(&EncoreCue::Start));
     assert!(cues.contains(&EncoreCue::End));
@@ -236,11 +194,7 @@ fn the_bands_last_chord_knocks_nat_over() {
     KeyCode::ArrowRight.release(app.world_mut());
     until(&mut app, EncorePhase::Ending, LAP_SECS);
     step(&mut app, 0.5);
-    assert_eq!(
-        phase(&app),
-        Some(EncorePhase::Ending),
-        "waiting for the last chord"
-    );
+    assert_eq!(phase(&app), Some(EncorePhase::Ending), "waiting for the last chord");
     app.world_mut().write_message(FinalHit);
     until(&mut app, EncorePhase::Knocked, 0.1);
 }
@@ -255,10 +209,7 @@ fn nat_alone_ends_with_nat_upstairs_and_han_downstairs() {
     let e = app.world().resource::<Encore>().clone();
     assert_eq!(e.gag, Gag::Grate);
     let seam = e.seam.expect("a ceiling over the stage");
-    assert!(
-        (seam.hole - e.throne.x).abs() < 0.01,
-        "the grate's over the throne"
-    );
+    assert!((seam.hole - e.throne.x).abs() < 0.01, "the grate's over the throne");
     // The ceiling's real for Nat in the lap: Giant Steps can't jump through it.
     tap(&mut app, KeyCode::ArrowDown);
     for _ in 0..6 {
@@ -266,11 +217,7 @@ fn nat_alone_ends_with_nat_upstairs_and_han_downstairs() {
         tap(&mut app, KeyCode::Space);
         step(&mut app, 0.2);
         let nat = pos::<Player>(&mut app);
-        assert!(
-            nat.y < seam.bottom,
-            "under the ceiling: {nat} vs {}",
-            seam.bottom
-        );
+        assert!(nat.y < seam.bottom, "under the ceiling: {nat} vs {}", seam.bottom);
     }
     until(&mut app, EncorePhase::Ending, LAP_SECS);
     until(&mut app, EncorePhase::Knocked, ENDING_TIMEOUT + 0.1);
@@ -279,49 +226,24 @@ fn nat_alone_ends_with_nat_upstairs_and_han_downstairs() {
     let e = app.world().resource::<Encore>().clone();
     assert!(e.through, "through the grate");
     let nat = pos::<Player>(&mut app);
-    assert!(
-        nat.y > seam.top,
-        "Nat's upstairs: {nat} vs top {}",
-        seam.top
-    );
+    assert!(nat.y > seam.top, "Nat's upstairs: {nat} vs top {}", seam.top);
     // Han pops out of the throne and stands under the hole, looking up; "Nat?!".
     step(&mut app, UPSTAIRS_SECS - 0.1);
     let han = pos::<StageHan>(&mut app);
     assert!(han.y < seam.bottom, "Han's downstairs: {han}");
-    assert!(
-        (han.x - seam.hole).abs() <= GRATE_HALF + 1.0,
-        "under the hole: {han} vs {}",
-        seam.hole
-    );
-    assert!(
-        app.world_mut()
-            .query_filtered::<(), With<HanGlimpse>>()
-            .iter(app.world())
-            .next()
-            .is_none(),
-        "one Han to talk over"
-    );
+    assert!((han.x - seam.hole).abs() <= GRATE_HALF + 1.0, "under the hole: {han} vs {}", seam.hole);
+    assert!(app.world_mut().query_filtered::<(), With<HanGlimpse>>().iter(app.world()).next().is_none(), "one Han to talk over");
     until(&mut app, EncorePhase::Slam, 0.2);
     until(&mut app, EncorePhase::Continued, SLAM_SECS + 0.2);
-    assert_eq!(
-        app.world().resource::<Encore>().shutter(),
-        1.0,
-        "the hole's shut"
-    );
+    assert_eq!(app.world().resource::<Encore>().shutter(), 1.0, "the hole's shut");
     step(&mut app, CONTINUED_SECS + 0.1);
     assert_eq!(state(&app), AppState::LevelComplete);
     assert_eq!(counted::<LevelCompleted>(&app), 1);
     let cues = &app.world().resource::<Cues>().0;
     for want in ["Boing", "Through", "Slam"] {
-        assert!(
-            cues.iter().any(|c| format!("{c:?}").starts_with(want)),
-            "no {want} cue: {cues:?}"
-        );
+        assert!(cues.iter().any(|c| format!("{c:?}").starts_with(want)), "no {want} cue: {cues:?}");
     }
-    assert!(
-        !cues.iter().any(|c| matches!(c, EncoreCue::Flush { .. })),
-        "no flush in NAT ALONE"
-    );
+    assert!(!cues.iter().any(|c| matches!(c, EncoreCue::Flush { .. })), "no flush in NAT ALONE");
 }
 
 #[test]

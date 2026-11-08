@@ -5,19 +5,16 @@
 use bevy::prelude::*;
 
 use super::brain::{HanBrain, HanMode};
-use super::{
-    FLY_LINE, HAN_PLUG_LINGER, HAN_RAFT_WIDTH, HAN_SINK_TIME, HAN_SQUASH_RESPAWN, HanAnim,
-    JET_LINES, SQUASH_LINE,
-};
+use super::{FLY_LINE, HAN_PLUG_LINGER, HAN_SQUASH_RESPAWN, SQUASH_LINE, HAN_RAFT_WIDTH, HAN_SINK_TIME, HanAnim, JET_LINES};
 use leafwing_input_manager::prelude::*;
 
 use crate::events::{HanSays, NuggetCollected};
+use crate::input::Action;
 use crate::game::crushers::{CrusherBlock, squashed};
 use crate::game::{
-    ActiveLevel, Assists, Body, CAN_HEIGHT, CAN_WIDTH, Dead, Fly, Han, LevelEntity, MovingPlatform,
-    Player, Pos, PrevPos, Raft, SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
+    ActiveLevel, Assists, Body, Dead, Fly, Han, LevelEntity, Player, MovingPlatform, Pos, PrevPos, Raft,
+    CAN_HEIGHT, CAN_WIDTH, SPRAY_HEIGHT, SPRAY_WIDTH, SimClock, Spray,
 };
-use crate::input::Action;
 use crate::level::buddy::HALF;
 use crate::level::{PlatformKind, TILE, Tile};
 
@@ -40,12 +37,7 @@ impl SprayPlug {
             Some(p) => p.top.map_or(top, |t| t.min(top)),
             None => top,
         };
-        (top > base.y).then(|| {
-            (
-                base - Vec2::new(SPRAY_WIDTH / 2.0, 0.0),
-                Vec2::new(base.x + SPRAY_WIDTH / 2.0, top),
-            )
-        })
+        (top > base.y).then(|| (base - Vec2::new(SPRAY_WIDTH / 2.0, 0.0), Vec2::new(base.x + SPRAY_WIDTH / 2.0, top)))
     }
 
     /// The can's body box (min, max) for a can standing at `floor` (world, the bottom-center
@@ -53,18 +45,12 @@ impl SprayPlug {
     /// Han stands over it (the jet then stops at his feet, at or below the nozzle).
     pub fn can(plug: Option<&SprayPlug>, floor: Vec2) -> Option<(Vec2, Vec2)> {
         Self::jet(plug, floor + Vec2::new(0.0, TILE))?;
-        Some((
-            floor - Vec2::new(CAN_WIDTH / 2.0, 0.0),
-            floor + Vec2::new(CAN_WIDTH / 2.0, CAN_HEIGHT),
-        ))
+        Some((floor - Vec2::new(CAN_WIDTH / 2.0, 0.0), floor + Vec2::new(CAN_WIDTH / 2.0, CAN_HEIGHT)))
     }
 
     /// Everything that's deadly about a firing can standing at `floor`: its body and its jet.
     pub fn danger(plug: Option<&SprayPlug>, floor: Vec2) -> [Option<(Vec2, Vec2)>; 2] {
-        [
-            Self::can(plug, floor),
-            Self::jet(plug, floor + Vec2::new(0.0, TILE)),
-        ]
+        [Self::can(plug, floor), Self::jet(plug, floor + Vec2::new(0.0, TILE))]
     }
 }
 
@@ -81,11 +67,7 @@ pub struct FlySpin {
 
 impl Default for FlySpin {
     fn default() -> Self {
-        FlySpin {
-            dir: 1.0,
-            offset: 0.0,
-            cooldown: 0.0,
-        }
+        FlySpin { dir: 1.0, offset: 0.0, cooldown: 0.0 }
     }
 }
 
@@ -126,16 +108,7 @@ pub struct HanFloat {
 
 impl HanFloat {
     pub fn new(dir: f32, row: i32, surface: f32) -> Self {
-        HanFloat {
-            dir,
-            vel: 0.0,
-            row,
-            surface,
-            boarded: false,
-            fuel: FLOAT_FUEL,
-            sunk: 0.0,
-            idle: 0.0,
-        }
+        HanFloat { dir, vel: 0.0, row, surface, boarded: false, fuel: FLOAT_FUEL, sunk: 0.0, idle: 0.0 }
     }
 }
 
@@ -182,16 +155,10 @@ pub(in crate::game) fn drift_floats(
         return;
     }
     let level = &active.level;
-    let axis = input.map_or(0.0, |i| {
-        i.pressed(&Action::Right) as i32 as f32 - i.pressed(&Action::Left) as i32 as f32
-    });
+    let axis = input.map_or(0.0, |i| i.pressed(&Action::Right) as i32 as f32 - i.pressed(&Action::Left) as i32 as f32);
     let riding = player.single().ok().and_then(|(_, b)| b.riding);
     // Nat in the air (hopping off him): where, and how fast across.
-    let nat = player
-        .single()
-        .ok()
-        .filter(|(_, b)| !b.on_ground)
-        .map(|(p, b)| (p.0.x, b.vel.x));
+    let nat = player.single().ok().filter(|(_, b)| !b.on_ground).map(|(p, b)| (p.0.x, b.vel.x));
     for (e, mut f, mut p, mut pos) in &mut floats {
         let aboard = riding == Some(e);
         f.boarded |= aboard;
@@ -225,11 +192,7 @@ pub(in crate::game) fn drift_floats(
             let edge = x + side * half;
             let col = ((edge - side * 0.01) / TILE).floor() as i32;
             if level.tile(col, f.row) != Tile::Liquid {
-                let bank = if side > 0.0 {
-                    col as f32 * TILE
-                } else {
-                    (col + 1) as f32 * TILE
-                };
+                let bank = if side > 0.0 { col as f32 * TILE } else { (col + 1) as f32 * TILE };
                 x = bank - side * half;
                 if f.vel * side > 0.0 {
                     f.vel = 0.0;
@@ -242,9 +205,7 @@ pub(in crate::game) fn drift_floats(
         if f.boarded && aboard && !dry {
             f.fuel -= dt;
             if f.fuel <= 0.0 {
-                says.write(HanSays {
-                    text: GLUB_LINE.to_string(),
-                });
+                says.write(HanSays { text: GLUB_LINE.to_string() });
             }
         }
         // (Low on kicks, he shivers: `visuals`. Any lower in the muck and Nat's feet are in it.)
@@ -289,9 +250,7 @@ pub(super) fn han_hazards(
     let side_b = nav.is_some_and(|n| n.side_b);
     let dt = time.delta_secs();
     *quip -= dt;
-    let Ok((pos, _body, mut brain, mut anim)) = han.single_mut() else {
-        return;
-    };
+    let Ok((pos, _body, mut brain, mut anim)) = han.single_mut() else { return };
     anim.wobble = (anim.wobble - dt).max(0.0);
     let present = !matches!(brain.mode, HanMode::Sinking { .. } | HanMode::Gone { .. });
     let (min, max) = (pos.0 - HALF, pos.0 + HALF);
@@ -310,18 +269,9 @@ pub(super) fn han_hazards(
         // Escorting Nat through: the jets he's plugged stay plugged.
         let escorting = matches!(brain.mode, HanMode::Ahead { .. });
         let new = match plug.as_deref() {
-            _ if inside => SprayPlug {
-                top: Some(min.y),
-                linger: HAN_PLUG_LINGER,
-            },
-            Some(p) if escorting && p.linger > 0.0 => SprayPlug {
-                top: None,
-                linger: HAN_PLUG_LINGER,
-            },
-            Some(p) => SprayPlug {
-                top: None,
-                linger: (p.linger - dt).max(0.0),
-            },
+            _ if inside => SprayPlug { top: Some(min.y), linger: HAN_PLUG_LINGER },
+            Some(p) if escorting && p.linger > 0.0 => SprayPlug { top: None, linger: HAN_PLUG_LINGER },
+            Some(p) => SprayPlug { top: None, linger: (p.linger - dt).max(0.0) },
             None => continue,
         };
         hit |= inside && spray.on;
@@ -366,14 +316,8 @@ pub(super) fn han_hazards(
         anim.wobble = 0.6;
         if *quip <= 0.0 {
             *quip = QUIP_EVERY;
-            let line = if batted {
-                FLY_LINE
-            } else {
-                JET_LINES[(clock.steps as usize / 7) % JET_LINES.len()]
-            };
-            says.write(HanSays {
-                text: line.to_string(),
-            });
+            let line = if batted { FLY_LINE } else { JET_LINES[(clock.steps as usize / 7) % JET_LINES.len()] };
+            says.write(HanSays { text: line.to_string() });
         }
     }
 
@@ -381,18 +325,11 @@ pub(super) fn han_hazards(
         return;
     }
     // A crusher: flat as a pancake, and back by parachute.
-    if crushers
-        .iter()
-        .any(|(b, p)| squashed(pos.0, HALF, b.bounds(p.0)))
-    {
-        brain.mode = HanMode::Gone {
-            t: HAN_SQUASH_RESPAWN,
-        };
+    if crushers.iter().any(|(b, p)| squashed(pos.0, HALF, b.bounds(p.0))) {
+        brain.mode = HanMode::Gone { t: HAN_SQUASH_RESPAWN };
         brain.path.clear();
         brain.exec = None;
-        says.write(HanSays {
-            text: SQUASH_LINE.to_string(),
-        });
+        says.write(HanSays { text: SQUASH_LINE.to_string() });
         return;
     }
 
@@ -400,10 +337,7 @@ pub(super) fn han_hazards(
     let level = &active.level;
     let (fmin, fmax) = (min + 2.0, max - 2.0);
     let mut splat: Option<(i32, i32)> = None;
-    for c in [
-        (fmin.x / TILE).floor() as i32,
-        (fmax.x / TILE).floor() as i32,
-    ] {
+    for c in [(fmin.x / TILE).floor() as i32, (fmax.x / TILE).floor() as i32] {
         let (_, r) = level.cell_at(Vec2::new(0.0, fmin.y));
         if level.tile(c, r) == Tile::Liquid {
             splat.get_or_insert((c, r));
@@ -419,8 +353,7 @@ pub(super) fn han_hazards(
         top -= 1;
     }
     // The raft runs from the splat on in the way he was going (shifted back to stay on the pool).
-    let surface =
-        |k: i32| level.tile(k, top) == Tile::Liquid && level.tile(k, top - 1) != Tile::Liquid;
+    let surface = |k: i32| level.tile(k, top) == Tile::Liquid && level.tile(k, top - 1) != Tile::Liquid;
     let w = HAN_RAFT_WIDTH as i32;
     let mut c0 = if dir > 0 { c } else { c - w + 1 };
     for _ in 0..w {
@@ -435,29 +368,25 @@ pub(super) fn han_hazards(
     }
     let left = level.tile_center(c0.max(0) as usize, top as usize);
     let center = left + Vec2::new((w as f32 - 1.0) * TILE / 2.0, 0.0);
-    let raft = commands
-        .spawn((
-            Name::new("HanRaft"),
-            LevelEntity,
-            Raft::default(),
-            HanRaft,
-            MovingPlatform {
-                base: center,
-                travel: Vec2::ZERO,
-                period: 1.0,
-                phase: 0.0,
-                width: HAN_RAFT_WIDTH,
-                kind: PlatformKind::Raft,
-            },
-            Pos(center),
-            PrevPos(center),
-            Transform::from_translation(center.extend(1.0)),
-        ))
-        .id();
+    let raft = commands.spawn((
+        Name::new("HanRaft"),
+        LevelEntity,
+        Raft::default(),
+        HanRaft,
+        MovingPlatform {
+            base: center,
+            travel: Vec2::ZERO,
+            period: 1.0,
+            phase: 0.0,
+            width: HAN_RAFT_WIDTH,
+            kind: PlatformKind::Raft,
+        },
+        Pos(center),
+        PrevPos(center),
+        Transform::from_translation(center.extend(1.0)),
+    )).id();
     if !side_b {
-        commands
-            .entity(raft)
-            .insert(HanFloat::new(dir as f32, top, center.y));
+        commands.entity(raft).insert(HanFloat::new(dir as f32, top, center.y));
     }
 }
 

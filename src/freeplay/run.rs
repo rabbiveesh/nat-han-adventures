@@ -18,12 +18,11 @@ use super::templates::{Unlocks, unlocked_skills};
 use crate::adapt::frustration::IDLE_SECS;
 use crate::adapt::{AdaptEvent, FrustrationSignal, RoomResult, Skill, next_room, reduce};
 use crate::events::{Jumped, LevelCompleted, PlayerDied};
-use crate::game::sideb::{self, AloneRoom, SideB};
 use crate::game::{
-    ActiveLevel, AdaptiveProfile, AssistMode, Checkpoint, Dead, Fly, GeneratedLevel, Goal,
-    HintSpot, LevelEntity, LevelRun, LevelTile, MovingPlatform, Nugget, Player, Pos, RestartLevel,
-    Spray, Stain, cell_floor, spawn_region,
+    ActiveLevel, AdaptiveProfile, AssistMode, Checkpoint, Dead, Fly, GeneratedLevel, Goal, HintSpot, LevelEntity,
+    LevelRun, LevelTile, MovingPlatform, Nugget, Player, Pos, RestartLevel, Spray, Stain, cell_floor, spawn_region,
 };
+use crate::game::sideb::{self, AloneRoom, SideB};
 use crate::input::Action;
 use crate::level::TILE;
 use crate::save::Progress;
@@ -52,14 +51,7 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(OnEnter(AppState::FreePlaySetup), end_run)
         .add_systems(
             Update,
-            (
-                track_rooms,
-                room_stats,
-                restart_room,
-                finish_run,
-                poll_generation,
-                stream_in,
-            )
+            (track_rooms, room_stats, restart_room, finish_run, poll_generation, stream_in)
                 .chain()
                 .run_if(in_state(AppState::Playing).and_then(resource_exists::<FreePlayRun>)),
         );
@@ -75,10 +67,7 @@ pub struct FreePlaySettings {
 
 impl Default for FreePlaySettings {
     fn default() -> Self {
-        FreePlaySettings {
-            endless: false,
-            last_seed: None,
-        }
+        FreePlaySettings { endless: false, last_seed: None }
     }
 }
 
@@ -177,11 +166,7 @@ impl FreePlayRun {
     }
 
     fn unlocks(&self) -> Unlocks {
-        Unlocks {
-            levels: self.unlocked_levels,
-            side_b: self.side_b_cleared,
-            solo: self.solo_cleared,
-        }
+        Unlocks { levels: self.unlocked_levels, side_b: self.side_b_cleared, solo: self.solo_cleared }
     }
 
     /// The plan for room `index`, from the profile as it is now. Once Side B's been played,
@@ -202,15 +187,7 @@ impl FreePlayRun {
         }
         let request = next_room(profile, &self.unlocked, d.rng());
         let seen = self.seen(request.skill);
-        RoomPlan::new(
-            self.seed,
-            index as u32,
-            request,
-            self.world,
-            seen,
-            profile.calibrating(),
-            self.unlocks(),
-        )
+        RoomPlan::new(self.seed, index as u32, request, self.world, seen, profile.calibrating(), self.unlocks())
     }
 }
 
@@ -242,12 +219,7 @@ fn start_generation(commands: &mut Commands, seed: u32, plan: RoomPlan) {
     if let Some(text) = offload::encode_job(id, seed, &plan)
         && offload::send(&text)
     {
-        commands.insert_resource(WorkerGen {
-            id,
-            seed,
-            plan,
-            waited: 0.0,
-        });
+        commands.insert_resource(WorkerGen { id, seed, plan, waited: 0.0 });
     } else {
         spawn_attempt(commands, Job::new(seed, plan));
     }
@@ -275,11 +247,7 @@ pub fn begin(
 ) -> (FreePlayRun, crate::level::Level) {
     let unlocks = unlocks.into();
     let world = world_for(seed);
-    let rooms = if endless {
-        ENDLESS_ROOMS
-    } else {
-        FIXED_ROOMS as usize
-    };
+    let rooms = if endless { ENDLESS_ROOMS } else { FIXED_ROOMS as usize };
     let (course, mut level) = Course::new(world, rooms);
     level.intro = INTRO.to_string();
     let unlocked = unlocked_skills(unlocks);
@@ -327,14 +295,8 @@ fn start_run(
     mut mode: ResMut<AssistMode>,
     mut next: ResMut<NextState<AppState>>,
 ) {
-    let Some(req) = requests.read().last().copied() else {
-        return;
-    };
-    let unlocks = Unlocks {
-        levels: progress.unlocked,
-        side_b: progress.side_b_cleared(),
-        solo: progress.solo_cleared(),
-    };
+    let Some(req) = requests.read().last().copied() else { return };
+    let unlocks = Unlocks { levels: progress.unlocked, side_b: progress.side_b_cleared(), solo: progress.solo_cleared() };
     let (run, level) = begin(req.seed, req.endless, &mut profile.0, unlocks);
     settings.last_seed = Some(req.seed);
     // Remembered between visits (saved with the progress).
@@ -376,15 +338,7 @@ fn result_of(stats: &RoomStats, now: f32) -> RoomResult {
     }
 }
 
-type Static = Or<(
-    With<LevelTile>,
-    With<Nugget>,
-    With<Checkpoint>,
-    With<Fly>,
-    With<Spray>,
-    With<Stain>,
-    With<MovingPlatform>,
-)>;
+type Static = Or<(With<LevelTile>, With<Nugget>, With<Checkpoint>, With<Fly>, With<Spray>, With<Stain>, With<MovingPlatform>)>;
 
 /// Nat crossed into a new room: the last one is finished, this one starts, the one after it is
 /// planned, and rooms far behind are sealed off and unloaded.
@@ -402,9 +356,7 @@ fn track_rooms(
     let Ok(pos) = player.single() else { return };
     let col = (pos.0.x / TILE).floor().max(0.0) as usize;
     let next = run.current.map_or(0, |k| k + 1);
-    let Some(room) = run.course.rooms.get(next).copied() else {
-        return;
-    };
+    let Some(room) = run.course.rooms.get(next).copied() else { return };
     if col < room.start_col() {
         return;
     }
@@ -416,10 +368,7 @@ fn track_rooms(
         run.cleared += 1;
     }
     run.current = Some(next);
-    run.stats = RoomStats {
-        started: now,
-        ..default()
-    };
+    run.stats = RoomStats { started: now, ..default() };
     let r = &run.rooms[next];
     let started = AdaptEvent::RoomStarted {
         room_id: run.room_id(next),
@@ -434,11 +383,7 @@ fn track_rooms(
         let p = run.course.rooms[next];
         let dr = super::course::COURSE_H - r.level.height;
         let at = |(c, row): (usize, usize)| (c + p.col0, row + dr);
-        let room = AloneRoom {
-            start: at(r.level.start),
-            goal: at(r.level.goal),
-            cols: (p.col0, p.col0 + p.width),
-        };
+        let room = AloneRoom { start: at(r.level.start), goal: at(r.level.goal), cols: (p.col0, p.col0 + p.width) };
         let setlist = super::alone::setlist(r.plan.side_b as usize);
         commands.queue(move |w: &mut World| sideb::start_room(w, next, room, setlist));
     }
@@ -474,13 +419,7 @@ fn spawn_tile(commands: &mut Commands, level: &crate::level::Level, col: usize, 
     commands.spawn((
         Name::new("Tile"),
         LevelEntity,
-        LevelTile {
-            col,
-            row,
-            tile,
-            top,
-            world: level.world,
-        },
+        LevelTile { col, row, tile, top, world: level.world },
         Transform::from_translation(level.tile_center(col, row).extend(0.0)),
     ));
 }
@@ -523,11 +462,7 @@ fn room_stats(
     st.max_idle = st.max_idle.max(idle);
     if idle > IDLE_SECS && !st.idle_posted {
         st.idle_posted = true;
-        post(
-            run,
-            &mut profile.0,
-            AdaptEvent::Frustrated(FrustrationSignal::IdleAfterDeath),
-        );
+        post(run, &mut profile.0, AdaptEvent::Frustrated(FrustrationSignal::IdleAfterDeath));
     }
 }
 
@@ -615,9 +550,7 @@ fn poll_generation(
         }
     } else {
         let Some(mut task) = task else { return };
-        let Some((job, room)) = check_ready(&mut task.0) else {
-            return;
-        };
+        let Some((job, room)) = check_ready(&mut task.0) else { return };
         commands.remove_resource::<GenTask>();
         let Some(room) = room else {
             spawn_attempt(&mut commands, job);

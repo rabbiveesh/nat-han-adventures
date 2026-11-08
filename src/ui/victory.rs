@@ -49,10 +49,7 @@ fn credits() -> Vec<Line> {
         Gap,
         Heading("STARRING".into()),
         role(&HERO_NAME.to_uppercase(), "AS HIMSELF"),
-        role(
-            &format!("{} THE PLUMBER", SIDEKICK_NAME.to_uppercase()),
-            "AS HIMSELF",
-        ),
+        role(&format!("{} THE PLUMBER", SIDEKICK_NAME.to_uppercase()), "AS HIMSELF"),
         role("GOLDEN NUGGETS", "THEMSELVES"),
         role("THE FLIES", "THE FLIES"),
         role("TOILET BRUSHES", "PURE EVIL"),
@@ -86,24 +83,12 @@ fn credits() -> Vec<Line> {
     lines
 }
 
-fn spawn(
-    mut commands: Commands,
-    font: Res<UiFont>,
-    sprites: Option<Res<Sprites>>,
-    progress: Res<Progress>,
-    levels: Res<Levels>,
-) {
+fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, progress: Res<Progress>, levels: Res<Levels>) {
     let f = &*font;
     let got: u32 = progress.best_nuggets.iter().flatten().sum();
     let total: usize = levels.0.iter().map(|l| l.nugget_count()).sum();
     commands
-        .spawn((
-            Name::new("Victory"),
-            DespawnOnExit(AppState::Victory),
-            fullscreen(),
-            BackgroundColor(INK),
-            GlobalZIndex(5),
-        ))
+        .spawn((Name::new("Victory"), DespawnOnExit(AppState::Victory), fullscreen(), BackgroundColor(INK), GlobalZIndex(5)))
         .with_children(|root| {
             root.spawn(Node {
                 flex_direction: FlexDirection::Column,
@@ -115,21 +100,14 @@ fn spawn(
             .with_children(|h| {
                 h.spawn(label(f, "THE GOLDEN THRONE", 16.0, GOLD));
                 h.spawn(label(f, "IS YOURS!", 16.0, GOLD));
-                h.spawn(Node {
-                    column_gap: px(8.0),
-                    align_items: AlignItems::Center,
-                    ..default()
-                })
-                .with_children(|r| {
-                    r.spawn(icon(sprites.as_deref(), SpriteId::PooIdle, 16.0, 16.0));
-                    r.spawn(icon(sprites.as_deref(), SpriteId::IconNugget, 8.0, 8.0));
-                    r.spawn(label(f, format!("{got}/{total} NUGGETS"), 8.0, CREAM));
-                    r.spawn(icon(sprites.as_deref(), SpriteId::HanIdle, 16.0, 16.0));
-                });
-                h.spawn((
-                    label(f, "SIDE B IS OPEN ON THE TITLE!", 8.0, CREAM),
-                    Blink(1.0),
-                ));
+                h.spawn(Node { column_gap: px(8.0), align_items: AlignItems::Center, ..default() })
+                    .with_children(|r| {
+                        r.spawn(icon(sprites.as_deref(), SpriteId::PooIdle, 16.0, 16.0));
+                        r.spawn(icon(sprites.as_deref(), SpriteId::IconNugget, 8.0, 8.0));
+                        r.spawn(label(f, format!("{got}/{total} NUGGETS"), 8.0, CREAM));
+                        r.spawn(icon(sprites.as_deref(), SpriteId::HanIdle, 16.0, 16.0));
+                    });
+                h.spawn((label(f, "SIDE B IS OPEN ON THE TITLE!", 8.0, CREAM), Blink(1.0)));
             });
             // The rolling credits, clipped to the space below the header.
             root.spawn(Node {
@@ -159,25 +137,16 @@ fn spawn(
                             Line::Text(s) => c.spawn((
                                 label(f, s, 8.0, CREAM),
                                 TextLayout::justify(Justify::Center),
-                                Node {
-                                    max_width: px(272.0),
-                                    ..default()
-                                },
+                                Node { max_width: px(272.0), ..default() },
                             )),
-                            Line::Gap => c.spawn(Node {
-                                height: px(8.0),
-                                ..default()
-                            }),
+                            Line::Gap => c.spawn(Node { height: px(8.0), ..default() }),
                         };
                     }
                 });
             });
             root.spawn((
                 label(f, "ENTER: BACK TO TITLE", 8.0, DIM_CREAM),
-                Node {
-                    margin: UiRect::vertical(px(8.0)),
-                    ..default()
-                },
+                Node { margin: UiRect::vertical(px(8.0)), ..default() },
             ));
         });
 }
@@ -189,9 +158,7 @@ fn scroll(
     parents: Query<&ComputedNode>,
 ) {
     for (mut roll, mut node, computed, child_of) in &mut q {
-        let Ok(view) = parents.get(child_of.parent()) else {
-            continue;
-        };
+        let Ok(view) = parents.get(child_of.parent()) else { continue };
         let k = computed.inverse_scale_factor();
         let (h, view_h) = (computed.size().y * k, view.size().y * k);
         if view_h <= 0.0 {
@@ -207,11 +174,7 @@ fn scroll(
     }
 }
 
-fn input(
-    action: Single<&ActionState<Action>>,
-    mut next: ResMut<NextState<AppState>>,
-    mut sfx_w: MessageWriter<PlaySfx>,
-) {
+fn input(action: Single<&ActionState<Action>>, mut next: ResMut<NextState<AppState>>, mut sfx_w: MessageWriter<PlaySfx>) {
     if action.just_pressed(&Action::Confirm) || action.just_pressed(&Action::Back) {
         sfx(&mut sfx_w, Sfx::MenuSelect);
         next.set(AppState::Title);
@@ -240,11 +203,7 @@ mod tests {
                 Line::Gap => None,
             })
             .collect();
-        assert!(
-            texts
-                .iter()
-                .any(|s| s.starts_with("HAN THE PLUMBER") && s.ends_with("AS HIMSELF"))
-        );
+        assert!(texts.iter().any(|s| s.starts_with("HAN THE PLUMBER") && s.ends_with("AS HIMSELF")));
         assert!(texts.iter().any(|s| s == "THANKS FOR PLAYING!"));
         assert!(texts.contains(&library::title(Music::Title).to_uppercase()));
     }

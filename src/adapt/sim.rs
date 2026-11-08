@@ -161,11 +161,7 @@ pub struct SimRun {
 /// story teaches both in level 3).
 pub const UNLOCK_EVERY: usize = 15;
 pub fn unlock_room(skill: Skill) -> usize {
-    let skill = if skill == Skill::Buddy {
-        Skill::FiredUp
-    } else {
-        skill
-    };
+    let skill = if skill == Skill::Buddy { Skill::FiredUp } else { skill };
     skill.index().saturating_sub(2) * UNLOCK_EVERY
 }
 
@@ -175,12 +171,7 @@ pub fn run(player: SyntheticPlayer, seed: u64, rooms: usize) -> SimRun {
 }
 
 /// [`run`] with a custom unlock schedule (`|_| 0` = everything from the start).
-pub fn run_with(
-    player: SyntheticPlayer,
-    seed: u64,
-    rooms: usize,
-    unlock_at: impl Fn(Skill) -> usize,
-) -> SimRun {
+pub fn run_with(player: SyntheticPlayer, seed: u64, rooms: usize, unlock_at: impl Fn(Skill) -> usize) -> SimRun {
     let mut rng = StdRng::seed_from_u64(seed);
     let mut profile = PlayerProfile::new();
     let mut out = Vec::with_capacity(rooms);
@@ -234,8 +225,7 @@ pub fn run_with(
             first_death = Some(3.0);
         }
         let deaths = expected + excess;
-        let time =
-            PAR_SECS * (player.speed * (0.85 + 0.3 * rng.random::<f32>()) + 0.25 * excess as f32);
+        let time = PAR_SECS * (player.speed * (0.85 + 0.3 * rng.random::<f32>()) + 0.25 * excess as f32);
         profile = reduce(
             profile,
             AdaptEvent::RoomFinished(RoomResult {
@@ -247,11 +237,7 @@ pub fn run_with(
             }),
         );
         cues.extend(profile.cues.iter().copied());
-        let outcome = profile
-            .recent
-            .last()
-            .map(|r| r.outcome)
-            .unwrap_or(Outcome::Struggle);
+        let outcome = profile.recent.last().map(|r| r.outcome).unwrap_or(Outcome::Struggle);
         out.push(SimRoom {
             request: req,
             outcome,
@@ -261,11 +247,7 @@ pub fn run_with(
             cues,
         });
     }
-    SimRun {
-        player,
-        rooms: out,
-        profile,
-    }
+    SimRun { player, rooms: out, profile }
 }
 
 /// Summary numbers for a run.
@@ -298,11 +280,7 @@ impl SimRun {
         let n = self.rooms.len();
         let clean = |r: &SimRoom| r.outcome == Outcome::Clean;
         let rate = |rs: &[SimRoom]| {
-            if rs.is_empty() {
-                0.0
-            } else {
-                rs.iter().filter(|r| clean(r)).count() as f32 / rs.len() as f32
-            }
+            if rs.is_empty() { 0.0 } else { rs.iter().filter(|r| clean(r)).count() as f32 / rs.len() as f32 }
         };
         let after = &self.rooms[WARMUP.min(n)..];
         let near = (WARMUP.min(n)..n)
@@ -314,11 +292,7 @@ impl SimRun {
         let (mut oscillations, mut reversals) = (0, 0);
         let mut last_dir = [0i32; Skill::COUNT];
         let mut last_at = [0usize; Skill::COUNT];
-        let mut prev = self
-            .rooms
-            .first()
-            .map(|r| r.centers)
-            .unwrap_or([1; Skill::COUNT]);
+        let mut prev = self.rooms.first().map(|r| r.centers).unwrap_or([1; Skill::COUNT]);
         let mut calibrated = false;
         let (mut promotions, mut demotions, mut frustrations) = (0, 0, 0);
         for (i, r) in self.rooms.iter().enumerate() {
@@ -355,21 +329,13 @@ impl SimRun {
             prev = r.centers;
         }
         let mean = |f: &dyn Fn(&SimRoom) -> f32| {
-            if after.is_empty() {
-                0.0
-            } else {
-                after.iter().map(f).sum::<f32>() / after.len() as f32
-            }
+            if after.is_empty() { 0.0 } else { after.iter().map(f).sum::<f32>() / after.len() as f32 }
         };
         Metrics {
             rooms: n,
             clean_rate: rate(&self.rooms),
             clean_after_warmup: rate(after),
-            time_near_target: if after.is_empty() {
-                0.0
-            } else {
-                near as f32 / after.len() as f32
-            },
+            time_near_target: if after.is_empty() { 0.0 } else { near as f32 / after.len() as f32 },
             oscillations,
             reversals,
             promotions,

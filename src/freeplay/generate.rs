@@ -55,16 +55,7 @@ pub fn lean_strategies() -> Vec<Strategy> {
     let inf = f32::INFINITY;
     let mut out = Vec::new();
     for toot in [None, Some(0.27), Some(0.36)] {
-        out.push(Strategy {
-            dir: 0.0,
-            jump: true,
-            hold: inf,
-            vx0: 0.0,
-            toot,
-            edge: false,
-            release: inf,
-            carry: 0.0,
-        });
+        out.push(Strategy { dir: 0.0, jump: true, hold: inf, vx0: 0.0, toot, edge: false, release: inf, carry: 0.0 });
     }
     for dir in [-1.0, 1.0] {
         for toot in [None, Some(0.2), Some(0.36), Some(0.5)] {
@@ -76,54 +67,18 @@ pub fn lean_strategies() -> Vec<Strategy> {
                 (0.12, dir, true),
                 (0.12, 0.0, false),
             ] {
-                out.push(Strategy {
-                    dir,
-                    jump: true,
-                    hold,
-                    vx0,
-                    toot,
-                    edge,
-                    release: inf,
-                    carry: 0.0,
-                });
+                out.push(Strategy { dir, jump: true, hold, vx0, toot, edge, release: inf, carry: 0.0 });
             }
             // Running off a ledge.
-            out.push(Strategy {
-                dir,
-                jump: false,
-                hold: inf,
-                vx0: dir,
-                toot,
-                edge: true,
-                release: inf,
-                carry: 0.0,
-            });
+            out.push(Strategy { dir, jump: false, hold: inf, vx0: dir, toot, edge: true, release: inf, carry: 0.0 });
         }
         for toot in [None, Some(0.36)] {
             for release in [0.15, 0.3] {
-                out.push(Strategy {
-                    dir,
-                    jump: true,
-                    hold: inf,
-                    vx0: dir,
-                    toot,
-                    edge: true,
-                    release,
-                    carry: 0.0,
-                });
+                out.push(Strategy { dir, jump: true, hold: inf, vx0: dir, toot, edge: true, release, carry: 0.0 });
             }
         }
         for edge in [false, true] {
-            out.push(Strategy {
-                dir,
-                jump: true,
-                hold: 0.05,
-                vx0: dir,
-                toot: None,
-                edge,
-                release: inf,
-                carry: 0.0,
-            });
+            out.push(Strategy { dir, jump: true, hold: 0.05, vx0: dir, toot: None, edge, release: inf, carry: 0.0 });
         }
     }
     out
@@ -162,41 +117,14 @@ impl RoomPlan {
         calibrating: bool,
         unlocks: impl Into<Unlocks>,
     ) -> RoomPlan {
-        RoomPlan::pick(
-            seed,
-            index,
-            request,
-            world,
-            seen,
-            calibrating,
-            unlocks.into(),
-            false,
-        )
+        RoomPlan::pick(seed, index, request, world, seen, calibrating, unlocks.into(), false)
     }
 
     /// A Side B room (`super::alone`) for `request` (a [`Skill::Buddy`] one) as room `index`:
     /// Nat waits in the pipe, Han goes on alone and the player calls the band, with the pieces
     /// the Side B levels cleared in `unlocks` have taught.
-    pub fn alone(
-        seed: u32,
-        index: u32,
-        request: RoomRequest,
-        world: u8,
-        unlocks: Unlocks,
-    ) -> RoomPlan {
-        RoomPlan::pick(
-            seed,
-            index,
-            RoomRequest {
-                skill: Skill::Buddy,
-                ..request
-            },
-            world,
-            true,
-            false,
-            unlocks,
-            true,
-        )
+    pub fn alone(seed: u32, index: u32, request: RoomRequest, world: u8, unlocks: Unlocks) -> RoomPlan {
+        RoomPlan::pick(seed, index, RoomRequest { skill: Skill::Buddy, ..request }, world, true, false, unlocks, true)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -217,11 +145,7 @@ impl RoomPlan {
             .filter(|(_, t)| t.skill == request.skill && t.alone() == alone && t.unlocked(unlocks))
             .map(|(i, _)| i)
             .collect();
-        let template = if choices.is_empty() {
-            0
-        } else {
-            d.pick(&choices)
-        };
+        let template = if choices.is_empty() { 0 } else { d.pick(&choices) };
         let line = if calibrating {
             CALIBRATION_LINES[(index as usize).min(CALIBRATION_LINES.len() - 1)]
         } else {
@@ -286,11 +210,7 @@ impl Room {
         let run = level.width as f32 * TILE / 70.0;
         // (A Side B room's rewind replays the room up to it, on average half, after the
         // needle scratch.)
-        let per_death = if plan.template().alone() {
-            run / 2.0 + crate::game::sideb::REWIND_SECS
-        } else {
-            3.0
-        };
+        let per_death = if plan.template().alone() { run / 2.0 + crate::game::sideb::REWIND_SECS } else { 3.0 };
         let par_secs = run + 4.0 + per_death * v.deaths as f32;
         Room {
             plan,
@@ -317,11 +237,7 @@ impl Room {
     /// The room a [`Job`] for `plan` found, from its [`Verdict`] (validated elsewhere): the
     /// winning attempt drawn again.
     pub fn rebuild(seed: u32, plan: RoomPlan, v: Verdict) -> Room {
-        let plan = if v.fallback {
-            fallback_plan(&plan)
-        } else {
-            plan
-        };
+        let plan = if v.fallback { fallback_plan(&plan) } else { plan };
         let level = draw(seed, &plan, v.attempts.saturating_sub(1));
         Room::finish(plan, level, v)
     }
@@ -335,17 +251,9 @@ pub fn draw(seed: u32, plan: &RoomPlan, attempt: u32) -> Level {
 
 /// [`draw`]'s level text.
 pub fn draw_text(seed: u32, plan: &RoomPlan, attempt: u32) -> String {
-    let mut d = Dice::new(stream(
-        seed,
-        ROOM_STREAM,
-        plan.index as u64 * 1024 + attempt as u64,
-    ));
+    let mut d = Dice::new(stream(seed, ROOM_STREAM, plan.index as u64 * 1024 + attempt as u64));
     let mut c = Canvas::with_height(plan.template().height);
-    let dress = Dressing {
-        extra_nuggets: plan.request.assists.extra_nuggets_before_quartal,
-        side_b: plan.side_b,
-        solo: plan.solo,
-    };
+    let dress = Dressing { extra_nuggets: plan.request.assists.extra_nuggets_before_quartal, side_b: plan.side_b, solo: plan.solo };
     let built: Built = (plan.template().build)(&mut c, &mut d, plan.request.band, &dress);
     if plan.hint
         && let Some((topics, text)) = built.hint
@@ -360,11 +268,7 @@ pub fn draw_text(seed: u32, plan: &RoomPlan, attempt: u32) -> String {
     {
         c.checkpoint(col, row, "On the house!");
     }
-    let min_nuggets = if plan.template().alone() {
-        0
-    } else {
-        super::canvas::MIN_NUGGETS
-    };
+    let min_nuggets = if plan.template().alone() { 0 } else { super::canvas::MIN_NUGGETS };
     c.finish_text(plan.world, plan.line, min_nuggets)
 }
 
@@ -375,21 +279,9 @@ pub fn validate(level: &Level) -> Report {
 
 /// The gentle room used when a plan keeps failing: a band-1 jump gauntlet, no frills.
 pub fn fallback_plan(plan: &RoomPlan) -> RoomPlan {
-    let template = TEMPLATES
-        .iter()
-        .position(|t| t.skill == Skill::Precision)
-        .unwrap_or(0);
-    let request = RoomRequest {
-        skill: Skill::Precision,
-        band: 1,
-        assists: AssistLevers::NONE,
-    };
-    RoomPlan {
-        request,
-        template,
-        hint: false,
-        ..plan.clone()
-    }
+    let template = TEMPLATES.iter().position(|t| t.skill == Skill::Precision).unwrap_or(0);
+    let request = RoomRequest { skill: Skill::Precision, band: 1, assists: AssistLevers::NONE };
+    RoomPlan { request, template, hint: false, ..plan.clone() }
 }
 
 /// Generation of one room, an attempt at a time.
@@ -404,13 +296,7 @@ pub struct Job {
 
 impl Job {
     pub fn new(seed: u32, plan: RoomPlan) -> Job {
-        Job {
-            seed,
-            plan,
-            attempt: 0,
-            fallback: false,
-            micros: 0,
-        }
+        Job { seed, plan, attempt: 0, fallback: false, micros: 0 }
     }
 
     /// One attempt: the room if it validated.
@@ -448,11 +334,7 @@ impl Job {
             if self.fallback {
                 // Never seen in tests (`tests/freeplay.rs` runs the fallback on many seeds);
                 // keep re-rolling rather than hang the run on one bad draw.
-                assert!(
-                    self.attempt < 8 * MAX_ATTEMPTS,
-                    "free play: the fallback room keeps failing: {:?}",
-                    report.errs
-                );
+                assert!(self.attempt < 8 * MAX_ATTEMPTS, "free play: the fallback room keeps failing: {:?}", report.errs);
                 return None;
             }
             // The plan keeps failing: a gentle room instead (validated like any other).

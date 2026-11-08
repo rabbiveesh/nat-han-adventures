@@ -11,18 +11,12 @@ use crate::game::{Body, Dead, Groove, JumpedOnOne, LevelEntity, Player};
 use crate::state::PlayState;
 
 pub(super) fn plugin(app: &mut App) {
-    app.init_resource::<Rng>()
-        .init_resource::<NoteTrail>()
-        .add_systems(
-            Update,
-            (
-                spawn_fx.run_if(resource_exists::<Sprites>),
-                note_trail.run_if(resource_exists::<Sprites>),
-                update_particles,
-            )
-                .chain()
-                .run_if(not(in_state(PlayState::Paused))),
-        );
+    app.init_resource::<Rng>().init_resource::<NoteTrail>().add_systems(
+        Update,
+        (spawn_fx.run_if(resource_exists::<Sprites>), note_trail.run_if(resource_exists::<Sprites>), update_particles)
+            .chain()
+            .run_if(not(in_state(PlayState::Paused))),
+    );
 }
 
 /// A short-lived effect sprite.
@@ -100,18 +94,8 @@ fn spawn_fx(
             let color = b.colors[(rng.f() * b.colors.len() as f32) as usize % b.colors.len()];
             commands.spawn((
                 LevelEntity,
-                Particle {
-                    vel: v,
-                    gravity: b.gravity,
-                    life,
-                    max_life: life,
-                    fade: true,
-                },
-                Sprite {
-                    image: sprites.get(SpriteId::Particle),
-                    color,
-                    ..default()
-                },
+                Particle { vel: v, gravity: b.gravity, life, max_life: life, fade: true },
+                Sprite { image: sprites.get(SpriteId::Particle), color, ..default() },
                 Transform::from_translation(at.extend(6.0)).with_scale(Vec3::splat(b.size / 2.0)),
             ));
         }
@@ -122,181 +106,110 @@ fn spawn_fx(
         if j.double {
             commands.spawn((
                 LevelEntity,
-                Particle {
-                    vel: Vec2::new(0.0, -20.0),
-                    gravity: 0.0,
-                    life: 0.4,
-                    max_life: 0.4,
-                    fade: true,
-                },
+                Particle { vel: Vec2::new(0.0, -20.0), gravity: 0.0, life: 0.4, max_life: 0.4, fade: true },
                 Sprite::from_image(sprites.get(SpriteId::TootPuff)),
-                FrameAnim {
-                    id: SpriteId::TootPuff,
-                    fps: 10.0,
-                    offset: 0.0,
-                },
+                FrameAnim { id: SpriteId::TootPuff, fps: 10.0, offset: 0.0 },
                 Transform::from_translation((j.pos + Vec2::new(0.0, -10.0)).extend(6.0)),
             ));
-            burst(
-                &mut commands,
-                &mut rng,
-                j.pos + feet,
-                Burst {
-                    count: 10,
-                    colors: &[
-                        Color::srgb(0.55, 0.8, 0.3),
-                        Color::srgb(0.75, 0.9, 0.4),
-                        Color::srgb(0.4, 0.65, 0.25),
-                    ],
-                    speed: (20.0, 70.0),
-                    angle: (-PI * 0.9, -PI * 0.1),
-                    gravity: -60.0,
-                    life: (0.3, 0.6),
-                    size: 2.0,
-                },
-            );
+            burst(&mut commands, &mut rng, j.pos + feet, Burst {
+                count: 10,
+                colors: &[Color::srgb(0.55, 0.8, 0.3), Color::srgb(0.75, 0.9, 0.4), Color::srgb(0.4, 0.65, 0.25)],
+                speed: (20.0, 70.0),
+                angle: (-PI * 0.9, -PI * 0.1),
+                gravity: -60.0,
+                life: (0.3, 0.6),
+                size: 2.0,
+            });
         } else {
-            burst(
-                &mut commands,
-                &mut rng,
-                j.pos + feet,
-                Burst {
-                    count: 4,
-                    colors: &[Color::srgb(0.75, 0.68, 0.55)],
-                    speed: (15.0, 40.0),
-                    angle: (PI * 0.05, PI * 0.95),
-                    gravity: 100.0,
-                    life: (0.2, 0.35),
-                    size: 2.0,
-                },
-            );
+            burst(&mut commands, &mut rng, j.pos + feet, Burst {
+                count: 4,
+                colors: &[Color::srgb(0.75, 0.68, 0.55)],
+                speed: (15.0, 40.0),
+                angle: (PI * 0.05, PI * 0.95),
+                gravity: 100.0,
+                life: (0.2, 0.35),
+                size: 2.0,
+            });
         }
     }
     for j in on_one.read() {
         // A ring of gold around the feet, and a few glints that rise with Nat.
-        burst(
-            &mut commands,
-            &mut rng,
-            j.pos + feet,
-            Burst {
-                count: 14,
-                colors: &NOTE_COLORS,
-                speed: (40.0, 90.0),
-                angle: (0.0, 2.0 * PI),
-                gravity: 0.0,
-                life: (0.3, 0.55),
-                size: 2.0,
-            },
-        );
-        burst(
-            &mut commands,
-            &mut rng,
-            j.pos,
-            Burst {
-                count: 6,
-                colors: &[Color::srgb(1.0, 1.0, 0.75)],
-                speed: (60.0, 120.0),
-                angle: (PI * 0.35, PI * 0.65),
-                gravity: 60.0,
-                life: (0.4, 0.7),
-                size: 2.0,
-            },
-        );
+        burst(&mut commands, &mut rng, j.pos + feet, Burst {
+            count: 14,
+            colors: &NOTE_COLORS,
+            speed: (40.0, 90.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 0.0,
+            life: (0.3, 0.55),
+            size: 2.0,
+        });
+        burst(&mut commands, &mut rng, j.pos, Burst {
+            count: 6,
+            colors: &[Color::srgb(1.0, 1.0, 0.75)],
+            speed: (60.0, 120.0),
+            angle: (PI * 0.35, PI * 0.65),
+            gravity: 60.0,
+            life: (0.4, 0.7),
+            size: 2.0,
+        });
     }
     for l in landed.read() {
         let n = if l.speed > 300.0 { 10 } else { 6 };
-        burst(
-            &mut commands,
-            &mut rng,
-            l.pos + feet,
-            Burst {
-                count: n,
-                colors: &[Color::srgb(0.75, 0.68, 0.55), Color::srgb(0.6, 0.55, 0.45)],
-                speed: (20.0, 60.0),
-                angle: (0.0, PI),
-                gravity: 200.0,
-                life: (0.2, 0.4),
-                size: 2.0,
-            },
-        );
+        burst(&mut commands, &mut rng, l.pos + feet, Burst {
+            count: n,
+            colors: &[Color::srgb(0.75, 0.68, 0.55), Color::srgb(0.6, 0.55, 0.45)],
+            speed: (20.0, 60.0),
+            angle: (0.0, PI),
+            gravity: 200.0,
+            life: (0.2, 0.4),
+            size: 2.0,
+        });
     }
     for d in died.read() {
-        burst(
-            &mut commands,
-            &mut rng,
-            d.pos,
-            Burst {
-                count: 28,
-                colors: &[
-                    Color::srgb(0.45, 0.28, 0.12),
-                    Color::srgb(0.6, 0.38, 0.17),
-                    Color::srgb(0.33, 0.2, 0.08),
-                ],
-                speed: (60.0, 180.0),
-                angle: (0.0, 2.0 * PI),
-                gravity: 500.0,
-                life: (0.4, 0.8),
-                size: 2.0,
-            },
-        );
+        burst(&mut commands, &mut rng, d.pos, Burst {
+            count: 28,
+            colors: &[Color::srgb(0.45, 0.28, 0.12), Color::srgb(0.6, 0.38, 0.17), Color::srgb(0.33, 0.2, 0.08)],
+            speed: (60.0, 180.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 500.0,
+            life: (0.4, 0.8),
+            size: 2.0,
+        });
     }
     for n in nuggets.read() {
-        burst(
-            &mut commands,
-            &mut rng,
-            n.pos,
-            Burst {
-                count: 10,
-                colors: &[
-                    Color::srgb(1.0, 0.85, 0.2),
-                    Color::srgb(1.0, 1.0, 0.7),
-                    Color::srgb(0.95, 0.65, 0.1),
-                ],
-                speed: (30.0, 80.0),
-                angle: (0.0, 2.0 * PI),
-                gravity: 0.0,
-                life: (0.25, 0.5),
-                size: 2.0,
-            },
-        );
+        burst(&mut commands, &mut rng, n.pos, Burst {
+            count: 10,
+            colors: &[Color::srgb(1.0, 0.85, 0.2), Color::srgb(1.0, 1.0, 0.7), Color::srgb(0.95, 0.65, 0.1)],
+            speed: (30.0, 80.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 0.0,
+            life: (0.25, 0.5),
+            size: 2.0,
+        });
     }
     for b in smashed.read() {
         // Chips of soap everywhere.
-        burst(
-            &mut commands,
-            &mut rng,
-            b.pos,
-            Burst {
-                count: 16,
-                colors: &[
-                    Color::srgb(0.96, 0.72, 0.83),
-                    Color::srgb(1.0, 0.96, 0.98),
-                    Color::srgb(0.85, 0.55, 0.7),
-                ],
-                speed: (60.0, 160.0),
-                angle: (0.0, 2.0 * PI),
-                gravity: 500.0,
-                life: (0.4, 0.8),
-                size: 3.0,
-            },
-        );
+        burst(&mut commands, &mut rng, b.pos, Burst {
+            count: 16,
+            colors: &[Color::srgb(0.96, 0.72, 0.83), Color::srgb(1.0, 0.96, 0.98), Color::srgb(0.85, 0.55, 0.7)],
+            speed: (60.0, 160.0),
+            angle: (0.0, 2.0 * PI),
+            gravity: 500.0,
+            life: (0.4, 0.8),
+            size: 3.0,
+        });
     }
     for s in sprung.read() {
         // A pink pfffft out of the cushion.
-        burst(
-            &mut commands,
-            &mut rng,
-            s.pos + feet,
-            Burst {
-                count: 8,
-                colors: &[Color::srgb(0.95, 0.63, 0.69), Color::srgb(1.0, 0.82, 0.85)],
-                speed: (30.0, 90.0),
-                angle: (-PI * 0.2, PI * 0.2),
-                gravity: 0.0,
-                life: (0.2, 0.4),
-                size: 2.0,
-            },
-        );
+        burst(&mut commands, &mut rng, s.pos + feet, Burst {
+            count: 8,
+            colors: &[Color::srgb(0.95, 0.63, 0.69), Color::srgb(1.0, 0.82, 0.85)],
+            speed: (30.0, 90.0),
+            angle: (-PI * 0.2, PI * 0.2),
+            gravity: 0.0,
+            life: (0.2, 0.4),
+            size: 2.0,
+        });
     }
     for t in thuds.read() {
         // Dust along the slammed face.
@@ -307,20 +220,15 @@ fn spawn_fx(
             CrushDir::Right => ((-PI * 0.45, PI * 0.45), Vec2::Y),
         };
         for k in [-1.0, 0.0, 1.0] {
-            burst(
-                &mut commands,
-                &mut rng,
-                t.face + along * k * t.half * 0.8,
-                Burst {
-                    count: 4,
-                    colors: &[Color::srgb(0.75, 0.75, 0.78), Color::srgb(0.55, 0.55, 0.6)],
-                    speed: (30.0, 80.0),
-                    angle,
-                    gravity: 120.0,
-                    life: (0.3, 0.6),
-                    size: 2.0,
-                },
-            );
+            burst(&mut commands, &mut rng, t.face + along * k * t.half * 0.8, Burst {
+                count: 4,
+                colors: &[Color::srgb(0.75, 0.75, 0.78), Color::srgb(0.55, 0.55, 0.6)],
+                speed: (30.0, 80.0),
+                angle,
+                gravity: 120.0,
+                life: (0.3, 0.6),
+                size: 2.0,
+            });
         }
     }
     // The encore: confetti for every call (more as it gets bigger), a star burst off the last
@@ -335,122 +243,79 @@ fn spawn_fx(
     for cue in encore.read() {
         let (at, b) = match *cue {
             EncoreCue::Start | EncoreCue::End => continue,
-            EncoreCue::Call { pos, hype } => (
-                pos + Vec2::new(0.0, 8.0),
-                Burst {
-                    count: 16 + 4 * hype.min(10) as usize,
-                    colors: &CONFETTI,
-                    speed: (60.0, 140.0 + 8.0 * hype.min(10) as f32),
-                    angle: (PI * 0.15, PI * 0.85),
-                    gravity: 220.0,
-                    life: (0.7, 1.3),
-                    size: 3.0,
-                },
-            ),
-            EncoreCue::Knock { pos } => (
-                pos,
-                Burst {
-                    count: 40,
-                    colors: &[
-                        Color::WHITE,
-                        Color::srgb(1.0, 0.95, 0.6),
-                        Color::srgb(1.0, 0.85, 0.2),
-                    ],
-                    speed: (80.0, 220.0),
-                    angle: (0.0, 2.0 * PI),
-                    gravity: 0.0,
-                    life: (0.3, 0.6),
-                    size: 3.0,
-                },
-            ),
-            EncoreCue::Boing { pos } => (
-                pos,
-                Burst {
-                    count: 24,
-                    colors: &[Color::srgb(0.97, 0.85, 0.22), Color::WHITE],
-                    speed: (60.0, 160.0),
-                    angle: (0.0, PI),
-                    gravity: 300.0,
-                    life: (0.4, 0.8),
-                    size: 3.0,
-                },
-            ),
-            EncoreCue::Through { pos } => (
-                pos,
-                Burst {
-                    count: 30,
-                    colors: &[
-                        Color::srgb(0.45, 0.48, 0.55),
-                        Color::srgb(0.7, 0.72, 0.78),
-                        Color::srgb(0.25, 0.27, 0.32),
-                    ],
-                    speed: (80.0, 200.0),
-                    angle: (0.0, 2.0 * PI),
-                    gravity: 420.0,
-                    life: (0.5, 1.0),
-                    size: 3.0,
-                },
-            ),
-            EncoreCue::Slam { pos } => (
-                pos,
-                Burst {
-                    count: 28,
-                    colors: &[Color::srgb(0.85, 0.82, 0.72), Color::srgb(0.65, 0.6, 0.52)],
-                    speed: (40.0, 120.0),
-                    angle: (-PI * 0.2, PI * 1.2),
-                    gravity: 150.0,
-                    life: (0.5, 1.1),
-                    size: 4.0,
-                },
-            ),
-            EncoreCue::Flush { pos } => (
-                pos,
-                Burst {
-                    count: 36,
-                    colors: &[
-                        Color::srgb(0.45, 0.75, 1.0),
-                        Color::srgb(0.75, 0.9, 1.0),
-                        Color::WHITE,
-                    ],
-                    speed: (60.0, 170.0),
-                    angle: (PI * 0.25, PI * 0.75),
-                    gravity: 420.0,
-                    life: (0.5, 1.0),
-                    size: 2.0,
-                },
-            ),
+            EncoreCue::Call { pos, hype } => (pos + Vec2::new(0.0, 8.0), Burst {
+                count: 16 + 4 * hype.min(10) as usize,
+                colors: &CONFETTI,
+                speed: (60.0, 140.0 + 8.0 * hype.min(10) as f32),
+                angle: (PI * 0.15, PI * 0.85),
+                gravity: 220.0,
+                life: (0.7, 1.3),
+                size: 3.0,
+            }),
+            EncoreCue::Knock { pos } => (pos, Burst {
+                count: 40,
+                colors: &[Color::WHITE, Color::srgb(1.0, 0.95, 0.6), Color::srgb(1.0, 0.85, 0.2)],
+                speed: (80.0, 220.0),
+                angle: (0.0, 2.0 * PI),
+                gravity: 0.0,
+                life: (0.3, 0.6),
+                size: 3.0,
+            }),
+            EncoreCue::Boing { pos } => (pos, Burst {
+                count: 24,
+                colors: &[Color::srgb(0.97, 0.85, 0.22), Color::WHITE],
+                speed: (60.0, 160.0),
+                angle: (0.0, PI),
+                gravity: 300.0,
+                life: (0.4, 0.8),
+                size: 3.0,
+            }),
+            EncoreCue::Through { pos } => (pos, Burst {
+                count: 30,
+                colors: &[Color::srgb(0.45, 0.48, 0.55), Color::srgb(0.7, 0.72, 0.78), Color::srgb(0.25, 0.27, 0.32)],
+                speed: (80.0, 200.0),
+                angle: (0.0, 2.0 * PI),
+                gravity: 420.0,
+                life: (0.5, 1.0),
+                size: 3.0,
+            }),
+            EncoreCue::Slam { pos } => (pos, Burst {
+                count: 28,
+                colors: &[Color::srgb(0.85, 0.82, 0.72), Color::srgb(0.65, 0.6, 0.52)],
+                speed: (40.0, 120.0),
+                angle: (-PI * 0.2, PI * 1.2),
+                gravity: 150.0,
+                life: (0.5, 1.1),
+                size: 4.0,
+            }),
+            EncoreCue::Flush { pos } => (pos, Burst {
+                count: 36,
+                colors: &[Color::srgb(0.45, 0.75, 1.0), Color::srgb(0.75, 0.9, 1.0), Color::WHITE],
+                speed: (60.0, 170.0),
+                angle: (PI * 0.25, PI * 0.75),
+                gravity: 420.0,
+                life: (0.5, 1.0),
+                size: 2.0,
+            }),
         };
         burst(&mut commands, &mut rng, at, b);
     }
     for c in checkpoints.read() {
-        burst(
-            &mut commands,
-            &mut rng,
-            c.pos + Vec2::new(0.0, 12.0),
-            Burst {
-                count: 24,
-                colors: &[
-                    Color::WHITE,
-                    Color::srgb(0.95, 0.93, 0.85),
-                    Color::srgb(0.85, 0.85, 0.8),
-                ],
-                speed: (60.0, 150.0),
-                angle: (PI * 0.15, PI * 0.85),
-                gravity: 250.0,
-                life: (0.6, 1.1),
-                size: 4.0,
-            },
-        );
+        burst(&mut commands, &mut rng, c.pos + Vec2::new(0.0, 12.0), Burst {
+            count: 24,
+            colors: &[Color::WHITE, Color::srgb(0.95, 0.93, 0.85), Color::srgb(0.85, 0.85, 0.8)],
+            speed: (60.0, 150.0),
+            angle: (PI * 0.15, PI * 0.85),
+            gravity: 250.0,
+            life: (0.6, 1.1),
+            size: 4.0,
+        });
     }
 }
 
 /// Seconds between trail notes while airborne in Giant Steps.
 const NOTE_EVERY: f32 = 0.07;
-const NOTE_COLORS: [Color; 3] = [
-    Color::srgb(1.0, 0.85, 0.2),
-    Color::srgb(1.0, 0.95, 0.55),
-    Color::srgb(0.95, 0.65, 0.1),
-];
+const NOTE_COLORS: [Color; 3] = [Color::srgb(1.0, 0.85, 0.2), Color::srgb(1.0, 0.95, 0.55), Color::srgb(0.95, 0.65, 0.1)];
 
 /// Time until the next trail note.
 #[derive(Resource, Default)]
@@ -482,18 +347,8 @@ fn note_trail(
     let life = rng.range(0.5, 0.8);
     commands.spawn((
         LevelEntity,
-        Particle {
-            vel: Vec2::new(rng.range(-8.0, 8.0), rng.range(10.0, 25.0)),
-            gravity: 0.0,
-            life,
-            max_life: life,
-            fade: true,
-        },
-        Sprite {
-            image: sprites.get(SpriteId::Note),
-            color,
-            ..default()
-        },
+        Particle { vel: Vec2::new(rng.range(-8.0, 8.0), rng.range(10.0, 25.0)), gravity: 0.0, life, max_life: life, fade: true },
+        Sprite { image: sprites.get(SpriteId::Note), color, ..default() },
         Transform::from_translation(at.extend(6.0)),
     ));
 }

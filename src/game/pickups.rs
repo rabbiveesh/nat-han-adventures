@@ -27,13 +27,7 @@ pub const CHECKPOINT_WIDTH: f32 = 12.0;
 pub const GOAL_WIDTH: f32 = 10.0;
 
 /// Han's lines for checkpoints that have no `say:` in the level file.
-pub const CHECKPOINT_QUIPS: &[&str] = &[
-    "Two-ply!",
-    "Checkpoint!",
-    "Roll with it!",
-    "Fresh roll!",
-    "Smells... fine.",
-];
+pub const CHECKPOINT_QUIPS: &[&str] = &["Two-ply!", "Checkpoint!", "Roll with it!", "Fresh roll!", "Smells... fine."];
 
 /// Nuggets picked up since the last checkpoint (where they were). Dying puts them back, so a
 /// nugget line that fires up the band for a long gap is there again after a failed try.
@@ -54,9 +48,7 @@ fn collect_nuggets(
     mut at_risk: ResMut<NuggetsAtRisk>,
     mut collected: MessageWriter<NuggetCollected>,
 ) {
-    let Ok((pos, body)) = player.single() else {
-        return;
-    };
+    let Ok((pos, body)) = player.single() else { return };
     let h = Vec2::splat(NUGGET_BOX / 2.0);
     for (e, tf, ghost) in &nuggets {
         let c = tf.translation.truncate();
@@ -80,9 +72,7 @@ fn touch_checkpoints(
     mut reached: MessageWriter<CheckpointReached>,
     mut says: MessageWriter<HanSays>,
 ) {
-    let Ok((pos, body)) = player.single() else {
-        return;
-    };
+    let Ok((pos, body)) = player.single() else { return };
     for (mut cp, tf) in &mut checkpoints {
         if cp.active {
             continue;
@@ -99,10 +89,7 @@ fn touch_checkpoints(
         // highest index: indices are reading order, top row first, so in a level you climb
         // (Septic Tank) the first checkpoint you reach has the highest index.
         run.checkpoint = Some(cp.index);
-        reached.write(CheckpointReached {
-            index: cp.index,
-            pos: floor,
-        });
+        reached.write(CheckpointReached { index: cp.index, pos: floor });
         let text = active.level.checkpoint_line(cp.index).map_or_else(
             || CHECKPOINT_QUIPS[cp.index % CHECKPOINT_QUIPS.len()].to_string(),
             str::to_string,
@@ -121,9 +108,7 @@ fn hear_hints(
     for mut hint in &mut hints {
         if !hint.said && hint.center.distance(pos.0) <= crate::level::HINT_RADIUS {
             hint.said = true;
-            says.write(HanSays {
-                text: hint.text.clone(),
-            });
+            says.write(HanSays { text: hint.text.clone() });
             return; // one at a time
         }
     }
@@ -145,9 +130,7 @@ fn touch_goal(
     mut completed: MessageWriter<LevelCompleted>,
     mut next: ResMut<NextState<AppState>>,
 ) {
-    let Ok((entity, pos, mut body)) = player.single_mut() else {
-        return;
-    };
+    let Ok((entity, pos, mut body)) = player.single_mut() else { return };
     let Ok(goal) = goal.single() else { return };
     let floor = goal.translation.truncate();
     let min = floor - Vec2::new(GOAL_WIDTH / 2.0, 0.0);

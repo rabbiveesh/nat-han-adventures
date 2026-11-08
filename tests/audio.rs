@@ -14,10 +14,7 @@ type Song = SongFile;
 
 /// Every song of the game, and the demo.
 fn all_songs() -> Vec<(String, Song)> {
-    let mut all: Vec<(String, Song)> = Music::ALL
-        .iter()
-        .map(|m| (format!("{m:?}"), song(*m)))
-        .collect();
+    let mut all: Vec<(String, Song)> = Music::ALL.iter().map(|m| (format!("{m:?}"), song(*m))).collect();
     all.push(("demo".into(), demo::demo_song()));
     all
 }
@@ -46,10 +43,7 @@ fn check(name: &str, r: &synth::Rendered) {
     assert!(!r.frames.is_empty(), "{name}: empty");
     let mut peak = 0.0f32;
     for (i, f) in r.frames.iter().enumerate() {
-        assert!(
-            f.left.is_finite() && f.right.is_finite(),
-            "{name}: NaN/inf at frame {i}"
-        );
+        assert!(f.left.is_finite() && f.right.is_finite(), "{name}: NaN/inf at frame {i}");
         peak = peak.max(f.left.abs()).max(f.right.abs());
     }
     assert!(peak <= 1.0, "{name}: peak {peak} > 1");
@@ -61,29 +55,14 @@ fn check(name: &str, r: &synth::Rendered) {
         let max_step = r
             .frames
             .windows(2)
-            .map(|w| {
-                (w[1].left - w[0].left)
-                    .abs()
-                    .max((w[1].right - w[0].right).abs())
-            })
+            .map(|w| (w[1].left - w[0].left).abs().max((w[1].right - w[0].right).abs()))
             .fold(0.0f32, f32::max);
-        let seam = (first.left - last.left)
-            .abs()
-            .max((first.right - last.right).abs());
-        assert!(
-            seam <= max_step.max(0.05),
-            "{name}: loop seam jump {seam} (max step inside {max_step})"
-        );
+        let seam = (first.left - last.left).abs().max((first.right - last.right).abs());
+        assert!(seam <= max_step.max(0.05), "{name}: loop seam jump {seam} (max step inside {max_step})");
     } else {
         // One-shots start and end (near) silent: no pops.
-        assert!(
-            last.left.abs() < 1e-3 && last.right.abs() < 1e-3,
-            "{name}: ends at {last:?}"
-        );
-        assert!(
-            first.left.abs() < 0.1 && first.right.abs() < 0.1,
-            "{name}: starts at {first:?}"
-        );
+        assert!(last.left.abs() < 1e-3 && last.right.abs() < 1e-3, "{name}: ends at {last:?}");
+        assert!(first.left.abs() < 0.1 && first.right.abs() < 0.1, "{name}: starts at {first:?}");
     }
 }
 
@@ -125,29 +104,18 @@ fn every_song_renders_through_every_filter() {
                 continue;
             }
             for just_intonation in [false, true] {
-                let f = Filters {
-                    harmony,
-                    just_intonation,
-                };
+                let f = Filters { harmony, just_intonation };
                 let t = Instant::now();
-                let r = synth::render_song_with(song, f, 42)
-                    .unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
+                let r = synth::render_song_with(song, f, 42).unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
                 filtered_secs += t.elapsed().as_secs_f64();
                 filtered_audio += r.duration_secs() as f64;
                 if song.looping {
-                    assert_eq!(
-                        r.frames.len(),
-                        version_frames(song, f, plain.frames.len()),
-                        "{name} {f:?}: length changed"
-                    );
+                    assert_eq!(r.frames.len(), version_frames(song, f, plain.frames.len()), "{name} {f:?}: length changed");
                 } else if harmony != Harmony::Waltz {
                     // A one-shot rings out from its last note, which sits a few ms off the beat
                     // (each take its own way: `live::pocket`).
                     let d = r.frames.len().abs_diff(plain.frames.len());
-                    assert!(
-                        d <= synth::SAMPLE_RATE as usize / 40,
-                        "{name} {f:?}: length changed by {d} frames"
-                    );
+                    assert!(d <= synth::SAMPLE_RATE as usize / 40, "{name} {f:?}: length changed by {d} frames");
                 }
                 check(&format!("{name} {f:?}"), &r);
             }
@@ -155,15 +123,8 @@ fn every_song_renders_through_every_filter() {
     }
     let per_plain = plain_secs / plain_audio;
     let per_filtered = filtered_secs / filtered_audio;
-    println!(
-        "plain {:.2}ms/s of audio, filtered {:.2}ms/s",
-        per_plain * 1000.0,
-        per_filtered * 1000.0
-    );
-    assert!(
-        per_filtered < 2.0 * per_plain + 0.0002,
-        "filtered renders too slow: {per_filtered:.5}s vs {per_plain:.5}s per second"
-    );
+    println!("plain {:.2}ms/s of audio, filtered {:.2}ms/s", per_plain * 1000.0, per_filtered * 1000.0);
+    assert!(per_filtered < 2.0 * per_plain + 0.0002, "filtered renders too slow: {per_filtered:.5}s vs {per_plain:.5}s per second");
 }
 
 /// The jazz waltz, alone and with the laughing band: every song with a chart, clean (including
@@ -178,32 +139,18 @@ fn every_song_waltzes_cleanly_and_within_budget() {
             continue;
         }
         for just_intonation in [false, true] {
-            let f = Filters {
-                harmony: Harmony::Waltz,
-                just_intonation,
-            };
-            let r =
-                synth::render_song_with(song, f, 7).unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
+            let f = Filters { harmony: Harmony::Waltz, just_intonation };
+            let r = synth::render_song_with(song, f, 7).unwrap_or_else(|e| panic!("{name} {f:?}: {e}"));
             let want = waltz::warp(song.beats()) * 60.0 / waltz::WALTZ_BPM as f64;
             // (A one-shot rings out a little past its last beat.)
             let tail = if song.looping { 1e-3 } else { 0.5 };
             let d = r.duration_secs() as f64;
-            assert!(
-                d > want - 1e-3 && d < want + tail,
-                "{name}: {d} s, want {want}"
-            );
+            assert!(d > want - 1e-3 && d < want + tail, "{name}: {d} s, want {want}");
             assert_eq!(r.looping, song.looping);
             check(&format!("{name} {f:?}"), &r);
             // Not just the melody: the bass, comping and drums all play.
-            let quiet = r
-                .frames
-                .iter()
-                .filter(|x| x.left.abs().max(x.right.abs()) < 1e-3)
-                .count();
-            assert!(
-                quiet * 10 < r.frames.len(),
-                "{name} {f:?}: {quiet} silent frames"
-            );
+            let quiet = r.frames.iter().filter(|x| x.left.abs().max(x.right.abs()) < 1e-3).count();
+            assert!(quiet * 10 < r.frames.len(), "{name} {f:?}: {quiet} silent frames");
             waltzed += 1;
         }
     }
@@ -226,22 +173,13 @@ fn the_waltz_melody_is_the_tune_in_three() {
         assert_eq!(w.length, 1.5 * mel.length, "{m:?}");
         assert_eq!(w.events.len(), mel.events.len(), "{m:?}");
         for (a, b) in w.events.iter().zip(&mel.events) {
-            assert_eq!(
-                (a.kind, a.volume, a.duty, a.tie),
-                (b.kind, b.volume, b.duty, b.tie),
-                "{m:?}"
-            );
+            assert_eq!((a.kind, a.volume, a.duty, a.tie), (b.kind, b.volume, b.duty, b.tie), "{m:?}");
             assert!((a.start - waltz::warp(b.start)).abs() < 1e-9);
         }
         // Every 4/4 downbeat note is on a waltz ONE.
         for (a, b) in w.events.iter().zip(&mel.events) {
             if b.start.rem_euclid(2.0) < 1e-9 {
-                assert!(
-                    a.start.rem_euclid(3.0) < 1e-9,
-                    "{m:?}: {} -> {}",
-                    b.start,
-                    a.start
-                );
+                assert!(a.start.rem_euclid(3.0) < 1e-9, "{m:?}: {} -> {}", b.start, a.start);
             }
         }
     }
@@ -251,24 +189,17 @@ fn the_waltz_melody_is_the_tune_in_three() {
 /// every song clean (including the loop seam), loop-length, and within the render budget.
 #[test]
 fn every_song_renders_cleanly_in_the_medley() {
-    let laughing = Filters {
-        just_intonation: true,
-        ..Filters::default()
-    };
+    let laughing = Filters { just_intonation: true, ..Filters::default() };
     let all = all_songs();
     let t = Instant::now();
     for (name, song) in &all {
-        let r =
-            synth::render_song_with(song, laughing, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
+        let r = synth::render_song_with(song, laughing, 0).unwrap_or_else(|e| panic!("{name}: {e}"));
         let plain = synth::render_song(song).unwrap();
         assert_eq!(r.frames.len(), plain.frames.len(), "{name}: length changed");
         check(&format!("{name} medley"), &r);
     }
     let secs = t.elapsed().as_secs_f64();
-    assert!(
-        secs < 2.0 * budget_secs(),
-        "medley + plain renders took {secs:.2}s"
-    );
+    assert!(secs < 2.0 * budget_secs(), "medley + plain renders took {secs:.2}s");
 }
 
 /// Side B's levels are timed to world 2's tune (calls land on bar lines, and the routes in
@@ -306,11 +237,7 @@ fn melodies_follow_the_reharmonization() {
         let mel = song.tracks[0].clone();
         for h in [Harmony::Coltrane, Harmony::Quartal, Harmony::MelodicMinor] {
             let t = melody::reharmonize(&mel, &c, h);
-            assert_eq!(
-                t,
-                melody::reharmonize(&mel, &c, h),
-                "{name} {h:?}: deterministic"
-            );
+            assert_eq!(t, melody::reharmonize(&mel, &c, h), "{name} {h:?}: deterministic");
             // Rhythm, dynamics and slurs untouched.
             assert_eq!(t.events.len(), mel.events.len(), "{name} {h:?}");
             assert_eq!(t.length, mel.length);
@@ -324,10 +251,7 @@ fn melodies_follow_the_reharmonization() {
                 assert_eq!(pitch(a).is_some(), pitch(b).is_some(), "{name} {h:?}");
                 if let (Some(x), Some(y)) = (pitch(a), pitch(b)) {
                     assert!((48..=95).contains(&x), "{name} {h:?}: {x} out of o3-o6");
-                    assert!(
-                        (x - y).abs() <= melody::MAX_SHIFT,
-                        "{name} {h:?}: moved {y} -> {x}"
-                    );
+                    assert!((x - y).abs() <= melody::MAX_SHIFT, "{name} {h:?}: moved {y} -> {x}");
                     notes.push((a, x, y));
                 }
             }
@@ -354,27 +278,13 @@ fn melodies_follow_the_reharmonization() {
                 kept += (d_new.signum() == d_old.signum()) as usize;
             }
             let share = kept as f64 / steps as f64;
-            println!(
-                "{name} {h:?}: contour kept {:.1}%, worst interval change {worst}",
-                share * 100.0
-            );
-            assert!(
-                share >= 0.9,
-                "{name} {h:?}: contour kept only {:.0}%",
-                share * 100.0
-            );
+            println!("{name} {h:?}: contour kept {:.1}%, worst interval change {worst}", share * 100.0);
+            assert!(share >= 0.9, "{name} {h:?}: contour kept only {:.0}%", share * 100.0);
             assert!(worst <= 12, "{name} {h:?}: an interval changed by {worst}");
             for w in notes.windows(2) {
                 // Repeated notes over one chord (old and new) stay repeated.
-                if w[0].2 == w[1].2
-                    && seg(w[0].0) == seg(w[1].0)
-                    && new_seg(w[0].0) == new_seg(w[1].0)
-                {
-                    assert_eq!(
-                        w[0].1, w[1].1,
-                        "{name} {h:?}: repeated note split at {}",
-                        w[1].0.start
-                    );
+                if w[0].2 == w[1].2 && seg(w[0].0) == seg(w[1].0) && new_seg(w[0].0) == new_seg(w[1].0) {
+                    assert_eq!(w[0].1, w[1].1, "{name} {h:?}: repeated note split at {}", w[1].0.start);
                 }
             }
             for (k, &(e, x, y)) in notes.iter().enumerate() {
@@ -386,8 +296,7 @@ fn melodies_follow_the_reharmonization() {
                             // A written chromatic approach: a semitone straight into the next note.
                             let next = notes.get(k + 1).expect("an approach has a target");
                             assert!(
-                                (next.0.start - (e.start + e.dur)).abs() < 1e-6
-                                    && (next.1 - x).abs() == 1,
+                                (next.0.start - (e.start + e.dur)).abs() < 1e-6 && (next.1 - x).abs() == 1,
                                 "{name}: {x} at {} not in {mm:?} and not an approach",
                                 e.start
                             );
@@ -398,9 +307,7 @@ fn melodies_follow_the_reharmonization() {
                         let semi = (x - chord.root as i32).rem_euclid(12) as u8;
                         if melody::strong_beat(e.start) {
                             assert!(
-                                melody::quartal_avoid(&chord)
-                                    .iter()
-                                    .all(|(a, _)| *a != semi),
+                                melody::quartal_avoid(&chord).iter().all(|(a, _)| *a != semi),
                                 "{name}: avoid note {x} on {chord} at beat {}",
                                 e.start
                             );
@@ -413,11 +320,7 @@ fn melodies_follow_the_reharmonization() {
                         let j = new_seg(e);
                         let chromatic = !melody::chord_scale(&slots[i].chord).contains(y as u8);
                         if slots[i].chord == new[j].chord && !chromatic {
-                            assert_eq!(
-                                x, y,
-                                "{name}: changed at {} where the chart wasn't",
-                                e.start
-                            );
+                            assert_eq!(x, y, "{name}: changed at {} where the chart wasn't", e.start);
                         }
                     }
                 }
@@ -431,12 +334,7 @@ fn every_chart_parses_and_covers_its_song() {
     for m in Music::ALL {
         let song = song(m);
         let Some(c) = &song.chart else { continue };
-        assert_eq!(
-            c.beats(),
-            song.tracks[0].length,
-            "{m:?}: chart is {} bars",
-            c.bars
-        );
+        assert_eq!(c.beats(), song.tracks[0].length, "{m:?}: chart is {} bars", c.bars);
         assert_eq!(c.beats(), song.beats(), "{m:?}");
     }
     // Every level's song has one (or its gates can't open).
@@ -447,35 +345,17 @@ fn every_chart_parses_and_covers_its_song() {
 
 #[test]
 fn filter_labels_and_override_syntax() {
-    let f = |harmony, just_intonation| Filters {
-        harmony,
-        just_intonation,
-    };
+    let f = |harmony, just_intonation| Filters { harmony, just_intonation };
     assert_eq!(Filters::default().label(), "");
     assert_eq!(f(Harmony::Coltrane, false).label(), "COLTRANE CHANGES");
     assert_eq!(f(Harmony::Quartal, false).label(), "QUARTAL");
     assert_eq!(f(Harmony::MelodicMinor, false).label(), "MELODIC MINOR");
     assert_eq!(f(Harmony::Original, true).label(), "TUNING? WHAT TUNING");
-    assert_eq!(
-        f(Harmony::Coltrane, true).label(),
-        "COLTRANE CHANGES + TUNING? WHAT TUNING"
-    );
-    assert_eq!(
-        Filters::parse("coltrane"),
-        Some(f(Harmony::Coltrane, false))
-    );
-    assert_eq!(
-        Filters::parse("Quartal+JI"),
-        Some(f(Harmony::Quartal, true))
-    );
-    assert_eq!(
-        Filters::parse("melodic"),
-        Some(f(Harmony::MelodicMinor, false))
-    );
-    assert_eq!(
-        Filters::parse("original+ji"),
-        Some(f(Harmony::Original, true))
-    );
+    assert_eq!(f(Harmony::Coltrane, true).label(), "COLTRANE CHANGES + TUNING? WHAT TUNING");
+    assert_eq!(Filters::parse("coltrane"), Some(f(Harmony::Coltrane, false)));
+    assert_eq!(Filters::parse("Quartal+JI"), Some(f(Harmony::Quartal, true)));
+    assert_eq!(Filters::parse("melodic"), Some(f(Harmony::MelodicMinor, false)));
+    assert_eq!(Filters::parse("original+ji"), Some(f(Harmony::Original, true)));
     assert_eq!(Filters::parse("ji"), Some(f(Harmony::Original, true)));
     assert_eq!(Filters::parse("bebop"), None);
     assert_eq!(f(Harmony::Waltz, false).label(), "JAZZ WALTZ");
@@ -486,29 +366,17 @@ fn filter_labels_and_override_syntax() {
 #[test]
 fn a_long_busy_song_renders_fast_and_loops_cleanly() {
     // 60 bars of 4/4 at 160bpm = 90s.
-    let song = Song::from_mml(
-        "stress",
-        160.0,
-        0.3,
-        true,
-        0,
-        "",
-        [
-            "[ o5 l16 v13 @1 c e g >c< b g e d c+ e a >c+< b a e c+ ]60",
-            "[ o4 l8 v9 @2 e g e g f a f a ]60",
-            "[ o2 l8 c c g g a a e& e ]60",
-            "[ k8 h8 s8 h16 h16 k8 k8 s8 H8 ]60",
-        ],
-    )
+    let song = Song::from_mml("stress", 160.0, 0.3, true, 0, "", [
+        "[ o5 l16 v13 @1 c e g >c< b g e d c+ e a >c+< b a e c+ ]60",
+        "[ o4 l8 v9 @2 e g e g f a f a ]60",
+        "[ o2 l8 c c g g a a e& e ]60",
+        "[ k8 h8 s8 h16 h16 k8 k8 s8 H8 ]60",
+    ])
     .unwrap();
     let t = Instant::now();
     let r = synth::render_song(&song).unwrap();
     let secs = t.elapsed().as_secs_f64();
-    assert!(
-        (r.duration_secs() - 90.0).abs() < 0.01,
-        "{}",
-        r.duration_secs()
-    );
+    assert!((r.duration_secs() - 90.0).abs() < 0.01, "{}", r.duration_secs());
     check("stress", &r);
     println!("90s busy song: {:.0}ms", secs * 1000.0);
     // (Offline, the engine plays two passes and keeps the second.)
@@ -521,9 +389,8 @@ mod plugin {
     use bevy::{prelude::*, state::app::StatesPlugin, time::TimeUpdateStrategy};
     use nat_han_adventures::{
         audio::{
-            AudioOutput, Filters, Harmony, LiveClock, LivePlayer, Music, MusicChanged,
-            MusicOverride, MusicStarted, NowPlaying, SfxCount, director, live::library,
-            tuning::Tuning,
+            AudioOutput, Filters, Harmony, LiveClock, LivePlayer, Music, MusicChanged, MusicOverride, MusicStarted, NowPlaying, SfxCount,
+            director, live::library, tuning::Tuning,
         },
         events::{CallBand, CheckpointReached, Jumped},
         game::{Groove, LevelRun},
@@ -548,9 +415,7 @@ mod plugin {
     ) {
         heard.started.extend(s.read().cloned());
         let now = time.elapsed_secs_f64();
-        heard
-            .changed
-            .extend(c.read().map(|m| (now, m.clone(), *clock)));
+        heard.changed.extend(c.read().map(|m| (now, m.clone(), *clock)));
     }
 
     /// The plugin headless (no sound card: the music renders as real time passes), on a fixed
@@ -566,9 +431,7 @@ mod plugin {
         ))
         .insert_resource(AudioOutput::Headless)
         .insert_resource(MusicOverride(overrides))
-        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(
-            1.0 / 60.0,
-        )))
+        .insert_resource(TimeUpdateStrategy::ManualDuration(Duration::from_secs_f64(1.0 / 60.0)))
         .init_resource::<Heard>()
         .add_systems(Last, listen);
         app.update();
@@ -608,40 +471,12 @@ mod plugin {
 
         // Each (re)start was announced once, plain, and NowPlaying follows.
         let w = Music::World(world_of(&app, 0));
-        let heard: Vec<Music> = app
-            .world()
-            .resource::<Heard>()
-            .started
-            .iter()
-            .map(|m| m.0.music)
-            .collect();
-        assert_eq!(
-            heard,
-            [
-                Music::Title,
-                w,
-                Music::LevelClear,
-                Music::Victory,
-                Music::Title
-            ]
-        );
-        assert!(
-            app.world()
-                .resource::<Heard>()
-                .started
-                .iter()
-                .all(|m| m.0.filters == Filters::default())
-        );
+        let heard: Vec<Music> = app.world().resource::<Heard>().started.iter().map(|m| m.0.music).collect();
+        assert_eq!(heard, [Music::Title, w, Music::LevelClear, Music::Victory, Music::Title]);
+        assert!(app.world().resource::<Heard>().started.iter().all(|m| m.0.filters == Filters::default()));
         let now = app.world().resource::<NowPlaying>();
-        assert_eq!(
-            (now.music, now.title),
-            (Music::Title, library::title(Music::Title))
-        );
-        assert!(
-            now.title.starts_with("Sweet Georgia Brown"),
-            "{}",
-            now.title
-        );
+        assert_eq!((now.music, now.title), (Music::Title, library::title(Music::Title)));
+        assert!(now.title.starts_with("Sweet Georgia Brown"), "{}", now.title);
         assert_eq!(now.toast(), "");
         assert_eq!(now.tuning_now, None);
         // The engine is playing it.
@@ -650,10 +485,7 @@ mod plugin {
         }
         let clock = app.world().resource::<LiveClock>().clock;
         assert!(clock.bpm > 100.0 && clock.position.sample > 0, "{clock:?}");
-        assert_eq!(
-            app.world().resource::<LivePlayer>().filters(),
-            Some(Filters::default())
-        );
+        assert_eq!(app.world().resource::<LivePlayer>().filters(), Some(Filters::default()));
     }
 
     /// Side B plays its own tunes, a run of levels to each, and a level's tune comes back
@@ -670,11 +502,7 @@ mod plugin {
         assert_eq!(playing(&app), Some(Music::SideB(Music::SIDE_B_TUNES)));
         app.world_mut().remove_resource::<SideB>();
         app.update();
-        assert!(
-            matches!(playing(&app), Some(Music::World(_))),
-            "{:?}",
-            playing(&app)
-        );
+        assert!(matches!(playing(&app), Some(Music::World(_))), "{:?}", playing(&app));
     }
 
     /// The player's AUDIO DELAY steps the beat back by exactly that much, all the way through
@@ -683,10 +511,7 @@ mod plugin {
     fn the_audio_delay_steps_the_heard_beat_back() {
         let mut plain = app();
         let mut delayed = app();
-        delayed
-            .world_mut()
-            .resource_mut::<Progress>()
-            .audio_delay_ms = 250;
+        delayed.world_mut().resource_mut::<Progress>().audio_delay_ms = 250;
         let mut checked = 0;
         for frame in 0..60 * 6 {
             plain.update();
@@ -694,20 +519,14 @@ mod plugin {
             if frame < 60 {
                 continue;
             }
-            let (a, b) = (
-                plain.world().resource::<LiveClock>().clock,
-                delayed.world().resource::<LiveClock>().clock,
-            );
+            let (a, b) = (plain.world().resource::<LiveClock>().clock, delayed.world().resource::<LiveClock>().clock);
             assert!(a.bpm > 0.0 && a.bpm == b.bpm);
             let want = 0.25 * a.bpm as f64 / 60.0;
             let mut lag = a.position.song_beat - b.position.song_beat;
             if a.loop_beats > 0.0 {
                 lag = lag.rem_euclid(a.loop_beats);
             }
-            assert!(
-                (lag - want).abs() < 1e-6,
-                "frame {frame}: heard {lag} beats behind, want {want} ({a:?} vs {b:?})"
-            );
+            assert!((lag - want).abs() < 1e-6, "frame {frame}: heard {lag} beats behind, want {want} ({a:?} vs {b:?})");
             checked += 1;
         }
         assert!(checked > 200);
@@ -728,31 +547,18 @@ mod plugin {
         let started = app.world().resource::<Heard>().started.len();
 
         for _ in 0..director::GIANT_STEPS_TOOTS {
-            app.world_mut().write_message(Jumped {
-                pos: Vec2::ZERO,
-                double: true,
-            });
+            app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: true });
         }
         app.update();
         app.world_mut().write_message(CallBand);
-        app.world_mut().write_message(CheckpointReached {
-            index: 0,
-            pos: Vec2::ZERO,
-        });
+        app.world_mut().write_message(CheckpointReached { index: 0, pos: Vec2::ZERO });
         app.update();
         let run_time = |app: &App| app.world().resource::<LevelRun>().time;
         let t0 = run_time(&app);
         let decided_at = app.world().resource::<Time<Real>>().elapsed_secs_f64();
         let player = app.world().resource::<LivePlayer>();
-        assert_eq!(
-            player.pending_filters().map(|f| f.harmony),
-            Some(Harmony::Coltrane)
-        );
-        assert_eq!(
-            player.filters(),
-            Some(Filters::default()),
-            "still as written until the bar line"
-        );
+        assert_eq!(player.pending_filters().map(|f| f.harmony), Some(Harmony::Coltrane));
+        assert_eq!(player.filters(), Some(Filters::default()), "still as written until the bar line");
 
         let mut frames = 0;
         while app.world().resource::<Heard>().changed.is_empty() {
@@ -765,45 +571,17 @@ mod plugin {
         assert_eq!(change.now.reason, director::REASON_GIANT_STEPS);
         assert_eq!(change.now.toast(), "GIANT STEPS! - COLTRANE CHANGES");
         let bars = change.at_secs / bar;
-        assert!(
-            (bars - bars.round()).abs() < 1e-6,
-            "switched mid-bar: {} s = {bars} bars",
-            change.at_secs
-        );
+        assert!((bars - bars.round()).abs() < 1e-6, "switched mid-bar: {} s = {bars} bars", change.at_secs);
         // Heard right at the bar line (within a frame and the output latency).
         let beat = clock.clock.position.beat;
-        assert!(
-            beat < 0.02 * clock.clock.bpm as f64 / 60.0 + 1e-9,
-            "switched {beat} beats into a bar"
-        );
+        assert!(beat < 0.02 * clock.clock.bpm as f64 / 60.0 + 1e-9, "switched {beat} beats into a bar");
         // Within two bars of the decision (the next bar line not committed yet).
-        assert!(
-            switched_at >= decided_at && switched_at - decided_at < 2.0 * bar + 0.1,
-            "{}",
-            switched_at - decided_at
-        );
-        assert_eq!(
-            app.world().resource::<NowPlaying>().filters.harmony,
-            Harmony::Coltrane
-        );
-        assert_eq!(
-            app.world()
-                .resource::<LivePlayer>()
-                .filters()
-                .unwrap()
-                .harmony,
-            Harmony::Coltrane
-        );
+        assert!(switched_at >= decided_at && switched_at - decided_at < 2.0 * bar + 0.1, "{}", switched_at - decided_at);
+        assert_eq!(app.world().resource::<NowPlaying>().filters.harmony, Harmony::Coltrane);
+        assert_eq!(app.world().resource::<LivePlayer>().filters().unwrap().harmony, Harmony::Coltrane);
         assert_eq!(app.world().resource::<LivePlayer>().pending_filters(), None);
-        assert!(
-            app.world().resource::<Groove>().giant_steps(),
-            "the physics follow"
-        );
-        assert_eq!(
-            app.world().resource::<Heard>().started.len(),
-            started,
-            "the song didn't restart"
-        );
+        assert!(app.world().resource::<Groove>().giant_steps(), "the physics follow");
+        assert_eq!(app.world().resource::<Heard>().started.len(), started, "the song didn't restart");
 
         // The periodic check, MUSIC_CHECK_SECS of play after the checkpoint.
         let mut frames = 0;
@@ -815,10 +593,7 @@ mod plugin {
         let (_, back, _) = app.world().resource::<Heard>().changed[1].clone();
         assert_eq!(back.now.filters, Filters::default());
         let after = run_time(&app) - t0;
-        assert!(
-            after >= director::MUSIC_CHECK_SECS,
-            "switched back too early ({after}s)"
-        );
+        assert!(after >= director::MUSIC_CHECK_SECS, "switched back too early ({after}s)");
         let bars = back.at_secs / bar;
         assert!((bars - bars.round()).abs() < 1e-6);
         assert!(!app.world().resource::<Groove>().giant_steps());
@@ -833,17 +608,9 @@ mod plugin {
         go(&mut app, AppState::Playing);
         app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
         app.update();
-        let pending = |app: &App| {
-            app.world()
-                .resource::<LivePlayer>()
-                .pending_filters()
-                .or(app.world().resource::<LivePlayer>().filters())
-        };
+        let pending = |app: &App| app.world().resource::<LivePlayer>().pending_filters().or(app.world().resource::<LivePlayer>().filters());
         assert_eq!(pending(&app).map(|f| f.just_intonation), Some(false));
-        app.world_mut().write_message(PlayerDied {
-            slip: true,
-            ..PlayerDied::at(Vec2::ZERO)
-        });
+        app.world_mut().write_message(PlayerDied { slip: true, ..PlayerDied::at(Vec2::ZERO) });
         app.update();
         assert_eq!(pending(&app).map(|f| f.just_intonation), Some(true));
     }
@@ -852,71 +619,33 @@ mod plugin {
     /// fanfare), physics and all; the laughing band's phrase tuning is readable every frame.
     #[test]
     fn nathan_music_forces_the_filters() {
-        let forced = Filters {
-            harmony: Harmony::Waltz,
-            just_intonation: true,
-        };
+        let forced = Filters { harmony: Harmony::Waltz, just_intonation: true };
         let mut app = app_with(Some(forced));
         app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
         go(&mut app, AppState::Playing);
-        let started = app
-            .world()
-            .resource::<Heard>()
-            .started
-            .last()
-            .unwrap()
-            .clone();
-        assert_eq!(
-            (started.0.filters, started.0.reason),
-            (forced, "NATHAN_MUSIC")
-        );
+        let started = app.world().resource::<Heard>().started.last().unwrap().clone();
+        assert_eq!((started.0.filters, started.0.reason), (forced, "NATHAN_MUSIC"));
         for _ in 0..30 {
             app.update();
         }
         let groove = *app.world().resource::<Groove>();
         assert!(groove.waltz() && groove.bounce);
-        assert_eq!(
-            (groove.clock.beats_per_bar, groove.clock.beat_secs),
-            (3, 0.5),
-            "the world dances in 3"
-        );
+        assert_eq!((groove.clock.beats_per_bar, groove.clock.beat_secs), (3, 0.5), "the world dances in 3");
         let now = app.world().resource::<NowPlaying>().clone();
         assert_eq!(now.filters, forced);
         let t = now.tuning_now.expect("the medley's tuning");
         assert_ne!(t, Tuning::Medley);
-        assert_eq!(
-            Some(t),
-            app.world()
-                .resource::<LiveClock>()
-                .clock
-                .position
-                .song_beat
-                .is_finite()
-                .then_some(t)
-        );
+        assert_eq!(Some(t), app.world().resource::<LiveClock>().clock.position.song_beat.is_finite().then_some(t));
         // The director's decisions are overridden too (a death decides).
-        app.world_mut()
-            .write_message(nat_han_adventures::events::PlayerDied::at(Vec2::ZERO));
+        app.world_mut().write_message(nat_han_adventures::events::PlayerDied::at(Vec2::ZERO));
         for _ in 0..200 {
             app.update();
         }
-        assert!(
-            app.world().resource::<Heard>().changed.is_empty(),
-            "still forced"
-        );
+        assert!(app.world().resource::<Heard>().changed.is_empty(), "still forced");
         // The fanfare plays as written.
         go(&mut app, AppState::LevelComplete);
-        let started = app
-            .world()
-            .resource::<Heard>()
-            .started
-            .last()
-            .unwrap()
-            .clone();
-        assert_eq!(
-            (started.0.music, started.0.filters),
-            (Music::LevelClear, Filters::default())
-        );
+        let started = app.world().resource::<Heard>().started.last().unwrap().clone();
+        assert_eq!((started.0.music, started.0.filters), (Music::LevelClear, Filters::default()));
     }
 
     /// Sound effects go out on the same manager (headless: counted).
@@ -924,21 +653,12 @@ mod plugin {
     fn gameplay_plays_sound_effects() {
         let mut app = app();
         let before = app.world().resource::<SfxCount>().0;
-        app.world_mut().write_message(Jumped {
-            pos: Vec2::ZERO,
-            double: false,
-        });
-        app.world_mut()
-            .write_message(nat_han_adventures::events::PlaySfx(
-                nat_han_adventures::audio::Sfx::MenuMove,
-            ));
+        app.world_mut().write_message(Jumped { pos: Vec2::ZERO, double: false });
+        app.world_mut().write_message(nat_han_adventures::events::PlaySfx(nat_han_adventures::audio::Sfx::MenuMove));
         app.update();
         assert_eq!(app.world().resource::<SfxCount>().0, before + 2);
         // Han's babble: a few blips over the next half second.
-        app.world_mut()
-            .write_message(nat_han_adventures::events::HanSays {
-                text: "ONE-two-three!".into(),
-            });
+        app.world_mut().write_message(nat_han_adventures::events::HanSays { text: "ONE-two-three!".into() });
         for _ in 0..40 {
             app.update();
         }
@@ -954,21 +674,13 @@ mod plugin {
         app.world_mut().resource_mut::<CurrentLevel>().0 = 0;
         go(&mut app, AppState::Playing);
         app.update();
-        let start = app
-            .world()
-            .resource::<LivePlayer>()
-            .freedom()
-            .expect("posted at level start");
+        let start = app.world().resource::<LivePlayer>().freedom().expect("posted at level start");
         for _ in 0..4 {
-            app.world_mut()
-                .write_message(nat_han_adventures::events::PlayerDied::at(Vec2::ZERO));
+            app.world_mut().write_message(nat_han_adventures::events::PlayerDied::at(Vec2::ZERO));
             app.update();
         }
         let after = app.world().resource::<LivePlayer>().freedom().unwrap();
-        assert!(
-            after.lead < start.lead && after.dynamics <= start.dynamics,
-            "{start:?} → {after:?}"
-        );
+        assert!(after.lead < start.lead && after.dynamics <= start.dynamics, "{start:?} → {after:?}");
     }
 
     /// Side B's band starts hotter than the story's and still follows play: a rewind cools it, a
@@ -976,13 +688,7 @@ mod plugin {
     #[test]
     fn side_b_raises_the_bands_baseline() {
         use nat_han_adventures::game::sideb::SideB;
-        let freedom = |app: &App| {
-            app.world()
-                .resource::<LivePlayer>()
-                .freedom()
-                .expect("posted")
-                .lead
-        };
+        let freedom = |app: &App| app.world().resource::<LivePlayer>().freedom().expect("posted").lead;
         let mut story = app();
         story.world_mut().resource_mut::<CurrentLevel>().0 = 0;
         go(&mut story, AppState::Playing);
@@ -995,10 +701,7 @@ mod plugin {
         go(&mut app, AppState::Playing);
         app.update();
         let start = freedom(&app);
-        assert!(
-            start > story_start + 0.1,
-            "Side B {start} vs story {story_start}"
-        );
+        assert!(start > story_start + 0.1, "Side B {start} vs story {story_start}");
         // Two frames per change: the decision and the post that forwards it run in either order.
         app.world_mut().resource_mut::<SideB>().rewinds = 2;
         // (Two frames: the decision posts on one, the engine can hear it on the next.)
@@ -1023,18 +726,10 @@ mod plugin {
     fn nat_alone_starts_hotter_than_side_b() {
         use nat_han_adventures::events::{CheckpointReached, PlayerDied};
         use nat_han_adventures::game::{adaptive::SIDE_B_BASE, solo::SoloRun};
-        let freedom = |app: &App| {
-            app.world()
-                .resource::<LivePlayer>()
-                .freedom()
-                .expect("posted")
-                .lead
-        };
+        let freedom = |app: &App| app.world().resource::<LivePlayer>().freedom().expect("posted").lead;
         let mut side_b = app();
         side_b.world_mut().resource_mut::<CurrentLevel>().0 = 0;
-        side_b
-            .world_mut()
-            .insert_resource(nat_han_adventures::game::sideb::SideB::new(0, Vec::new()));
+        side_b.world_mut().insert_resource(nat_han_adventures::game::sideb::SideB::new(0, Vec::new()));
         go(&mut side_b, AppState::Playing);
         side_b.update();
         side_b.update();
@@ -1047,19 +742,13 @@ mod plugin {
         app.update();
         app.update();
         let start = freedom(&app);
-        assert!(
-            start > side_b_start,
-            "NAT ALONE {start} vs Side B {side_b_start} (base {SIDE_B_BASE})"
-        );
+        assert!(start > side_b_start, "NAT ALONE {start} vs Side B {side_b_start} (base {SIDE_B_BASE})");
         app.world_mut().write_message(PlayerDied::at(Vec2::ZERO));
         app.update();
         app.update();
         let cooled = freedom(&app);
         assert!(cooled < start, "a death cools it: {cooled}");
-        app.world_mut().write_message(CheckpointReached {
-            index: 0,
-            pos: Vec2::ZERO,
-        });
+        app.world_mut().write_message(CheckpointReached { index: 0, pos: Vec2::ZERO });
         app.update();
         app.update();
         assert_eq!(freedom(&app), start, "a checkpoint brings it back");

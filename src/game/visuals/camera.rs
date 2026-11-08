@@ -6,9 +6,7 @@ use bevy::prelude::*;
 
 use super::VisualSet;
 use crate::art::{SpriteId, Sprites};
-use crate::game::{
-    ActiveLevel, Groove, LevelEntity, Nudge, Player, PlayerControl, SEASICK_ROLL, SEASICK_ROLL_HZ,
-};
+use crate::game::{ActiveLevel, Groove, LevelEntity, Nudge, Player, PlayerControl, SEASICK_ROLL, SEASICK_ROLL_HZ};
 use crate::level::TILE;
 use crate::touch::TouchMode;
 
@@ -23,9 +21,7 @@ pub(super) fn plugin(app: &mut App) {
                 spawn_backdrop.run_if(not(any_with_component::<Backdrop>)),
                 spawn_margins.run_if(not(any_with_component::<MarginTile>)),
             )
-                .run_if(
-                    resource_exists::<Sprites>.and_then(resource_exists_and_changed::<ActiveLevel>),
-                ),
+                .run_if(resource_exists::<Sprites>.and_then(resource_exists_and_changed::<ActiveLevel>)),
             scroll_backdrop,
         )
             .chain()
@@ -78,9 +74,7 @@ fn spawn_camera(mut commands: Commands) {
         Camera2d,
         GameCamera::default(),
         Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: VIEW_HEIGHT,
-            },
+            scaling_mode: ScalingMode::FixedVertical { viewport_height: VIEW_HEIGHT },
             ..OrthographicProjection::default_2d()
         }),
     ));
@@ -93,25 +87,18 @@ fn follow_player(
     touch: Option<Res<TouchMode>>,
     active: Option<Res<ActiveLevel>>,
     player: Query<(&Transform, &PlayerControl, Ref<Player>), Without<GameCamera>>,
-    han: Query<
-        (&Transform, &crate::game::Body),
-        (With<crate::game::Han>, Without<GameCamera>, Without<Player>),
-    >,
+    han: Query<(&Transform, &crate::game::Body), (With<crate::game::Han>, Without<GameCamera>, Without<Player>)>,
     side_b: Option<Res<crate::game::sideb::SideB>>,
     encore: Option<Res<crate::game::encore::Encore>>,
     mut cam: Query<(&mut Transform, &mut GameCamera, &Projection)>,
 ) {
-    let (Some(active), Ok((ptf, ctl, added))) = (active, player.single()) else {
-        return;
-    };
+    let (Some(active), Ok((ptf, ctl, added))) = (active, player.single()) else { return };
     // Side B: Nat's off screen; the camera's on Han.
     let (ptf, facing) = match (side_b, han.single()) {
         (Some(_), Ok((htf, hb))) => (htf, if hb.vel.x < -1.0 { -1.0 } else { 1.0 }),
         _ => (ptf, ctl.facing),
     };
-    let Ok((mut tf, mut gc, proj)) = cam.single_mut() else {
-        return;
-    };
+    let Ok((mut tf, mut gc, proj)) = cam.single_mut() else { return };
     let half = match proj {
         Projection::Orthographic(o) if o.area.width() > 0.0 => o.area.half_size(),
         _ => Vec2::new(VIEW_HEIGHT * 16.0 / 9.0, VIEW_HEIGHT) / 2.0,
@@ -124,21 +111,14 @@ fn follow_player(
     let touch = touch.is_some_and(|t| t.0);
     let lift = if touch { 16.0 + TOUCH_LIFT } else { 16.0 };
     // (NAT ALONE's encore gag: upstairs and down at once.)
-    let target = encore
-        .as_ref()
-        .and_then(|e| e.focus())
-        .unwrap_or(ptf.translation.truncate() + Vec2::new(gc.look, lift));
+    let target = encore.as_ref().and_then(|e| e.focus()).unwrap_or(ptf.translation.truncate() + Vec2::new(gc.look, lift));
     let mut p = tf.translation.truncate() - gc.wobble;
     p.x += (target.x - p.x) * k(6.0);
     p.y += (target.y - p.y) * k(4.0);
 
     let size = active.level.size_px();
     let clamp = |v: f32, half: f32, size: f32, margin: f32| {
-        if size + 2.0 * margin <= half * 2.0 {
-            size / 2.0
-        } else {
-            v.clamp(half - margin, size - half + margin)
-        }
+        if size + 2.0 * margin <= half * 2.0 { size / 2.0 } else { v.clamp(half - margin, size - half + margin) }
     };
     let margin = if touch { TOUCH_MARGIN } else { Vec2::ZERO };
     p.x = clamp(p.x, half.x, size.x, margin.x);
@@ -158,9 +138,7 @@ fn follow_player(
         match e.phase {
             EncorePhase::Knocked => 4.0 * (1.0 - e.t / 0.5).max(0.0),
             EncorePhase::Flushing => 1.5 * (1.0 - e.t / crate::game::encore::FLUSH_SECS).max(0.0),
-            EncorePhase::Slam if e.t >= crate::game::encore::SHUT_SECS => {
-                4.0 * (1.0 - (e.t - crate::game::encore::SHUT_SECS) / 0.5).max(0.0)
-            }
+            EncorePhase::Slam if e.t >= crate::game::encore::SHUT_SECS => 4.0 * (1.0 - (e.t - crate::game::encore::SHUT_SECS) / 0.5).max(0.0),
             _ => 0.0,
         }
     });
@@ -171,9 +149,7 @@ fn follow_player(
     // Seasick (the laughing band's 7-TET phrase): the world rolls a little.
     let seasick = groove.is_some_and(|g| g.nudge() == Some(Nudge::Seasick));
     gc.seasick = (gc.seasick + if seasick { dt } else { -dt }).clamp(0.0, 1.0);
-    let roll = gc.seasick
-        * SEASICK_ROLL
-        * (time.elapsed_secs() * std::f32::consts::TAU * SEASICK_ROLL_HZ).sin();
+    let roll = gc.seasick * SEASICK_ROLL * (time.elapsed_secs() * std::f32::consts::TAU * SEASICK_ROLL_HZ).sin();
     tf.rotation = Quat::from_rotation_z(roll);
 }
 

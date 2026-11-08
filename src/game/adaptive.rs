@@ -41,21 +41,13 @@ use leafwing_input_manager::prelude::*;
 
 use super::hazards::RaftLife;
 use super::physics::{Body, Dead, Finished, PlayerControl};
-use super::{
-    ActiveLevel, Assists, Checkpoint, Fly, GameSet, Goal, Groove, HintSpot, LevelRun, Player, Pos,
-    Raft, Spray,
-};
+use super::{ActiveLevel, Assists, Checkpoint, Fly, GameSet, Goal, Groove, HintSpot, LevelRun, Player, Pos, Raft, Spray};
 use crate::adapt::frustration::IDLE_SECS;
 use crate::adapt::profile::{ASSIST_EPS, RecentRoom};
 use crate::adapt::skill::{Band, MAX_BAND, MIN_BAND};
-use crate::adapt::{
-    self, AdaptEvent, AssistLevers, BandMood, Cue, Outcome, PlayerProfile, Skill, StoryAssist,
-    StoryEvent, reduce_story,
-};
+use crate::adapt::{self, AdaptEvent, AssistLevers, BandMood, Cue, Outcome, PlayerProfile, Skill, StoryAssist, StoryEvent, reduce_story};
 use crate::audio::Harmony;
-use crate::events::{
-    BandFreedom, CheckpointReached, HanSays, Jumped, LevelCompleted, LevelStarted, PlayerDied,
-};
+use crate::events::{BandFreedom, CheckpointReached, HanSays, Jumped, LevelCompleted, LevelStarted, PlayerDied};
 use crate::input::Action;
 use crate::level::{Level, TILE, ThingKind, Topic};
 use crate::state::{CurrentLevel, PlayState};
@@ -70,22 +62,11 @@ pub(super) fn plugin(app: &mut App) {
         .add_systems(Startup, register_debug)
         .add_systems(
             Update,
-            (
-                feed_story,
-                idle_after_death,
-                profile_cues,
-                decide_music,
-                write_assists,
-                sync_raft_life,
-                judge_easy,
-            )
-                .chain(),
+            (feed_story, idle_after_death, profile_cues, decide_music, write_assists, sync_raft_life, judge_easy).chain(),
         )
         .add_systems(
             FixedUpdate,
-            record_hidden_respawn
-                .in_set(GameSet::Interact)
-                .after(super::hazards::respawn),
+            record_hidden_respawn.in_set(GameSet::Interact).after(super::hazards::respawn),
         );
 }
 
@@ -128,16 +109,9 @@ impl EasySkills {
 /// The skill a gate (or a hint topic) exercises.
 pub fn skill_of(topic: Topic) -> Option<Skill> {
     Some(match topic {
-        Topic::Toot
-        | Topic::OneWay
-        | Topic::Brick
-        | Topic::Crumble
-        | Topic::Spring
-        | Topic::Belt
-        | Topic::Fan
-        | Topic::Bumper
-        | Topic::Wind
-        | Topic::Fling => Skill::Precision,
+        Topic::Toot | Topic::OneWay | Topic::Brick | Topic::Crumble | Topic::Spring | Topic::Belt | Topic::Fan | Topic::Bumper | Topic::Wind | Topic::Fling => {
+            Skill::Precision
+        }
         Topic::Platform => Skill::MovingPlatforms,
         Topic::Fly | Topic::Spray | Topic::Crusher | Topic::Beat => Skill::HazardTiming,
         Topic::Giant => Skill::GiantSteps,
@@ -145,9 +119,7 @@ pub fn skill_of(topic: Topic) -> Option<Skill> {
         Topic::Waltz => Skill::Waltz,
         Topic::Stain => Skill::Stains,
         Topic::Grease | Topic::Grip => Skill::Grease,
-        Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Chain | Topic::BuddyRaft => {
-            Skill::Buddy
-        }
+        Topic::Mega | Topic::Shaft | Topic::Trapeze | Topic::Chain | Topic::BuddyRaft => Skill::Buddy,
     })
 }
 
@@ -172,9 +144,7 @@ pub fn segment_skills(level: &Level, c0: i32, c1: i32) -> Vec<Skill> {
             add(skill_of(g.topic).expect("every gate has a skill"));
         }
     }
-    if level.things.iter().any(|t| {
-        matches!(t.kind, ThingKind::Fly | ThingKind::Spray) && cols.contains(&(t.col as i32))
-    }) {
+    if level.things.iter().any(|t| matches!(t.kind, ThingKind::Fly | ThingKind::Spray) && cols.contains(&(t.col as i32))) {
         add(Skill::HazardTiming);
     }
     if level.platforms.iter().any(|p| {
@@ -190,11 +160,7 @@ pub fn segment_skills(level: &Level, c0: i32, c1: i32) -> Vec<Skill> {
 /// How a segment went per skill: each skill it exercised (and each that killed Nat in it), a
 /// struggle where Nat died at it more than the segment's designed deaths allow (only stain
 /// pits and grease chutes have any), else clean.
-pub fn segment_outcomes(
-    exercised: &[Skill],
-    deaths: &[u32; Skill::COUNT],
-    designed: u32,
-) -> Vec<(Skill, Outcome)> {
+pub fn segment_outcomes(exercised: &[Skill], deaths: &[u32; Skill::COUNT], designed: u32) -> Vec<(Skill, Outcome)> {
     let mut skills = exercised.to_vec();
     for s in Skill::ALL {
         if deaths[s.index()] > 0 && !skills.contains(&s) {
@@ -204,19 +170,8 @@ pub fn segment_outcomes(
     skills
         .into_iter()
         .map(|s| {
-            let allowed = if matches!(s, Skill::Stains | Skill::Grease) {
-                designed
-            } else {
-                0
-            };
-            (
-                s,
-                if deaths[s.index()] > allowed {
-                    Outcome::Struggle
-                } else {
-                    Outcome::Clean
-                },
-            )
+            let allowed = if matches!(s, Skill::Stains | Skill::Grease) { designed } else { 0 };
+            (s, if deaths[s.index()] > allowed { Outcome::Struggle } else { Outcome::Clean })
         })
         .collect()
 }
@@ -239,8 +194,7 @@ pub struct HiddenRespawn {
 impl HiddenRespawn {
     /// Where to respawn instead of checkpoint `checkpoint`, if anywhere.
     pub fn respawn_at(&self, checkpoint: Option<usize>, run_time: f32) -> Option<Vec2> {
-        self.pos
-            .filter(|_| self.armed && self.segment == checkpoint && run_time >= self.at_time)
+        self.pos.filter(|_| self.armed && self.segment == checkpoint && run_time >= self.at_time)
     }
 }
 
@@ -325,12 +279,7 @@ pub fn story_mood(story: &StoryAssist, recent: &[RecentRoom]) -> BandMood {
     let mut recent = recent.to_vec();
     let excess = story.segment_deaths.saturating_sub(story.expected_deaths);
     if excess > 0 {
-        recent.push(RecentRoom {
-            outcome: Outcome::Struggle,
-            excess_deaths: excess,
-            time_ratio: None,
-            toots_per_min: 0.0,
-        });
+        recent.push(RecentRoom { outcome: Outcome::Struggle, excess_deaths: excess, time_ratio: None, toots_per_min: 0.0 });
     }
     let profile = PlayerProfile {
         assists: story.assists,
@@ -383,8 +332,7 @@ impl Tracker {
     /// Expected deaths for the segment starting now: the even split, or what's left of the
     /// level's budget if that's more (designed deaths often all sit in one segment).
     fn expected_now(&self) -> u32 {
-        self.per_segment
-            .max(self.level_deaths.saturating_sub(self.deaths_in_level))
+        self.per_segment.max(self.level_deaths.saturating_sub(self.deaths_in_level))
     }
 
     fn encourage_line(&mut self) -> String {
@@ -397,11 +345,7 @@ impl Tracker {
         let excess = story.segment_deaths.saturating_sub(story.expected_deaths);
         let minutes = ((now - self.segment_start) / 60.0).max(1.0 / 60.0);
         self.recent.push(RecentRoom {
-            outcome: if excess == 0 {
-                Outcome::Clean
-            } else {
-                Outcome::Struggle
-            },
+            outcome: if excess == 0 { Outcome::Clean } else { Outcome::Struggle },
             excess_deaths: excess,
             time_ratio: None,
             toots_per_min: self.segment_toots as f32 / minutes,
@@ -409,11 +353,7 @@ impl Tracker {
         if self.recent.len() > RECENT_SEGMENTS {
             self.recent.remove(0);
         }
-        self.clean_streak = if excess == 0 {
-            self.clean_streak + 1
-        } else {
-            0
-        };
+        self.clean_streak = if excess == 0 { self.clean_streak + 1 } else { 0 };
         self.segment_toots = 0;
         self.segment_start = now;
         self.repeated.clear();
@@ -422,12 +362,7 @@ impl Tracker {
 
     /// The evidence a story segment that ended at column `col` gives the profile (and the next
     /// segment starts there).
-    fn segment_evidence(
-        &mut self,
-        level: &Level,
-        col: i32,
-        designed: u32,
-    ) -> Vec<(Skill, Outcome)> {
+    fn segment_evidence(&mut self, level: &Level, col: i32, designed: u32) -> Vec<(Skill, Outcome)> {
         let exercised = segment_skills(level, self.segment_col, col);
         let out = segment_outcomes(&exercised, &self.skill_deaths, designed);
         self.skill_deaths = [0; Skill::COUNT];
@@ -437,33 +372,18 @@ impl Tracker {
 }
 
 /// Story evidence → the shared profile.
-fn give_evidence(
-    profile: &mut AdaptiveProfile,
-    played: Vec<(Skill, Outcome)>,
-    band: Band,
-    assists: f32,
-) {
+fn give_evidence(profile: &mut AdaptiveProfile, played: Vec<(Skill, Outcome)>, band: Band, assists: f32) {
     if played.is_empty() {
         return;
     }
     let skills = played.into_iter().map(|(s, o)| (s, band, o)).collect();
-    profile.0 = adapt::reduce(
-        std::mem::take(&mut profile.0),
-        AdaptEvent::Evidence { skills, assists },
-    );
+    profile.0 = adapt::reduce(std::mem::take(&mut profile.0), AdaptEvent::Evidence { skills, assists });
 }
 
-fn step(
-    story: &mut StoryAssistState,
-    t: &mut Tracker,
-    says: &mut MessageWriter<HanSays>,
-    event: StoryEvent,
-) {
+fn step(story: &mut StoryAssistState, t: &mut Tracker, says: &mut MessageWriter<HanSays>, event: StoryEvent) {
     story.0 = reduce_story(std::mem::take(&mut story.0), event);
     if story.0.encourage.is_some() {
-        says.write(HanSays {
-            text: t.encourage_line(),
-        });
+        says.write(HanSays { text: t.encourage_line() });
     }
 }
 
@@ -509,10 +429,7 @@ fn feed_story(
         t.idle = None;
         t.death_spot = None;
         t.repeated.clear();
-        *hidden = HiddenRespawn {
-            armed: hidden.armed,
-            ..default()
-        };
+        *hidden = HiddenRespawn { armed: hidden.armed, ..default() };
         if let Some(a) = active.as_ref() {
             t.level_deaths = a.level.deaths.unwrap_or(0);
             t.per_segment = expected_per_segment(&a.level);
@@ -523,9 +440,7 @@ fn feed_story(
         let event = if s.restart {
             StoryEvent::LevelRestarted
         } else {
-            StoryEvent::LevelStarted {
-                expected_deaths_per_segment: t.expected_now(),
-            }
+            StoryEvent::LevelStarted { expected_deaths_per_segment: t.expected_now() }
         };
         step(&mut story, t, &mut says, event);
         story.0.expected_deaths = t.expected_now();
@@ -556,19 +471,11 @@ fn feed_story(
                 .iter()
                 .filter(|h| h.center.distance(d.pos) <= HINT_REPEAT_RADIUS)
                 .filter(|h| !t.repeated.iter().any(|c| c.distance(h.center) < 1.0))
-                .min_by(|a, b| {
-                    a.center
-                        .distance(d.pos)
-                        .total_cmp(&b.center.distance(d.pos))
-                });
+                .min_by(|a, b| a.center.distance(d.pos).total_cmp(&b.center.distance(d.pos)));
             if let Some(h) = nearest {
                 t.repeated.push(h.center);
-                says.write(HanSays {
-                    text: h.text.clone(),
-                });
-                repeated.write(crate::events::HintRepeated {
-                    topics: h.topics.clone(),
-                });
+                says.write(HanSays { text: h.text.clone() });
+                repeated.write(crate::events::HintRepeated { topics: h.topics.clone() });
             }
         }
     }
@@ -577,11 +484,7 @@ fn feed_story(
         t.deaths_in_segment = 0;
         if story_mode {
             if let Some(a) = active.as_ref() {
-                let played = t.segment_evidence(
-                    &a.level,
-                    (c.pos.x / TILE).floor() as i32,
-                    story.0.expected_deaths,
-                );
+                let played = t.segment_evidence(&a.level, (c.pos.x / TILE).floor() as i32, story.0.expected_deaths);
                 give_evidence(&mut profile, played, band, story.0.assists);
             }
             t.end_segment(&story.0, now);
@@ -632,12 +535,7 @@ fn idle_after_death(
     }
     t.idle = None;
     if *mode == AssistMode::Story {
-        step(
-            &mut story,
-            &mut t,
-            &mut says,
-            StoryEvent::IdleAfterDeath { secs: idle },
-        );
+        step(&mut story, &mut t, &mut says, StoryEvent::IdleAfterDeath { secs: idle });
     }
 }
 
@@ -651,12 +549,7 @@ fn profile_cues(
     if *mode != AssistMode::FreePlay || !profile.is_changed() {
         return;
     }
-    if profile
-        .0
-        .cues
-        .iter()
-        .any(|c| matches!(c, Cue::Encourage(_)))
-    {
+    if profile.0.cues.iter().any(|c| matches!(c, Cue::Encourage(_))) {
         let text = t.encourage_line();
         says.write(HanSays { text });
     }
@@ -666,12 +559,8 @@ fn profile_cues(
 /// a hot baseline ([`SIDE_B_BASE`]) that each rewind of the level cools and each call this
 /// try heats back up, never below [`SIDE_B_FLOOR`] (still hotter than the story's neutral).
 pub fn side_b_mood(rewinds: u32, calls: u32) -> BandMood {
-    let f = (SIDE_B_BASE - SIDE_B_REWIND_COOLS * rewinds as f32 + SIDE_B_CALL_HEATS * calls as f32)
-        .clamp(SIDE_B_FLOOR, 1.0);
-    BandMood {
-        freedom: f,
-        intensity: f,
-    }
+    let f = (SIDE_B_BASE - SIDE_B_REWIND_COOLS * rewinds as f32 + SIDE_B_CALL_HEATS * calls as f32).clamp(SIDE_B_FLOOR, 1.0);
+    BandMood { freedom: f, intensity: f }
 }
 
 /// Side B's freedom at the top of a level (story neutral is 0.5).
@@ -686,10 +575,7 @@ const SIDE_B_CALL_HEATS: f32 = 0.05;
 /// and a checkpoint brings it back.
 pub fn solo_mood(deaths_in_segment: u32) -> BandMood {
     let f = (SOLO_BASE - SOLO_DEATH_COOLS * deaths_in_segment as f32).clamp(SOLO_FLOOR, 1.0);
-    BandMood {
-        freedom: f,
-        intensity: f,
-    }
+    BandMood { freedom: f, intensity: f }
 }
 
 /// NAT ALONE's freedom at the top of a level and at each checkpoint.
@@ -720,10 +606,7 @@ fn decide_music(
     if secret.read().count() > 0 {
         t.decide = false;
         t.last_decision = run.time;
-        out.write(band_freedom(BandMood {
-            freedom: 1.0,
-            intensity: 1.0,
-        }));
+        out.write(band_freedom(BandMood { freedom: 1.0, intensity: 1.0 }));
         return;
     }
     // Side B decides on coming, going, every rewind and every call.
@@ -789,12 +672,7 @@ fn sync_raft_life(assists: Res<Assists>, mut life: ResMut<RaftLife>) {
 
 /// [`EasySkills`] from the profile, at the current difficulty: the story level's number, or
 /// each skill's center in free play.
-fn judge_easy(
-    mode: Res<AssistMode>,
-    current: Option<Res<CurrentLevel>>,
-    profile: Res<AdaptiveProfile>,
-    mut easy: ResMut<EasySkills>,
-) {
+fn judge_easy(mode: Res<AssistMode>, current: Option<Res<CurrentLevel>>, profile: Res<AdaptiveProfile>, mut easy: ResMut<EasySkills>) {
     let band = |s: Skill| match *mode {
         AssistMode::FreePlay => profile.0.center(s),
         _ => story_band(current.as_ref().map_or(0, |c| c.0)),
@@ -828,17 +706,12 @@ fn record_hidden_respawn(
     sprays: Query<&Transform, With<Spray>>,
 ) {
     if run.time < hidden.at_time || (hidden.pos.is_some() && hidden.segment != run.checkpoint) {
-        *hidden = HiddenRespawn {
-            armed: hidden.armed,
-            ..default()
-        };
+        *hidden = HiddenRespawn { armed: hidden.armed, ..default() };
     }
     if hidden.pos.is_some() {
         return;
     }
-    let Ok((pos, body, ctl)) = player.single() else {
-        return;
-    };
+    let Ok((pos, body, ctl)) = player.single() else { return };
     if !body.on_ground || body.riding.is_some() || ctl.on_grease || !rafts.is_empty() {
         return;
     }
@@ -867,8 +740,7 @@ fn record_hidden_respawn(
     if !(below.is_solid() || below.is_one_way()) || below == crate::level::Tile::Grease {
         return;
     }
-    let deadly_near =
-        (col - 2..=col + 2).any(|c| (row - 2..=row + 1).any(|r| level.tile(c, r).is_deadly()));
+    let deadly_near = (col - 2..=col + 2).any(|c| (row - 2..=row + 1).any(|r| level.tile(c, r).is_deadly()));
     let hazard_near = flies.iter().any(|f| f.center.distance(p) < 3.0 * TILE)
         || sprays.iter().any(|tf| {
             let s = tf.translation.truncate();
@@ -879,11 +751,7 @@ fn record_hidden_respawn(
         return;
     }
     *hidden = HiddenRespawn {
-        pos: Some(super::lifecycle::stand_pos(
-            level,
-            col as usize,
-            row as usize,
-        )),
+        pos: Some(super::lifecycle::stand_pos(level, col as usize, row as usize)),
         segment: run.checkpoint,
         at_time: run.time,
         armed: hidden.armed,
@@ -901,10 +769,7 @@ fn register_debug(sections: Option<ResMut<crate::debug::DebugSections>>) {
 pub fn debug_text(world: &World) -> String {
     use std::fmt::Write as _;
     let mut out = String::new();
-    let mode = world
-        .get_resource::<AssistMode>()
-        .copied()
-        .unwrap_or_default();
+    let mode = world.get_resource::<AssistMode>().copied().unwrap_or_default();
     let _ = writeln!(out, "mode: {mode:?}");
     if let Some(s) = world.get_resource::<StoryAssistState>() {
         let s = &s.0;
@@ -924,10 +789,7 @@ pub fn debug_text(world: &World) -> String {
             t.per_segment,
             t.deaths_in_level,
             t.clean_streak,
-            t.recent
-                .iter()
-                .map(|r| (r.outcome, r.excess_deaths))
-                .collect::<Vec<_>>()
+            t.recent.iter().map(|r| (r.outcome, r.excess_deaths)).collect::<Vec<_>>()
         );
     }
     if let Some(a) = world.get_resource::<Assists>() {
@@ -983,9 +845,7 @@ mod tests {
         let floor = Assists::default();
         for i in 0..=20 {
             let a = assists_for(i as f32 / 20.0, 0);
-            assert!(
-                a.coyote_mult >= floor.coyote_mult && a.jump_buffer_mult >= floor.jump_buffer_mult
-            );
+            assert!(a.coyote_mult >= floor.coyote_mult && a.jump_buffer_mult >= floor.jump_buffer_mult);
             assert!(a.hitbox_forgiveness_px >= 0.0 && a.raft_life_mult >= 1.0);
         }
         assert_eq!(assists_for(0.0, 0), floor);
@@ -1000,35 +860,16 @@ mod tests {
 
     #[test]
     fn struggling_is_calmer_than_flying() {
-        let clean = RecentRoom {
-            outcome: Outcome::Clean,
-            excess_deaths: 0,
-            time_ratio: None,
-            toots_per_min: 10.0,
-        };
-        let bad = RecentRoom {
-            outcome: Outcome::Struggle,
-            excess_deaths: 3,
-            time_ratio: None,
-            toots_per_min: 0.0,
-        };
+        let clean = RecentRoom { outcome: Outcome::Clean, excess_deaths: 0, time_ratio: None, toots_per_min: 10.0 };
+        let bad = RecentRoom { outcome: Outcome::Struggle, excess_deaths: 3, time_ratio: None, toots_per_min: 0.0 };
         let flying = band_freedom(story_mood(&StoryAssist::new(0.0), &[clean; 6]));
         let struggling = band_freedom(story_mood(&StoryAssist::new(0.6), &[bad; 6]));
         assert!(struggling.lead < flying.lead && struggling.drums < flying.drums);
         assert!(struggling.dynamics < flying.dynamics);
         let neutral = band_freedom(BandMood::NEUTRAL);
-        assert!(
-            (neutral.lead - 0.35).abs() < 0.02 && (neutral.drums - 0.35).abs() < 0.03,
-            "{neutral:?}"
-        );
-        assert!(
-            flying.lead > 0.5 && flying.lead <= 0.75 && flying.drums <= 0.75,
-            "{flying:?}"
-        );
-        assert!(
-            struggling.lead <= 0.2 && struggling.comp <= 0.2,
-            "{struggling:?}"
-        );
+        assert!((neutral.lead - 0.35).abs() < 0.02 && (neutral.drums - 0.35).abs() < 0.03, "{neutral:?}");
+        assert!(flying.lead > 0.5 && flying.lead <= 0.75 && flying.drums <= 0.75, "{flying:?}");
+        assert!(struggling.lead <= 0.2 && struggling.comp <= 0.2, "{struggling:?}");
     }
 }
 
@@ -1052,15 +893,9 @@ mod evidence_tests {
         let l = &levels.0[4];
         let s = segment_skills(l, 70, 110);
         assert_eq!(s[0], Skill::Precision);
-        assert!(
-            s.contains(&Skill::Stains) && !s.contains(&Skill::Buddy),
-            "{s:?}"
-        );
+        assert!(s.contains(&Skill::Stains) && !s.contains(&Skill::Buddy), "{s:?}");
         let s = segment_skills(l, 140, 160);
-        assert!(
-            s.contains(&Skill::Buddy) && !s.contains(&Skill::Stains),
-            "{s:?}"
-        );
+        assert!(s.contains(&Skill::Buddy) && !s.contains(&Skill::Stains), "{s:?}");
     }
 
     /// Designed deaths (stain pits, chutes) are allowed up to the segment's expectation; any
@@ -1073,11 +908,7 @@ mod evidence_tests {
         let out = segment_outcomes(&[Skill::Precision, Skill::Stains], &deaths, 2);
         assert_eq!(
             out,
-            [
-                (Skill::Precision, Outcome::Clean),
-                (Skill::Stains, Outcome::Clean),
-                (Skill::HazardTiming, Outcome::Struggle)
-            ]
+            [(Skill::Precision, Outcome::Clean), (Skill::Stains, Outcome::Clean), (Skill::HazardTiming, Outcome::Struggle)]
         );
         let out = segment_outcomes(&[Skill::Stains], &deaths, 1);
         assert_eq!(out[0], (Skill::Stains, Outcome::Struggle));

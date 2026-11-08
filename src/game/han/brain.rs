@@ -17,12 +17,11 @@ use crate::audio::Harmony;
 use crate::events::HanSays;
 use crate::game::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use crate::game::{
-    ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, KICK_CARRY,
-    MovingPlatform, Player, PlayerControl, Pos, PrevPos, SimClock, move_towards, platform_pos,
+    ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, KICK_CARRY, MovingPlatform, Player,
+    PlayerControl, Pos, PrevPos, SimClock, move_towards, platform_pos,
 };
 use crate::level::buddy::{
-    HALF, HanCtl, HanInput, HanPhys, Kin, TRAPEZE_OUT, drive, head_holds, intercept, trapeze_at,
-    trapeze_swing, waltz_step,
+    HALF, HanCtl, HanInput, HanPhys, Kin, TRAPEZE_OUT, drive, head_holds, intercept, trapeze_at, trapeze_swing, waltz_step,
 };
 use crate::level::nav::{Edge, HanMove, Nav, Route, Step, take_off};
 use crate::level::validate::{Map, Mode};
@@ -41,35 +40,19 @@ pub struct HanNav {
 
 impl Default for HanNav {
     fn default() -> Self {
-        HanNav {
-            normal: Nav::new(Mode::Normal),
-            giant: None,
-            fired: None,
-            side_b: false,
-        }
+        HanNav { normal: Nav::new(Mode::Normal), giant: None, fired: None, side_b: false }
     }
 }
 
 impl HanNav {
     /// Side B's graphs: Nat's physics, one toot.
     pub fn side_b() -> Self {
-        HanNav {
-            normal: Nav::side_b(Mode::Normal),
-            giant: None,
-            fired: None,
-            side_b: true,
-        }
+        HanNav { normal: Nav::side_b(Mode::Normal), giant: None, fired: None, side_b: true }
     }
 
     pub fn for_groove(&mut self, groove: &Groove) -> &mut Nav {
         let side_b = self.side_b;
-        let make = move |mode| {
-            if side_b {
-                Nav::side_b(mode)
-            } else {
-                Nav::new(mode)
-            }
-        };
+        let make = move |mode| if side_b { Nav::side_b(mode) } else { Nav::new(mode) };
         if groove.giant_steps() {
             self.giant.get_or_insert_with(|| make(Mode::GiantSteps))
         } else if groove.fired_up() {
@@ -81,11 +64,7 @@ impl HanNav {
 
     /// Han's physics under `groove` (Side B: Nat's).
     pub fn phys(&self, groove: &Groove) -> HanPhys {
-        if self.side_b {
-            HanPhys::side_b(groove)
-        } else {
-            HanPhys::of(groove)
-        }
+        if self.side_b { HanPhys::side_b(groove) } else { HanPhys::of(groove) }
     }
 
     fn invalidate(&mut self) {
@@ -277,16 +256,7 @@ fn floor_at(level: &Level, c: i32, r: i32) -> bool {
 /// pit, sewage or spikes: Nat's heading for a splat.
 fn doomed(level: &Level, pos: Vec2, vx: f32) -> bool {
     let (c, r) = level.cell_at(pos);
-    let cols = [
-        c,
-        c + if vx > 20.0 {
-            1
-        } else if vx < -20.0 {
-            -1
-        } else {
-            0
-        },
-    ];
+    let cols = [c, c + if vx > 20.0 { 1 } else if vx < -20.0 { -1 } else { 0 }];
     cols.iter().all(|&cc| {
         let first = (r..level.height as i32).find(|&rr| {
             let t = level.tile(cc, rr + 1);
@@ -436,9 +406,7 @@ fn landing_x(level: &Level, platforms: &[(Vec2, MovingPlatform)], to: (i32, i32)
     let floor_y = (level.height as i32 - 1 - to.1) as f32 * TILE;
     platforms
         .iter()
-        .filter(|(at, p)| {
-            (at.y + TILE / 2.0 - floor_y).abs() < 10.0 && (at.x - x).abs() < p.width as f32 * TILE
-        })
+        .filter(|(at, p)| (at.y + TILE / 2.0 - floor_y).abs() < 10.0 && (at.x - x).abs() < p.width as f32 * TILE)
         .map(|(at, p)| {
             let half = p.width as f32 * TILE / 2.0 - 6.0;
             me.clamp(at.x - half, at.x + half)
@@ -463,24 +431,13 @@ pub(super) fn think(
     mut commands: Commands,
     player: Query<(Entity, &Pos, &Body, &PlayerControl, Has<Dead>), (With<Player>, Without<Han>)>,
     mut han: Query<
-        (
-            Entity,
-            &mut Pos,
-            &mut PrevPos,
-            &mut Body,
-            &mut HanBrain,
-            &mut HanHead,
-            &mut HanAnim,
-        ),
+        (Entity, &mut Pos, &mut PrevPos, &mut Body, &mut HanBrain, &mut HanHead, &mut HanAnim),
         (With<Han>, Without<Player>),
     >,
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), (Without<Han>, Without<Player>)>,
     mut boosted: MessageReader<HanBoosted>,
     mut says: MessageWriter<HanSays>,
-    crushers: Query<
-        (Entity, &CrusherBlock, &Pos, &PrevPos),
-        (Without<Han>, Without<Player>, Without<MovingPlatform>),
-    >,
+    crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Han>, Without<Player>, Without<MovingPlatform>)>,
     mut smashed: MessageWriter<BrickSmashed>,
     mut sprung: MessageWriter<Sprung>,
 ) {
@@ -496,28 +453,17 @@ pub(super) fn think(
     if active.is_changed() {
         nav.invalidate(); // a new stain: the ground changed under him
     }
-    let Ok((han_e, mut pos, mut prev, mut body, mut brain, mut head, mut anim)) = han.single_mut()
-    else {
-        return;
-    };
-    let Ok((_, npos, nbody, nctl, nat_dead)) = player.single() else {
-        return;
-    };
+    let Ok((han_e, mut pos, mut prev, mut body, mut brain, mut head, mut anim)) = han.single_mut() else { return };
+    let Ok((_, npos, nbody, nctl, nat_dead)) = player.single() else { return };
     let brain = &mut *brain;
     let e = assists.han_eagerness;
     let phys = nav.phys(&groove);
     let side_b = nav.side_b;
     let gs = groove.harmony == Harmony::Coltrane;
-    let nat = Kin {
-        pos: npos.0,
-        vel: nbody.vel,
-        grounded: nbody.on_ground,
-    };
+    let nat = Kin { pos: npos.0, vel: nbody.vel, grounded: nbody.on_ground };
     let nat_on_han = nbody.riding == Some(han_e);
     let say = |says: &mut MessageWriter<HanSays>, text: &str| {
-        says.write(HanSays {
-            text: text.to_string(),
-        });
+        says.write(HanSays { text: text.to_string() });
     };
 
     // --- Overuse: boosts in a row.
@@ -529,10 +475,7 @@ pub(super) fn think(
             // The band zone: a feeble hop and a grumble (not his back's business).
             brain.weak_boosts += 1;
             if brain.since_grumble >= GRUMBLE_EVERY {
-                let topic = level
-                    .band_zone(feet_cell(level, pos.0))
-                    .or(level.band_zone(level.cell_at(b.pos)))
-                    .map(|g| g.topic);
+                let topic = level.band_zone(feet_cell(level, pos.0)).or(level.band_zone(level.cell_at(b.pos))).map(|g| g.topic);
                 say(&mut says, grumble_line(topic, brain.grumbles));
                 brain.grumbles += 1;
                 brain.since_grumble = 0.0;
@@ -549,11 +492,7 @@ pub(super) fn think(
         }
     }
     brain.since_boost += dt;
-    brain.nat_grounded = if nbody.on_ground && !nat_on_han {
-        brain.nat_grounded + dt
-    } else {
-        0.0
-    };
+    brain.nat_grounded = if nbody.on_ground && !nat_on_han { brain.nat_grounded + dt } else { 0.0 };
     if brain.nat_grounded > 1.2 || brain.since_boost > 4.0 {
         brain.streak = 0;
         brain.warned = false;
@@ -571,14 +510,9 @@ pub(super) fn think(
     }
     brain.winded = (brain.winded - dt).max(0.0);
 
-    let plats: Vec<(Vec2, MovingPlatform)> = platforms
-        .iter()
-        .map(|(_, p, _, m)| (p.0, m.clone()))
-        .collect();
-    let mut carriers: Vec<Carrier> = platforms
-        .iter()
-        .map(|(ent, p, pr, m)| Carrier::platform(ent, p.0, pr.0, m.width))
-        .collect();
+    let plats: Vec<(Vec2, MovingPlatform)> = platforms.iter().map(|(_, p, _, m)| (p.0, m.clone())).collect();
+    let mut carriers: Vec<Carrier> =
+        platforms.iter().map(|(ent, p, pr, m)| Carrier::platform(ent, p.0, pr.0, m.width)).collect();
     let mut solids = Vec::new();
     for (ent, block, p, pr) in &crushers {
         carriers.push(block.carrier(ent, p.0, pr.0));
@@ -591,9 +525,7 @@ pub(super) fn think(
             pos.0.y -= 10.0 * dt;
             body.vel = Vec2::ZERO;
             brain.mode = if t - dt <= 0.0 {
-                HanMode::Gone {
-                    t: super::HAN_SEWAGE_RESPAWN,
-                }
+                HanMode::Gone { t: super::HAN_SEWAGE_RESPAWN }
             } else {
                 HanMode::Sinking { t: t - dt }
             };
@@ -637,25 +569,15 @@ pub(super) fn think(
         && let Some((wall, x)) = cling_wall(level, nat_cell, brain.side)
     {
         // Up from the floor Nat's on (not from wherever he landed).
-        let floor = level
-            .tile_center(nat_cell.0.max(0) as usize, nat_cell.1.max(0) as usize)
-            .y
-            - TILE / 2.0;
-        brain.mode = HanMode::Cling {
-            wall,
-            x,
-            top: floor + HALF.y + CLING_ROWS as f32 * TILE,
-            t: 0.0,
-        };
+        let floor = level.tile_center(nat_cell.0.max(0) as usize, nat_cell.1.max(0) as usize).y - TILE / 2.0;
+        brain.mode = HanMode::Cling { wall, x, top: floor + HALF.y + CLING_ROWS as f32 * TILE, t: 0.0 };
         brain.exec = None;
         brain.path.clear();
     }
     if let HanMode::Cling { wall, x, top, t } = brain.mode {
         let t = t + dt;
         // Nat made it up (or walked off): done.
-        let nat_left = nat.grounded
-            && !nat_on_han
-            && (!level.in_shaft(nat_cell) || nat.pos.y > top + 3.0 * TILE);
+        let nat_left = nat.grounded && !nat_on_han && (!level.in_shaft(nat_cell) || nat.pos.y > top + 3.0 * TILE);
         if kicked || nat_dead || !groove.grip() || t > CLING_SECS || nat_left {
             // Let go: he drops back down.
             brain.mode = HanMode::Follow;
@@ -668,13 +590,7 @@ pub(super) fn think(
             body.vel = Vec2::ZERO;
             body.on_ground = false;
             let up = pos.0.y >= top;
-            *head = HanHead {
-                solid: up,
-                boost: up && brain.winded == 0.0,
-                block: false,
-                weak: false,
-                kick: -wall * KICK_CARRY,
-            };
+            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall * KICK_CARRY };
             set_anim(&mut anim, HanPose::Cling, wall < 0.0, &groove, false);
             return;
         }
@@ -692,39 +608,16 @@ pub(super) fn think(
         && (nat.pos.x - pos.0.x).abs() < 4.0 * TILE
         && let Some((anchor, len, dir)) = trapeze_near(level, nat_cell, -brain.side)
     {
-        brain.mode = HanMode::Trapeze {
-            anchor,
-            len,
-            dir,
-            on: false,
-            t: 0.0,
-        };
+        brain.mode = HanMode::Trapeze { anchor, len, dir, on: false, t: 0.0 };
         brain.exec = None;
         brain.path.clear();
     }
-    if let HanMode::Trapeze {
-        anchor,
-        len,
-        dir,
-        on,
-        t,
-    } = brain.mode
-    {
+    if let HanMode::Trapeze { anchor, len, dir, on, t } = brain.mode {
         let t = t + dt;
-        let bar = (groove.clock.beat as f32 + groove.clock.phase)
-            / groove.clock.beats_per_bar.max(1) as f32;
-        let (swing, vel) = trapeze_at(
-            anchor,
-            len,
-            dir,
-            bar,
-            groove.clock.beat_secs * groove.clock.beats_per_bar as f32,
-        );
+        let bar = (groove.clock.beat as f32 + groove.clock.phase) / groove.clock.beats_per_bar.max(1) as f32;
+        let (swing, vel) = trapeze_at(anchor, len, dir, bar, groove.clock.beat_secs * groove.clock.beats_per_bar as f32);
         // Nat flew off (or walked off, or gave up and landed back on the lip's side).
-        let nat_left = nat.grounded
-            && !nat_on_han
-            && (on || t > 1.0)
-            && !level.in_mark(Topic::Trapeze, nat_cell);
+        let nat_left = nat.grounded && !nat_on_han && (on || t > 1.0) && !level.in_mark(Topic::Trapeze, nat_cell);
         let past = nat.grounded && !nat_on_han && (nat.pos.x - anchor.x) * dir > TILE;
         if kicked || nat_dead || !waltz || t > TRAPEZE_SECS || nat_left || past {
             // Let go: he flies off with the swing (and parachutes back).
@@ -733,45 +626,19 @@ pub(super) fn think(
             body.vel = if on { vel } else { Vec2::ZERO };
         } else {
             let on = on || pos.0.distance(swing) < 4.0;
-            brain.mode = HanMode::Trapeze {
-                anchor,
-                len,
-                dir,
-                on,
-                t,
-            };
-            pos.0 = if on {
-                swing
-            } else {
-                move_towards_v(pos.0, swing, REEL_SPEED * dt)
-            };
+            brain.mode = HanMode::Trapeze { anchor, len, dir, on, t };
+            pos.0 = if on { swing } else { move_towards_v(pos.0, swing, REEL_SPEED * dt) };
             body.vel = Vec2::ZERO;
             body.on_ground = false;
-            *head = HanHead {
-                solid: on,
-                boost: on && brain.winded == 0.0,
-                block: false,
-                weak: false,
-                kick: if on { vel.x } else { 0.0 },
-            };
+            *head = HanHead { solid: on, boost: on && brain.winded == 0.0, block: false, weak: false, kick: if on { vel.x } else { 0.0 } };
             set_anim(&mut anim, HanPose::Trapeze, dir < 0.0, &groove, false);
             return;
         }
     }
 
-    let me = Kin {
-        pos: pos.0,
-        vel: body.vel,
-        grounded: body.on_ground,
-    };
+    let me = Kin { pos: pos.0, vel: body.vel, grounded: body.on_ground };
     // (Side B: "Nat" is where he's heading, `game::sideb`: right there, not behind it.)
-    let gap = if side_b {
-        0.0
-    } else if groove.grip() {
-        NERVOUS_GAP
-    } else {
-        FOLLOW_GAP
-    };
+    let gap = if side_b { 0.0 } else if groove.grip() { NERVOUS_GAP } else { FOLLOW_GAP };
     if nbody.on_ground && !nat_on_han {
         let cell = feet_cell(level, nat.pos);
         // Nat landed somewhere new while Han has nothing left to do: re-plan right away.
@@ -783,16 +650,14 @@ pub(super) fn think(
             brain.side = -nbody.vel.x.signum();
         }
     }
-    let slot_x =
-        (nat.pos.x + brain.side * gap).clamp(HALF.x + 1.0, level.size_px().x - HALF.x - 1.0);
+    let slot_x = (nat.pos.x + brain.side * gap).clamp(HALF.x + 1.0, level.size_px().x - HALF.x - 1.0);
     let mut input = HanInput::default();
     brain.braced = false;
 
     // --- Mode changes.
     let dx_nat = nat.pos.x - pos.0.x;
     let nat_above = nat.pos.y - HALF.y > pos.0.y + HALF.y;
-    let in_chasm =
-        level.in_chasm(level.cell_at(nat.pos).0) || level.in_chasm(level.cell_at(pos.0).0);
+    let in_chasm = level.in_chasm(level.cell_at(nat.pos).0) || level.in_chasm(level.cell_at(pos.0).0);
     // The band zone: his boost is weak, and he's no catch in mid-air there.
     let zoned = |p: Vec2| level.in_band_zone(level.cell_at(p));
     let in_zone = zoned(pos.0) || zoned(nat.pos);
@@ -868,11 +733,7 @@ pub(super) fn think(
         HanMode::Parachute { .. } => {
             parachute = true;
             let dx = slot_x - pos.0.x;
-            input = HanInput {
-                dir: if dx.abs() > 3.0 { dx.signum() } else { 0.0 },
-                speed: 0.5,
-                ..default()
-            };
+            input = HanInput { dir: if dx.abs() > 3.0 { dx.signum() } else { 0.0 }, speed: 0.5, ..default() };
         }
         HanMode::Ahead { dir, t } => {
             let t = t + dt;
@@ -885,12 +746,7 @@ pub(super) fn think(
             let next = level.cell_at(pos.0 + Vec2::new(dir * TILE, 0.0));
             let next_ok = level.han_allowed(next) && !level.han_keeps_out(next);
             let backed_off = lead > 6.0 * TILE;
-            if (lead > TILE && clear && nat_clear)
-                || backed_off
-                || t > 20.0
-                || !next_ok
-                || (body.on_ground && !ahead_floor(pos.0.x, dir))
-            {
+            if (lead > TILE && clear && nat_clear) || backed_off || t > 20.0 || !next_ok || (body.on_ground && !ahead_floor(pos.0.x, dir)) {
                 brain.mode = HanMode::Follow;
                 brain.replan = 0.0;
             } else {
@@ -909,21 +765,12 @@ pub(super) fn think(
         HanMode::Intercept => {
             if !nat_on_han {
                 let dir = (nat.pos.x - pos.0.x).signum();
-                input = intercept(
-                    &me,
-                    &nat,
-                    brain.ctl.toots_left,
-                    Fall::of(&groove).gravity,
-                    ahead_floor(pos.0.x, dir),
-                );
+                input = intercept(&me, &nat, brain.ctl.toots_left, Fall::of(&groove).gravity, ahead_floor(pos.0.x, dir));
             }
         }
         HanMode::Follow => {
             if !brain.braced && !nat_dead {
-                input = follow(
-                    level, &mut nav, brain, &me, &body, &nat, slot_x, &plats, &clock, &groove, dt,
-                    &mut says,
-                );
+                input = follow(level, &mut nav, brain, &me, &body, &nat, slot_x, &plats, &clock, &groove, dt, &mut says);
             }
         }
         _ => {}
@@ -931,11 +778,7 @@ pub(super) fn think(
     // On the run-up to a chain chasm he hangs back a few tiles from its edge until Nat jumps
     // (then it's an intercept): mid-air catches are much more forgiving from there than from
     // right on Nat's heels.
-    if brain.mode == HanMode::Follow
-        && body.on_ground
-        && input.dir != 0.0
-        && chasm_ahead(level, pos.0, input.dir)
-    {
+    if brain.mode == HanMode::Follow && body.on_ground && input.dir != 0.0 && chasm_ahead(level, pos.0, input.dir) {
         input.dir = 0.0;
         input.jump = false;
     }
@@ -954,10 +797,7 @@ pub(super) fn think(
     // Keep off a chute's grease (on foot).
     if !side_b && !parachute && input.dir != 0.0 && body.on_ground {
         let here = level.han_keeps_out(feet_cell(level, pos.0));
-        let next = level.han_keeps_out(feet_cell(
-            level,
-            pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0),
-        ));
+        let next = level.han_keeps_out(feet_cell(level, pos.0 + Vec2::new(input.dir * (HALF.x + 2.0), 0.0)));
         if !here && next {
             input.dir = 0.0;
         }
@@ -968,31 +808,16 @@ pub(super) fn think(
     if !parachute
         && body.on_ground
         && input.dir != 0.0
-        && crushers.iter().any(|(_, b, _, _)| {
-            crate::game::crushers::wait_for(b, pos.0, body.half, input.dir, phys.speed, crush_t)
-        })
+        && crushers.iter().any(|(_, b, _, _)| crate::game::crushers::wait_for(b, pos.0, body.half, input.dir, phys.speed, crush_t))
     {
         input.dir = 0.0;
         input.jump = false;
     }
 
     // --- Move.
-    let drove = drive(
-        level,
-        &mut pos.0,
-        &mut body,
-        &mut brain.ctl,
-        input,
-        &phys,
-        &carriers,
-        &solids,
-        dt,
-    );
+    let drove = drive(level, &mut pos.0, &mut body, &mut brain.ctl, input, &phys, &carriers, &solids, dt);
     if drove.contact.sprung || drove.contact.bumped {
-        sprung.write(Sprung {
-            pos: pos.0,
-            han: true,
-        });
+        sprung.write(Sprung { pos: pos.0, han: true });
     }
     if drove.contact.bricks.iter().any(Option::is_some) {
         smash(&mut active, drove.contact.smashed(), &mut smashed);
@@ -1037,13 +862,7 @@ pub(super) fn think(
     };
     // Lost and out of sight: parachute in.
     let lost = brain.lost || brain.behind > FALL_BEHIND_SECS;
-    if lost
-        && !side_b
-        && brain.mode == HanMode::Follow
-        && out_of_sight(pos.0, nat.pos)
-        && !nat_dead
-        && nat.grounded
-    {
+    if lost && !side_b && brain.mode == HanMode::Follow && out_of_sight(pos.0, nat.pos) && !nat_dead && nat.grounded {
         start_parachute(level, &mut pos, &mut prev, &mut body, brain, nat.pos, false);
     }
     // --- His head: a perch for Nat (standing, or, fired up, in mid-air not too high up and not
@@ -1052,27 +871,18 @@ pub(super) fn think(
     if body.on_ground {
         brain.floor_y = pos.0.y;
     }
-    let up = matches!(
-        brain.mode,
-        HanMode::Follow | HanMode::Intercept | HanMode::Ahead { .. }
-    );
+    let up = matches!(brain.mode, HanMode::Follow | HanMode::Intercept | HanMode::Ahead { .. });
     let my_cell = feet_cell(level, pos.0);
     let zone = level.in_band_zone(my_cell) || level.in_band_zone((my_cell.0, my_cell.1 - 1));
-    let holds = head_holds(
-        body.on_ground,
-        pos.0.y - brain.floor_y,
-        zone,
-        level.in_chasm(my_cell.0),
-        groove.fired_up(),
-    ) && !level.han_keeps_out(my_cell);
+    let holds = head_holds(body.on_ground, pos.0.y - brain.floor_y, zone, level.in_chasm(my_cell.0), groove.fired_up())
+        && !level.han_keeps_out(my_cell);
     *head = HanHead {
         solid: up && holds,
         boost: up && holds && brain.winded == 0.0,
         block: matches!(brain.mode, HanMode::Ahead { .. }),
         kick: 0.0,
         // (By a mega wall, while Giant Steps plays, the mega-boost: full strength.)
-        weak: level.weak_boost(my_cell, groove.granted())
-            || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.granted()),
+        weak: level.weak_boost(my_cell, groove.granted()) || level.weak_boost((my_cell.0, my_cell.1 - 1), groove.granted()),
     };
 
     // --- Pose.
@@ -1148,11 +958,7 @@ fn trapeze_near(level: &Level, nat: (i32, i32), dir: f32) -> Option<(Vec2, f32, 
 
 fn move_towards_v(from: Vec2, to: Vec2, step: f32) -> Vec2 {
     let d = to - from;
-    if d.length() <= step {
-        to
-    } else {
-        from + d.normalize() * step
-    }
+    if d.length() <= step { to } else { from + d.normalize() * step }
 }
 
 /// Side B: Han just goes for it. Run `dir`; jump at a wall, an edge or spikes ahead; a full
@@ -1165,8 +971,7 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> Han
         let (c, r) = level.cell_at(*pos + Vec2::new(dx, dy));
         level.tile(c, r)
     };
-    let wall = tile_at(dir * (half.x + 3.0), 0.0).is_solid()
-        || tile_at(dir * (half.x + 3.0), -half.y + 2.0).is_solid();
+    let wall = tile_at(dir * (half.x + 3.0), 0.0).is_solid() || tile_at(dir * (half.x + 3.0), -half.y + 2.0).is_solid();
     // A gap ahead: nothing to land on under the next step (a drop with a floor he walks off).
     let (c, r) = level.cell_at(*pos + Vec2::new(dir * (half.x + 2.0), -half.y - 2.0));
     let edge = !(r..level.height as i32).any(|r| floor_at(level, c, r));
@@ -1178,30 +983,17 @@ fn charge(level: &Level, pos: &Vec2, body: &Body, ctl: &HanCtl, dir: f32) -> Han
             [0.0, dir * TILE, dir * 2.0 * TILE].into_iter().any(|dx| {
                 let dy = half.y + (k as f32 - 0.5) * TILE;
                 let t = tile_at(dx, dy);
-                t == Tile::SpikesDown
-                    || (t.is_solid() && t != Tile::Brick && !tile_at(dx, dy - TILE).is_solid())
+                t == Tile::SpikesDown || (t.is_solid() && t != Tile::Brick && !tile_at(dx, dy - TILE).is_solid())
             })
         })
     };
     let jump = body.on_ground && (wall || edge || spikes);
     let toot = !body.on_ground && body.vel.y <= 0.0 && ctl.toots_left > 0 && !ceiling(5);
-    HanInput {
-        dir,
-        speed: 1.0,
-        jump,
-        hold: !ceiling(1),
-        toot,
-    }
+    HanInput { dir, speed: 1.0, jump, hold: !ceiling(1), toot }
 }
 
 fn set_anim(anim: &mut HanAnim, pose: HanPose, facing_left: bool, groove: &Groove, hidden: bool) {
-    let new = HanAnim {
-        pose,
-        facing_left,
-        tremble: groove.grip(),
-        wobble: anim.wobble,
-        hidden,
-    };
+    let new = HanAnim { pose, facing_left, tremble: groove.grip(), wobble: anim.wobble, hidden };
     if *anim != new {
         *anim = new;
     }
@@ -1252,19 +1044,13 @@ fn follow(
 ) -> HanInput {
     let top_speed = nav.phys(groove).speed;
     let nav = nav.for_groove(groove);
-    let my_cell = if body.riding.is_some() {
-        feet_cell(level, me.pos)
-    } else {
-        nav_cell(level, me.pos)
-    };
+    let my_cell = if body.riding.is_some() { feet_cell(level, me.pos) } else { nav_cell(level, me.pos) };
     brain.replan -= dt;
     let flying = brain.exec.is_some_and(|e| e.flying);
     if brain.replan <= 0.0 && me.grounded && !flying {
         brain.replan = REPLAN_SECS;
         let map = Map::for_han(level);
-        let goal = brain
-            .nat_cell
-            .and_then(|nc| slot_cell(&map, level, nc, slot_x));
+        let goal = brain.nat_cell.and_then(|nc| slot_cell(&map, level, nc, slot_x));
         if goal != brain.goal {
             brain.goal = goal;
             // Re-route, but keep going the way he's going until the new route is in: the slot
@@ -1288,10 +1074,7 @@ fn follow(
             match nav.route(&map, my_cell, goal, ROUTE_BUDGET) {
                 Route::Found(p) => {
                     // The jump he's lining up for, if it's still the way to go.
-                    let same = |e: &Exec| {
-                        p.first()
-                            .is_some_and(|f| f.to == e.to && f.step == Step::Move(e.mv))
-                    };
+                    let same = |e: &Exec| p.first().is_some_and(|f| f.to == e.to && f.step == Step::Move(e.mv));
                     if !brain.exec.as_ref().is_some_and(same) {
                         brain.exec = None;
                     }
@@ -1309,9 +1092,7 @@ fn follow(
             }
         }
     }
-    let Some(goal) = brain.goal else {
-        return HanInput::default();
-    };
+    let Some(goal) = brain.goal else { return HanInput::default() };
 
     // Progress (stuck detection).
     let d = (stand(level, goal) - me.pos).length();
@@ -1331,18 +1112,9 @@ fn follow(
         // Nat just jumped on the run: run on with him (his reflexes take it from here: an
         // intercept, or the route to where Nat lands) rather than brake in the old slot.
         let behind_nat = (nat.pos.x - me.pos.x) * me.vel.x > 0.0;
-        if !nat.grounded
-            && nat.vel.x * me.vel.x > 0.0
-            && me.vel.x.abs() > 30.0
-            && behind_nat
-            && body.riding.is_none()
-        {
+        if !nat.grounded && nat.vel.x * me.vel.x > 0.0 && me.vel.x.abs() > 30.0 && behind_nat && body.riding.is_none() {
             let top = top_speed;
-            let on = HanInput {
-                dir: me.vel.x.signum(),
-                speed: (me.vel.x.abs() / top).min(1.0),
-                ..default()
-            };
+            let on = HanInput { dir: me.vel.x.signum(), speed: (me.vel.x.abs() / top).min(1.0), ..default() };
             return careful(level, me, body, on);
         }
         if my_cell == goal {
@@ -1354,20 +1126,12 @@ fn follow(
                 // it: where the chain proofs put him. Not when the nervous band has him clinging
                 // close: no overshooting into Nat when he stops.)
                 if !groove.grip() {
-                    return careful(
-                        level,
-                        me,
-                        body,
-                        pace(nat.vel.x, slot_x - me.pos.x, top_speed),
-                    );
+                    return careful(level, me, body, pace(nat.vel.x, slot_x - me.pos.x, top_speed));
                 }
                 return careful(level, me, body, arrive(slot_x - me.pos.x, 2.0));
             }
-            let dx = if (slot_x - stand(level, goal).x).abs() < TILE {
-                slot_x
-            } else {
-                stand(level, goal).x
-            } - me.pos.x;
+            let dx =
+                if (slot_x - stand(level, goal).x).abs() < TILE { slot_x } else { stand(level, goal).x } - me.pos.x;
             return arrive(dx, 2.0);
         }
         if !Nav::node(&Map::for_han(level), level, my_cell) || body.riding.is_some() {
@@ -1383,17 +1147,14 @@ fn follow(
     if brain.lost {
         // Try anyway: walk toward the slot, hop when blocked.
         let mut i = careful(level, me, body, arrive(slot_x - me.pos.x, 4.0));
-        i.jump =
-            me.grounded && body.vel.x.abs() < 5.0 && i.dir != 0.0 && nat.pos.y > me.pos.y + TILE;
+        i.jump = me.grounded && body.vel.x.abs() < 5.0 && i.dir != 0.0 && nat.pos.y > me.pos.y + TILE;
         i.hold = true;
         return i;
     }
 
     // Carry out the next edge.
     if brain.exec.is_none() {
-        let Some(edge) = brain.path.first().copied() else {
-            return HanInput::default();
-        };
+        let Some(edge) = brain.path.first().copied() else { return HanInput::default() };
         match edge.step {
             Step::Walk => {
                 let tx = stand(level, edge.to).x;
@@ -1412,15 +1173,7 @@ fn follow(
                     brain.replan = 0.0;
                 }
                 let speed = catch_up(me.pos.x, slot_x, nat.vel.x);
-                return if more {
-                    HanInput {
-                        dir: dx.signum(),
-                        speed,
-                        ..default()
-                    }
-                } else {
-                    arrive(dx, 2.0)
-                };
+                return if more { HanInput { dir: dx.signum(), speed, ..default() } } else { arrive(dx, 2.0) };
             }
             Step::Move(k) => {
                 let map = Map::for_han(level);
@@ -1429,15 +1182,7 @@ fn follow(
                     brain.path.clear();
                     return HanInput::default();
                 };
-                brain.exec = Some(Exec {
-                    mv: k,
-                    from: my_cell,
-                    to: edge.to,
-                    x0,
-                    t: 0.0,
-                    flying: false,
-                    wait: 0.0,
-                });
+                brain.exec = Some(Exec { mv: k, from: my_cell, to: edge.to, x0, t: 0.0, flying: false, wait: 0.0 });
             }
         }
     }
@@ -1498,12 +1243,7 @@ fn follow(
         brain.path.clear();
         return HanInput::default();
     }
-    let last_toot = m
-        .toots
-        .iter()
-        .copied()
-        .filter(|x| x.is_finite())
-        .fold(0.0f32, f32::max);
+    let last_toot = m.toots.iter().copied().filter(|x| x.is_finite()).fold(0.0f32, f32::max);
     let correcting = t > last_toot + 0.1 && t > 0.25;
     let mut dir = if t < m.release { m.dir } else { 0.0 };
     if correcting {
@@ -1515,10 +1255,7 @@ fn follow(
         speed: 1.0,
         jump: m.jump && t == 0.0,
         hold: t < m.hold,
-        toot: m
-            .toots
-            .iter()
-            .any(|&tt| tt.is_finite() && tt > t - 1e-4 && tt <= t + 1.0 / 60.0 - 1e-4),
+        toot: m.toots.iter().any(|&tt| tt.is_finite() && tt > t - 1e-4 && tt <= t + 1.0 / 60.0 - 1e-4),
     }
 }
 
@@ -1537,17 +1274,11 @@ fn rolling_take_off(
     nat_x: f32,
 ) -> Option<(usize, u16, (i32, i32))> {
     let map = Map::for_han(level);
-    let walks = path
-        .iter()
-        .skip(1)
-        .take_while(|e| e.step == Step::Walk)
-        .count();
+    let walks = path.iter().skip(1).take_while(|e| e.step == Step::Walk).count();
     let last = path.get(walks).map_or(ex.to, |e| e.to);
     let nat_col = (nat_x / TILE).floor() as i32;
     let toward_nat = |to: (i32, i32)| {
-        walks + 1 == path.len()
-            && (to.0 - last.0) * m.dir as i32 > 0
-            && (nat_col - to.0) * m.dir as i32 >= 0
+        walks + 1 == path.len() && (to.0 - last.0) * m.dir as i32 > 0 && (nat_col - to.0) * m.dir as i32 >= 0
     };
     let ok = |to: (i32, i32)| {
         (0..=walks)
@@ -1578,8 +1309,7 @@ fn careful(level: &Level, me: &Kin, body: &Body, i: HanInput) -> HanInput {
         return i;
     }
     let (c, r) = level.cell_at(me.pos + Vec2::new(i.dir * (HALF.x + 3.0), -HALF.y + 1.0));
-    let safe =
-        (r + 1..=r + 3).find(|&rr| floor_at(level, c, rr) || level.tile(c, rr) == Tile::Liquid);
+    let safe = (r + 1..=r + 3).find(|&rr| floor_at(level, c, rr) || level.tile(c, rr) == Tile::Liquid);
     match safe {
         Some(rr) if level.tile(c, rr) != Tile::Liquid => i,
         _ => HanInput::default(),
@@ -1616,11 +1346,7 @@ fn pace(vx: f32, dx: f32, top: f32) -> HanInput {
     if v.abs() < 5.0 {
         return HanInput::default();
     }
-    HanInput {
-        dir: v.signum(),
-        speed: (v.abs() / top).clamp(0.15, 1.0),
-        ..default()
-    }
+    HanInput { dir: v.signum(), speed: (v.abs() / top).clamp(0.15, 1.0), ..default() }
 }
 
 /// The deceleration (px/s²) [`arrive`] plans its stop with.
@@ -1632,9 +1358,5 @@ fn arrive(dx: f32, tol: f32) -> HanInput {
         return HanInput::default();
     }
     let speed = ((2.0 * ARRIVE_DECEL * dx.abs()).sqrt() / super::HAN_RUN_SPEED).clamp(0.15, 1.0);
-    HanInput {
-        dir: dx.signum(),
-        speed,
-        ..default()
-    }
+    HanInput { dir: dx.signum(), speed, ..default() }
 }

@@ -21,50 +21,14 @@ use nat_han_adventures::level::*;
 const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Bathroom Floor", 1, &[Gate::GiantWall]),
     ("The Bowl", 1, &[]),
-    (
-        "U-Bend",
-        2,
-        &[Gate::LongGap, Gate::StainPit, Gate::MegaWall],
-    ),
+    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit, Gate::MegaWall]),
     ("Pipe Maze", 2, &[Gate::GiantWall]),
-    (
-        "Main Sewer",
-        3,
-        &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft],
-    ),
-    (
-        "Rat Kingdom",
-        3,
-        &[Gate::GiantWall, Gate::GreaseChute, Gate::MegaWall],
-    ),
+    ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft]),
+    ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::MegaWall]),
     ("Septic Tank", 4, &[Gate::GlideLaunch]),
-    (
-        "Porta-Potty Festival",
-        4,
-        &[
-            Gate::GiantWall,
-            Gate::GlideLaunch,
-            Gate::StainPit,
-            Gate::ChainChasm,
-        ],
-    ),
-    (
-        "Treatment Plant",
-        5,
-        &[
-            Gate::LongGap,
-            Gate::GlideLaunch,
-            Gate::GreaseChute,
-            Gate::MegaWall,
-            Gate::ClingShaft,
-            Gate::BuddyRaft,
-        ],
-    ),
-    (
-        "The Golden Throne",
-        5,
-        &[Gate::GiantWall, Gate::Trapeze, Gate::ChainChasm],
-    ),
+    ("Porta-Potty Festival", 4, &[Gate::GiantWall, Gate::GlideLaunch, Gate::StainPit, Gate::ChainChasm]),
+    ("Treatment Plant", 5, &[Gate::LongGap, Gate::GlideLaunch, Gate::GreaseChute, Gate::MegaWall, Gate::ClingShaft, Gate::BuddyRaft]),
+    ("The Golden Throne", 5, &[Gate::GiantWall, Gate::Trapeze, Gate::ChainChasm]),
 ];
 /// Levels whose goal can only be reached through their gate (the tutorials of each mechanic).
 const GATED_GOAL: [usize; 2] = [0, 2];
@@ -73,12 +37,9 @@ const GATED_GOAL: [usize; 2] = [0, 2];
 fn levels_are_valid_and_beatable() {
     let t0 = Instant::now();
     let dump = std::env::var("LEVEL_DUMP").is_ok();
-    let only = std::env::var("LEVEL_ONLY")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok());
+    let only = std::env::var("LEVEL_ONLY").ok().and_then(|v| v.parse::<usize>().ok());
     let phys = Physics::new();
-    let levels: Vec<Result<Level, String>> =
-        LEVEL_SOURCES.iter().map(|s| Level::parse(s)).collect();
+    let levels: Vec<Result<Level, String>> = LEVEL_SOURCES.iter().map(|s| Level::parse(s)).collect();
     // Every level on its own thread.
     let reports: Vec<Option<Report>> = std::thread::scope(|scope| {
         let handles: Vec<_> = levels
@@ -87,17 +48,12 @@ fn levels_are_valid_and_beatable() {
             .map(|(i, l)| {
                 let phys = &phys;
                 scope.spawn(move || {
-                    let opts = Options {
-                        dump: dump && only.is_none_or(|o| o == i + 1),
-                    };
+                    let opts = Options { dump: dump && only.is_none_or(|o| o == i + 1) };
                     l.as_ref().ok().map(|l| check_with(l, &opts, phys))
                 })
             })
             .collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().expect("validator panicked"))
-            .collect()
+        handles.into_iter().map(|h| h.join().expect("validator panicked")).collect()
     });
     eprintln!("validated {} levels in {:.2?}", LEVEL_COUNT, t0.elapsed());
 
@@ -137,9 +93,7 @@ fn levels_are_valid_and_beatable() {
             }
             for &(gate, _, _, splats) in &report.gates {
                 if gate == Gate::StainPit && !(1..=MAX_PIT_DEATHS).contains(&splats) {
-                    errs.push(format!(
-                        "a stain pit takes {splats} splats (want 1..={MAX_PIT_DEATHS})"
-                    ));
+                    errs.push(format!("a stain pit takes {splats} splats (want 1..={MAX_PIT_DEATHS})"));
                 }
             }
         }
@@ -148,10 +102,7 @@ fn levels_are_valid_and_beatable() {
         {
             println!("levels/{:02}.txt {d}", i + 1);
             for l in &report.lessons {
-                println!(
-                    "  {:?} at {:?} (cost {}), hint {:?}",
-                    l.topic, l.at, l.dist, l.hint
-                );
+                println!("  {:?} at {:?} (cost {}), hint {:?}", l.topic, l.at, l.dist, l.hint);
             }
         }
         for e in errs {
@@ -161,13 +112,10 @@ fn levels_are_valid_and_beatable() {
 
     // Teaching: the first level where a mechanic appears teaches it with a hint before it.
     for topic in Topic::ALL {
-        let first = reports.iter().enumerate().find_map(|(i, r)| {
-            r.as_ref()?
-                .lessons
-                .iter()
-                .find(|l| l.topic == topic)
-                .map(|l| (i, l))
-        });
+        let first = reports
+            .iter()
+            .enumerate()
+            .find_map(|(i, r)| r.as_ref()?.lessons.iter().find(|l| l.topic == topic).map(|l| (i, l)));
         match first {
             Some((i, lesson)) if !lesson.taught() => failures.push(format!(
                 "levels/{:02}.txt: first {} (col {} row {}, path cost {}) needs a `hint@... {}:` before it (hint: {:?})",
@@ -196,30 +144,18 @@ fn levels_are_valid_and_beatable() {
 /// can't be made for a phrase can look like one.)
 #[test]
 fn laughing_band_never_closes_a_level() {
-    let levels: Vec<Level> = LEVEL_SOURCES
-        .iter()
-        .map(|s| Level::parse(s).unwrap())
-        .collect();
+    let levels: Vec<Level> = LEVEL_SOURCES.iter().map(|s| Level::parse(s).unwrap()).collect();
     let mut failures = Vec::new();
     for (nudge, phys) in Physics::laughing() {
         let reports: Vec<Report> = std::thread::scope(|scope| {
             let phys = &phys;
-            let handles: Vec<_> = levels
-                .iter()
-                .map(|l| scope.spawn(move || check_with(l, &Options::default(), phys)))
-                .collect();
-            handles
-                .into_iter()
-                .map(|h| h.join().expect("validator panicked"))
-                .collect()
+            let handles: Vec<_> =
+                levels.iter().map(|l| scope.spawn(move || check_with(l, &Options::default(), phys))).collect();
+            handles.into_iter().map(|h| h.join().expect("validator panicked")).collect()
         });
         for (i, (l, r)) in levels.iter().zip(&reports).enumerate() {
             for e in r.errs.iter().filter(|e| e.contains("unreachable")) {
-                failures.push(format!(
-                    "{nudge}: levels/{:02}.txt ({}): {e}",
-                    i + 1,
-                    l.name
-                ));
+                failures.push(format!("{nudge}: levels/{:02}.txt ({}): {e}", i + 1, l.name));
             }
         }
     }
@@ -229,17 +165,10 @@ fn laughing_band_never_closes_a_level() {
 /// A test level: `rows` (grid lines), plus 15 nuggets in row `nugget_row` cols 3..18 so it
 /// meets the nugget minimum.
 fn level_of(header: &str, rows: &[String], nugget_row: usize) -> Level {
-    let src = format!(
-        "name: Test\nworld: 1\nintro: hi\n{header}---\n{}\n",
-        rows.join("\n")
-    );
+    let src = format!("name: Test\nworld: 1\nintro: hi\n{header}---\n{}\n", rows.join("\n"));
     let mut l = Level::parse(&src).unwrap();
     for c in 3..18 {
-        l.things.push(Thing {
-            kind: ThingKind::Nugget,
-            col: c,
-            row: nugget_row,
-        });
+        l.things.push(Thing { kind: ThingKind::Nugget, col: c, row: nugget_row });
     }
     l
 }
@@ -296,11 +225,7 @@ fn validator_catches_broken_levels() {
         let rows: Vec<String> = grid.lines().map(String::from).collect();
         let mut l = level_of(header, &rows, 13);
         for &c in nuggets {
-            l.things.push(Thing {
-                kind: ThingKind::Nugget,
-                col: c,
-                row: 13,
-            });
+            l.things.push(Thing { kind: ThingKind::Nugget, col: c, row: 13 });
         }
         run(&l)
     };
@@ -319,41 +244,20 @@ fn validator_catches_broken_levels() {
         lines[last] = floor.into_iter().collect();
         lines.join("\n") + "\n"
     };
-    assert!(
-        errs_of(&with_gap(4)).is_empty(),
-        "{:?}",
-        errs_of(&with_gap(4))
-    );
-    assert!(
-        errs_of(&with_gap(7)).is_empty(),
-        "double jump clears 7: {:?}",
-        errs_of(&with_gap(7))
-    );
+    assert!(errs_of(&with_gap(4)).is_empty(), "{:?}", errs_of(&with_gap(4)));
+    assert!(errs_of(&with_gap(7)).is_empty(), "double jump clears 7: {:?}", errs_of(&with_gap(7)));
     assert!(modes_of(&with_gap(7)).is_empty());
     // Gate marks go in the header (Han keeps clear of the band's gates).
     let mark = |s: &str, m: &str| s.replace("say@19,13: hey\n", &format!("say@19,13: hey\n{m}\n"));
     // A long gap: only with the band fired up, so it needs a nugget line after the checkpoint.
     let long = mark(&with_gap(11), "gate: gap 20,13 40,13");
-    assert!(
-        errs_of(&long).iter().any(|e| e.contains("goal")),
-        "11 tiles is too far without a nugget line"
-    );
+    assert!(errs_of(&long).iter().any(|e| e.contains("goal")), "11 tiles is too far without a nugget line");
     let fired = check_with_nuggets(&long, &[20, 21, 22, 23]);
-    assert!(
-        fired.errs.is_empty(),
-        "a nugget line fires up the band for 11 tiles: {:?}",
-        fired.errs
-    );
+    assert!(fired.errs.is_empty(), "a nugget line fires up the band for 11 tiles: {:?}", fired.errs);
     assert_eq!(gates(&fired), [Gate::LongGap]);
     assert!(fired.gated_goal);
     assert!(
-        check_with_nuggets(
-            &mark(&with_gap(14), "gate: gap 20,13 40,13"),
-            &[20, 21, 22, 23]
-        )
-        .errs
-        .iter()
-        .any(|e| e.contains("goal")),
+        check_with_nuggets(&mark(&with_gap(14), "gate: gap 20,13 40,13"), &[20, 21, 22, 23]).errs.iter().any(|e| e.contains("goal")),
         "a 14-tile gap must make the goal unreachable"
     );
 
@@ -378,61 +282,29 @@ fn validator_catches_broken_levels() {
         lines[top] = row.into_iter().collect();
         lines.join("\n") + "\n"
     };
-    assert!(
-        errs_of(&wall(3)).is_empty(),
-        "single jump climbs 3: {:?}",
-        errs_of(&wall(3))
-    );
-    assert!(
-        errs_of(&wall(5)).is_empty(),
-        "double jump climbs 5: {:?}",
-        errs_of(&wall(5))
-    );
+    assert!(errs_of(&wall(3)).is_empty(), "single jump climbs 3: {:?}", errs_of(&wall(3)));
+    assert!(errs_of(&wall(5)).is_empty(), "double jump climbs 5: {:?}", errs_of(&wall(5)));
     assert!(modes_of(&wall(5)).is_empty(), "5 tiles is a normal wall");
     // A giant wall: only in Giant Steps, summoned on the runway before it. (Exclusive: not
     // with a waltz jump on ONE plus its weak toot either.)
     let giant_mark = "gate: giant 20,5 41,13";
     let giant = check_with_nuggets(&mark(&wall(6), giant_mark), &[]);
-    assert!(
-        giant.errs.is_empty(),
-        "giant steps climbs 6: {:?}",
-        giant.errs
-    );
+    assert!(giant.errs.is_empty(), "giant steps climbs 6: {:?}", giant.errs);
     assert_eq!(gates(&giant), [Gate::GiantWall]);
     assert!(giant.gated_goal);
     // 9 tiles: beyond Giant Steps, so Han keeping clear of it makes it a dead end...
-    assert!(
-        errs_of(&mark(&wall(9), giant_mark))
-            .iter()
-            .any(|e| e.contains("goal")),
-        "9 tiles is too tall"
-    );
+    assert!(errs_of(&mark(&wall(9), giant_mark)).iter().any(|e| e.contains("goal")), "9 tiles is too tall");
     // ...but a mega wall if he comes along: Giant Steps and his mega-boost (it must be
     // marked: unmarked, his plain boost climbs 9 from outside any band zone).
     let mega_mark = "gate: mega 20,1 41,13";
     let mega = check_with_nuggets(&mark(&wall(9), mega_mark), &[]);
-    assert!(
-        mega.errs.is_empty(),
-        "the mega-boost climbs 9: {:?}",
-        mega.errs
-    );
+    assert!(mega.errs.is_empty(), "the mega-boost climbs 9: {:?}", mega.errs);
     assert_eq!(gates(&mega), [Gate::MegaWall]);
-    assert!(
-        errs_of(&wall(9)).iter().any(|e| e.contains("`gate: mega")),
-        "unmarked: {:?}",
-        errs_of(&wall(9))
-    );
+    assert!(errs_of(&wall(9)).iter().any(|e| e.contains("`gate: mega")), "unmarked: {:?}", errs_of(&wall(9)));
     // 11 tiles: too tall for the plain boost, a mega wall.
-    assert!(
-        errs_of(&wall(11)).iter().any(|e| e.contains("goal")),
-        "11 tiles is too tall for the plain boost"
-    );
+    assert!(errs_of(&wall(11)).iter().any(|e| e.contains("goal")), "11 tiles is too tall for the plain boost");
     let tall = check_with_nuggets(&mark(&wall(11), mega_mark), &[]);
-    assert!(
-        tall.errs.is_empty(),
-        "the mega-boost climbs 11: {:?}",
-        tall.errs
-    );
+    assert!(tall.errs.is_empty(), "the mega-boost climbs 11: {:?}", tall.errs);
     assert_eq!(gates(&tall), [Gate::MegaWall]);
     // No runway (ceiling spikes 5 tiles up all the way to the wall: tooting would splat):
     // no Giant Steps, no way up.
@@ -444,51 +316,23 @@ fn validator_catches_broken_levels() {
     }
     spiked[row] = chars.into_iter().collect();
     let spiked = mark(&(spiked.join("\n") + "\n"), giant_mark);
-    assert!(
-        errs_of(&spiked).iter().any(|e| e.contains("goal")),
-        "a giant wall needs a runway"
-    );
+    assert!(errs_of(&spiked).iter().any(|e| e.contains("goal")), "a giant wall needs a runway");
 
     // Lines: say@ must sit on a checkpoint; every checkpoint needs a line.
     let off = ok.replace("say@19,13", "say@18,13");
-    assert!(
-        errs_of(&off)
-            .iter()
-            .any(|e| e.contains("not on a checkpoint")),
-        "{:?}",
-        errs_of(&off)
-    );
+    assert!(errs_of(&off).iter().any(|e| e.contains("not on a checkpoint")), "{:?}", errs_of(&off));
     let plain = ok.replace("say@19,13: hey", "say: hey");
-    assert!(
-        errs_of(&plain).is_empty(),
-        "plain say: still works: {:?}",
-        errs_of(&plain)
-    );
+    assert!(errs_of(&plain).is_empty(), "plain say: still works: {:?}", errs_of(&plain));
     let none = ok.replace("say@19,13: hey\n", "");
     assert!(errs_of(&none).iter().any(|e| e.contains("has no line")));
     // A hint about something the level doesn't have.
-    let fly = ok.replace(
-        "say@19,13: hey\n",
-        "say@19,13: hey\nhint@5,13 fly: Flies!\n",
-    );
-    assert!(
-        errs_of(&fly).iter().any(|e| e.contains("teaches fly")),
-        "{:?}",
-        errs_of(&fly)
-    );
+    let fly = ok.replace("say@19,13: hey\n", "say@19,13: hey\nhint@5,13 fly: Flies!\n");
+    assert!(errs_of(&fly).iter().any(|e| e.contains("teaches fly")), "{:?}", errs_of(&fly));
     // Han barks (1-3 words, the intro aside), and every hint names what its card teaches.
     let chatty = ok.replace("say@19,13: hey", "say@19,13: hey there you lot");
-    assert!(
-        errs_of(&chatty).iter().any(|e| e.contains("barks")),
-        "{:?}",
-        errs_of(&chatty)
-    );
+    assert!(errs_of(&chatty).iter().any(|e| e.contains("barks")), "{:?}", errs_of(&chatty));
     let mute = ok.replace("say@19,13: hey\n", "say@19,13: hey\nhint@5,13: Look!\n");
-    assert!(
-        errs_of(&mute).iter().any(|e| e.contains("names no topic")),
-        "{:?}",
-        errs_of(&mute)
-    );
+    assert!(errs_of(&mute).iter().any(|e| e.contains("names no topic")), "{:?}", errs_of(&mute));
 }
 
 /// A flat walkway (row 9) with a spike pit `width` wide sunk into it (spikes in row 10 from
@@ -498,11 +342,7 @@ fn pit_level(width: usize, header: &str) -> Level {
     let w = (width + 45).max(60);
     let mut rows: Vec<Vec<char>> = vec![vec!['.'; w]; 14];
     for c in 0..w {
-        rows[10][c] = if (20..20 + width).contains(&c) {
-            '^'
-        } else {
-            '#'
-        };
+        rows[10][c] = if (20..20 + width).contains(&c) { '^' } else { '#' };
         for r in 11..14 {
             rows[r][c] = '#';
         }
@@ -511,11 +351,7 @@ fn pit_level(width: usize, header: &str) -> Level {
     rows[9][8] = 'C';
     rows[9][w - 3] = 'G';
     let rows: Vec<String> = rows.iter().map(|r| r.iter().collect()).collect();
-    let mark = if width >= STAIN_PIT_MIN {
-        format!("gate: stain 15,8 {},10\n", 25 + width)
-    } else {
-        String::new()
-    };
+    let mark = if width >= STAIN_PIT_MIN { format!("gate: stain 15,8 {},10\n", 25 + width) } else { String::new() };
     level_of(&format!("say@8,9: hey\n{mark}{header}"), &rows, 9)
 }
 
@@ -530,48 +366,26 @@ fn validator_knows_stain_pits() {
     // splat in the middle makes it two normal jumps.
     let one = run(&pit_level(15, "deaths: 1\n"));
     assert!(one.errs.is_empty(), "{:?}", one.errs);
-    assert_eq!(
-        one.gates.iter().map(|g| (g.0, g.3)).collect::<Vec<_>>(),
-        [(Gate::StainPit, 1)]
-    );
+    assert_eq!(one.gates.iter().map(|g| (g.0, g.3)).collect::<Vec<_>>(), [(Gate::StainPit, 1)]);
     assert!(one.gated_goal);
     assert_eq!(one.deaths, 1);
     // The level must say so.
     let undeclared = run(&pit_level(15, ""));
-    assert!(
-        undeclared.errs.iter().any(|e| e.contains("deaths")),
-        "{:?}",
-        undeclared.errs
-    );
+    assert!(undeclared.errs.iter().any(|e| e.contains("deaths")), "{:?}", undeclared.errs);
     // Wider: more splats.
     let two = run(&pit_level(22, "deaths: 2\n"));
     assert!(two.errs.is_empty(), "{:?}", two.errs);
-    assert_eq!(
-        two.gates.iter().map(|g| (g.0, g.3)).collect::<Vec<_>>(),
-        [(Gate::StainPit, 2)]
-    );
+    assert_eq!(two.gates.iter().map(|g| (g.0, g.3)).collect::<Vec<_>>(), [(Gate::StainPit, 2)]);
     // Too wide for 4 splats.
     let wide = run(&pit_level(50, "deaths: 5\n"));
-    assert!(
-        wide.errs.iter().any(|e| e.contains("can't be crossed")),
-        "{:?}",
-        wide.errs
-    );
+    assert!(wide.errs.iter().any(|e| e.contains("can't be crossed")), "{:?}", wide.errs);
     // Teaching: a stain hint before the pit is the lesson; one after it is an error.
     let taught = run(&pit_level(15, "deaths: 1\nhint@14,9 stain: Splat time!\n"));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
-    let lesson = taught
-        .lessons
-        .iter()
-        .find(|l| l.topic == Topic::Stain)
-        .expect("a stain lesson");
+    let lesson = taught.lessons.iter().find(|l| l.topic == Topic::Stain).expect("a stain lesson");
     assert!(lesson.taught(), "{lesson:?}");
     let late = run(&pit_level(15, "deaths: 1\nhint@40,9 stain: Splat time!\n"));
-    assert!(
-        late.errs.iter().any(|e| e.contains("must come before")),
-        "{:?}",
-        late.errs
-    );
+    assert!(late.errs.iter().any(|e| e.contains("must come before")), "{:?}", late.errs);
 }
 
 /// A grease chute: drop from the ledge (row 7) onto grease (row 12) that slides into spikes;
@@ -600,20 +414,13 @@ fn chute_level(header: &str, spikes: bool) -> Level {
     rows[7][8] = 'C';
     rows[9][57] = 'G';
     let rows: Vec<String> = rows.iter().map(|r| r.iter().collect()).collect();
-    level_of(
-        &format!("say@8,7: hey\ngate: grip 18,6 50,13\n{header}"),
-        &rows,
-        7,
-    )
+    level_of(&format!("say@8,7: hey\ngate: grip 18,6 50,13\n{header}"), &rows, 7)
 }
 
 /// Grease chutes: impassable without grip in every mode, passable with it; three deaths.
 #[test]
 fn validator_knows_grease_chutes() {
-    let chute = run(&chute_level(
-        "deaths: 3\nhint@18,7 grease grip: Grease! Careful!\n",
-        true,
-    ));
+    let chute = run(&chute_level("deaths: 3\nhint@18,7 grease grip: Grease! Careful!\n", true));
     assert!(chute.errs.is_empty(), "{:?}", chute.errs);
     assert_eq!(gates(&chute), [Gate::GreaseChute]);
     assert!(chute.gated_goal);
@@ -624,14 +431,7 @@ fn validator_knows_grease_chutes() {
     }
     // Grease that slides into a plain wall: nowhere to splat, the band never gets nervous.
     let no_spikes = run(&chute_level("deaths: 3\n", false));
-    assert!(
-        no_spikes
-            .errs
-            .iter()
-            .any(|e| e.contains("must end in spikes")),
-        "{:?}",
-        no_spikes.errs
-    );
+    assert!(no_spikes.errs.iter().any(|e| e.contains("must end in spikes")), "{:?}", no_spikes.errs);
 }
 
 /// A grid `w` x 14: solid floor rows 10..14, `P` at col 2, checkpoint at col 8, goal at the
@@ -683,26 +483,11 @@ fn validator_knows_glide_launches() {
     assert_eq!(gates(&good), [Gate::GlideLaunch]);
     assert!(good.gated_goal, "the only way across is the launch");
     let narrow = run(&glide_level(14, false));
-    assert!(
-        narrow
-            .errs
-            .iter()
-            .any(|e| e.contains("passable with FiredUp")),
-        "{:?}",
-        narrow.errs
-    );
+    assert!(narrow.errs.iter().any(|e| e.contains("passable with FiredUp")), "{:?}", narrow.errs);
     let wide = run(&glide_level(21, false));
-    assert!(
-        wide.errs.iter().any(|e| e.contains("goal")),
-        "too far even gliding: {:?}",
-        wide.errs
-    );
+    assert!(wide.errs.iter().any(|e| e.contains("goal")), "too far even gliding: {:?}", wide.errs);
     let cramped = run(&glide_level(17, true));
-    assert!(
-        cramped.errs.iter().any(|e| e.contains("goal")),
-        "no runway, no waltz: {:?}",
-        cramped.errs
-    );
+    assert!(cramped.errs.iter().any(|e| e.contains("goal")), "no runway, no waltz: {:?}", cramped.errs);
 }
 
 /// A platform's speed carries the jump off it: a gap a jump from the ledge can't clear is
@@ -714,10 +499,7 @@ fn validator_knows_platform_carry() {
     let l = glide_level(17, false);
     let (on, off) = map_of(&l);
     let top = std::f32::consts::PI * 8.0 * 16.0 / 4.5;
-    assert!(
-        on > 0.5 * top && on <= top + 0.01,
-        "the platform's speed over its path: {on} of {top}"
-    );
+    assert!(on > 0.5 * top && on <= top + 0.01, "the platform's speed over its path: {on} of {top}");
     assert_eq!(off, 0.0, "none on the ground");
     assert!(top < LAUNCH_MAX);
 }
@@ -750,38 +532,18 @@ fn validator_knows_fired_up_chasms() {
         assert_eq!(gates(&r), [Gate::ChainChasm], "{w}");
         assert!(r.gated_goal);
         assert_eq!(r.deaths, 0, "Han falling in isn't Nat's death");
-        let lesson = r
-            .lessons
-            .iter()
-            .find(|l| l.topic == Topic::Chain)
-            .expect("a chasm lesson");
+        let lesson = r.lessons.iter().find(|l| l.topic == Topic::Chain).expect("a chasm lesson");
         assert!(!lesson.taught(), "no hint yet");
     }
-    let taught = run(&with_sky(
-        chasm_level(16, &format!("{}hint@24,9 chain: Hop on!\n", mark(16))),
-        SKY,
-    ));
+    let taught = run(&with_sky(chasm_level(16, &format!("{}hint@24,9 chain: Hop on!\n", mark(16))), SKY));
     assert!(taught.errs.is_empty(), "{:?}", taught.errs);
-    assert!(
-        taught
-            .lessons
-            .iter()
-            .any(|l| l.topic == Topic::Chain && l.taught())
-    );
+    assert!(taught.lessons.iter().any(|l| l.topic == Topic::Chain && l.taught()));
     // Too wide even for a throw.
     let wide = run(&with_sky(chasm_level(21, &mark(21)), SKY));
-    assert!(
-        wide.errs.iter().any(|e| e.contains("goal")),
-        "{:?}",
-        wide.errs
-    );
+    assert!(wide.errs.iter().any(|e| e.contains("goal")), "{:?}", wide.errs);
     // Unmarked: an error (Han's overuse limit would apply in it).
     let bare = run(&with_sky(chasm_level(16, ""), SKY));
-    assert!(
-        bare.errs.iter().any(|e| e.contains("`gate: chain")),
-        "{:?}",
-        bare.errs
-    );
+    assert!(bare.errs.iter().any(|e| e.contains("`gate: chain")), "{:?}", bare.errs);
     // A checkpoint between the nugget line and the edge: a splat there loses the nuggets, so
     // the band may not be fired up at the edge, and nothing else crosses.
     let cp = floor_level(66, &format!("{}say@26,9: hi\n", mark(16)), |rows| {
@@ -797,19 +559,10 @@ fn validator_knows_fired_up_chasms() {
     });
     let cp = with_sky(cp, SKY);
     let cp = run(&cp);
-    assert!(
-        cp.errs.iter().any(|e| e.contains("goal")),
-        "{:?} {:?}",
-        cp.errs,
-        gates(&cp)
-    );
+    assert!(cp.errs.iter().any(|e| e.contains("goal")), "{:?} {:?}", cp.errs, gates(&cp));
     // Narrower than a chasm: a long gap (the fired-up band alone).
     let gap = run(&with_sky(chasm_level(11, "gate: gap 20,9 50,9\n"), SKY));
-    assert!(
-        !gates(&gap).contains(&Gate::ChainChasm),
-        "{:?}",
-        gates(&gap)
-    );
+    assert!(!gates(&gap).contains(&Gate::ChainChasm), "{:?}", gates(&gap));
 }
 
 /// Han's boost in a band zone, and chains of boosts: an 18-wide stain pit with a ledge 9 tiles
@@ -830,17 +583,12 @@ fn validator_proves_band_zone_boost_chains() {
     // Headroom over the ledge for the second boost (the top of the screen is a ceiling).
     let l = with_sky(l, 6);
     let r = run(&l);
-    assert!(
-        r.errs.is_empty(),
-        "the weak boost doesn't open the pit: {:?}",
-        r.errs
-    );
+    assert!(r.errs.is_empty(), "the weak boost doesn't open the pit: {:?}", r.errs);
     assert_eq!(gates(&r), [Gate::StainPit]);
     let full = Physics::new().with_weak_boost(nat_han_adventures::game::BOOST_SPEED);
     let errs = check_with(&l, &Options::default(), &full).errs;
     assert!(
-        errs.iter()
-            .any(|e| e.contains("stain pit") && e.contains("chain of boosts")),
+        errs.iter().any(|e| e.contains("stain pit") && e.contains("chain of boosts")),
         "a full boost to the ledge, then another: {errs:?}"
     );
     // (The ledge is what makes it a chain: without it, one full boost doesn't do it.)
@@ -855,22 +603,18 @@ fn validator_proves_band_zone_boost_chains() {
 #[test]
 fn validator_knows_buddy_raft_pools() {
     let level = |x: usize, width: usize, spikes_up: usize| {
-        floor_level(
-            x + width + 20,
-            &format!("gate: buddyraft {},9 {},10\n", x - 2, x + width + 1),
-            |rows| {
-                for c in x..x + width {
-                    for r in 10..14 {
-                        rows[r][c] = '~';
-                    }
-                    let s = 10 - spikes_up;
-                    rows[s][c] = 'v';
-                    for r in 0..s {
-                        rows[r][c] = '#';
-                    }
+        floor_level(x + width + 20, &format!("gate: buddyraft {},9 {},10\n", x - 2, x + width + 1), |rows| {
+            for c in x..x + width {
+                for r in 10..14 {
+                    rows[r][c] = '~';
                 }
-            },
-        )
+                let s = 10 - spikes_up;
+                rows[s][c] = 'v';
+                for r in 0..s {
+                    rows[r][c] = '#';
+                }
+            }
+        })
     };
     // Far from the checkpoint: Nat's own 12 s rafts (3-4 of them, a 6 s round trip each) sink
     // before the last walk across. Han's 3-tile rafts bridge it.
@@ -883,24 +627,12 @@ fn validator_knows_buddy_raft_pools() {
     }
     // Next to the checkpoint: Nat's own rafts do it (round trips of 2 s).
     let near = run(&level(20, 14, 3));
-    assert!(
-        near.errs
-            .iter()
-            .any(|e| e.contains("Nat's own rafts bridge it")),
-        "{:?}",
-        near.errs
-    );
+    assert!(near.errs.iter().any(|e| e.contains("Nat's own rafts bridge it")), "{:?}", near.errs);
     // Spikes higher up leave room for longer hops: fewer rafts, and fired up it's 2.
     let roomy = run(&level(60, 14, 4));
-    assert!(
-        roomy
-            .errs
-            .iter()
-            .any(|e| e.contains("Nat's own rafts bridge it (FiredUp)")),
-        "{:?}",
-        roomy.errs
-    );
+    assert!(roomy.errs.iter().any(|e| e.contains("Nat's own rafts bridge it (FiredUp)")), "{:?}", roomy.errs);
 }
+
 
 #[test]
 fn validator_and_game_share_the_ceiling() {
@@ -910,16 +642,8 @@ fn validator_and_game_share_the_ceiling() {
         let level = Level::parse(src).unwrap();
         let map = Map::new(&level);
         for c in 0..level.width as i32 {
-            assert!(
-                level.tile(c, -1).is_solid() && map.is_solid(c, -1),
-                "{}: open sky over col {c}",
-                level.name
-            );
-            assert!(
-                !map.standable((c, -1)),
-                "{}: a roof over col {c}",
-                level.name
-            );
+            assert!(level.tile(c, -1).is_solid() && map.is_solid(c, -1), "{}: open sky over col {c}", level.name);
+            assert!(!map.standable((c, -1)), "{}: a roof over col {c}", level.name);
         }
     }
 }

@@ -66,23 +66,15 @@ impl CaptureConfig {
             };
             let timeline = match var("NATHAN_CAPTURE_TIMELINE") {
                 Some(path) => {
-                    let text =
-                        std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
-                    Script::parse(&text)
-                        .map_err(|e| format!("{path}: {e}"))?
-                        .compile(fps)
+                    let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
+                    Script::parse(&text).map_err(|e| format!("{path}: {e}"))?.compile(fps)
                 }
                 None => {
                     let secs = match var("NATHAN_CAPTURE_SECS") {
-                        Some(v) => v
-                            .parse::<f64>()
-                            .map_err(|_| format!("NATHAN_CAPTURE_SECS={v:?}"))?,
+                        Some(v) => v.parse::<f64>().map_err(|_| format!("NATHAN_CAPTURE_SECS={v:?}"))?,
                         None => DEFAULT_SECS,
                     };
-                    Timeline {
-                        events: Vec::new(),
-                        frames: (secs * fps as f64).round() as u64,
-                    }
+                    Timeline { events: Vec::new(), frames: (secs * fps as f64).round() as u64 }
                 }
             };
             CaptureConfig::new(dir, fps, timeline)
@@ -91,10 +83,8 @@ impl CaptureConfig {
 
     /// Checks the frame rate; makes `dir`.
     pub fn new(dir: PathBuf, fps: u32, timeline: Timeline) -> Result<Self, String> {
-        frame_duration(fps)
-            .ok_or_else(|| format!("capture fps {fps} must divide {}", crate::game::FIXED_HZ))?;
-        samples_per_frame(CAPTURE_RATE, fps)
-            .ok_or_else(|| format!("capture fps {fps} must divide {CAPTURE_RATE}"))?;
+        frame_duration(fps).ok_or_else(|| format!("capture fps {fps} must divide {}", crate::game::FIXED_HZ))?;
+        samples_per_frame(CAPTURE_RATE, fps).ok_or_else(|| format!("capture fps {fps} must divide {CAPTURE_RATE}"))?;
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         Ok(CaptureConfig { dir, fps, timeline })
     }
@@ -126,10 +116,7 @@ pub fn capture_window(window: Window) -> Window {
 pub fn adjust_plugins(plugins: bevy::app::PluginGroupBuilder) -> bevy::app::PluginGroupBuilder {
     plugins
         .disable::<bevy::render::pipelined_rendering::PipelinedRenderingPlugin>()
-        .set(bevy::render::RenderPlugin {
-            synchronous_pipeline_compilation: true,
-            ..default()
-        })
+        .set(bevy::render::RenderPlugin { synchronous_pipeline_compilation: true, ..default() })
 }
 
 /// Add after the game's plugins (it overrides the time strategy; its `AudioCapture` makes the
@@ -140,29 +127,17 @@ impl Plugin for CapturePlugin {
     fn build(&self, app: &mut App) {
         let c = &self.0;
         let audio = AudioCapture::new(&c.dir.join("audio.wav"), c.fps).expect("capture audio file");
-        app.insert_resource(TimeUpdateStrategy::ManualDuration(
-            frame_duration(c.fps).unwrap(),
-        ))
-        .insert_resource(audio)
-        .insert_resource(TimelinePlayer::new(c.timeline.clone()))
-        .insert_resource(CaptureState::new(c))
-        .add_systems(First, collect_frame)
-        .add_systems(
-            PreUpdate,
-            timeline::play_timeline
-                .before(bevy::input::InputSystems)
-                .run_if(recording),
-        )
-        .add_systems(Last, request_frame.run_if(recording));
+        app.insert_resource(TimeUpdateStrategy::ManualDuration(frame_duration(c.fps).unwrap()))
+            .insert_resource(audio)
+            .insert_resource(TimelinePlayer::new(c.timeline.clone()))
+            .insert_resource(CaptureState::new(c))
+            .add_systems(First, collect_frame)
+            .add_systems(PreUpdate, timeline::play_timeline.before(bevy::input::InputSystems).run_if(recording))
+            .add_systems(Last, request_frame.run_if(recording));
         if std::env::var("NATHAN_LESSONS").as_deref() != Ok("1") {
             app.insert_resource(crate::ui::LessonsOff);
         }
-        info!(
-            "capture: {} frames at {} fps into {}",
-            c.timeline.frames,
-            c.fps,
-            c.dir.display()
-        );
+        info!("capture: {} frames at {} fps into {}", c.timeline.frames, c.fps, c.dir.display());
     }
 }
 
@@ -252,10 +227,7 @@ fn wait_for_screenshot(world: &mut World, entity: Entity) -> Option<Image> {
     let rx = rx.lock().ok()?;
     while start.elapsed() < FRAME_TIMEOUT {
         if let Some(d) = &device {
-            let _ = d.poll(PollType::Wait {
-                submission_index: None,
-                timeout: Some(Duration::from_millis(100)),
-            });
+            let _ = d.poll(PollType::Wait { submission_index: None, timeout: Some(Duration::from_millis(100)) });
         }
         match rx.recv_timeout(Duration::from_millis(5)) {
             Ok((e, image)) if e == entity => return Some(image),
@@ -301,11 +273,7 @@ fn finish(world: &mut World, ok: bool) {
         error!("capture: {e}");
     }
     info!("capture done: {}", summary.replace('\n', " "));
-    world.write_message(if ok {
-        AppExit::Success
-    } else {
-        AppExit::error()
-    });
+    world.write_message(if ok { AppExit::Success } else { AppExit::error() });
 }
 
 /// PNG encoding on worker threads, in any order (the names carry the frame numbers).
@@ -324,9 +292,7 @@ impl FrameWriter {
                 std::thread::spawn(move || {
                     let mut n = 0;
                     loop {
-                        let Ok((frame, image)) = rx.lock().unwrap().recv() else {
-                            return n;
-                        };
+                        let Ok((frame, image)) = rx.lock().unwrap().recv() else { return n };
                         let path = dir.join(format!("frame_{frame:06}.png"));
                         match image.try_into_dynamic() {
                             Ok(img) => match img.to_rgb8().save(&path) {
@@ -339,10 +305,7 @@ impl FrameWriter {
                 })
             })
             .collect();
-        FrameWriter {
-            tx: Some(tx),
-            workers,
-        }
+        FrameWriter { tx: Some(tx), workers }
     }
 
     fn send(&self, frame: u64, image: Image) {
@@ -382,9 +345,7 @@ mod tests {
             let mut app = App::new();
             app.add_plugins(MinimalPlugins)
                 .insert_resource(Time::<Fixed>::from_hz(crate::game::FIXED_HZ))
-                .insert_resource(TimeUpdateStrategy::ManualDuration(
-                    frame_duration(fps).unwrap(),
-                ))
+                .insert_resource(TimeUpdateStrategy::ManualDuration(frame_duration(fps).unwrap()))
                 .init_resource::<Steps>()
                 .add_systems(FixedUpdate, |mut s: ResMut<Steps>| s.0 += 1);
             app.update(); // the warm-up: time zero
@@ -394,11 +355,7 @@ mod tests {
                     std::thread::sleep(Duration::from_millis(3)); // a slow frame changes nothing
                 }
                 app.update();
-                assert_eq!(
-                    app.world().resource::<Steps>().0,
-                    frame * per,
-                    "fps {fps} frame {frame}"
-                );
+                assert_eq!(app.world().resource::<Steps>().0, frame * per, "fps {fps} frame {frame}");
             }
             let t = app.world().resource::<Time<Virtual>>().elapsed_secs_f64();
             assert!((t - 600.0 / fps as f64).abs() < 1e-5, "fps {fps}: {t}");

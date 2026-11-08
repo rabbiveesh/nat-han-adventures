@@ -16,15 +16,9 @@ use crate::state::AppState;
 pub fn plugin(app: &mut App) {
     use crate::game::sideb::SideB;
     // (Side B has its set list instead: `ui::sideb`.)
-    app.add_systems(
-        OnEnter(AppState::Playing),
-        spawn_strip.run_if(not(resource_exists::<SideB>)),
-    )
-    .add_systems(
-        Update,
-        update_strip.run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))),
-    )
-    .add_systems(Update, hide_strip.run_if(resource_exists::<SideB>));
+    app.add_systems(OnEnter(AppState::Playing), spawn_strip.run_if(not(resource_exists::<SideB>)))
+        .add_systems(Update, update_strip.run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))))
+        .add_systems(Update, hide_strip.run_if(resource_exists::<SideB>));
 }
 
 /// Where the strip's panel sits (virtual px from the top).
@@ -138,12 +132,7 @@ fn spawn_strip(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sp
                     if c == BandCounter::Sweat {
                         row.spawn((
                             Divider,
-                            Node {
-                                width: px(1.0),
-                                height: px(8.0),
-                                display: Display::None,
-                                ..default()
-                            },
+                            Node { width: px(1.0), height: px(8.0), display: Display::None, ..default() },
                             BackgroundColor(DARK_GOLD),
                         ));
                     }
@@ -165,66 +154,26 @@ fn spawn_strip(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sp
                     ))
                     .with_children(|cell| {
                         cell.spawn(icon(sprites, icon_of(c), 8.0, 8.0));
-                        cell.spawn((
-                            Pips(c),
-                            Node {
-                                column_gap: px(PIP_GAP),
-                                ..default()
-                            },
-                        ))
-                        .with_children(|p| {
+                        cell.spawn((Pips(c), Node { column_gap: px(PIP_GAP), ..default() })).with_children(|p| {
                             for k in 0..n {
-                                p.spawn((
-                                    Pip(c, k),
-                                    Node {
-                                        width: px(PIP),
-                                        height: px(PIP),
-                                        ..default()
-                                    },
-                                    BackgroundColor(DIM_PIP),
-                                ));
+                                p.spawn((Pip(c, k), Node { width: px(PIP), height: px(PIP), ..default() }, BackgroundColor(DIM_PIP)));
                             }
                         });
                         let w = n as f32 * (PIP + PIP_GAP) - PIP_GAP;
                         cell.spawn((
                             ModeTimer(c),
-                            Node {
-                                width: px(w),
-                                height: px(PIP),
-                                display: Display::None,
-                                ..default()
-                            },
+                            Node { width: px(w), height: px(PIP), display: Display::None, ..default() },
                             BackgroundColor(DIM_PIP),
                         ))
-                        .with_child((
-                            TimerFill(c),
-                            Node {
-                                width: percent(100.0),
-                                height: percent(100.0),
-                                ..default()
-                            },
-                            BackgroundColor(CREAM),
-                        ));
+                        .with_child((TimerFill(c), Node { width: percent(100.0), height: percent(100.0), ..default() }, BackgroundColor(CREAM)));
                     });
                 }
             });
             // The CALL row: one slot per counter, as wide as its cell.
-            root.spawn(Node {
-                padding: UiRect::horizontal(px(4.0)),
-                column_gap: px(3.0),
-                ..default()
-            })
-            .with_children(|row| {
+            root.spawn(Node { padding: UiRect::horizontal(px(4.0)), column_gap: px(3.0), ..default() }).with_children(|row| {
                 for c in BandCounter::ALL {
                     if c == BandCounter::Sweat {
-                        row.spawn((
-                            Divider,
-                            Node {
-                                width: px(1.0),
-                                display: Display::None,
-                                ..default()
-                            },
-                        ));
+                        row.spawn((Divider, Node { width: px(1.0), display: Display::None, ..default() }));
                     }
                     row.spawn((
                         CallSlot(c),
@@ -237,36 +186,14 @@ fn spawn_strip(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sp
                         },
                     ))
                     .with_children(|slot| {
-                        slot.spawn((
-                            CallMark(c),
-                            Visibility::Hidden,
-                            Node {
-                                flex_direction: FlexDirection::Column,
-                                align_items: AlignItems::Center,
-                                row_gap: px(1.0),
-                                ..default()
-                            },
-                        ))
-                        .with_children(|m| {
-                            // A small arrow pointing up at the counter, then the word.
-                            for w in [1.0, 3.0] {
-                                m.spawn((
-                                    Node {
-                                        width: px(w),
-                                        height: px(1.0),
-                                        ..default()
-                                    },
-                                    BackgroundColor(GOLD),
-                                ));
-                            }
-                            m.spawn((
-                                label(&font, "CALL", 8.0, GOLD),
-                                Node {
-                                    margin: UiRect::top(px(1.0)),
-                                    ..default()
-                                },
-                            ));
-                        });
+                        slot.spawn((CallMark(c), Visibility::Hidden, Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, row_gap: px(1.0), ..default() }))
+                            .with_children(|m| {
+                                // A small arrow pointing up at the counter, then the word.
+                                for w in [1.0, 3.0] {
+                                    m.spawn((Node { width: px(w), height: px(1.0), ..default() }, BackgroundColor(GOLD)));
+                                }
+                                m.spawn((label(&font, "CALL", 8.0, GOLD), Node { margin: UiRect::top(px(1.0)), ..default() }));
+                            });
                     });
                 }
             });
@@ -291,11 +218,7 @@ pub fn strip_view(meters: &crate::audio::director::Meters, progress: &Progress) 
         .and_then(|h| SUMMON_ORDER.iter().position(|&s| s == h))
         .map(|i| BandCounter::ALL[i])
         .filter(|c| shown[c.index()]);
-    StripView {
-        shown,
-        meters: m,
-        ready,
-    }
+    StripView { shown, meters: m, ready }
 }
 
 #[allow(clippy::type_complexity)]
@@ -303,42 +226,17 @@ fn update_strip(
     meters: Option<Res<BandMeters>>,
     progress: Res<Progress>,
     mut strip: Query<&mut Visibility, (With<Strip>, Without<CallMark>)>,
-    mut nodes: Query<
-        (
-            &mut Node,
-            Option<&Cell>,
-            Option<&CallSlot>,
-            Option<&Pips>,
-            Option<&ModeTimer>,
-            Has<Divider>,
-        ),
-        Without<TimerFill>,
-    >,
-    mut cells: Query<
-        (&Cell, &mut BackgroundColor, &mut BorderColor),
-        (Without<Pip>, Without<TimerFill>),
-    >,
+    mut nodes: Query<(&mut Node, Option<&Cell>, Option<&CallSlot>, Option<&Pips>, Option<&ModeTimer>, Has<Divider>), Without<TimerFill>>,
+    mut cells: Query<(&Cell, &mut BackgroundColor, &mut BorderColor), (Without<Pip>, Without<TimerFill>)>,
     mut pips: Query<(&Pip, &mut BackgroundColor), (Without<Cell>, Without<TimerFill>)>,
-    mut fills: Query<
-        (&TimerFill, &mut Node),
-        (
-            Without<Cell>,
-            Without<CallSlot>,
-            Without<Pips>,
-            Without<ModeTimer>,
-        ),
-    >,
+    mut fills: Query<(&TimerFill, &mut Node), (Without<Cell>, Without<CallSlot>, Without<Pips>, Without<ModeTimer>)>,
     mut marks: Query<(&CallMark, &mut Visibility), Without<Strip>>,
 ) {
     let m = meters.map(|m| m.0).unwrap_or_default();
     let v = strip_view(&m, &progress);
     let any = v.shown.iter().any(|&s| s);
     for mut vis in &mut strip {
-        vis.set_if_neq(if any {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        });
+        vis.set_if_neq(if any { Visibility::Inherited } else { Visibility::Hidden });
     }
     let display = |on: bool| if on { Display::Flex } else { Display::None };
     for (mut node, cell, slot, pips_node, timer, divider) in &mut nodes {
@@ -356,11 +254,7 @@ fn update_strip(
     for (Cell(c), mut bg, mut border) in &mut cells {
         let meter = v.meters[c.index()];
         let framed = v.ready == Some(*c) || meter.active.is_some();
-        let (fill, rim) = if framed {
-            (READY_FILL, GOLD)
-        } else {
-            (Color::NONE, Color::NONE)
-        };
+        let (fill, rim) = if framed { (READY_FILL, GOLD) } else { (Color::NONE, Color::NONE) };
         bg.set_if_neq(BackgroundColor(fill));
         border.set_if_neq(BorderColor::all(rim));
     }
@@ -381,11 +275,7 @@ fn update_strip(
         }
     }
     for (CallMark(c), mut vis) in &mut marks {
-        vis.set_if_neq(if v.ready == Some(*c) {
-            Visibility::Inherited
-        } else {
-            Visibility::Hidden
-        });
+        vis.set_if_neq(if v.ready == Some(*c) { Visibility::Inherited } else { Visibility::Hidden });
     }
 }
 

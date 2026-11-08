@@ -207,11 +207,7 @@ pub fn stat_bars(s: &director::PlayStats) -> [(&'static str, u32, u32); 5] {
         ("nuggets", s.stretch_nuggets, director::FIRED_UP_NUGGETS),
         ("waltz steps", s.stretch_waltzes, 1),
         ("mood deaths", s.mood_deaths, director::NERVOUS_DEATHS),
-        (
-            "slips since cp",
-            s.checkpoint_slips,
-            director::LAUGHING_SLIPS,
-        ),
+        ("slips since cp", s.checkpoint_slips, director::LAUGHING_SLIPS),
     ]
 }
 
@@ -229,12 +225,7 @@ pub struct AutoNat {
 
 impl Default for AutoNat {
     fn default() -> Self {
-        AutoNat {
-            on: false,
-            chaos: 0.5,
-            rng: 0x9E37_79B9_7F4A_7C15,
-            queue: Vec::new(),
-        }
+        AutoNat { on: false, chaos: 0.5, rng: 0x9E37_79B9_7F4A_7C15, queue: Vec::new() }
     }
 }
 
@@ -288,8 +279,7 @@ impl AutoNat {
                 true
             }
         });
-        self.queue
-            .extend(lands.into_iter().map(|t| (t, Button::Land)));
+        self.queue.extend(lands.into_iter().map(|t| (t, Button::Land)));
         out
     }
 }
@@ -319,14 +309,8 @@ mod tests {
         assert_eq!(press(&mut g, Button::Nugget), [Input::Nugget]);
         assert_eq!(press(&mut g, Button::Death), [Input::Death]);
         assert_eq!(press(&mut g, Button::Checkpoint), [Input::Checkpoint]);
-        assert_eq!(
-            press(&mut g, Button::Jump),
-            [Input::Jump { on_ground: true }]
-        );
-        assert!(matches!(
-            press(&mut g, Button::Land)[..],
-            [Input::Land { .. }]
-        ));
+        assert_eq!(press(&mut g, Button::Jump), [Input::Jump { on_ground: true }]);
+        assert!(matches!(press(&mut g, Button::Land)[..], [Input::Land { .. }]));
         assert_eq!(press(&mut g, Button::Restart), [Input::Restart]);
         // The waltz step goes through the director, which sends it on.
         assert!(press(&mut g, Button::WaltzStep).is_empty());
@@ -335,23 +319,11 @@ mod tests {
         assert!(out.contains(&Input::WaltzStep), "{out:?}");
         assert!(out.iter().any(|i| matches!(i, Input::SetStats(_))));
         // The restart re-ran the level start; the waltz step charged the waltz, and a call plays it.
-        assert!(
-            !out.contains(&Input::SetFilters(Filters {
-                harmony: Harmony::Waltz,
-                just_intonation: false
-            })),
-            "{out:?}"
-        );
+        assert!(!out.contains(&Input::SetFilters(Filters { harmony: Harmony::Waltz, just_intonation: false })), "{out:?}");
         assert!(press(&mut g, Button::Call).is_empty());
         let mut out = Vec::new();
         g.tick(0.016, &mut out);
-        assert!(
-            out.contains(&Input::SetFilters(Filters {
-                harmony: Harmony::Waltz,
-                just_intonation: false
-            })),
-            "{out:?}"
-        );
+        assert!(out.contains(&Input::SetFilters(Filters { harmony: Harmony::Waltz, just_intonation: false })), "{out:?}");
     }
 
     /// Five toots and a call summon Giant Steps, and a headless engine fed the inputs plays it
@@ -397,21 +369,13 @@ mod tests {
         run(&mut g, &mut engine, inputs, 3.0);
         assert!(engine.state().filters.just_intonation);
         assert_eq!(engine.state().tuning, Tuning::Medley);
-        assert_eq!(
-            g.decided.unwrap().0.harmony,
-            Harmony::Coltrane,
-            "the summon holds through deaths"
-        );
+        assert_eq!(g.decided.unwrap().0.harmony, Harmony::Coltrane, "the summon holds through deaths");
     }
 
     #[test]
     fn auto_nat_plays_like_its_dial() {
         let count = |chaos: f32| {
-            let mut a = AutoNat {
-                on: true,
-                chaos,
-                ..AutoNat::default()
-            };
+            let mut a = AutoNat { on: true, chaos, ..AutoNat::default() };
             let mut n = [0u32; Button::ALL.len()];
             for k in 0..60 * 60 {
                 for b in a.tick(k as f32 / 60.0, 1.0 / 60.0) {

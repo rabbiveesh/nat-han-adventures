@@ -124,12 +124,8 @@ impl Script {
                 "press" => Step::Press(keys(args).map_err(err)?),
                 "release" => Step::Release(keys(args).map_err(err)?),
                 "repeat" => {
-                    let [count] = args else {
-                        return Err(err("repeat takes a count".into()));
-                    };
-                    let c = count
-                        .parse::<u32>()
-                        .map_err(|_| err(format!("bad count {count:?}")))?;
+                    let [count] = args else { return Err(err("repeat takes a count".into())) };
+                    let c = count.parse::<u32>().map_err(|_| err(format!("bad count {count:?}")))?;
                     stack.push((c, Vec::new(), n));
                     continue;
                 }
@@ -148,23 +144,14 @@ impl Script {
             stack.last_mut().unwrap().1.push(step);
         }
         if stack.len() > 1 {
-            return Err(format!(
-                "line {}: repeat without end",
-                stack.last().unwrap().2
-            ));
+            return Err(format!("line {}: repeat without end", stack.last().unwrap().2));
         }
         Ok(Script(stack.pop().unwrap().1))
     }
 
     /// The key changes, frame by frame, at `fps`. A time `t` lands on frame `round(t * fps)`.
     pub fn compile(&self, fps: u32) -> Timeline {
-        let mut c = Compiler {
-            fps,
-            cursor: 0.0,
-            spans: Vec::new(),
-            latches: Vec::new(),
-            end: 0,
-        };
+        let mut c = Compiler { fps, cursor: 0.0, spans: Vec::new(), latches: Vec::new(), end: 0 };
         c.run(&self.0);
         let frame_of_cursor = c.frame(c.cursor);
         let total = c
@@ -175,12 +162,7 @@ impl Script {
             .chain([frame_of_cursor, c.end])
             .max()
             .unwrap_or(0);
-        let mut keys: Vec<KeyCode> = c
-            .spans
-            .iter()
-            .map(|s| s.0)
-            .chain(c.latches.iter().map(|l| l.1))
-            .collect();
+        let mut keys: Vec<KeyCode> = c.spans.iter().map(|s| s.0).chain(c.latches.iter().map(|l| l.1)).collect();
         keys.sort_by_key(|k| format!("{k:?}"));
         keys.dedup();
         let mut events = Vec::new();
@@ -191,24 +173,14 @@ impl Script {
                 for l in c.latches.iter().filter(|l| l.0 == frame && l.1 == k) {
                     latched[i] = l.2;
                 }
-                let held = latched[i]
-                    || c.spans
-                        .iter()
-                        .any(|s| s.0 == k && s.1 <= frame && frame < s.2);
+                let held = latched[i] || c.spans.iter().any(|s| s.0 == k && s.1 <= frame && frame < s.2);
                 if held != down[i] {
                     down[i] = held;
-                    events.push(KeyEvent {
-                        frame,
-                        key: k,
-                        pressed: held,
-                    });
+                    events.push(KeyEvent { frame, key: k, pressed: held });
                 }
             }
         }
-        Timeline {
-            events,
-            frames: total,
-        }
+        Timeline { events, frames: total }
     }
 }
 
@@ -262,12 +234,7 @@ impl Compiler {
 
 fn span(s: &str) -> Result<Span, String> {
     let bad = || format!("bad time {s:?} (try 4, 0.14s, 140ms, 3f)");
-    let num = |x: &str| {
-        x.parse::<f64>()
-            .ok()
-            .filter(|v| v.is_finite() && *v >= 0.0)
-            .ok_or_else(bad)
-    };
+    let num = |x: &str| x.parse::<f64>().ok().filter(|v| v.is_finite() && *v >= 0.0).ok_or_else(bad);
     if let Some(ms) = s.strip_suffix("ms") {
         Ok(Span::Secs(num(ms)? / 1000.0))
     } else if let Some(f) = s.strip_suffix('f') {
@@ -288,9 +255,7 @@ fn keys(args: &[&str]) -> Result<Vec<KeyCode>, String> {
     if args.is_empty() {
         return Err("expected keys".into());
     }
-    args.iter()
-        .map(|k| key_code(k).ok_or_else(|| format!("unknown key {k:?}")))
-        .collect()
+    args.iter().map(|k| key_code(k).ok_or_else(|| format!("unknown key {k:?}"))).collect()
 }
 
 /// Keys, then a duration (optional if `optional`).
@@ -321,12 +286,10 @@ pub fn key_code(name: &str) -> Option<KeyCode> {
         _ => {
             let letter = |c: char| -> Option<KeyCode> {
                 const L: [KeyCode; 26] = [
-                    KeyA, KeyB, KeyC, KeyD, KeyE, KeyF, KeyG, KeyH, KeyI, KeyJ, KeyK, KeyL, KeyM,
-                    KeyN, KeyO, KeyP, KeyQ, KeyR, KeyS, KeyT, KeyU, KeyV, KeyW, KeyX, KeyY, KeyZ,
+                    KeyA, KeyB, KeyC, KeyD, KeyE, KeyF, KeyG, KeyH, KeyI, KeyJ, KeyK, KeyL, KeyM, KeyN, KeyO, KeyP, KeyQ, KeyR,
+                    KeyS, KeyT, KeyU, KeyV, KeyW, KeyX, KeyY, KeyZ,
                 ];
-                const D: [KeyCode; 10] = [
-                    Digit0, Digit1, Digit2, Digit3, Digit4, Digit5, Digit6, Digit7, Digit8, Digit9,
-                ];
+                const D: [KeyCode; 10] = [Digit0, Digit1, Digit2, Digit3, Digit4, Digit5, Digit6, Digit7, Digit8, Digit9];
                 match c {
                     'A'..='Z' => Some(L[c as usize - 'A' as usize]),
                     '0'..='9' => Some(D[c as usize - '0' as usize]),
@@ -340,11 +303,7 @@ pub fn key_code(name: &str) -> Option<KeyCode> {
                     _ => None,
                 }
             };
-            if let Some(c) = name
-                .strip_prefix("Key")
-                .and_then(one)
-                .filter(char::is_ascii_uppercase)
-            {
+            if let Some(c) = name.strip_prefix("Key").and_then(one).filter(char::is_ascii_uppercase) {
                 return letter(c);
             }
             if let Some(c) = name.strip_prefix("Digit").and_then(one) {
@@ -374,11 +333,7 @@ pub struct TimelinePlayer {
 
 impl TimelinePlayer {
     pub fn new(timeline: Timeline) -> Self {
-        TimelinePlayer {
-            timeline,
-            frame: 0,
-            next: 0,
-        }
+        TimelinePlayer { timeline, frame: 0, next: 0 }
     }
 
     /// Every frame of it has played.
@@ -402,11 +357,7 @@ pub fn keyboard_input(key: KeyCode, pressed: bool, window: Entity) -> KeyboardIn
     KeyboardInput {
         key_code: key,
         logical_key,
-        state: if pressed {
-            ButtonState::Pressed
-        } else {
-            ButtonState::Released
-        },
+        state: if pressed { ButtonState::Pressed } else { ButtonState::Released },
         text: None,
         repeat: false,
         window,
@@ -434,11 +385,7 @@ mod tests {
     use KeyCode::*;
 
     fn ev(frame: u64, key: KeyCode, pressed: bool) -> KeyEvent {
-        KeyEvent {
-            frame,
-            key,
-            pressed,
-        }
+        KeyEvent { frame, key, pressed }
     }
 
     #[test]
@@ -496,62 +443,32 @@ mod tests {
     #[test]
     fn compiles_to_frames() {
         // 30 fps: 4 s = frame 120; 140 ms = 4.2 frames -> released on frame 124.
-        let t = Script::parse("wait 4\nhold Space 140ms\nwait 120ms\nhold Space 140ms\nwait 1")
-            .unwrap()
-            .compile(30);
-        assert_eq!(
-            t.events,
-            vec![
-                ev(120, Space, true),
-                ev(124, Space, false),
-                ev(128, Space, true),
-                ev(132, Space, false)
-            ]
-        );
+        let t = Script::parse("wait 4\nhold Space 140ms\nwait 120ms\nhold Space 140ms\nwait 1").unwrap().compile(30);
+        assert_eq!(t.events, vec![ev(120, Space, true), ev(124, Space, false), ev(128, Space, true), ev(132, Space, false)]);
         // 4 + 0.14 + 0.12 + 0.14 + 1 = 5.4 s.
         assert_eq!(t.frames, 162);
         assert!((t.duration(30).as_secs_f64() - 5.4).abs() < 1e-9);
         // The same at 60 fps.
-        let t = Script::parse("wait 4\nhold Space 140ms")
-            .unwrap()
-            .compile(60);
+        let t = Script::parse("wait 4\nhold Space 140ms").unwrap().compile(60);
         assert_eq!(t.events, vec![ev(240, Space, true), ev(248, Space, false)]);
     }
 
     #[test]
     fn back_to_back_holds_keep_the_key_down() {
-        let t = Script::parse("repeat 2\nhold Right Space 300ms\nhold Right 450ms\nend")
-            .unwrap()
-            .compile(30);
+        let t = Script::parse("repeat 2\nhold Right Space 300ms\nhold Right 450ms\nend").unwrap().compile(30);
         assert_eq!(
             t.events,
-            vec![
-                ev(0, ArrowRight, true),
-                ev(0, Space, true),
-                ev(9, Space, false),
-                ev(23, Space, true),
-                ev(32, Space, false),
-                ev(45, ArrowRight, false)
-            ]
+            vec![ev(0, ArrowRight, true), ev(0, Space, true), ev(9, Space, false), ev(23, Space, true), ev(32, Space, false), ev(45, ArrowRight, false)]
         );
         assert_eq!(t.frames, 45);
     }
 
     #[test]
     fn short_taps_last_a_frame_and_latches_hold() {
-        let t = Script::parse("tap Space 1ms\npress Left\nwait 1\nrelease Left\ntap R 2f")
-            .unwrap()
-            .compile(30);
+        let t = Script::parse("tap Space 1ms\npress Left\nwait 1\nrelease Left\ntap R 2f").unwrap().compile(30);
         assert_eq!(
             t.events,
-            vec![
-                ev(0, ArrowLeft, true),
-                ev(0, Space, true),
-                ev(1, Space, false),
-                ev(30, ArrowLeft, false),
-                ev(30, KeyR, true),
-                ev(32, KeyR, false)
-            ]
+            vec![ev(0, ArrowLeft, true), ev(0, Space, true), ev(1, Space, false), ev(30, ArrowLeft, false), ev(30, KeyR, true), ev(32, KeyR, false)]
         );
         assert_eq!(t.frames, 32);
     }
@@ -560,30 +477,15 @@ mod tests {
     fn the_player_sends_each_frames_keys() {
         let mut app = App::new();
         app.add_plugins((MinimalPlugins, bevy::input::InputPlugin))
-            .insert_resource(TimelinePlayer::new(
-                Script::parse("wait 2f\nhold Space 2f").unwrap().compile(30),
-            ))
+            .insert_resource(TimelinePlayer::new(Script::parse("wait 2f\nhold Space 2f").unwrap().compile(30)))
             .add_systems(PreUpdate, play_timeline.before(bevy::input::InputSystems));
         let mut seen = Vec::new();
         for _ in 0..5 {
             app.update();
             let keys = app.world().resource::<ButtonInput<KeyCode>>();
-            seen.push((
-                keys.just_pressed(Space),
-                keys.pressed(Space),
-                keys.just_released(Space),
-            ));
+            seen.push((keys.just_pressed(Space), keys.pressed(Space), keys.just_released(Space)));
         }
-        assert_eq!(
-            seen,
-            vec![
-                (false, false, false),
-                (false, false, false),
-                (true, true, false),
-                (false, true, false),
-                (false, false, true)
-            ]
-        );
+        assert_eq!(seen, vec![(false, false, false), (false, false, false), (true, true, false), (false, true, false), (false, false, true)]);
         assert!(app.world().resource::<TimelinePlayer>().done());
     }
 }

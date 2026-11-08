@@ -43,9 +43,7 @@ pub fn plugin(app: &mut App) {
         app.insert_resource(LessonsOff);
     }
     app.init_resource::<Lessons>()
-        .add_systems(OnExit(AppState::Playing), |mut l: ResMut<Lessons>| {
-            *l = Lessons::default()
-        })
+        .add_systems(OnExit(AppState::Playing), |mut l: ResMut<Lessons>| *l = Lessons::default())
         .add_systems(
             Update,
             (
@@ -109,11 +107,7 @@ impl Lessons {
             }
         }
         if progress.taught_call {
-            let first = BandCounter::ALL[..3]
-                .iter()
-                .copied()
-                .find(|c| progress.taught[c.index()])
-                .unwrap_or(BandCounter::Horn);
+            let first = BandCounter::ALL[..3].iter().copied().find(|c| progress.taught[c.index()]).unwrap_or(BandCounter::Horn);
             self.queue.push_back(Lesson::Call(first));
         }
         for t in HanTrick::ALL {
@@ -174,10 +168,7 @@ pub fn cards_of(topics: &[Topic]) -> Vec<Lesson> {
 }
 
 fn counter_of_harmony(h: Harmony) -> Option<BandCounter> {
-    SUMMON_ORDER
-        .iter()
-        .position(|&s| s == h)
-        .map(|i| BandCounter::ALL[i])
+    SUMMON_ORDER.iter().position(|&s| s == h).map(|i| BandCounter::ALL[i])
 }
 
 /// Han's tricks off his head: one idea (hop on, jump; the band decides how big), so one line
@@ -320,11 +311,7 @@ fn queue_lessons(
             }
         }
     }
-    let heard: Vec<Topic> = hints
-        .iter()
-        .filter(|h| h.said)
-        .flat_map(|h| h.topics.iter().copied())
-        .collect();
+    let heard: Vec<Topic> = hints.iter().filter(|h| h.said).flat_map(|h| h.topics.iter().copied()).collect();
     let m = meters.map(|m| m.0).unwrap_or_default();
     // (Only touch the save when something's due: it's written on every change.)
     let mut p = progress.bypass_change_detection().clone();
@@ -420,37 +407,19 @@ fn dismiss(
 /// A card's title and lines.
 pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
     let (title, lines): (&str, Vec<String>) = match l {
-        Lesson::Counter(BandCounter::Horn) => (
-            "NEW: THE HORN",
-            vec![
-                "EVERY TOOT FILLS A PIP.".into(),
-                "FILL ALL 5 TO CHARGE".into(),
-                "GIANT STEPS.".into(),
-            ],
-        ),
+        Lesson::Counter(BandCounter::Horn) => {
+            ("NEW: THE HORN", vec!["EVERY TOOT FILLS A PIP.".into(), "FILL ALL 5 TO CHARGE".into(), "GIANT STEPS.".into()])
+        }
         Lesson::Counter(BandCounter::Nugget) => (
             "NEW: THE NUGGET",
-            vec![
-                "GRAB 4 NUGGETS QUICK".into(),
-                "TO CHARGE THE".into(),
-                "FIRED-UP BAND.".into(),
-            ],
+            vec!["GRAB 4 NUGGETS QUICK".into(), "TO CHARGE THE".into(), "FIRED-UP BAND.".into()],
         ),
-        Lesson::Counter(BandCounter::Note) => (
-            "NEW: THE NOTE",
-            vec![
-                "HOP, HOP, HOP ON EVEN".into(),
-                "BEATS TO CHARGE".into(),
-                "THE WALTZ.".into(),
-            ],
-        ),
+        Lesson::Counter(BandCounter::Note) => {
+            ("NEW: THE NOTE", vec!["HOP, HOP, HOP ON EVEN".into(), "BEATS TO CHARGE".into(), "THE WALTZ.".into()])
+        }
         Lesson::Counter(BandCounter::Sweat) => (
             "NEW: THE SWEAT DROP",
-            vec![
-                "EVERY SPLAT ADDS A DROP.".into(),
-                "3 AND THE BAND GETS NERVOUS:".into(),
-                "GRIPPY FEET.".into(),
-            ],
+            vec!["EVERY SPLAT ADDS A DROP.".into(), "3 AND THE BAND GETS NERVOUS:".into(), "GRIPPY FEET.".into()],
         ),
         Lesson::Call(c) => {
             let (mode, does) = match c {
@@ -458,55 +427,28 @@ pub fn card_text(l: Lesson, touch: bool) -> (String, Vec<String>) {
                 BandCounter::Note => ("A WALTZ", "AND YOU JUMP HIGH ON ONE."),
                 _ => ("GIANT STEPS", "AND GRAVITY GOES LOW."),
             };
-            let call = if touch {
-                format!("TAP THE {} TO CALL THE BAND.", c.name().to_uppercase())
-            } else {
-                "PRESS DOWN TO CALL THE BAND.".into()
-            };
-            (
-                "CHARGED!",
-                vec![call, format!("THEY PLAY {mode}"), does.into()],
-            )
+            let call = if touch { format!("TAP THE {} TO CALL THE BAND.", c.name().to_uppercase()) } else { "PRESS DOWN TO CALL THE BAND.".into() };
+            ("CHARGED!", vec![call, format!("THEY PLAY {mode}"), does.into()])
         }
         Lesson::Trick(HanTrick::Throw) => (
             "HAN'S TRICK: THE THROW",
-            vec![
-                "BAND FIRED UP? HAN RUNS FAST.".into(),
-                "HOP ON HIS HEAD AND JUMP:".into(),
-                "HE THROWS YOU FAR!".into(),
-            ],
+            vec!["BAND FIRED UP? HAN RUNS FAST.".into(), "HOP ON HIS HEAD AND JUMP:".into(), "HE THROWS YOU FAR!".into()],
         ),
         Lesson::Trick(HanTrick::Mega) => (
             "HAN'S TRICK: THE MEGA BOOST",
-            vec![
-                "GIANT STEPS PLAYING? HOP ON".into(),
-                "HAN'S HEAD AND JUMP: WAY UP!".into(),
-                "TOOT AT THE TOP.".into(),
-            ],
+            vec!["GIANT STEPS PLAYING? HOP ON".into(), "HAN'S HEAD AND JUMP: WAY UP!".into(), "TOOT AT THE TOP.".into()],
         ),
         Lesson::Trick(HanTrick::Cling) => (
             "HAN'S TRICK: THE WALL CLING",
-            vec![
-                "BAND NERVOUS? IN A SHAFT".into(),
-                "HAN CLIMBS THE WALL. HOP ON".into(),
-                "HIS HEAD AND JUMP: UP!".into(),
-            ],
+            vec!["BAND NERVOUS? IN A SHAFT".into(), "HAN CLIMBS THE WALL. HOP ON".into(), "HIS HEAD AND JUMP: UP!".into()],
         ),
         Lesson::Trick(HanTrick::Trapeze) => (
             "HAN'S TRICK: THE TRAPEZE",
-            vec![
-                "WALTZING? HAN SWINGS FROM".into(),
-                "THE CEILING. RIDE HIS CAP,".into(),
-                "JUMP ON ONE: FLY FAR!".into(),
-            ],
+            vec!["WALTZING? HAN SWINGS FROM".into(), "THE CEILING. RIDE HIS CAP,".into(), "JUMP ON ONE: FLY FAR!".into()],
         ),
         Lesson::Trick(HanTrick::Raft) => (
             "HAN'S TRICK: THE POOL FLOAT",
-            vec![
-                "RUN UP TO A POOL: HAN DIVES".into(),
-                "IN. HOP ON, LEFT/RIGHT ROW.".into(),
-                "TEENY HOPS UNDER SPIKES!".into(),
-            ],
+            vec!["RUN UP TO A POOL: HAN DIVES".into(), "IN. HOP ON, LEFT/RIGHT ROW.".into(), "TEENY HOPS UNDER SPIKES!".into()],
         ),
         Lesson::Tip(t) => tip_text(t, touch),
     };
@@ -518,73 +460,24 @@ fn tip_text(t: Topic, touch: bool) -> (&'static str, Vec<String>) {
     let jump = if touch { "TAP JUMP" } else { "JUMP" };
     let lines: Vec<String> = match t {
         Topic::Toot => {
-            return (
-                "NEW: THE TOOT",
-                vec![
-                    format!("{jump}, THEN {jump} AGAIN"),
-                    "IN MIDAIR: A TOOT!".into(),
-                ],
-            );
+            return ("NEW: THE TOOT", vec![format!("{jump}, THEN {jump} AGAIN"), "IN MIDAIR: A TOOT!".into()]);
         }
-        Topic::OneWay => vec![
-            "THIN SHELVES: JUMP UP".into(),
-            "THROUGH THEM, LAND ON TOP.".into(),
-        ],
-        Topic::Platform => vec![
-            "HOP ON A FLOATING ROLL:".into(),
-            "IT CARRIES YOU. JUMP OFF".into(),
-            "AND KEEP ITS SPEED.".into(),
-        ],
-        Topic::Fly => vec![
-            "FLIES HOVER UP THERE.".into(),
-            "LITTLE HOPS UNDER THEM!".into(),
-        ],
-        Topic::Spray => vec![
-            "A CAN PUFFS ON A BEAT.".into(),
-            "WAIT TILL THE PSSHT STOPS,".into(),
-            "THEN GO!".into(),
-        ],
-        Topic::Stain => vec![
-            "TOO WIDE TO JUMP? SPLAT".into(),
-            "ON THE SPIKES: YOUR STAIN".into(),
-            "IS A STEP!".into(),
-        ],
-        Topic::Grease => vec![
-            "ON GREASE YOU CAN'T STOP".into(),
-            "OR JUMP. SPLAT A FEW AND".into(),
-            "THE BAND GETS NERVOUS.".into(),
-        ],
+        Topic::OneWay => vec!["THIN SHELVES: JUMP UP".into(), "THROUGH THEM, LAND ON TOP.".into()],
+        Topic::Platform => vec!["HOP ON A FLOATING ROLL:".into(), "IT CARRIES YOU. JUMP OFF".into(), "AND KEEP ITS SPEED.".into()],
+        Topic::Fly => vec!["FLIES HOVER UP THERE.".into(), "LITTLE HOPS UNDER THEM!".into()],
+        Topic::Spray => vec!["A CAN PUFFS ON A BEAT.".into(), "WAIT TILL THE PSSHT STOPS,".into(), "THEN GO!".into()],
+        Topic::Stain => vec!["TOO WIDE TO JUMP? SPLAT".into(), "ON THE SPIKES: YOUR STAIN".into(), "IS A STEP!".into()],
+        Topic::Grease => vec!["ON GREASE YOU CAN'T STOP".into(), "OR JUMP. SPLAT A FEW AND".into(), "THE BAND GETS NERVOUS.".into()],
         Topic::Brick => vec!["JUMP UP INTO A BAR OF".into(), "SOAP: IT SMASHES!".into()],
-        Topic::Crumble => vec![
-            "SOGGY CARDBOARD SAGS".into(),
-            "UNDER YOU. KEEP MOVING!".into(),
-        ],
+        Topic::Crumble => vec!["SOGGY CARDBOARD SAGS".into(), "UNDER YOU. KEEP MOVING!".into()],
         Topic::Spring => vec!["LAND ON A CUSHION:".into(), "PFFFT! UP YOU GO!".into()],
-        Topic::Crusher => vec![
-            "A CRUSHER SLAMS, THEN".into(),
-            "CREEPS BACK. GO THEN!".into(),
-        ],
-        Topic::Belt => vec![
-            "A CONVEYOR CARRIES YOU.".into(),
-            "JUMP OFF IT FOR A BOOST!".into(),
-        ],
-        Topic::Fan => vec![
-            "A FAN BLOWS YOU UP.".into(),
-            "FLOAT, THEN STEER OFF!".into(),
-        ],
-        Topic::Bumper => vec![
-            "BUMP A RUBBER DUCK".into(),
-            "AND BOING! IT BATS BACK!".into(),
-        ],
+        Topic::Crusher => vec!["A CRUSHER SLAMS, THEN".into(), "CREEPS BACK. GO THEN!".into()],
+        Topic::Belt => vec!["A CONVEYOR CARRIES YOU.".into(), "JUMP OFF IT FOR A BOOST!".into()],
+        Topic::Fan => vec!["A FAN BLOWS YOU UP.".into(), "FLOAT, THEN STEER OFF!".into()],
+        Topic::Bumper => vec!["BUMP A RUBBER DUCK".into(), "AND BOING! IT BATS BACK!".into()],
         Topic::Beat => vec!["RED AND BLUE BLOCKS".into(), "SWAP ON EVERY BAR!".into()],
-        Topic::Wind => vec![
-            "FANS ON WALLS PUSH YOU.".into(),
-            "ON CEILINGS? NO RISING!".into(),
-        ],
-        Topic::Fling => vec![
-            "CUSHIONS ON WALLS FLING".into(),
-            "YOU. ON CEILINGS: BONK!".into(),
-        ],
+        Topic::Wind => vec!["FANS ON WALLS PUSH YOU.".into(), "ON CEILINGS? NO RISING!".into()],
+        Topic::Fling => vec!["CUSHIONS ON WALLS FLING".into(), "YOU. ON CEILINGS: BONK!".into()],
         // (The others have a counter or a trick card; a tip for them is never due.)
         _ => vec![],
     };
@@ -635,40 +528,20 @@ fn draw_card(
             Name::new("LessonCard"),
             LessonCard,
             DespawnOnExit(AppState::Playing),
-            Node {
-                justify_content: JustifyContent::Start,
-                padding: UiRect::top(px(48.0)),
-                ..fullscreen()
-            },
+            Node { justify_content: JustifyContent::Start, padding: UiRect::top(px(48.0)), ..fullscreen() },
             BackgroundColor(OVERLAY),
             // Over the game and the HUD, under the strip (it stays lit).
             GlobalZIndex(30),
         ))
         .with_children(|root| {
-            root.spawn(panel(Node {
-                padding: UiRect::axes(px(12.0), px(8.0)),
-                ..column(8.0, 4.0)
-            }))
-            .with_children(|p| {
+            root.spawn(panel(Node { padding: UiRect::axes(px(12.0), px(8.0)), ..column(8.0, 4.0) })).with_children(|p| {
                 p.spawn(label(f, title, 8.0, GOLD));
                 for line in lines {
                     p.spawn(label(f, line, 8.0, CREAM));
                 }
                 p.spawn((
-                    label(
-                        f,
-                        if touch {
-                            "- TAP JUMP -"
-                        } else {
-                            "- PRESS JUMP -"
-                        },
-                        8.0,
-                        GOLD,
-                    ),
-                    Node {
-                        margin: UiRect::top(px(4.0)),
-                        ..default()
-                    },
+                    label(f, if touch { "- TAP JUMP -" } else { "- PRESS JUMP -" }, 8.0, GOLD),
+                    Node { margin: UiRect::top(px(4.0)), ..default() },
                 ));
             });
         });
@@ -813,20 +686,12 @@ mod tests {
     fn lessons_come_once_per_save() {
         let mut p = Progress::default();
         let none = Meters::default();
-        assert_eq!(
-            due(&mut p, &[Topic::Toot, Topic::Giant], &none),
-            [Lesson::Counter(BandCounter::Horn), Lesson::Tip(Topic::Toot)]
-        );
+        assert_eq!(due(&mut p, &[Topic::Toot, Topic::Giant], &none), [Lesson::Counter(BandCounter::Horn), Lesson::Tip(Topic::Toot)]);
         assert_eq!(due(&mut p, &[Topic::Giant, Topic::Toot], &none), [], "once");
         // A counter that fills before its hint stays untaught (level 1's nuggets don't teach
         // the nugget counter); the first full counter that shows gets the call.
         let mut full = Meters::default();
-        full.summons[1] = Meter {
-            lit: 4,
-            of: 4,
-            full: true,
-            active: None,
-        };
+        full.summons[1] = Meter { lit: 4, of: 4, full: true, active: None };
         full.ready = Some(Harmony::Quartal);
         assert_eq!(due(&mut p, &[], &full), []);
         assert!(!p.taught[BandCounter::Nugget.index()]);
@@ -903,25 +768,13 @@ mod tests {
             let _ = due(&mut p, &[t], &Meters::default());
             assert_ne!(p, Progress::default(), "{t:?} teaches nothing");
         }
-        assert_eq!(
-            cards_of(&[Topic::Grease, Topic::Grip]),
-            [
-                Lesson::Tip(Topic::Grease),
-                Lesson::Counter(BandCounter::Sweat)
-            ]
-        );
-        assert_eq!(
-            cards_of(&[Topic::BuddyRaft]),
-            [Lesson::Trick(HanTrick::Raft)]
-        );
+        assert_eq!(cards_of(&[Topic::Grease, Topic::Grip]), [Lesson::Tip(Topic::Grease), Lesson::Counter(BandCounter::Sweat)]);
+        assert_eq!(cards_of(&[Topic::BuddyRaft]), [Lesson::Trick(HanTrick::Raft)]);
     }
 
     #[test]
     fn cards_fit_the_screen() {
-        for l in BandCounter::ALL
-            .map(Lesson::Counter)
-            .into_iter()
-            .chain(BandCounter::ALL[..3].iter().map(|&c| Lesson::Call(c)))
+        for l in BandCounter::ALL.map(Lesson::Counter).into_iter().chain(BandCounter::ALL[..3].iter().map(|&c| Lesson::Call(c)))
             .chain(HanTrick::ALL.map(Lesson::Trick))
             .chain(Topic::ALL.into_iter().filter_map(tip_of).map(Lesson::Tip))
         {

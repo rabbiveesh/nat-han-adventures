@@ -15,32 +15,17 @@ fn main() {
         ..default()
     };
     #[cfg(feature = "capture")]
-    let window = if capture.is_some() {
-        nat_han_adventures::capture::capture_window(window)
-    } else {
-        window
-    };
+    let window = if capture.is_some() { nat_han_adventures::capture::capture_window(window) } else { window };
     let plugins = DefaultPlugins
-        .set(WindowPlugin {
-            primary_window: Some(window),
-            ..default()
-        })
+        .set(WindowPlugin { primary_window: Some(window), ..default() })
         // Chunky pixels: never blur our 16x16 sprites.
         .set(ImagePlugin::default_nearest());
     #[cfg(feature = "capture")]
-    let plugins = if capture.is_some() {
-        nat_han_adventures::capture::adjust_plugins(plugins)
-    } else {
-        plugins
-    };
+    let plugins = if capture.is_some() { nat_han_adventures::capture::adjust_plugins(plugins) } else { plugins };
 
     let mut app = App::new();
-    app.add_plugins((
-        plugins,
-        nat_han_adventures::gameplay,
-        nat_han_adventures::presentation,
-    ))
-    .insert_resource(ClearColor(Color::srgb_u8(0x1a, 0x12, 0x0c)));
+    app.add_plugins((plugins, nat_han_adventures::gameplay, nat_han_adventures::presentation))
+        .insert_resource(ClearColor(Color::srgb_u8(0x1a, 0x12, 0x0c)));
 
     // No remote control while capturing: the timeline is the only input.
     #[cfg(feature = "capture")]

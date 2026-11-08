@@ -31,14 +31,10 @@ pub struct StoryAssist {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum StoryEvent {
-    LevelStarted {
-        expected_deaths_per_segment: u32,
-    },
+    LevelStarted { expected_deaths_per_segment: u32 },
     Died,
     /// Idled this long right after a death.
-    IdleAfterDeath {
-        secs: f32,
-    },
+    IdleAfterDeath { secs: f32 },
     CheckpointReached,
     LevelRestarted,
     LevelCompleted,
@@ -47,10 +43,7 @@ pub enum StoryEvent {
 impl StoryAssist {
     /// Start from an existing dial (e.g. the free-play profile's, or the saved one).
     pub fn new(assists: f32) -> Self {
-        StoryAssist {
-            assists: assists.clamp(0.0, 1.0),
-            ..Default::default()
-        }
+        StoryAssist { assists: assists.clamp(0.0, 1.0), ..Default::default() }
     }
 
     pub fn levers(&self) -> AssistLevers {
@@ -60,14 +53,9 @@ impl StoryAssist {
 
 /// The next story-assist state after `event`. Pure, like [`super::reduce`].
 pub fn reduce_story(state: StoryAssist, event: StoryEvent) -> StoryAssist {
-    let s = StoryAssist {
-        encourage: None,
-        ..state
-    };
+    let s = StoryAssist { encourage: None, ..state };
     match event {
-        StoryEvent::LevelStarted {
-            expected_deaths_per_segment,
-        } => StoryAssist {
+        StoryEvent::LevelStarted { expected_deaths_per_segment } => StoryAssist {
             expected_deaths: expected_deaths_per_segment,
             segment_deaths: 0,
             restarts: 0,
@@ -78,30 +66,17 @@ pub fn reduce_story(state: StoryAssist, event: StoryEvent) -> StoryAssist {
             let segment_deaths = s.segment_deaths + 1;
             let excess = segment_deaths.saturating_sub(s.expected_deaths);
             let rise = if excess > 0 { STORY_RISE } else { 0.0 };
-            let s = StoryAssist {
-                segment_deaths,
-                assists: (s.assists + rise).min(1.0),
-                ..s
-            };
+            let s = StoryAssist { segment_deaths, assists: (s.assists + rise).min(1.0), ..s };
             frustrate(s, frustration::detect(excess, 0.0, 0))
         }
         StoryEvent::IdleAfterDeath { secs } => frustrate(s, frustration::detect(0, secs, 0)),
         StoryEvent::LevelRestarted => {
             let restarts = s.restarts + 1;
-            let s = StoryAssist {
-                restarts,
-                segment_deaths: 0,
-                segment_frustrated: false,
-                ..s
-            };
+            let s = StoryAssist { restarts, segment_deaths: 0, segment_frustrated: false, ..s };
             frustrate(s, frustration::detect(0, 0.0, restarts))
         }
         StoryEvent::CheckpointReached | StoryEvent::LevelCompleted => {
-            let fade = if s.segment_deaths <= s.expected_deaths {
-                STORY_FADE
-            } else {
-                0.0
-            };
+            let fade = if s.segment_deaths <= s.expected_deaths { STORY_FADE } else { 0.0 };
             StoryAssist {
                 assists: (s.assists - fade).max(0.0),
                 segment_deaths: 0,

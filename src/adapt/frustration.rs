@@ -24,11 +24,7 @@ pub const RESTARTS: u32 = 3;
 
 /// The first signal that fires, if any. `idle_after_death_secs` is the longest stretch with no
 /// input right after a death.
-pub fn detect(
-    excess_deaths: u32,
-    idle_after_death_secs: f32,
-    restarts: u32,
-) -> Option<FrustrationSignal> {
+pub fn detect(excess_deaths: u32, idle_after_death_secs: f32, restarts: u32) -> Option<FrustrationSignal> {
     if excess_deaths >= EXCESS_DEATHS {
         Some(FrustrationSignal::ManyDeaths)
     } else if idle_after_death_secs > IDLE_SECS {

@@ -14,30 +14,16 @@ use crate::events::PlaySfx;
 use crate::game::LevelRun;
 use crate::input::Action;
 use crate::state::AppState;
-use crate::ui::{
-    Blink, UiFont, column, format_time, fullscreen, icon, label, nav, palette::*, panel, sfx,
-};
+use crate::ui::{Blink, UiFont, column, format_time, fullscreen, icon, label, nav, palette::*, panel, sfx};
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(
-        OnEnter(AppState::FreePlaySetup),
-        (init_setup, spawn_setup).chain(),
-    )
-    .add_systems(
-        Update,
-        (setup_input, refresh_setup)
-            .chain()
-            .run_if(in_state(AppState::FreePlaySetup)),
-    )
-    .add_systems(
-        OnEnter(AppState::LevelComplete),
-        spawn_results.run_if(resource_exists::<FreePlayRun>),
-    )
-    .add_systems(
-        Update,
-        results_input
-            .run_if(in_state(AppState::LevelComplete).and_then(resource_exists::<FreePlayRun>)),
-    );
+    app.add_systems(OnEnter(AppState::FreePlaySetup), (init_setup, spawn_setup).chain())
+        .add_systems(Update, (setup_input, refresh_setup).chain().run_if(in_state(AppState::FreePlaySetup)))
+        .add_systems(OnEnter(AppState::LevelComplete), spawn_results.run_if(resource_exists::<FreePlayRun>))
+        .add_systems(
+            Update,
+            results_input.run_if(in_state(AppState::LevelComplete).and_then(resource_exists::<FreePlayRun>)),
+        );
 }
 
 /// Where the run's seed comes from.
@@ -103,12 +89,7 @@ impl Setup {
 
     /// Apply navigation / confirm / back. Returns the seed and length when the run should start,
     /// `Err(())` to leave the screen.
-    pub fn press(
-        &mut self,
-        d: IVec2,
-        confirm: bool,
-        back: bool,
-    ) -> Result<Option<(u32, bool)>, ()> {
+    pub fn press(&mut self, d: IVec2, confirm: bool, back: bool) -> Result<Option<(u32, bool)>, ()> {
         if let Some(i) = self.editing {
             if confirm || back {
                 self.editing = None;
@@ -163,43 +144,23 @@ impl Setup {
 
     /// The three rows' text.
     pub fn lines(&self) -> [String; 3] {
-        let run = if self.endless {
-            "ENDLESS".to_string()
-        } else {
-            format!("{FIXED_ROOMS} ROOMS")
-        };
+        let run = if self.endless { "ENDLESS".to_string() } else { format!("{FIXED_ROOMS} ROOMS") };
         let digits: String = self
             .typed
             .iter()
             .enumerate()
-            .map(|(k, d)| {
-                if self.editing == Some(k) {
-                    format!("[{d}]")
-                } else {
-                    d.to_string()
-                }
-            })
+            .map(|(k, d)| if self.editing == Some(k) { format!("[{d}]") } else { d.to_string() })
             .collect();
         let seed = match self.source {
             SeedSource::New => format!("NEW {}", seed_text(self.new_seed)),
             SeedSource::Last => format!("LAST {}", seed_text(self.seed())),
             SeedSource::Typed => format!("TYPED {digits}"),
         };
-        let arrows = |on: bool, s: String| {
-            if on && self.editing.is_none() {
-                format!("< {s} >")
-            } else {
-                s
-            }
-        };
+        let arrows = |on: bool, s: String| if on && self.editing.is_none() { format!("< {s} >") } else { s };
         [
             format!("RUN  {}", arrows(self.row == 0, run)),
             format!("SEED {}", arrows(self.row == 1, seed)),
-            if self.row == 2 {
-                "> FLUSH! <".to_string()
-            } else {
-                "FLUSH!".to_string()
-            },
+            if self.row == 2 { "> FLUSH! <".to_string() } else { "FLUSH!".to_string() },
         ]
     }
 }
@@ -210,11 +171,7 @@ struct SetupRow(usize);
 #[derive(Component)]
 struct SetupHelp;
 
-fn init_setup(
-    mut commands: Commands,
-    settings: Res<FreePlaySettings>,
-    progress: Option<Res<crate::save::Progress>>,
-) {
+fn init_setup(mut commands: Commands, settings: Res<FreePlaySettings>, progress: Option<Res<crate::save::Progress>>) {
     commands.insert_resource(Setup {
         row: 2,
         endless: settings.endless,
@@ -226,59 +183,30 @@ fn init_setup(
     });
 }
 
-fn spawn_setup(
-    mut commands: Commands,
-    font: Res<UiFont>,
-    sprites: Option<Res<crate::art::Sprites>>,
-) {
+fn spawn_setup(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<crate::art::Sprites>>) {
     let f = &*font;
     commands
-        .spawn((
-            Name::new("FreePlaySetup"),
-            DespawnOnExit(AppState::FreePlaySetup),
-            fullscreen(),
-        ))
+        .spawn((Name::new("FreePlaySetup"), DespawnOnExit(AppState::FreePlaySetup), fullscreen()))
         .with_children(|root| {
-            root.spawn((
-                label(f, "FREE PLAY", 16.0, GOLD),
-                Node {
-                    margin: UiRect::bottom(px(4.0)),
-                    ..default()
-                },
-            ));
+            root.spawn((label(f, "FREE PLAY", 16.0, GOLD), Node { margin: UiRect::bottom(px(4.0)), ..default() }));
             root.spawn((
                 label(f, "NEW PIPES EVERY TIME", 8.0, DIM_CREAM),
-                Node {
-                    margin: UiRect::bottom(px(10.0)),
-                    ..default()
-                },
+                Node { margin: UiRect::bottom(px(10.0)), ..default() },
             ));
-            root.spawn(Node {
-                column_gap: px(24.0),
-                margin: UiRect::bottom(px(10.0)),
-                ..default()
-            })
-            .with_children(|r| {
+            root.spawn(Node { column_gap: px(24.0), margin: UiRect::bottom(px(10.0)), ..default() }).with_children(|r| {
                 r.spawn(icon(sprites.as_deref(), SpriteId::PooIdle, 24.0, 24.0));
                 r.spawn(icon(sprites.as_deref(), SpriteId::HanIdle, 24.0, 24.0));
             });
-            root.spawn(panel(Node {
-                width: px(272.0),
-                align_items: AlignItems::Start,
-                ..column(10.0, 10.0)
-            }))
-            .with_children(|p| {
-                for k in 0..3 {
-                    p.spawn((label(f, "", 8.0, CREAM), SetupRow(k)));
-                }
-            });
+            root.spawn(panel(Node { width: px(272.0), align_items: AlignItems::Start, ..column(10.0, 10.0) }))
+                .with_children(|p| {
+                    for k in 0..3 {
+                        p.spawn((label(f, "", 8.0, CREAM), SetupRow(k)));
+                    }
+                });
             root.spawn((
                 label(f, "", 8.0, DIM_CREAM),
                 SetupHelp,
-                Node {
-                    margin: UiRect::top(px(10.0)),
-                    ..default()
-                },
+                Node { margin: UiRect::top(px(10.0)), ..default() },
             ));
         });
 }
@@ -313,10 +241,7 @@ fn setup_input(
         }
     }
     let d = nav(&action);
-    let (confirm, back) = (
-        action.just_pressed(&Action::Confirm),
-        action.just_pressed(&Action::Back),
-    );
+    let (confirm, back) = (action.just_pressed(&Action::Confirm), action.just_pressed(&Action::Back));
     if d == IVec2::ZERO && !confirm && !back {
         return;
     }
@@ -329,14 +254,7 @@ fn setup_input(
             sfx(&mut sfx_w, Sfx::MenuSelect);
             start.write(StartFreePlay { seed, endless });
         }
-        Ok(None) => sfx(
-            &mut sfx_w,
-            if confirm {
-                Sfx::MenuSelect
-            } else {
-                Sfx::MenuMove
-            },
-        ),
+        Ok(None) => sfx(&mut sfx_w, if confirm { Sfx::MenuSelect } else { Sfx::MenuMove }),
     }
 }
 
@@ -380,18 +298,9 @@ pub fn result_lines(run: &FreePlayRun, level_run: &LevelRun) -> Vec<String> {
     ]
 }
 
-fn spawn_results(
-    mut commands: Commands,
-    font: Res<UiFont>,
-    run: Res<FreePlayRun>,
-    level_run: Res<LevelRun>,
-) {
+fn spawn_results(mut commands: Commands, font: Res<UiFont>, run: Res<FreePlayRun>, level_run: Res<LevelRun>) {
     let f = &*font;
-    let header = if run.finished {
-        "FLUSHED IT ALL!"
-    } else {
-        "PIPE DREAMS!"
-    };
+    let header = if run.finished { "FLUSHED IT ALL!" } else { "PIPE DREAMS!" };
     commands
         .spawn((
             Name::new("FreePlayResults"),
@@ -401,36 +310,20 @@ fn spawn_results(
             GlobalZIndex(10),
         ))
         .with_children(|root| {
-            root.spawn(panel(Node {
-                min_width: px(240.0),
-                padding: UiRect::axes(px(16.0), px(12.0)),
-                ..column(16.0, 8.0)
-            }))
-            .with_children(|p| {
-                p.spawn(label(f, header, 16.0, GOLD));
-                p.spawn((
-                    label(f, "FREE PLAY", 8.0, CREAM),
-                    Node {
-                        margin: UiRect::bottom(px(8.0)),
-                        ..default()
-                    },
-                ));
-                let lines = result_lines(&run, &level_run);
-                for (k, l) in lines.into_iter().enumerate() {
-                    p.spawn(label(f, l, 8.0, if k == 3 { GOLD } else { CREAM }));
-                }
-                p.spawn((
-                    label(f, "SHARE THE SEED! NASTY ONES TOO.", 8.0, DIM_CREAM),
-                    Blink(1.2),
-                ));
-                p.spawn((
-                    label(f, "ENTER:AGAIN  ESC:MENU", 8.0, DIM_CREAM),
-                    Node {
-                        margin: UiRect::top(px(8.0)),
-                        ..default()
-                    },
-                ));
-            });
+            root.spawn(panel(Node { min_width: px(240.0), padding: UiRect::axes(px(16.0), px(12.0)), ..column(16.0, 8.0) }))
+                .with_children(|p| {
+                    p.spawn(label(f, header, 16.0, GOLD));
+                    p.spawn((label(f, "FREE PLAY", 8.0, CREAM), Node { margin: UiRect::bottom(px(8.0)), ..default() }));
+                    let lines = result_lines(&run, &level_run);
+                    for (k, l) in lines.into_iter().enumerate() {
+                        p.spawn(label(f, l, 8.0, if k == 3 { GOLD } else { CREAM }));
+                    }
+                    p.spawn((label(f, "SHARE THE SEED! NASTY ONES TOO.", 8.0, DIM_CREAM), Blink(1.2)));
+                    p.spawn((
+                        label(f, "ENTER:AGAIN  ESC:MENU", 8.0, DIM_CREAM),
+                        Node { margin: UiRect::top(px(8.0)), ..default() },
+                    ));
+                });
         });
 }
 

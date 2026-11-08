@@ -2,9 +2,9 @@
 //! assists, and simulator-level behaviour over hundreds of rooms.
 
 use nat_han_adventures::adapt::{
-    AdaptEvent, AssistLevers, BandMood, Cue, FrustrationSignal, Outcome, PlayerProfile, RoomResult,
-    Skill, SkillState, StoryAssist, StoryEvent, WindowEntry, band_distribution, band_mood,
-    calibration, next_room, pick_skill, profile, reduce, reduce_story, sample_band, sim,
+    AdaptEvent, AssistLevers, BandMood, Cue, FrustrationSignal, Outcome, PlayerProfile, RoomResult, Skill,
+    SkillState, StoryAssist, StoryEvent, WindowEntry, band_distribution, band_mood, calibration, next_room, pick_skill, profile, reduce,
+    reduce_story, sample_band, sim,
 };
 use rand::SeedableRng;
 use rand::rngs::StdRng;
@@ -12,12 +12,7 @@ use rand::rngs::StdRng;
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 fn start(id: u64, skill: Skill, band: u8, expected: u32) -> AdaptEvent {
-    AdaptEvent::RoomStarted {
-        room_id: id,
-        skills: vec![(skill, band)],
-        expected_deaths: expected,
-        par_secs: Some(30.0),
-    }
+    AdaptEvent::RoomStarted { room_id: id, skills: vec![(skill, band)], expected_deaths: expected, par_secs: Some(30.0) }
 }
 
 fn finish(deaths: u32) -> AdaptEvent {
@@ -69,28 +64,15 @@ fn promotes_after_four_clean_rooms_at_center() {
     let p = rooms_at_center(p, P, 1, 0);
     assert_eq!(p.center(P), 5);
     assert!(p.cues.contains(&Cue::Promoted(P, 5)));
-    assert!(
-        p.skill(P).spread < profile::DEFAULT_SPREAD,
-        "promotion narrows the spread"
-    );
+    assert!(p.skill(P).spread < profile::DEFAULT_SPREAD, "promotion narrows the spread");
 }
 
 /// A skill centered at `center` whose current-epoch window holds `rooms` as (band, clean).
 fn skill_with(center: u8, rooms: &[(u8, bool)]) -> SkillState {
     let mut st = SkillState::new(center);
     for &(band, clean) in rooms {
-        let outcome = if clean {
-            Outcome::Clean
-        } else {
-            Outcome::Struggle
-        };
-        st.window = st.window.push(WindowEntry {
-            outcome,
-            band,
-            center,
-            epoch: 0,
-            assists: 0.0,
-        });
+        let outcome = if clean { Outcome::Clean } else { Outcome::Struggle };
+        st.window = st.window.push(WindowEntry { outcome, band, center, epoch: 0, assists: 0.0 });
     }
     st
 }
@@ -100,24 +82,15 @@ fn promotion_and_demotion_thresholds() {
     use profile::{should_demote, should_promote};
     let (c, x) = (true, false);
     // 3 of 4 = 75%: promote. 2 of 3 rooms isn't enough evidence; 5 of 7 (71%) isn't enough.
-    assert!(should_promote(&skill_with(
-        4,
-        &[(4, c), (4, c), (4, x), (4, c)]
-    )));
+    assert!(should_promote(&skill_with(4, &[(4, c), (4, c), (4, x), (4, c)])));
     assert!(!should_promote(&skill_with(4, &[(4, c), (4, c), (4, c)])));
-    assert!(!should_promote(&skill_with(
-        4,
-        &[(4, c), (4, c), (4, x), (4, c), (4, c), (4, x), (4, c)]
-    )));
+    assert!(!should_promote(&skill_with(4, &[(4, c), (4, c), (4, x), (4, c), (4, c), (4, x), (4, c)])));
     // Stretch: ≥2 stretch rooms need ≥60%; a single bad stretch room doesn't block.
     let center4 = [(4, c), (4, c), (4, c), (4, c)];
     let with = |extra: &[(u8, bool)]| skill_with(4, &[&center4[..], extra].concat());
     assert!(should_promote(&with(&[(5, x)])));
     assert!(!should_promote(&with(&[(5, x), (6, c)])), "1/2 = 50% < 60%");
-    assert!(
-        should_promote(&with(&[(5, x), (6, c), (5, c)])),
-        "2/3 ≥ 60%"
-    );
+    assert!(should_promote(&with(&[(5, x), (6, c), (5, c)])), "2/3 ≥ 60%");
     // Assisted rooms aren't promotion evidence.
     let mut assisted = skill_with(4, &center4);
     for e in &mut assisted.window.entries {
@@ -125,20 +98,11 @@ fn promotion_and_demotion_thresholds() {
     }
     assert!(!should_promote(&assisted));
     // Demote below 50% over ≥4; exactly 50% holds; 3 rooms isn't enough.
-    assert!(should_demote(&skill_with(
-        4,
-        &[(4, x), (4, c), (4, x), (4, x)]
-    )));
-    assert!(!should_demote(&skill_with(
-        4,
-        &[(4, x), (4, c), (4, x), (4, c)]
-    )));
+    assert!(should_demote(&skill_with(4, &[(4, x), (4, c), (4, x), (4, x)])));
+    assert!(!should_demote(&skill_with(4, &[(4, x), (4, c), (4, x), (4, c)])));
     assert!(!should_demote(&skill_with(4, &[(4, x), (4, x), (4, x)])));
     // Rooms below the center don't count either way.
-    assert!(!should_demote(&skill_with(
-        4,
-        &[(3, x), (3, x), (3, x), (3, x)]
-    )));
+    assert!(!should_demote(&skill_with(4, &[(3, x), (3, x), (3, x), (3, x)])));
 }
 
 #[test]
@@ -204,11 +168,7 @@ fn re_promoting_into_a_band_just_fallen_from_needs_more_evidence() {
     assert_eq!(p.center(P), 4);
     p.assists = 0.0;
     let p = rooms_at_center(p, P, profile::MIN_EVIDENCE, 0);
-    assert_eq!(
-        p.center(P),
-        4,
-        "hysteresis: 4 rooms isn't enough to go straight back"
-    );
+    assert_eq!(p.center(P), 4, "hysteresis: 4 rooms isn't enough to go straight back");
     let p = rooms_at_center(p, P, profile::REPROMOTE_EVIDENCE - profile::MIN_EVIDENCE, 0);
     assert_eq!(p.center(P), 5);
 }
@@ -235,20 +195,12 @@ fn careless_slip_after_clean_clears_is_ignored() {
 #[test]
 fn quick_death_without_a_clean_run_is_a_real_struggle() {
     let p = room(PlayerProfile::calibrated(4), P, 4, 1);
-    let quick = AdaptEvent::RoomFinished(RoomResult {
-        deaths: 1,
-        first_death_secs: Some(0.9),
-        ..Default::default()
-    });
+    let quick = AdaptEvent::RoomFinished(RoomResult { deaths: 1, first_death_secs: Some(0.9), ..Default::default() });
     let p = reduce(reduce(p, start(7, P, 4, 0)), quick);
     assert_eq!(p.recent.last().unwrap().outcome, Outcome::Struggle);
     // Two quick deaths after clean clears aren't a slip either.
     let p = rooms_at_center(PlayerProfile::calibrated(4), P, 3, 0);
-    let two = AdaptEvent::RoomFinished(RoomResult {
-        deaths: 2,
-        first_death_secs: Some(0.9),
-        ..Default::default()
-    });
+    let two = AdaptEvent::RoomFinished(RoomResult { deaths: 2, first_death_secs: Some(0.9), ..Default::default() });
     let p = reduce(reduce(p, start(8, P, 4, 0)), two);
     assert_eq!(p.recent.last().unwrap().outcome, Outcome::Struggle);
     assert_eq!(p.streak, 0);
@@ -261,11 +213,7 @@ fn expected_deaths_never_count_against_you() {
     for i in 0..4 {
         p = reduce(reduce(p, start(i, s, 4, 2)), finish(2));
     }
-    assert_eq!(
-        p.center(s),
-        5,
-        "dying exactly as the room expects is a clean clear"
-    );
+    assert_eq!(p.center(s), 5, "dying exactly as the room expects is a clean clear");
     assert_eq!(p.assists, 0.0);
     assert_eq!(p.streak, 4);
     // One beyond expected is a struggle.
@@ -279,11 +227,7 @@ fn slow_but_clean_is_never_penalized() {
     for i in 0..4 {
         p = reduce(
             reduce(p, start(i, P, 4, 0)),
-            AdaptEvent::RoomFinished(RoomResult {
-                deaths: 0,
-                time_secs: 300.0,
-                ..Default::default()
-            }),
+            AdaptEvent::RoomFinished(RoomResult { deaths: 0, time_secs: 300.0, ..Default::default() }),
         );
     }
     assert_eq!(p.center(P), 5);
@@ -312,10 +256,7 @@ fn many_deaths_eases_the_band_and_raises_assists() {
     assert!(p.skill(P).spread < spread);
     assert!(p.assists >= profile::FRUSTRATION_ASSISTS);
     assert!(p.frustrated());
-    assert!(
-        p.cues
-            .contains(&Cue::Encourage(FrustrationSignal::ManyDeaths))
-    );
+    assert!(p.cues.contains(&Cue::Encourage(FrustrationSignal::ManyDeaths)));
     assert!(p.cues.contains(&Cue::Eased(P, 5)));
 }
 
@@ -324,16 +265,9 @@ fn idling_after_a_death_is_frustration() {
     let p = PlayerProfile::calibrated(6);
     let p = reduce(
         reduce(p, start(0, P, 6, 0)),
-        AdaptEvent::RoomFinished(RoomResult {
-            deaths: 1,
-            idle_after_death_secs: 16.0,
-            ..Default::default()
-        }),
+        AdaptEvent::RoomFinished(RoomResult { deaths: 1, idle_after_death_secs: 16.0, ..Default::default() }),
     );
-    assert!(
-        p.cues
-            .contains(&Cue::Encourage(FrustrationSignal::IdleAfterDeath))
-    );
+    assert!(p.cues.contains(&Cue::Encourage(FrustrationSignal::IdleAfterDeath)));
     assert_eq!(p.center(P), 5);
 }
 
@@ -345,10 +279,7 @@ fn restarting_a_room_repeatedly_is_frustration_once() {
         assert!(p.cues.is_empty());
     }
     p = reduce(p, start(5, P, 6, 0));
-    assert!(
-        p.cues
-            .contains(&Cue::Encourage(FrustrationSignal::Restarts))
-    );
+    assert!(p.cues.contains(&Cue::Encourage(FrustrationSignal::Restarts)));
     assert_eq!(p.center(P), 5);
     // Further restarts and the finish don't pile on.
     p = reduce(p, start(5, P, 6, 0));
@@ -370,19 +301,9 @@ fn live_frustration_is_handled_once_per_room() {
 #[test]
 fn frustration_on_a_stretch_room_keeps_the_center() {
     let p = room(PlayerProfile::calibrated(6), P, 8, 4);
-    assert_eq!(
-        p.center(P),
-        6,
-        "the stretch was the problem, not the center"
-    );
-    assert!(
-        p.skill(P).spread < profile::DEFAULT_SPREAD,
-        "fewer stretch rooms from now on"
-    );
-    assert!(
-        p.cues
-            .contains(&Cue::Encourage(FrustrationSignal::ManyDeaths))
-    );
+    assert_eq!(p.center(P), 6, "the stretch was the problem, not the center");
+    assert!(p.skill(P).spread < profile::DEFAULT_SPREAD, "fewer stretch rooms from now on");
+    assert!(p.cues.contains(&Cue::Encourage(FrustrationSignal::ManyDeaths)));
 }
 
 #[test]
@@ -404,11 +325,7 @@ fn assists_fade_before_the_band_rises() {
         p = rooms_at_center(p, P, 1, 0);
         rooms += 1;
         if p.assists > profile::ASSIST_EPS {
-            assert_eq!(
-                p.center(P),
-                4,
-                "no promotion while assists are on (room {rooms})"
-            );
+            assert_eq!(p.center(P), 4, "no promotion while assists are on (room {rooms})");
         }
     }
     assert!(rooms >= 4);
@@ -491,12 +408,7 @@ fn with_rates(rates: &[(Skill, usize, usize)]) -> PlayerProfile {
 
 #[test]
 fn pick_skill_is_60_40_strengths_vs_growth() {
-    let unlocked = [
-        Skill::Precision,
-        Skill::HazardTiming,
-        Skill::Waltz,
-        Skill::Grease,
-    ];
+    let unlocked = [Skill::Precision, Skill::HazardTiming, Skill::Waltz, Skill::Grease];
     let p = with_rates(&[
         (Skill::Precision, 9, 10),
         (Skill::HazardTiming, 8, 10),
@@ -507,12 +419,7 @@ fn pick_skill_is_60_40_strengths_vs_growth() {
     let mut rng = StdRng::seed_from_u64(3);
     let n = 20_000;
     let strengths = (0..n)
-        .filter(|_| {
-            matches!(
-                pick_skill(&p, &unlocked, &mut rng),
-                Skill::Precision | Skill::HazardTiming
-            )
-        })
+        .filter(|_| matches!(pick_skill(&p, &unlocked, &mut rng), Skill::Precision | Skill::HazardTiming))
         .count();
     let share = strengths as f32 / n as f32;
     assert!((share - 0.6).abs() < 0.02, "strength share {share}");
@@ -521,18 +428,10 @@ fn pick_skill_is_60_40_strengths_vs_growth() {
     let mut f = p.clone();
     f.frustration_cooldown = 3;
     let strengths = (0..n)
-        .filter(|_| {
-            matches!(
-                pick_skill(&f, &unlocked, &mut rng),
-                Skill::Precision | Skill::HazardTiming
-            )
-        })
+        .filter(|_| matches!(pick_skill(&f, &unlocked, &mut rng), Skill::Precision | Skill::HazardTiming))
         .count();
     let share = strengths as f32 / n as f32;
-    assert!(
-        (share - 0.8).abs() < 0.02,
-        "frustrated strength share {share}"
-    );
+    assert!((share - 0.8).abs() < 0.02, "frustrated strength share {share}");
 }
 
 #[test]
@@ -584,12 +483,7 @@ fn calibrate(clean_up_to: u8, time_secs: f32) -> (PlayerProfile, Vec<u8>) {
         p = reduce(p, start(i, r.skill, r.band, 0));
         p = reduce(
             p,
-            AdaptEvent::RoomFinished(RoomResult {
-                deaths,
-                time_secs,
-                first_death_secs: Some(5.0),
-                ..Default::default()
-            }),
+            AdaptEvent::RoomFinished(RoomResult { deaths, time_secs, first_death_secs: Some(5.0), ..Default::default() }),
         );
     }
     (p, bands)
@@ -603,10 +497,7 @@ fn calibration_brackets_and_stops_early() {
     assert_eq!(p.center(Skill::Precision), 3);
     assert_eq!(p.center(Skill::Waltz), 2, "unseen skills start one lower");
     assert!(p.cues.iter().any(|c| matches!(c, Cue::Calibrated(_))));
-    assert!(
-        p.assists > 0.0 && p.assists < 0.3,
-        "a struggle in placement leaves a little help on"
-    );
+    assert!(p.assists > 0.0 && p.assists < 0.3, "a struggle in placement leaves a little help on");
 }
 
 #[test]
@@ -634,11 +525,7 @@ fn calibration_uses_time_only_upward() {
     let (slow, _) = calibrate(10, 90.0);
     assert_eq!(slow.center(Skill::Precision), 7);
     let (fast_bracketed, _) = calibrate(4, 15.0);
-    assert_eq!(
-        fast_bracketed.center(Skill::Precision),
-        4,
-        "3 clean fast, 5 struggled → 4"
-    );
+    assert_eq!(fast_bracketed.center(Skill::Precision), 4, "3 clean fast, 5 struggled → 4");
 }
 
 // ─── Music mood ──────────────────────────────────────────────────────────────
@@ -663,18 +550,10 @@ fn band_mood_follows_how_hard_the_player_pushes() {
 
 #[test]
 fn story_assists_rise_with_excess_deaths_and_fade_between_checkpoints() {
-    let mut s = reduce_story(
-        StoryAssist::new(0.0),
-        StoryEvent::LevelStarted {
-            expected_deaths_per_segment: 2,
-        },
-    );
+    let mut s = reduce_story(StoryAssist::new(0.0), StoryEvent::LevelStarted { expected_deaths_per_segment: 2 });
     s = reduce_story(s, StoryEvent::Died);
     s = reduce_story(s, StoryEvent::Died);
-    assert_eq!(
-        s.assists, 0.0,
-        "deaths within expectation don't raise assists"
-    );
+    assert_eq!(s.assists, 0.0, "deaths within expectation don't raise assists");
     s = reduce_story(s, StoryEvent::Died);
     s = reduce_story(s, StoryEvent::Died);
     assert!(s.assists > 0.0);
@@ -695,12 +574,7 @@ fn story_assists_rise_with_excess_deaths_and_fade_between_checkpoints() {
 
 #[test]
 fn story_frustration_encourages_once_per_segment() {
-    let mut s = reduce_story(
-        StoryAssist::new(0.0),
-        StoryEvent::LevelStarted {
-            expected_deaths_per_segment: 0,
-        },
-    );
+    let mut s = reduce_story(StoryAssist::new(0.0), StoryEvent::LevelStarted { expected_deaths_per_segment: 0 });
     for _ in 0..2 {
         s = reduce_story(s, StoryEvent::Died);
         assert_eq!(s.encourage, None);
@@ -746,25 +620,12 @@ fn simulator_is_deterministic() {
 fn learner_bands_rise() {
     // After warm-up, against the skills unlocked by then (the others sit at placement until
     // unlocked); at the end, over every skill.
-    let first: Vec<usize> = Skill::ALL
-        .iter()
-        .filter(|s| sim::unlock_room(**s) <= sim::WARMUP)
-        .map(|s| s.index())
-        .collect();
+    let first: Vec<usize> = Skill::ALL.iter().filter(|s| sim::unlock_room(**s) <= sim::WARMUP).map(|s| s.index()).collect();
     for r in runs("learner") {
         let c = &r.rooms[sim::WARMUP].centers;
         let early = first.iter().map(|&k| c[k] as f32).sum::<f32>() / first.len() as f32;
-        let late = r
-            .profile
-            .skills
-            .iter()
-            .map(|s| s.center as f32)
-            .sum::<f32>()
-            / Skill::COUNT as f32;
-        assert!(
-            late >= early + 1.0,
-            "mean band should rise ≥1: {early:.1} → {late:.1}"
-        );
+        let late = r.profile.skills.iter().map(|s| s.center as f32).sum::<f32>() / Skill::COUNT as f32;
+        assert!(late >= early + 1.0, "mean band should rise ≥1: {early:.1} → {late:.1}");
         let m = r.metrics();
         assert!(m.promotions >= m.demotions + 10, "{m:?}");
     }
@@ -779,11 +640,7 @@ fn nervous_beginner_settles_in_a_comfortable_band() {
             "seed {seed}: clean after warm-up {:.2}",
             m.clean_after_warmup
         );
-        assert!(
-            m.maxed_assists < 0.2,
-            "seed {seed}: assists maxed {:.0}% of rooms",
-            100.0 * m.maxed_assists
-        );
+        assert!(m.maxed_assists < 0.2, "seed {seed}: assists maxed {:.0}% of rooms", 100.0 * m.maxed_assists);
     }
 }
 
@@ -792,12 +649,7 @@ fn no_profile_ping_pongs() {
     for p in sim::PLAYERS {
         for seed in 0..SEEDS {
             let m = sim::run(p, seed, ROOMS).metrics();
-            assert!(
-                m.oscillations <= MAX_OSCILLATIONS,
-                "{} seed {seed}: {} oscillations",
-                p.name,
-                m.oscillations
-            );
+            assert!(m.oscillations <= MAX_OSCILLATIONS, "{} seed {seed}: {} oscillations", p.name, m.oscillations);
         }
     }
 }
@@ -805,9 +657,7 @@ fn no_profile_ping_pongs() {
 #[test]
 fn every_profile_lands_near_the_target_on_average() {
     for p in sim::PLAYERS {
-        let ms: Vec<sim::Metrics> = (0..SEEDS)
-            .map(|s| sim::run(p, s, ROOMS).metrics())
-            .collect();
+        let ms: Vec<sim::Metrics> = (0..SEEDS).map(|s| sim::run(p, s, ROOMS).metrics()).collect();
         let clean = ms.iter().map(|m| m.clean_after_warmup).sum::<f32>() / ms.len() as f32;
         // Target is 60–85%; a fast learner can outpace the evidence a little.
         assert!((0.58..=0.90).contains(&clean), "{}: {clean:.2}", p.name);
@@ -832,16 +682,8 @@ fn strong_players_climb_and_drop_assists() {
     for name in ["precise", "speedrunner"] {
         for r in runs(name) {
             let m = r.metrics();
-            assert!(
-                m.mean_assists < 0.15,
-                "{name}: assists {:.2}",
-                m.mean_assists
-            );
-            assert!(
-                r.profile.center(Skill::Precision) >= 5,
-                "{name}: precision {}",
-                r.profile.center(Skill::Precision)
-            );
+            assert!(m.mean_assists < 0.15, "{name}: assists {:.2}", m.mean_assists);
+            assert!(r.profile.center(Skill::Precision) >= 5, "{name}: precision {}", r.profile.center(Skill::Precision));
         }
     }
 }
@@ -849,13 +691,7 @@ fn strong_players_climb_and_drop_assists() {
 // ─── Story evidence and the laughing band's judgement ────────────────────────
 
 fn story(p: PlayerProfile, skills: &[(Skill, u8, Outcome)]) -> PlayerProfile {
-    reduce(
-        p,
-        AdaptEvent::Evidence {
-            skills: skills.to_vec(),
-            assists: 0.0,
-        },
-    )
+    reduce(p, AdaptEvent::Evidence { skills: skills.to_vec(), assists: 0.0 })
 }
 
 /// Story segments join the skills' windows like rooms, never touch the free-play dial, and
@@ -864,23 +700,10 @@ fn story(p: PlayerProfile, skills: &[(Skill, u8, Outcome)]) -> PlayerProfile {
 fn story_evidence_joins_the_windows() {
     let mut p = PlayerProfile::new();
     p.assists = 0.3;
-    let p = story(
-        p,
-        &[
-            (Skill::Precision, 3, Outcome::Clean),
-            (Skill::HazardTiming, 3, Outcome::Struggle),
-        ],
-    );
+    let p = story(p, &[(Skill::Precision, 3, Outcome::Clean), (Skill::HazardTiming, 3, Outcome::Struggle)]);
     assert_eq!(p.skill(Skill::Precision).window.entries.len(), 1);
-    assert_eq!(
-        p.skill(Skill::HazardTiming).window.entries[0].outcome,
-        Outcome::Struggle
-    );
-    assert_eq!(
-        (p.assists, p.rooms_played),
-        (0.3, 0),
-        "the dial and the room count are free play's"
-    );
+    assert_eq!(p.skill(Skill::HazardTiming).window.entries[0].outcome, Outcome::Struggle);
+    assert_eq!((p.assists, p.rooms_played), (0.3, 0), "the dial and the room count are free play's");
     assert_eq!(p.center(Skill::Precision), 1, "calibrating: evidence only");
     // Calibrated at band 3: four clean segments at the center promote.
     let mut p = PlayerProfile::calibrated(3);
@@ -898,17 +721,11 @@ fn a_skill_is_easy_once_cleared_at_that_band_or_harder() {
     for _ in 0..3 {
         p = story(p, &[(Skill::Precision, 4, Outcome::Clean)]);
     }
-    assert!(
-        !p.finds_easy(Skill::Precision, 4),
-        "3 isn't enough evidence"
-    );
+    assert!(!p.finds_easy(Skill::Precision, 4), "3 isn't enough evidence");
     p = story(p, &[(Skill::Precision, 5, Outcome::Struggle)]);
     assert!(p.finds_easy(Skill::Precision, 4), "3 of 4 clean");
     assert!(!p.finds_easy(Skill::Precision, 5), "only one at band 5");
-    assert!(
-        p.finds_easy(Skill::Precision, 2),
-        "harder evidence counts for easier bands"
-    );
+    assert!(p.finds_easy(Skill::Precision, 2), "harder evidence counts for easier bands");
     p = story(p, &[(Skill::Precision, 4, Outcome::Struggle)]);
     assert!(!p.finds_easy(Skill::Precision, 4), "3 of 5");
     assert!(!p.finds_easy(Skill::Waltz, 1), "never played");

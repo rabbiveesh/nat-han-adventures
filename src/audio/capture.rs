@@ -70,13 +70,7 @@ impl AudioCapture {
     pub fn new(path: &Path, fps: u32) -> io::Result<Self> {
         let block = samples_per_frame(CAPTURE_RATE, fps)
             .ok_or_else(|| io::Error::other(format!("fps {fps} must divide {CAPTURE_RATE}")))?;
-        Ok(AudioCapture {
-            recording: false,
-            block,
-            buf: vec![0.0; block * 2],
-            wav: Some(WavWriter::create(path, CAPTURE_RATE)?),
-            blocks: 0,
-        })
+        Ok(AudioCapture { recording: false, block, buf: vec![0.0; block * 2], wav: Some(WavWriter::create(path, CAPTURE_RATE)?), blocks: 0 })
     }
 
     /// Samples per frame.
@@ -119,11 +113,7 @@ impl WavWriter {
     pub fn create(path: &Path, rate: u32) -> io::Result<Self> {
         let mut out = BufWriter::new(File::create(path)?);
         out.write_all(&header(rate, 0))?;
-        Ok(WavWriter {
-            out,
-            path: path.to_owned(),
-            samples: 0,
-        })
+        Ok(WavWriter { out, path: path.to_owned(), samples: 0 })
     }
 
     /// Interleaved stereo samples.
@@ -177,12 +167,7 @@ pub fn read_wav(path: &Path) -> io::Result<Vec<[f32; 2]>> {
     let data = &bytes[44..44 + n.min(bytes.len() - 44)];
     Ok(data
         .chunks_exact(8)
-        .map(|c| {
-            [
-                f32::from_le_bytes(c[0..4].try_into().unwrap()),
-                f32::from_le_bytes(c[4..8].try_into().unwrap()),
-            ]
-        })
+        .map(|c| [f32::from_le_bytes(c[0..4].try_into().unwrap()), f32::from_le_bytes(c[4..8].try_into().unwrap())])
         .collect())
 }
 

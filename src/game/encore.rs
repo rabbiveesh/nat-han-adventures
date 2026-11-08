@@ -22,10 +22,7 @@ use super::physics::{Body, Dead, Finished};
 use super::secret::HanGlimpse;
 use super::sideb::{CallMode, SetCall};
 use super::solo::{SOLO_COUNT, SoloRun};
-use super::{
-    ActiveLevel, GameSet, Han, HanAnim, HanPose, LevelEntity, LevelRun, Player, Pos, PrevPos,
-    cell_floor,
-};
+use super::{ActiveLevel, GameSet, Han, HanAnim, HanPose, LevelEntity, LevelRun, Player, Pos, PrevPos, cell_floor};
 use crate::audio::Harmony;
 use crate::events::{EncoreCue, FinalHit, HanSays, LevelCompleted};
 use crate::input::Action;
@@ -71,11 +68,7 @@ const HAN_STANDS: f32 = TILE * 0.75;
 pub const SHUT_SECS: f32 = 0.25;
 pub const SLAM_SECS: f32 = 1.4;
 /// What the encore's calls cycle through.
-const CALLS: [SetCall; 3] = [
-    SetCall::Mode(Harmony::Coltrane),
-    SetCall::Mode(Harmony::Quartal),
-    SetCall::Melt,
-];
+const CALLS: [SetCall; 3] = [SetCall::Mode(Harmony::Coltrane), SetCall::Mode(Harmony::Quartal), SetCall::Melt];
 
 /// The encore in progress (only on the story's last level).
 #[derive(Resource, Debug, Clone, Reflect)]
@@ -159,14 +152,12 @@ impl Encore {
 
     /// Where Nat lands upstairs (his middle): beside the hole.
     pub fn perch(&self) -> Option<Vec2> {
-        self.seam
-            .map(|s| Vec2::new(s.hole + PERCH, s.top + Body::player().half.y))
+        self.seam.map(|s| Vec2::new(s.hole + PERCH, s.top + Body::player().half.y))
     }
 
     /// Where Han ends up downstairs (his middle): under the hole, looking up.
     pub fn han_spot(&self) -> Option<Vec2> {
-        self.seam
-            .map(|s| Vec2::new(s.hole - HAN_STANDS, self.throne.y + Body::player().half.y))
+        self.seam.map(|s| Vec2::new(s.hole - HAN_STANDS, self.throne.y + Body::player().half.y))
     }
 
     /// How far the shutter has slid over the hole (0 open, 1 shut).
@@ -181,16 +172,8 @@ impl Encore {
     /// Where the camera looks, if not at Nat: upstairs and down at once, once he's up there.
     pub fn focus(&self) -> Option<Vec2> {
         let s = self.seam?;
-        matches!(
-            self.phase,
-            EncorePhase::Upstairs | EncorePhase::Slam | EncorePhase::Continued
-        )
-        .then(|| {
-            Vec2::new(
-                s.hole,
-                (self.throne.y + s.top + 2.0 * Body::player().half.y) / 2.0,
-            )
-        })
+        matches!(self.phase, EncorePhase::Upstairs | EncorePhase::Slam | EncorePhase::Continued)
+            .then(|| Vec2::new(s.hole, (self.throne.y + s.top + 2.0 * Body::player().half.y) / 2.0))
     }
 }
 
@@ -203,19 +186,9 @@ pub struct StageHan;
 pub(super) fn plugin(app: &mut App) {
     app.register_type::<Encore>()
         .register_type::<StageHan>()
-        .add_systems(
-            FixedUpdate,
-            run_encore
-                .in_set(GameSet::Follow)
-                .run_if(resource_exists::<Encore>),
-        )
-        .add_systems(
-            Update,
-            call_in_encore.run_if(in_state(PlayState::Running).and_then(resource_exists::<Encore>)),
-        )
-        .add_systems(OnExit(AppState::Playing), |mut commands: Commands| {
-            commands.remove_resource::<Encore>()
-        });
+        .add_systems(FixedUpdate, run_encore.in_set(GameSet::Follow).run_if(resource_exists::<Encore>))
+        .add_systems(Update, call_in_encore.run_if(in_state(PlayState::Running).and_then(resource_exists::<Encore>)))
+        .add_systems(OnExit(AppState::Playing), |mut commands: Commands| commands.remove_resource::<Encore>());
 }
 
 /// Is `index` the level that ends in the encore (the story's last; not free play or Side B)?
@@ -235,10 +208,7 @@ fn stage(level: &Level) -> (i32, Vec2) {
     let goal = cell_floor(level, gc, gr);
     let floor_row = gr as i32 + 1;
     let mut left = gc as i32;
-    while left > 0
-        && level.tile(left - 1, floor_row).is_solid()
-        && !level.tile(left - 1, gr as i32).is_solid()
-    {
+    while left > 0 && level.tile(left - 1, floor_row).is_solid() && !level.tile(left - 1, gr as i32).is_solid() {
         left -= 1;
     }
     (left, goal + Vec2::new(THRONE_OFFSET, 0.0))
@@ -286,9 +256,7 @@ pub(super) fn start(
     cues.write(EncoreCue::Start);
     // (No Han to say it in NAT ALONE: the words on screen do.)
     if gag == Gag::Throne {
-        says.write(HanSays {
-            text: "Encore!".into(),
-        });
+        says.write(HanSays { text: "Encore!".into() });
     }
 }
 
@@ -306,10 +274,7 @@ fn call_in_encore(
     calls.write(CallMode(CALLS[encore.calls as usize % CALLS.len()]));
     encore.calls += 1;
     let pos = player.single().map_or(Vec2::ZERO, |p| p.0);
-    cues.write(EncoreCue::Call {
-        pos,
-        hype: encore.calls,
-    });
+    cues.write(EncoreCue::Call { pos, hype: encore.calls });
 }
 
 #[allow(clippy::too_many_arguments, clippy::type_complexity)]
@@ -332,9 +297,7 @@ fn run_encore(
 ) {
     let dt = time.delta_secs();
     let hit = hits.read().count() > 0;
-    let Ok((nat, mut pos, mut body, mut tf)) = player.single_mut() else {
-        return;
-    };
+    let Ok((nat, mut pos, mut body, mut tf)) = player.single_mut() else { return };
     let e = &mut *encore;
     e.t += dt;
     match e.phase {
@@ -355,11 +318,7 @@ fn run_encore(
                 e.phase = EncorePhase::Ending;
                 e.t = 0.0;
                 cues.write(EncoreCue::End);
-            } else if e.phase == EncorePhase::Ending
-                && (hit || e.t >= ENDING_TIMEOUT)
-                && dead.is_empty()
-                && let Some(seam) = e.seam
-            {
+            } else if e.phase == EncorePhase::Ending && (hit || e.t >= ENDING_TIMEOUT) && dead.is_empty() && let Some(seam) = e.seam {
                 // NAT ALONE's last chord: a rubber duck pops up under Nat and bounces him sky
                 // high, up through the grate.
                 let from = pos.0;
@@ -367,85 +326,54 @@ fn run_encore(
                 let land = e.perch().unwrap_or(from);
                 let vy = (2.0 * g * (seam.top + BOING_OVER - from.y)).sqrt();
                 let secs = (vy + (vy * vy - 2.0 * g * (land.y - from.y)).max(0.0).sqrt()) / g;
-                e.knock = Some(Knock {
-                    from,
-                    vel: Vec2::new(0.0, vy),
-                    secs,
-                    han_from: land,
-                    han_to: land,
-                });
+                e.knock = Some(Knock { from, vel: Vec2::new(0.0, vy), secs, han_from: land, han_to: land });
                 e.phase = EncorePhase::Knocked;
                 e.t = 0.0;
                 commands.entity(nat).insert(Finished);
                 body.vel = Vec2::ZERO;
                 cues.write(EncoreCue::Knock { pos: from });
-                cues.write(EncoreCue::Boing {
-                    pos: from - Vec2::new(0.0, body.half.y),
-                });
-            } else if e.phase == EncorePhase::Ending
-                && (hit || e.t >= ENDING_TIMEOUT)
-                && dead.is_empty()
-            {
+                cues.write(EncoreCue::Boing { pos: from - Vec2::new(0.0, body.half.y) });
+            } else if e.phase == EncorePhase::Ending && (hit || e.t >= ENDING_TIMEOUT) && dead.is_empty() {
                 // The last chord: the cymbal knocks Nat into the throne.
                 let from = pos.0;
                 let to = e.bowl();
                 let g = KNOCK_GRAVITY;
-                let peak =
-                    from.y.max(to.y) + KNOCK_PEAK + KNOCK_PEAK_PER_CALL * e.calls.min(10) as f32;
+                let peak = from.y.max(to.y) + KNOCK_PEAK + KNOCK_PEAK_PER_CALL * e.calls.min(10) as f32;
                 let vy = (2.0 * g * (peak - from.y)).sqrt();
                 let secs = (vy + (vy * vy - 2.0 * g * (to.y - from.y)).max(0.0).sqrt()) / g;
                 let vel = Vec2::new((to.x - from.x) / secs, vy);
                 // Han dives for him from wherever he is, and lands a hair short of the bowl.
-                let (han_from, side) = han.single().map_or((from, -1.0), |(p, _, _)| {
-                    (p.0, if p.0.x < to.x { -1.0 } else { 1.0 })
-                });
+                let (han_from, side) = han.single().map_or((from, -1.0), |(p, _, _)| (p.0, if p.0.x < to.x { -1.0 } else { 1.0 }));
                 let han_y = e.throne.y + Body::player().half.y;
-                e.knock = Some(Knock {
-                    from,
-                    vel,
-                    secs,
-                    han_from,
-                    han_to: Vec2::new(to.x + side * 20.0, han_y),
-                });
+                e.knock = Some(Knock { from, vel, secs, han_from, han_to: Vec2::new(to.x + side * 20.0, han_y) });
                 e.phase = EncorePhase::Knocked;
                 e.t = 0.0;
                 commands.entity(nat).insert(Finished);
                 body.vel = Vec2::ZERO;
                 cues.write(EncoreCue::Knock { pos: from });
-                says.write(HanSays {
-                    text: "NAT!!".into(),
-                });
+                says.write(HanSays { text: "NAT!!".into() });
             }
         }
         EncorePhase::Knocked if e.gag == Gag::Grate => {
-            let (Some(k), Some(seam), Some(land)) = (e.knock, e.seam, e.perch()) else {
-                return;
-            };
+            let (Some(k), Some(seam), Some(land)) = (e.knock, e.seam, e.perch()) else { return };
             let t = e.t.min(k.secs);
             let g = KNOCK_GRAVITY;
             let y = k.from.y + k.vel.y * t - 0.5 * g * t * t;
             // Over to the hole's middle before his head reaches the ceiling, then over to where
             // he lands.
             let half = Body::player().half.y;
-            let up = (k.vel.y
-                - (k.vel.y * k.vel.y - 2.0 * g * (seam.bottom - half - k.from.y))
-                    .max(0.0)
-                    .sqrt())
-                / g;
+            let up = (k.vel.y - (k.vel.y * k.vel.y - 2.0 * g * (seam.bottom - half - k.from.y)).max(0.0).sqrt()) / g;
             let smooth = |a: f32| a * a * (3.0 - 2.0 * a);
             let x = if t < up {
                 k.from.x + (seam.hole - k.from.x) * smooth((t / up.max(0.01)).min(1.0))
             } else {
-                seam.hole
-                    + (land.x - seam.hole) * smooth(((t - up) / (k.secs - up).max(0.01)).min(1.0))
+                seam.hole + (land.x - seam.hole) * smooth(((t - up) / (k.secs - up).max(0.01)).min(1.0))
             };
             pos.0 = Vec2::new(x, y);
             tf.rotation = Quat::from_rotation_z(-t * 11.0 * (1.0 - (t / k.secs)));
             if !e.through && y + half >= seam.bottom {
                 e.through = true;
-                cues.write(EncoreCue::Through {
-                    pos: Vec2::new(seam.hole, (seam.bottom + seam.top) / 2.0),
-                });
+                cues.write(EncoreCue::Through { pos: Vec2::new(seam.hole, (seam.bottom + seam.top) / 2.0) });
             }
             if e.t >= k.secs {
                 pos.0 = land;
@@ -461,12 +389,7 @@ fn run_encore(
                     Name::new("StageHan"),
                     LevelEntity,
                     StageHan,
-                    HanAnim {
-                        pose: HanPose::Jump,
-                        facing_left: false,
-                        hidden: true,
-                        ..default()
-                    },
+                    HanAnim { pose: HanPose::Jump, facing_left: false, hidden: true, ..default() },
                     Pos(at),
                     PrevPos(at),
                     Transform::from_translation(at.extend(1.45)),
@@ -485,15 +408,9 @@ fn run_encore(
                 anim.facing_left = false;
                 let from = e.bowl();
                 hp.0 = from.lerp(spot, s) + Vec2::new(0.0, 30.0 * 4.0 * s * (1.0 - s));
-                anim.pose = if s < 1.0 {
-                    HanPose::Jump
-                } else {
-                    HanPose::Braced
-                };
+                anim.pose = if s < 1.0 { HanPose::Jump } else { HanPose::Braced };
                 if e.t >= HAN_POPS + HAN_HOP && e.t - dt < HAN_POPS + HAN_HOP {
-                    says.write(HanSays {
-                        text: "Nat?!".into(),
-                    });
+                    says.write(HanSays { text: "Nat?!".into() });
                 }
             }
             if e.t >= UPSTAIRS_SECS {
@@ -506,12 +423,8 @@ fn run_encore(
                 && e.t >= SHUT_SECS
                 && e.t - dt < SHUT_SECS
             {
-                cues.write(EncoreCue::Slam {
-                    pos: Vec2::new(seam.hole, seam.top),
-                });
-                says.write(HanSays {
-                    text: "NAT!!".into(),
-                });
+                cues.write(EncoreCue::Slam { pos: Vec2::new(seam.hole, seam.top) });
+                says.write(HanSays { text: "NAT!!".into() });
                 if let Ok((_, mut anim)) = stage_han.single_mut() {
                     anim.pose = HanPose::Intercept;
                     anim.wobble = 0.6;
@@ -546,9 +459,7 @@ fn run_encore(
             if e.t >= FLUSH_SECS {
                 e.phase = EncorePhase::Continued;
                 e.t = 0.0;
-                says.write(HanSays {
-                    text: "...Nat?".into(),
-                });
+                says.write(HanSays { text: "...Nat?".into() });
             }
         }
         EncorePhase::Continued => {
@@ -565,9 +476,7 @@ fn run_encore(
         }
     }
     // Han's dive: a low leap after Nat that lands a hair too late and too short.
-    if let (Gag::Throne, Some(k), Ok((mut hp, mut hb, mut anim))) =
-        (e.gag, e.knock, han.single_mut())
-    {
+    if let (Gag::Throne, Some(k), Ok((mut hp, mut hb, mut anim))) = (e.gag, e.knock, han.single_mut()) {
         let start = 0.15;
         let dive = (k.secs + 0.12 - start).max(0.1);
         let since = match e.phase {
@@ -586,11 +495,7 @@ fn run_encore(
             anim.pose = HanPose::Intercept;
         } else {
             hp.0 = k.han_to;
-            anim.pose = if e.phase == EncorePhase::Continued {
-                HanPose::Idle
-            } else {
-                HanPose::Braced
-            };
+            anim.pose = if e.phase == EncorePhase::Continued { HanPose::Idle } else { HanPose::Braced };
         }
     }
 }
