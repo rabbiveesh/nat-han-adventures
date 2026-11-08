@@ -32,6 +32,7 @@
 //! Never tell the player the difficulty: nothing here shows a band.
 
 pub mod alone;
+pub mod blocks;
 pub mod canvas;
 pub mod course;
 pub mod dice;

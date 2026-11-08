@@ -117,29 +117,13 @@ fn said(app: &App, line: &str) -> bool {
 // `col/30` and `col/31` lean the band left and right. (`col/1k`, the old pick for the nuggets
 // ahead, does nothing now: calls are free.)
 const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
-    // The routes of B1-B7 are the game's plans (`sideb::parse_plan`: `col/k` as Han crosses a
-    // column, `+secs/k` after the step before; `/20` the hit, `/30` `/31` a step of the record
-    // back and forward: a hold is `/30 ... /31`).
-    // Down the Drain: the calls, and the record held on top of a step for the pit straight off
-    // it; at the end, up on the shelf (Giant Steps) or under it, melted.
-    &[
-        ("shelf", "3/1 24/0 44/2 64/0 78/30 +0.05/1 +1.6/31 97/2 116/0 129/30 +0.05/1 +1.6/31 150/0 194/1"),
-        ("under", "3/1 24/0 44/2 64/0 78/30 +0.05/1 +1.6/31 97/2 116/0 129/30 +0.05/1 +1.6/31 150/2 194/1"),
-    ],
-    // Spike Alley: up on the alley's roof (Giant Steps, its walls) or along it melted, twice.
-    &[
-        ("roof, roof", "3/1 18/0 56/0 102/1 132/0 165/0 196/0 212/30 +0.05/1 +1.6/31 216/2 250/1"),
-        ("alley, alley", "3/1 18/0 58/2 102/1 128/2 196/0 212/30 +0.05/1 +1.6/31 216/2 250/1"),
-        ("alley, roof", "3/1 18/0 58/2 102/1 132/0 165/0 196/0 212/30 +0.05/1 +1.6/31 216/2 250/1"),
-    ],
-    // Drip Pipe, the hit: doors and bridges (the third bridge after a hold), then the trapdoor
-    // (a hit: down into the pipe, melted) or the deck's walls; then a red bridge over the drop
-    // into the pipe (as the hits leave it) and the deck's red door.
-    &[
-        ("deck, deck", "8/20 36/20 58/30 +0.05/20 +0.6/31 95/0 128/0 150/20 172/20 178/0 205/1"),
-        ("pipe, deck", "8/20 36/20 58/30 +0.05/20 +0.6/31 84/2 92/20 130/0 172/20 178/0 205/1"),
-        ("pipe, pipe", "8/20 36/20 58/30 +0.05/20 +0.6/31 84/2 92/20 130/0 148/20 +0.1/2 185/0 205/1"),
-    ],
+    // B1-B3 and B5-B7 are built from the building blocks (`examples/side_b_levels.rs`), their
+    // routes with them: `levels/side-b/routes.txt` ([`routes`]). Their plans are the game's
+    // (`sideb::parse_plan`: `col/k` as Han crosses a column, `+secs/k` after the step before;
+    // `/20` the hit, `/30` `/31` a step of the record back and forward: a hold is `/30 ... /31`).
+    &[],
+    &[],
+    &[],
     // The Big Flush (the waltz in place of melting), from high up: doors to hit over the pits,
     // then the shelf (Giant Steps over its walls, or the waltz under on trapezes), the climb, and
     // the trapdoor (a hit: down the tunnel of doors and bridges) or the shelf again (Giant Steps,
@@ -149,27 +133,9 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
         ("under, under", "10/1 27/20 44/20 77/2 79/20 166/0 168/20 206/20 209/1 300/2"),
         ("up, tunnel", "10/1 27/20 44/20 77/0 79/20 166/0 168/20 206/20 222/20 233/20 246/20 267/20 280/20 301/20 314/20 335/20 348/20 369/20"),
     ],
-    // Rush Hour: bridges to drum across, a ferry and the pit off its landing (held for the
-    // gap), then a blue bridge over the drop to the low road: over it (a hit) up to the high
-    // road's bridges, or down to the low road's walls; a red door, and four bridges to drum.
-    &[
-        ("high road", "21/20 35/20 66/30 +0.05/1 +1.4/31 89/20 101/0 114/20 129/20 148/0 156/2 181/0 212/20 226/20 240/20 244/1"),
-        ("low road", "21/20 35/20 66/30 +0.05/1 +1.4/31 87/0 131/0 148/0 156/2 181/0 193/20 212/20 226/20 240/20 244/1"),
-    ],
-    // Double Trouble (nervous in place of Giant Steps): a tower (its door and bridge on top), the
-    // cliff over a drip pipe (up its face, nervous, or under, melted), the second tower (held on
-    // top for the pit), then the trapdoor (a hit: down to the low run's drips) or on over the pit.
-    &[
-        ("up the face, over", "3/0 18/1 46/20 60/0 96/1 120/1 140/30 +0.05/0 +1.6/31 160/20 178/0 205/2"),
-        ("under, down", "3/0 18/1 46/20 60/0 90/2 120/1 140/30 +0.05/0 +1.6/31 160/20 178/2 185/20"),
-    ],
-    // The Royal Flush (the waltz and nervous): trapezes down, held before each drip pipe for the
-    // melting, the trapdoor (a hit: down the well, out by its shaft) or the third trapeze, then
-    // two more trapezes into the chasm, and two shafts up out of it.
-    &[
-        ("trapeze", "2/0 6/20 66/30 +0.05/2 +2/31 88/0 128/0 189/30 +0.05/2 +2/31 210/1 234/20 238/1"),
-        ("well", "2/0 6/20 66/30 +0.05/2 +2/31 96/20 100/1 128/0 189/30 +0.05/2 +2/31 210/1 238/1"),
-    ],
+    &[],
+    &[],
+    &[],
     // Up the Pipe, a climb (Han turns at walls): a lift, a chimney of up-through floors, then
     // the giant wall (Giant Steps, over to the high gutter) or back over the trapdoor into the
     // cistern (its ferry and lift); then the leap (fired up, to the rim) or short of it, onto
@@ -212,6 +178,23 @@ const ROUTES: [&[(&str, &str)]; SIDE_B_COUNT] = [
         ("drain, drain, flume", "1/11 200/1"),
     ],
 ];
+
+/// The routes the building blocks wrote with the levels (`b1 shelf: <plan>` lines).
+const ROUTE_FILE: &str = include_str!("../levels/side-b/routes.txt");
+
+/// Level `n`'s routes: from [`ROUTE_FILE`], or [`ROUTES`] for a level built by hand.
+fn routes(n: usize) -> Vec<(String, String)> {
+    let key = format!("b{} ", n + 1);
+    let built: Vec<(String, String)> = ROUTE_FILE
+        .lines()
+        .filter_map(|l| l.strip_prefix(key.as_str())?.split_once(": "))
+        .map(|(a, b)| (a.to_string(), b.to_string()))
+        .collect();
+    if !built.is_empty() {
+        return built;
+    }
+    ROUTES[n].iter().map(|&(a, b)| (a.to_string(), b.to_string())).collect()
+}
 
 /// The levels whose routes are the game's plans (`play_steps`); the rest are `plan`s.
 const STEPPED: usize = 7;
@@ -318,8 +301,9 @@ fn the_long_way_finds_nat_behind_a_grate() {
     for (level, long, quick) in [(7, 0, 4), (8, 0, 4), (9, 1, 0)] {
         for (route, found) in [(long, true), (quick, false)] {
             let mut app = app(level);
-            play_in_app(&mut app, &plan(ROUTES[level][route].1)).unwrap();
-            let name = ROUTES[level][route].0;
+            let r = routes(level);
+            play_in_app(&mut app, &plan(&r[route].1)).unwrap();
+            let name = &r[route].0;
             assert_eq!(app.world().resource::<Progress>().side_b_secrets[level], found, "B{} {name}", level + 1);
         }
     }
@@ -436,7 +420,8 @@ struct Started(usize);
 
 #[test]
 fn every_route_of_every_level() {
-    for (n, routes) in ROUTES.iter().enumerate() {
+    for n in 0..SIDE_B_COUNT {
+        let routes = routes(n);
         assert!(routes.len() >= 2, "level {} forks", n + 1);
         for (name, p) in routes.iter() {
             if n < STEPPED {
@@ -475,18 +460,18 @@ fn han_hops_the_floor_spikes_but_not_the_alleys_drips() {
     // Spike Alley, fired up for the pit and Giant Steps for the wall: over the floor's spikes
     // on his own, but with nothing playing at the fork he takes the alley, full size.
     let mut app = app(1);
-    let r = play_in_app(&mut app, &plan("3/1 18/0"));
+    let r = play_in_app(&mut app, &plan("3/1 22/0"));
     let (f, c) = died(r);
     assert_eq!(f, Fate::Spikes);
-    assert!((68.0..80.0).contains(&c), "in the alley's drips, not {c}");
+    assert!((78.0..116.0).contains(&c), "in the alley's drips, not {c}");
 }
 
 #[test]
 fn full_size_han_loses_his_cap_in_the_drips() {
-    // Down the Drain's first drips (columns 58-69), with no melting.
+    // Down the Drain's first drips (columns 59-70), with no melting.
     let (f, c) = died(play(0, &plan("3/1 24/0")));
     assert_eq!(f, Fate::Spikes);
-    assert!((56.0..70.0).contains(&c), "at the drips, not {c}");
+    assert!((57.0..71.0).contains(&c), "at the drips, not {c}");
 }
 
 #[test]
@@ -510,15 +495,15 @@ fn spikes_kill_han_and_the_level_rewinds() {
 fn melting_too_late_is_too_late() {
     // Down the Drain's first drips, melting called as he reaches them: the melting phrase is
     // too far off.
-    let (f, c) = died(play(0, &plan("3/1 24/0 56/2")));
+    let (f, c) = died(play(0, &plan("3/1 24/0 57/2")));
     assert_eq!(f, Fate::Spikes);
-    assert!(c > 56.0, "at the drips, not {c}");
+    assert!(c > 57.0, "at the drips, not {c}");
 }
 
 #[test]
 fn a_cleared_level_goes_on_to_the_next() {
     let mut app = app(0);
-    play_steps(&mut app, ROUTES[0][1].1).expect("cleared");
+    play_steps(&mut app, &routes(0)[1].1).expect("cleared");
     until(&mut app, 6.0, |a| side(a).level == 1).expect("on to Spike Alley");
     until(&mut app, 0.1, |_| false);
     assert_eq!(side(&app).phase, Phase::Playing);
@@ -535,7 +520,7 @@ fn the_last_level_ends_in_hans_encore_gone_wrong() {
     };
     let n = SIDE_B_COUNT - 1;
     let mut app = app(n);
-    for (c, k) in plan(ROUTES[n][0].1) {
+    for (c, k) in plan(&routes(n)[0].1) {
         until(&mut app, 60.0, |a| col(a) >= c).unwrap();
         act(&mut app, k);
     }
@@ -721,8 +706,8 @@ fn play_steps(app: &mut App, text: &str) -> Result<f32, f32> {
 #[ignore]
 fn how_tight() {
     let n: usize = std::env::var("SIDE_B_TIGHT").unwrap().parse().unwrap();
-    for (name, p) in ROUTES[n - 1] {
-        let plan = plan(p);
+    for (name, p) in routes(n - 1) {
+        let plan = plan(&p);
         for i in 0..plan.len() {
             let ok: Vec<i32> = [-6, -4, -2, 2, 4, 6]
                 .into_iter()
@@ -750,7 +735,8 @@ fn route_report() {
         format!("{t:.1}s bar {}.{}", c.bar, c.beat + 1)
     };
     let only: Option<usize> = std::env::var("SIDE_B_LEVEL").ok().and_then(|v| v.parse().ok());
-    for (n, routes) in ROUTES.iter().enumerate() {
+    for n in 0..SIDE_B_COUNT {
+        let routes = routes(n);
         if only.is_some_and(|o| o != n + 1) {
             continue;
         }
