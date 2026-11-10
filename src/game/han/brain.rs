@@ -8,13 +8,13 @@
 use bevy::prelude::*;
 
 use super::{
-    BACK_WARN_LINE, BOING_LINE, CLIMB_SPEED, CLING_SECS, FALL_BEHIND_SECS, FOLLOW_GAP,
-    GRUMBLE_EVERY, HAN_CATCH_UP, HanAnim, HanPose, LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL,
-    PARACHUTE_HEIGHT, PRO_LINE, REEL_SPEED, REPLAN_SECS, STUCK_SECS, TRAPEZE_SECS, UNION_LINE,
-    brace_range, breather, go_ahead_delay, grumble_line, intercept_range, overuse_limit,
+    BOING_LINE, CLIMB_SPEED, CLING_SECS, FALL_BEHIND_SECS, FOLLOW_GAP, HAN_CATCH_UP, HanAnim,
+    HanPose, LOOK_AHEAD, NERVOUS_GAP, PARACHUTE_FALL, PARACHUTE_HEIGHT, POINT_EVERY, POINT_SECS,
+    PRO_LINE, REEL_SPEED, REPLAN_SECS, STUCK_SECS, TRAPEZE_SECS, brace_range, go_ahead_delay,
+    intercept_range,
 };
 use crate::audio::Harmony;
-use crate::events::HanSays;
+use crate::events::{HanPointsAtBand, HanSays};
 use crate::game::crushers::{BrickSmashed, CrusherBlock, Sprung, smash};
 use crate::game::{
     ActiveLevel, Assists, Body, Carrier, Dead, Fall, Groove, Han, HanBoosted, HanHead, KICK_CARRY, MovingPlatform, Player,
@@ -159,13 +159,6 @@ pub struct HanBrain {
     pub nat_cell: Option<(i32, i32)>,
     /// Nat standing still facing a hazard for this long (s).
     pub still: f32,
-    /// Boosts in a row (outside chain chasms), time since the last, Nat on the ground since.
-    pub streak: u32,
-    pub since_boost: f32,
-    pub nat_grounded: f32,
-    pub warned: bool,
-    /// Breather left (s): no boosts.
-    pub winded: f32,
     /// Boosts given this level visit (stats, tests).
     pub boosts: u32,
     /// Parachute drops this level visit (stats, tests).
@@ -176,11 +169,12 @@ pub struct HanBrain {
     /// fired-up chasm) his head holds Nat only
     /// [`HAN_CHASM_CATCH_RISE`](crate::level::buddy::HAN_CHASM_CATCH_RISE) above it.
     pub floor_y: f32,
-    /// Weak boosts given this level visit (stats, tests), grumbles said, and seconds since the
-    /// last grumble.
+    /// Weak boosts given this level visit (stats, tests), times he pointed up at the band for
+    /// one, seconds since the last time, and how long he's still pointing.
     pub weak_boosts: u32,
-    pub grumbles: u32,
-    pub since_grumble: f32,
+    pub points: u32,
+    pub since_point: f32,
+    pub pointing: f32,
     /// The slot moved: a new route is wanted (the old one is kept until it's in).
     pub reroute: bool,
     /// Seconds he's been far behind Nat and out of sight (see [`FALL_BEHIND_SECS`]).
@@ -217,18 +211,14 @@ impl Default for HanBrain {
             side: -1.0,
             nat_cell: None,
             still: 0.0,
-            streak: 0,
-            since_boost: f32::INFINITY,
-            nat_grounded: 0.0,
-            warned: false,
-            winded: 0.0,
             boosts: 0,
             drops: 0,
             braced: false,
             floor_y: 0.0,
             weak_boosts: 0,
-            grumbles: 0,
-            since_grumble: f32::INFINITY,
+            points: 0,
+            since_point: f32::INFINITY,
+            pointing: 0.0,
             reroute: false,
             behind: 0.0,
             gap: 0.0,
@@ -456,6 +446,7 @@ pub(super) fn think(
     platforms: Query<(Entity, &Pos, &PrevPos, &MovingPlatform), (Without<Han>, Without<Player>)>,
     mut boosted: MessageReader<HanBoosted>,
     mut says: MessageWriter<HanSays>,
+    mut pointed: MessageWriter<HanPointsAtBand>,
     crushers: Query<(Entity, &CrusherBlock, &Pos, &PrevPos), (Without<Han>, Without<Player>, Without<MovingPlatform>)>,
     mut smashed: MessageWriter<BrickSmashed>,
     mut sprung: MessageWriter<Sprung>,
@@ -482,22 +473,24 @@ pub(super) fn think(
     let nat = Kin { pos: npos.0, vel: nbody.vel, grounded: nbody.on_ground };
     let nat_on_han = nbody.riding == Some(han_e);
     let say = |says: &mut MessageWriter<HanSays>, text: &str| {
-        says.write(HanSays { text: text.to_string() });
+        says.write(HanSays::bark(text.to_string()));
     };
 
-    // --- Overuse: boosts in a row.
-    brain.since_grumble += dt;
+    // --- Boosts. In a band zone his boost is the weak one: no words, he points up at the band
+    // (the counter that opens the gate flashes on the strip, `ui::strip`).
     let mut kicked = false;
+    brain.since_point += dt;
+    brain.pointing = (brain.pointing - dt).max(0.0);
     for b in boosted.read() {
         kicked |= matches!(brain.mode, HanMode::Cling { .. } | HanMode::Trapeze { .. }) && !b.weak;
         if b.weak {
-            // The band zone: a feeble hop and a grumble (not his back's business).
             brain.weak_boosts += 1;
-            if brain.since_grumble >= GRUMBLE_EVERY {
+            if brain.since_point >= POINT_EVERY {
                 let topic = level.band_zone(feet_cell(level, pos.0)).or(level.band_zone(level.cell_at(b.pos))).map(|g| g.topic);
-                say(&mut says, grumble_line(topic, brain.grumbles));
-                brain.grumbles += 1;
-                brain.since_grumble = 0.0;
+                pointed.write(HanPointsAtBand { topic });
+                brain.points += 1;
+                brain.since_point = 0.0;
+                brain.pointing = POINT_SECS;
             }
             continue;
         }
@@ -505,29 +498,7 @@ pub(super) fn think(
             say(&mut says, BOING_LINE);
         }
         brain.boosts += 1;
-        brain.since_boost = 0.0;
-        if !level.in_chasm(level.cell_at(b.pos).0) {
-            brain.streak += 1;
-        }
     }
-    brain.since_boost += dt;
-    brain.nat_grounded = if nbody.on_ground && !nat_on_han { brain.nat_grounded + dt } else { 0.0 };
-    if brain.nat_grounded > 1.2 || brain.since_boost > 4.0 {
-        brain.streak = 0;
-        brain.warned = false;
-    }
-    let limit = overuse_limit(e);
-    if brain.streak + 1 == limit && !brain.warned {
-        say(&mut says, BACK_WARN_LINE);
-        brain.warned = true;
-    }
-    if brain.streak >= limit {
-        say(&mut says, UNION_LINE);
-        brain.winded = breather(e);
-        brain.streak = 0;
-        brain.warned = false;
-    }
-    brain.winded = (brain.winded - dt).max(0.0);
 
     let plats: Vec<(Vec2, MovingPlatform)> = platforms.iter().map(|(_, p, _, m)| (p.0, m.clone())).collect();
     let mut carriers: Vec<Carrier> =
@@ -642,7 +613,7 @@ pub(super) fn think(
             body.vel = Vec2::ZERO;
             body.on_ground = false;
             let up = pos.0.y >= top;
-            *head = HanHead { solid: up, boost: up && brain.winded == 0.0, block: false, weak: false, kick: -wall * KICK_CARRY, fling: false, hold: false };
+            *head = HanHead { solid: up, boost: up, block: false, weak: false, kick: -wall * KICK_CARRY, fling: false, hold: false };
             set_anim(&mut anim, HanPose::Cling, wall < 0.0, &groove, false);
             return;
         }
@@ -727,7 +698,7 @@ pub(super) fn think(
             // jump needed (a jump off him any time is a boost with the swing's speed then).
             let fling = on && swinging && one && nat_on_han;
             let kick = if on && swinging { vel.x } else { 0.0 };
-            *head = HanHead { solid: on, boost: on && brain.winded == 0.0, block: false, weak: false, kick, fling, hold: on && !swinging };
+            *head = HanHead { solid: on, boost: on, block: false, weak: false, kick, fling, hold: on && !swinging };
             set_anim(&mut anim, HanPose::Trapeze, dir < 0.0, &groove, false);
             return;
         }
@@ -759,7 +730,7 @@ pub(super) fn think(
     let zoned = |p: Vec2| level.in_band_zone(level.cell_at(p));
     let in_zone = zoned(pos.0) || zoned(nat.pos);
     match brain.mode {
-        HanMode::Follow if !nat_dead && !nat.grounded && nat_above && brain.winded == 0.0 => {
+        HanMode::Follow if !nat_dead && !nat.grounded && nat_above => {
             let coming = nat.vel.y < 0.0 || in_chasm;
             let near = dx_nat.abs() < intercept_range(e);
             if coming && near && !in_zone && (in_chasm || doomed(level, nat.pos, nat.vel.x)) {
@@ -878,7 +849,7 @@ pub(super) fn think(
                 && nat.vel.x.abs() < 40.0
                 && dx_nat.abs() < 2.5 * TILE
                 && body.on_ground
-                && brain.winded == 0.0
+               
                 && !in_zone;
             if asking {
                 input = HanInput { dir: if dx_nat.abs() > 2.0 { dx_nat.signum() } else { 0.0 }, speed: 1.0, ..default() };
@@ -1012,7 +983,7 @@ pub(super) fn think(
         && !level.han_keeps_out(my_cell);
     *head = HanHead {
         solid: up && holds,
-        boost: up && holds && brain.winded == 0.0,
+        boost: up && holds,
         block: matches!(brain.mode, HanMode::Ahead { .. }),
         kick: 0.0,
         fling: false,
@@ -1032,7 +1003,7 @@ pub(super) fn think(
         HanMode::Intercept if !grounded && gs => HanPose::Paddle,
         HanMode::Intercept => HanPose::Intercept,
         HanMode::Sinking { .. } | HanMode::Gone { .. } => HanPose::Splat,
-        HanMode::Follow if brain.winded > 0.0 => HanPose::Winded,
+        HanMode::Follow if brain.pointing > 0.0 && grounded && !running => HanPose::Point,
         HanMode::Follow if brain.braced => HanPose::Braced,
         HanMode::Follow if !grounded => {
             if gs {

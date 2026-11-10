@@ -94,7 +94,7 @@ fn touch_checkpoints(
             || CHECKPOINT_QUIPS[cp.index % CHECKPOINT_QUIPS.len()].to_string(),
             str::to_string,
         );
-        says.write(HanSays { text });
+        says.write(HanSays::bark(text));
     }
 }
 
@@ -108,7 +108,7 @@ fn hear_hints(
     for mut hint in &mut hints {
         if !hint.said && hint.center.distance(pos.0) <= crate::level::HINT_RADIUS {
             hint.said = true;
-            says.write(HanSays { text: hint.text.clone() });
+            says.write(HanSays::cue(hint.text.clone()));
             return; // one at a time
         }
     }

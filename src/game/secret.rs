@@ -92,7 +92,7 @@ fn find_secret(
         // The grate's center: half a tile above his middle.
         if !g.found && (pos.0 + Vec2::Y * TILE / 2.0).distance(nat.0) <= SECRET_RADIUS {
             g.found = true;
-            says.write(HanSays { text: g.text.clone() });
+            says.write(HanSays::cue(g.text.clone()));
             sfx.write(PlaySfx(Sfx::Secret));
             found.write(SecretFound);
         }

@@ -541,7 +541,7 @@ fn validator_knows_fired_up_chasms() {
     // Too wide even for a throw.
     let wide = run(&with_sky(chasm_level(21, &mark(21)), SKY));
     assert!(wide.errs.iter().any(|e| e.contains("goal")), "{:?}", wide.errs);
-    // Unmarked: an error (Han's overuse limit would apply in it).
+    // Unmarked: an error (Han wouldn't catch Nat in mid-air there).
     let bare = run(&with_sky(chasm_level(16, ""), SKY));
     assert!(bare.errs.iter().any(|e| e.contains("`gate: chain")), "{:?}", bare.errs);
     // A checkpoint between the nugget line and the edge: a splat there loses the nuggets, so

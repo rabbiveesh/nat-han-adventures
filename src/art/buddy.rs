@@ -266,6 +266,40 @@ pub fn han_winded() -> Vec<Pixels> {
         .collect()
 }
 
+/// Pointing up at the band (a weak boost in a band zone: "that's the band's job"), leaning on
+/// his plunger, a finger jabbing at the sky. 18 x 20, two frames (the jab).
+pub fn han_point() -> Vec<Pixels> {
+    (0..2)
+        .map(|k| {
+            let mut p = Pixels::new(18, 20);
+            p.blit(&body(k == 1), 5, 5);
+            // Plunger as a walking stick in his back hand, cup down on the floor.
+            for y in 8..17 {
+                p.blit(&grid(&[HANDLE], BUDDY_PAL), 0, y);
+            }
+            p.blit(&grid(&["kRRRk", "kRRRk", ".kkk."], BUDDY_PAL), 0, 17);
+            for x in 1..4 {
+                px(&mut p, x, 10, 's');
+            }
+            px(&mut p, 4, 11, 'r');
+            // The front arm straight up: sleeve, arm, a fist and its finger (a pixel higher on the jab).
+            let top = 3 - k as i32;
+            px(&mut p, 16, 13, 'r');
+            px(&mut p, 16, 12, 'r');
+            for y in top + 2..12 {
+                px(&mut p, 16, y, 's');
+                px(&mut p, 17, y, 'k');
+            }
+            px(&mut p, 16, top + 1, 's');
+            px(&mut p, 16, top, 's');
+            px(&mut p, 17, top + 1, 'k');
+            px(&mut p, 16, top - 1, 'k');
+            p.blit(&legs(LEGS_WIDE), 0, 17);
+            p
+        })
+        .collect()
+}
+
 /// Splatted in the sewage: sinking, a hand waving, then just the cap. Three frames.
 pub fn han_splat() -> Vec<Pixels> {
     (0..3)

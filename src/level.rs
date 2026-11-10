@@ -92,7 +92,7 @@
 //! - **Han's boost is feeble near the band's gates** (and the death gates): within the *band
 //!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
 //!   `grip`, `stain`, `mega`, `shaft` or `trapeze` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
-//!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
+//!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he points up at the band; there his head only
 //!   holds Nat while he's standing on the ground. He follows normally, but keeps off the
 //!   grease in a grease chute's zone ([`Level::han_keeps_out`]).
 //!   So no boost, and no chain of boosts, ever opens them: they always need their mode (the
@@ -111,9 +111,8 @@
 //!   the ceiling's edge and swings (`buddy::trapeze_swing`), through the bottom on ONE; Nat
 //!   rides his cap, and a jump off it is a full boost plus the swing's speed. In a trapeze's
 //!   zone his boost is weak out of the waltz.
-//! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
-//!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
-//!   catch you in mid-air (fired up) to throw you again.
+//! - **Fired-up chasms** (`chain`): only in the mark's columns ([`Level::in_chasm`]) does
+//!   Han's head catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
 //!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red
 //!   plunger-handle notches and yellow plumber's tape.
@@ -1002,8 +1001,7 @@ impl Level {
         self.gates.iter().any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
     }
 
-    /// Is column `col` inside a fired-up chasm mark (no overuse limit there, and Han catches
-    /// Nat in mid-air)?
+    /// Is column `col` inside a fired-up chasm mark (where Han catches Nat in mid-air)?
     pub fn in_chasm(&self, col: i32) -> bool {
         self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
     }

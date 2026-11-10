@@ -918,7 +918,7 @@ fn beacon(
             side.charge_x = hpos.0.x;
             side.charge_y = hpos.0.y;
             side.charge_landings = 0;
-            says.write(HanSays { text: charge_line(level, from, dir).to_string() });
+            says.write(HanSays::cue(charge_line(level, from, dir).to_string()));
         }
     }
     if let Some(t) = &mut side.charging {
@@ -1110,7 +1110,7 @@ fn han_fate(
     let dt = time.delta_secs();
     let level = &active.level;
     let say = |says: &mut MessageWriter<HanSays>, t: &str| {
-        says.write(HanSays { text: t.to_string() });
+        says.write(HanSays::cue(t.to_string()));
     };
     match side.phase {
         Phase::Rewind { t } => {

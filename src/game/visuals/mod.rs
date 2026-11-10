@@ -724,6 +724,7 @@ fn animate_han(
                 HanPose::March => (SpriteId::HanMarch, (t * 9.0) as usize),
                 HanPose::Parachute => (SpriteId::HanParachute, (t * 2.0) as usize),
                 HanPose::Winded => (SpriteId::HanWinded, (t * 3.0) as usize),
+                HanPose::Point => (SpriteId::HanPoint, (t * 6.0) as usize),
                 HanPose::Splat => (SpriteId::HanSplat, (t * 3.0) as usize % 3),
                 HanPose::Paddle => (SpriteId::HanPaddle, (t * 8.0) as usize),
                 HanPose::Roll => (SpriteId::HanRoll, (t * 14.0) as usize),

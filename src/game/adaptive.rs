@@ -383,7 +383,7 @@ fn give_evidence(profile: &mut AdaptiveProfile, played: Vec<(Skill, Outcome)>, b
 fn step(story: &mut StoryAssistState, t: &mut Tracker, says: &mut MessageWriter<HanSays>, event: StoryEvent) {
     story.0 = reduce_story(std::mem::take(&mut story.0), event);
     if story.0.encourage.is_some() {
-        says.write(HanSays { text: t.encourage_line() });
+        says.write(HanSays::bark(t.encourage_line()));
     }
 }
 
@@ -474,7 +474,7 @@ fn feed_story(
                 .min_by(|a, b| a.center.distance(d.pos).total_cmp(&b.center.distance(d.pos)));
             if let Some(h) = nearest {
                 t.repeated.push(h.center);
-                says.write(HanSays { text: h.text.clone() });
+                says.write(HanSays::cue(h.text.clone()));
                 repeated.write(crate::events::HintRepeated { topics: h.topics.clone() });
             }
         }
@@ -551,7 +551,7 @@ fn profile_cues(
     }
     if profile.0.cues.iter().any(|c| matches!(c, Cue::Encourage(_))) {
         let text = t.encourage_line();
-        says.write(HanSays { text });
+        says.write(HanSays::bark(text));
     }
 }
 

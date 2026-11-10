@@ -65,14 +65,14 @@ fn bubbles(app: &mut App) -> usize {
 fn speech_bubble_follows_han_and_tolerates_his_absence() {
     let mut app = app();
     // No Han: the line is dropped quietly.
-    app.world_mut().write_message(HanSays { text: "Anyone there?".into() });
+    app.world_mut().write_message(HanSays::cue("Anyone there?"));
     for _ in 0..3 {
         app.update();
     }
     assert_eq!(bubbles(&mut app), 0);
 
     let han = app.world_mut().spawn((Han, Transform::from_xyz(100.0, 50.0, 4.0))).id();
-    app.world_mut().write_message(HanSays { text: "Mind the brushes, kid. They bite!".into() });
+    app.world_mut().write_message(HanSays::cue("Mind the brushes, kid. They bite!"));
     app.update();
     app.update();
     assert_eq!(bubbles(&mut app), 1);
@@ -82,6 +82,45 @@ fn speech_bubble_follows_han_and_tolerates_his_absence() {
     app.update();
     app.update();
     assert_eq!(bubbles(&mut app), 0);
+}
+
+/// Han talks less: a bark (chatter) only into a quiet spell, dropped otherwise; a cue always.
+#[test]
+fn barks_wait_for_a_quiet_spell_and_cues_always_get_said() {
+    use bevy::time::TimeUpdateStrategy;
+    use nat_han_adventures::ui::BUBBLE_QUIET;
+    let mut app = app();
+    app.insert_resource(TimeUpdateStrategy::ManualDuration(std::time::Duration::from_secs_f64(1.0 / 60.0)));
+    app.world_mut().spawn((Han, Transform::from_xyz(100.0, 50.0, 4.0)));
+    let run = |app: &mut App, secs: f32| {
+        for _ in 0..(secs * 60.0) as usize {
+            app.update();
+        }
+    };
+    let said = |app: &mut App| -> Vec<String> {
+        app.world_mut().query::<&Text2d>().iter(app.world()).map(|t| t.0.clone()).collect()
+    };
+    run(&mut app, 0.5);
+    app.world_mut().write_message(HanSays::bark("Oof, Nat!"));
+    run(&mut app, 1.0);
+    assert_eq!(said(&mut app), vec!["Oof, Nat!"]);
+    // Chatter on top of it: dropped, never shown later.
+    app.world_mut().write_message(HanSays::bark("Happens!"));
+    run(&mut app, 6.0);
+    assert!(said(&mut app).is_empty(), "{:?}", said(&mut app));
+    // Still inside the quiet spell after the bubble went: dropped too.
+    app.world_mut().write_message(HanSays::bark("Shake it off!"));
+    run(&mut app, 1.0);
+    assert!(said(&mut app).is_empty(), "{:?}", said(&mut app));
+    // A cue gets said regardless.
+    app.world_mut().write_message(HanSays::cue("Hop on!"));
+    run(&mut app, 1.0);
+    assert_eq!(said(&mut app), vec!["Hop on!"]);
+    // Quiet long enough: chatter's back.
+    run(&mut app, 3.0 + BUBBLE_QUIET);
+    app.world_mut().write_message(HanSays::bark("Around, Nat!"));
+    run(&mut app, 1.0);
+    assert_eq!(said(&mut app), vec!["Around, Nat!"]);
 }
 
 /// No freezing: reaching a gate's hint spot teaches its counter (once per save) with a hint

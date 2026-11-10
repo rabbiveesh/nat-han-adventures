@@ -180,7 +180,7 @@ pub(super) fn run(
                 e.phase = EncorePhase::Hop;
                 e.t = 0.0;
                 cues.write(EncoreCue::Knock { pos: hp.0 });
-                says.write(HanSays { text: "Plunge!".into() });
+                says.write(HanSays::cue("Plunge!"));
             }
         }
         EncorePhase::Hop => {
@@ -206,7 +206,7 @@ pub(super) fn run(
                 e.phase = EncorePhase::Yanked;
                 e.t = 0.0;
                 cues.write(EncoreCue::Pop { pos: e.bowl() });
-                says.write(HanSays { text: "NAT!!".into() });
+                says.write(HanSays::cue("NAT!!"));
             } else if n > was {
                 cues.write(EncoreCue::Plunge { pos: e.bowl() });
             }
@@ -227,7 +227,7 @@ pub(super) fn run(
             if e.t >= SUCK_SECS {
                 e.phase = EncorePhase::Continued;
                 e.t = 0.0;
-                says.write(HanSays { text: "...oops.".into() });
+                says.write(HanSays::cue("...oops."));
             }
         }
         EncorePhase::Continued => {

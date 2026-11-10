@@ -330,7 +330,7 @@ pub(super) fn check_hazards(
     // Han pipes up on the 1st, 4th, 7th... death.
     if run.deaths % 3 == 1 {
         let line = DEATH_LINES[(run.deaths as usize / 3) % DEATH_LINES.len()];
-        says.write(HanSays { text: line.to_string() });
+        says.write(HanSays::bark(line.to_string()));
     }
 }
 

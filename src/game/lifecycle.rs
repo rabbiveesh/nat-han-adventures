@@ -55,7 +55,7 @@ fn enter_level(
     };
     let level = load(&mut commands, level, index, &old);
     if !level.intro.is_empty() {
-        says.write(HanSays { text: level.intro.clone() });
+        says.write(HanSays::cue(level.intro.clone()));
     }
 }
 

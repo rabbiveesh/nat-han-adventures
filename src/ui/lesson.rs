@@ -547,9 +547,6 @@ fn draw_card(
         });
 }
 
-/// Where the hint line sits (virtual px from the top): under the strip and its CALL arrow.
-pub const HINT_TOP: f32 = super::strip::STRIP_TOP + 34.0;
-
 #[derive(Component)]
 struct HintLine;
 
@@ -560,6 +557,7 @@ fn draw_hint(
     lessons: Res<Lessons>,
     touch: Option<Res<TouchMode>>,
     old: Query<(Entity, &HintLine)>,
+    slots: Query<(Entity, &super::hud::HudSlot)>,
     mut shown: Local<Option<Lesson>>,
 ) {
     let want = lessons
@@ -577,21 +575,12 @@ fn draw_hint(
     let Some(text) = hint_text(l, touch.is_some_and(|t| t.0)) else {
         return;
     };
-    commands
-        .spawn((
-            Name::new("HintLine"),
-            HintLine,
-            DespawnOnExit(AppState::Playing),
-            GlobalZIndex(31),
-            Node {
-                position_type: PositionType::Absolute,
-                top: px(HINT_TOP),
-                width: percent(100.0),
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-        ))
-        .with_children(|root| {
+    // In the HUD's stack, under the strip and its CALL arrow (`hud::HudSlot`).
+    let mut line = commands.spawn((Name::new("HintLine"), HintLine, DespawnOnExit(AppState::Playing), GlobalZIndex(31), Node::default()));
+    if let Some(slot) = super::hud::slot(&slots, super::hud::HudSlot::Hint) {
+        line.insert(ChildOf(slot));
+    }
+    line.with_children(|root| {
             root.spawn((
                 Node {
                     padding: UiRect::axes(px(4.0), px(2.0)),

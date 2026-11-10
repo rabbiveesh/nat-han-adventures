@@ -14,6 +14,7 @@ pub fn plugin(app: &mut App) {
         .add_message::<HitLanded>()
         .add_message::<LevelCompleted>()
         .add_message::<HanSays>()
+        .add_message::<HanPointsAtBand>()
         .add_message::<HintRepeated>()
         .add_message::<PlaySfx>()
         .add_message::<LevelStarted>()
@@ -107,9 +108,30 @@ pub struct LevelCompleted {
 }
 
 /// Han the plumber pipes up: show `text` in a speech bubble above him for a few seconds.
+/// A *cue* (a level's intro, a hint, a secret, the encores, Side B) always gets said; a *bark*
+/// (chatter: quips, encouragement, checkpoints, deaths) only when he's been quiet a while
+/// (`ui::bubble::QUIET`), otherwise it's dropped.
 #[derive(Message, Debug, Clone)]
 pub struct HanSays {
     pub text: String,
+    pub cue: bool,
+}
+
+impl HanSays {
+    pub fn cue(text: impl Into<String>) -> Self {
+        HanSays { text: text.into(), cue: true }
+    }
+
+    pub fn bark(text: impl Into<String>) -> Self {
+        HanSays { text: text.into(), cue: false }
+    }
+}
+
+/// A weak boost in a band zone: Han points up at the band (no words), and the strip flashes
+/// the counter that opens the gate of kind `topic` (`None`: a generated room's zone).
+#[derive(Message, Debug, Clone, Copy)]
+pub struct HanPointsAtBand {
+    pub topic: Option<crate::level::Topic>,
 }
 
 /// Han repeats a hint after repeated deaths near it (the adaptive `han_hint` lever): its

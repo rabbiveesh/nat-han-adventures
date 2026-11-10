@@ -204,7 +204,7 @@ pub(in crate::game) fn drift_floats(
         if f.boarded && aboard && !dry {
             f.fuel -= dt;
             if f.fuel <= 0.0 {
-                says.write(HanSays { text: GLUB_LINE.to_string() });
+                says.write(HanSays::bark(GLUB_LINE.to_string()));
             }
         }
         // (Low on kicks, he shivers: `visuals`. Any lower in the muck and Nat's feet are in it.)
@@ -317,7 +317,7 @@ pub(super) fn han_hazards(
         if *quip <= 0.0 {
             *quip = QUIP_EVERY;
             let line = if batted { FLY_LINE } else { JET_LINES[(clock.steps as usize / 7) % JET_LINES.len()] };
-            says.write(HanSays { text: line.to_string() });
+            says.write(HanSays::bark(line.to_string()));
         }
     }
 
@@ -329,7 +329,7 @@ pub(super) fn han_hazards(
         brain.mode = HanMode::Gone { t: HAN_SQUASH_RESPAWN };
         brain.path.clear();
         brain.exec = None;
-        says.write(HanSays { text: SQUASH_LINE.to_string() });
+        says.write(HanSays::bark(SQUASH_LINE.to_string()));
         return;
     }
 

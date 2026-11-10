@@ -658,7 +658,7 @@ mod plugin {
         app.update();
         assert_eq!(app.world().resource::<SfxCount>().0, before + 2);
         // Han's babble: a few blips over the next half second.
-        app.world_mut().write_message(nat_han_adventures::events::HanSays { text: "ONE-two-three!".into() });
+        app.world_mut().write_message(nat_han_adventures::events::HanSays::cue("ONE-two-three!"));
         for _ in 0..40 {
             app.update();
         }

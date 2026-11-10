@@ -43,7 +43,24 @@ fn level_name(levels: &Levels, i: usize) -> String {
     levels.0.get(i).map_or_else(|| "???".into(), |l| l.name.to_uppercase())
 }
 
-fn spawn_hud(
+/// The band's corner of the HUD: one column centred under the level name, so its parts stack
+/// instead of overlapping each other or the corners (nuggets top left, time top right) at any
+/// width. Top to bottom: the counter strip (`ui::strip`), the physics badge, the hint line
+/// (`ui::lesson`), the band toast. A part that's off takes no room.
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HudSlot {
+    Strip,
+    Badge,
+    Hint,
+    Toast,
+}
+
+/// The slot `which` of the stack, if the HUD is up.
+pub fn slot(slots: &Query<(Entity, &HudSlot)>, which: HudSlot) -> Option<Entity> {
+    slots.iter().find(|(_, s)| **s == which).map(|(e, _)| e)
+}
+
+pub(super) fn spawn_hud(
     mut commands: Commands,
     font: Res<UiFont>,
     sprites: Option<Res<Sprites>>,
@@ -83,11 +100,32 @@ fn spawn_hud(
                 c.spawn((label(f, "", 8.0, DIM_CREAM), HudText::Splats));
             });
         });
-    spawn_groove_badge(&mut commands, f, sprites.as_deref());
+    commands
+        .spawn((
+            Name::new("HudStack"),
+            DespawnOnExit(AppState::Playing),
+            Node {
+                position_type: PositionType::Absolute,
+                top: px(super::strip::STRIP_TOP),
+                width: percent(100.0),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                row_gap: px(2.0),
+                ..default()
+            },
+        ))
+        .with_children(|stack| {
+            for s in [HudSlot::Strip, HudSlot::Badge, HudSlot::Hint, HudSlot::Toast] {
+                let mut slot = stack.spawn((s, Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, ..default() }));
+                if s == HudSlot::Badge {
+                    slot.with_children(|b| spawn_groove_badge(b, f, sprites.as_deref()));
+                }
+            }
+        });
     spawn_band_readout(&mut commands, f);
 }
 
-/// Small persistent badge, top left under the nugget count: the mode the music has the physics in.
+/// Small persistent badge under the counter strip: what the music does to the physics.
 #[derive(Component)]
 struct GrooveBadge;
 
@@ -98,17 +136,13 @@ struct GrooveBadgeText;
 #[derive(Component)]
 struct GrooveBadgeBeat;
 
-fn spawn_groove_badge(commands: &mut Commands, f: &UiFont, sprites: Option<&Sprites>) {
+fn spawn_groove_badge(commands: &mut ChildSpawnerCommands, f: &UiFont, sprites: Option<&Sprites>) {
     commands
         .spawn((
             Name::new("GrooveBadge"),
             GrooveBadge,
-            DespawnOnExit(AppState::Playing),
-            Visibility::Hidden,
             Node {
-                position_type: PositionType::Absolute,
-                top: px(22.0),
-                left: px(8.0),
+                display: Display::None,
                 padding: UiRect::axes(px(4.0), px(3.0)),
                 column_gap: px(4.0),
                 align_items: AlignItems::Center,
@@ -166,7 +200,8 @@ pub fn groove_badge(g: &Groove) -> String {
 
 fn update_groove_badge(
     groove: Option<Res<Groove>>,
-    mut badge: Query<&mut Visibility, With<GrooveBadge>>,
+    toast: Query<(), With<BandToast>>,
+    mut badge: Query<&mut Node, With<GrooveBadge>>,
     mut text: Query<&mut Text, (With<GrooveBadgeText>, Without<GrooveBadgeBeat>)>,
     mut beat: Query<&mut Text, (With<GrooveBadgeBeat>, Without<GrooveBadgeText>)>,
 ) {
@@ -177,9 +212,12 @@ fn update_groove_badge(
         }
     }
     let s = groove.map_or_else(String::new, |g| groove_badge(&g));
-    let vis = if s.is_empty() { Visibility::Hidden } else { Visibility::Inherited };
-    for mut v in &mut badge {
-        v.set_if_neq(vis);
+    // (The band toast says the same thing bigger while it's up.)
+    let display = if s.is_empty() || !toast.is_empty() { Display::None } else { Display::Flex };
+    for mut node in &mut badge {
+        if node.display != display {
+            node.display = display;
+        }
     }
     for mut t in &mut text {
         if !s.is_empty() && t.0 != s {
@@ -279,6 +317,7 @@ fn band_toast(
     mut reader: MessageReader<MusicChanged>,
     old: Query<Entity, With<BandToast>>,
     encore: Option<Res<crate::game::encore::Encore>>,
+    slots: Query<(Entity, &HudSlot)>,
 ) {
     // Past the encore's lap the gag has the screen: no toasts over it.
     if encore.is_some_and(|e| e.phase != crate::game::encore::EncorePhase::Lap) {
@@ -293,22 +332,12 @@ fn band_toast(
     for e in &old {
         commands.entity(e).despawn();
     }
-    commands
-        .spawn((
-            Name::new("BandToast"),
-            BandToast,
-            Toast { ttl: BAND_SECS },
-            Node {
-                position_type: PositionType::Absolute,
-                // Under the band's counter strip and its CALL arrow.
-                top: px(46.0),
-                width: percent(100.0),
-                justify_content: JustifyContent::Center,
-                ..default()
-            },
-            GlobalZIndex(20),
-        ))
-        .with_children(|t| {
+    // At the bottom of the HUD's stack, under the strip, its CALL arrow and the hint line.
+    let mut toast = commands.spawn((Name::new("BandToast"), BandToast, Toast { ttl: BAND_SECS }, Node::default(), GlobalZIndex(20)));
+    if let Some(slot) = slot(&slots, HudSlot::Toast) {
+        toast.insert(ChildOf(slot));
+    }
+    toast.with_children(|t| {
             t.spawn(panel(Node {
                 padding: UiRect::axes(px(8.0), px(4.0)),
                 flex_direction: FlexDirection::Column,

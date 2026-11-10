@@ -26,6 +26,7 @@ mod title;
 mod victory;
 
 pub use lesson::{HINT_SECS, Hint, Lesson, Lessons, LessonsOff};
+pub use bubble::QUIET as BUBBLE_QUIET;
 
 /// The game's name ("Nat Han Adventures"), shown on the title screen and in the credits,
 /// split in two lines so it fits the 24px title font.
