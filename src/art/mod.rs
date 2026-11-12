@@ -46,6 +46,8 @@ pub enum SpriteId {
     HanParachute,
     /// Han winded (his back, or the fired-up band's pace): bent over, sweating. 2 frames.
     HanWinded,
+    /// Han pointing up at the band (a weak boost in a band zone). 18x20, 2 frames.
+    HanPoint,
     /// Han splatted in sewage, sinking. 3 frames.
     HanSplat,
     /// Han paddling the air under Giant Steps. 2 frames.
@@ -168,7 +170,7 @@ impl SpriteId {
         use SpriteId::*;
         let mut v = vec![
             PooIdle, PooRun, PooJump, PooFall, PooSplat, HanIdle, HanRun, HanJump, HanBraced, HanIntercept,
-            HanPlunge, HanYank, HanMarch, HanParachute, HanWinded, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
+            HanPlunge, HanYank, HanMarch, HanParachute, HanWinded, HanPoint, HanSplat, HanPaddle, HanRoll, HanRaft, GiantTrim, GiantEmblem,
             WaltzEmblem, LedgeNotch, PlumberTape, Nugget,
             CheckpointOff, CheckpointOn, GoalFlag, Throne, SpikesUp, SpikesDown, StainUp, StainDown,
             StainRaft, Fly, SprayCan,
@@ -188,6 +190,7 @@ impl SpriteId {
         match self {
             GoalFlag | Grate => (16, 32),
             HanBraced | HanPlunge | HanYank => (16, 20),
+            HanPoint => (18, 20),
             HanParachute => (16, 24),
                 Throne => (32, 32),
             Fly | IconNugget | IconLock | IconHorn | IconNote | IconSweat | IconJitters => (8, 8),
@@ -220,6 +223,7 @@ pub fn render(id: SpriteId) -> Vec<Pixels> {
         HanMarch => buddy::han_march(),
         HanParachute => buddy::han_parachute(),
         HanWinded => buddy::han_winded(),
+        HanPoint => buddy::han_point(),
         HanSplat => buddy::han_splat(),
         HanPaddle => buddy::han_paddle(),
         HanRoll => buddy::han_roll(),

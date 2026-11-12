@@ -24,6 +24,7 @@ struct Heard {
     jumped: usize,
     boosted: usize,
     died: usize,
+    pointed: Vec<Option<Topic>>,
 }
 
 fn app(level: &str) -> App {
@@ -41,11 +42,13 @@ fn app(level: &str) -> App {
              mut s: MessageReader<HanSays>,
              mut j: MessageReader<Jumped>,
              mut b: MessageReader<HanBoosted>,
-             mut d: MessageReader<PlayerDied>| {
+             mut d: MessageReader<PlayerDied>,
+             mut p: MessageReader<HanPointsAtBand>| {
                 h.says.extend(s.read().map(|m| m.text.clone()));
                 h.jumped += j.read().count();
                 h.boosted += b.read().count();
                 h.died += d.read().count();
+                h.pointed.extend(p.read().map(|m| m.topic));
             },
         );
     app.finish();
@@ -716,10 +719,10 @@ fn boost_rise(app: &mut App, col: f32) -> f32 {
     (top - feet0) / TILE
 }
 
-/// Near each kind of band (or death) gate the boost is weak and Han grumbles (a line for the
-/// gate's kind first); away from them it's the full one, silently.
+/// Near each kind of band (or death) gate the boost is weak and Han, wordless, points up at the
+/// band (the strip flashes the gate's counter); away from them it's the full one.
 #[test]
-fn boost_is_weak_near_band_gates_and_han_grumbles() {
+fn boost_is_weak_near_band_gates_and_han_points_at_the_band() {
     for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
         let lvl = FLAT.replace("name: Flat\n", &format!("name: Flat\ngate: {} 40,10 45,11\n", topic.word()));
         let mut app = app(&lvl);
@@ -731,34 +734,21 @@ fn boost_is_weak_near_band_gates_and_han_grumbles() {
         assert!((weak - expect).abs() < 0.3, "{topic:?}: weak boost {weak} tiles, expected ~{expect}");
         assert!(weak < 3.2, "{topic:?}: no more than a normal jump");
         assert_eq!(heard(&app).boosted, 1, "{topic:?}");
-        let line = grumble_lines(topic)[0];
-        assert!(line.len() <= nat_han_adventures::level::MAX_LINE, "{line}");
-        assert_eq!(said(&app, line), 1, "{topic:?}: {:?}", heard(&app).says);
+        assert_eq!(heard(&app).pointed, vec![Some(topic)], "{topic:?}");
+        assert_eq!(anim(&mut app).pose, HanPose::Point, "{topic:?}: he points up at the band");
         assert_eq!(brain(&mut app).weak_boosts, 1);
-        assert_eq!(brain(&mut app).streak, 0, "his back doesn't mind those");
-        // Away from it: the full boost, no grumbling.
+        // Away from it: the full boost, no words, no pointing.
         let says = heard(&app).says.len();
         let full = boost_rise(&mut app, 8.0);
         assert!(!head(&mut app).weak);
         assert!((6.5..7.5).contains(&full), "{topic:?}: full boost {full} tiles");
         assert_eq!(heard(&app).says.len(), says, "{:?}", heard(&app).says);
+        assert_eq!(heard(&app).pointed.len(), 1, "{topic:?}");
         // In mid-air in the zone his head holds nobody (no chains of weak boosts).
         put::<Han>(&mut app, Vec2::new(30.0 * TILE + 8.0, standing(TILE) + 3.0 * TILE));
         app.update();
         assert!(!head(&mut app).solid, "{topic:?}: mid-air in the zone");
     }
-}
-
-/// The grumbles go round: the gate's own lines and the general ones, all short enough.
-#[test]
-fn grumbles_rotate() {
-    for topic in [Topic::Giant, Topic::Gap, Topic::Waltz, Topic::Grip, Topic::Stain] {
-        let n = grumble_lines(topic).len() + GRUMBLE_LINES.len();
-        let lines: std::collections::HashSet<&str> = (0..n as u32).map(|k| grumble_line(Some(topic), k)).collect();
-        assert_eq!(lines.len(), n, "{topic:?}: every line in turn");
-        assert!(lines.iter().all(|l| l.len() <= nat_han_adventures::level::MAX_LINE), "{lines:?}");
-    }
-    assert!(GRUMBLE_LINES.contains(&grumble_line(None, 1)));
 }
 
 /// The weak boost and its toot, however timed, don't get Nat up a 6-tile giant wall from Han's
@@ -828,7 +818,7 @@ fn weak_boost_cannot_cross_a_long_gap() {
     }
 }
 
-// --- Overuse -----------------------------------------------------------------------------------
+// --- No refusals ------------------------------------------------------------------------------
 
 fn boost_once(app: &mut App) -> bool {
     let b0 = heard(app).boosted;
@@ -840,36 +830,16 @@ fn boost_once(app: &mut App) -> bool {
     heard(app).boosted > b0
 }
 
+/// No refusals: his head boosts as often as Nat jumps on it (no "union break"), silently.
 #[test]
-fn overuse_makes_han_take_a_breather() {
+fn han_never_refuses_a_boost() {
     let mut app = app(FLAT);
-    eagerness(&mut app, 0.5);
+    eagerness(&mut app, 0.0);
     step(&mut app, 1.0);
-    let limit = overuse_limit(0.5);
-    for k in 0..limit {
+    for k in 0..10 {
         assert!(boost_once(&mut app), "boost {k}");
     }
-    assert_eq!(said(&app, UNION_LINE), 1, "{:?}", heard(&app).says);
-    assert_eq!(said(&app, BACK_WARN_LINE), 1);
-    assert!(!head(&mut app).boost, "winded");
-    assert_eq!(anim(&mut app).pose, HanPose::Winded);
-    assert!(!boost_once(&mut app), "no boost while winded");
-    step(&mut app, breather(0.5));
-    assert!(boost_once(&mut app), "rested");
-}
-
-#[test]
-fn eager_han_allows_more_boosts_and_no_limit_in_chasms() {
-    assert!(overuse_limit(1.0) > overuse_limit(0.5) && overuse_limit(0.5) > overuse_limit(0.0));
-    assert!(breather(1.0) < breather(0.0));
-    // In a chain chasm mark: no limit at all.
-    let lvl = FLAT.replace("name: Flat\n", "name: Flat\ngate: chain 0,0 59,13\n");
-    let mut app = app(&lvl);
-    step(&mut app, 1.0);
-    for k in 0..overuse_limit(0.0) + 3 {
-        assert!(boost_once(&mut app), "boost {k}");
-    }
-    assert_eq!(said(&app, UNION_LINE), 0);
+    assert!(heard(&app).says.is_empty(), "{:?}", heard(&app).says);
 }
 
 // --- Eagerness ---------------------------------------------------------------------------------

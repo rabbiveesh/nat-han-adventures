@@ -31,8 +31,8 @@
 //!   stood; nowhere else does his head hold Nat in mid-air.
 //! - **The band zone** ([`HAN_BERTH`](crate::level::HAN_BERTH) columns around a band or death
 //!   gate's mark, `Level::in_band_zone`): his boost is the weak one
-//!   ([`WEAK_BOOST_SPEED`](super::WEAK_BOOST_SPEED), about a normal jump) and he grumbles
-//!   ([`grumble_line`]); his head only holds Nat there while he's standing, he doesn't go for
+//!   ([`WEAK_BOOST_SPEED`](super::WEAK_BOOST_SPEED), about a normal jump) and, wordless, he
+//!   points up at the band ([`HanPose::Point`]; the gate's counter flashes on the strip); his head only holds Nat there while he's standing, he doesn't go for
 //!   intercepts or go ahead. So the band is still what opens its gates.
 //! - **Intercept**: Nat in the air, coming down near him (or over a drop): he runs, jumps and
 //!   toots to get under Nat (the goalkeeper; [`intercept`](crate::level::buddy::intercept)), so
@@ -45,10 +45,9 @@
 //!   up to it Han cannonballs in and becomes the pool float ([`HanFloat`]: a
 //!   [`HAN_RAFT_WIDTH`]-tile raft Nat paddles across, fuelled by nuggets), and parachutes back
 //!   [`HAN_SEWAGE_RESPAWN`] s after he climbs out. Not Nat's death: nothing counts it.
-//! - **Overuse**: more than [`overuse_limit`] boosts in a row and his back goes ("My back! I'm
-//!   union, Nat!"): a [`breather`] with no boosts. No limit inside chain chasms.
+//! - **No refusals**: his head boosts as often as Nat jumps on it.
 //! - **Eagerness** ([`Assists::han_eagerness`](super::Assists)) scales all of it: brace and
-//!   intercept range, the go-ahead delay, the overuse limit. (Repeating a hint after repeated
+//!   intercept range, the go-ahead delay. (Repeating a hint after repeated
 //!   deaths is the adaptive engine's `han_hint` lever, `game::adaptive`.)
 
 mod brain;
@@ -62,7 +61,7 @@ pub use world::{
 };
 
 use super::{ActiveLevel, GameSet};
-use crate::level::{TILE, Topic};
+use crate::level::TILE;
 pub use crate::level::buddy::{HAN_MARCH_SPEED, HAN_RUN_SPEED, HAN_TOOTS, HanPhys};
 
 pub(super) fn plugin(app: &mut App) {
@@ -127,39 +126,11 @@ pub const LOOK_AHEAD: i32 = 4;
 /// he doesn't.
 pub const LEMME_LINE: &str = "Lemme check.";
 pub const PRO_LINE: &str = "I'm fine!";
-pub const BACK_WARN_LINE: &str = "Oof. Back...";
-pub const UNION_LINE: &str = "Union break!";
-/// What Han grumbles when Nat jumps off his head in a band zone (the weak boost), in turn with
-/// the lines of the gate's kind ([`grumble_lines`]).
-pub const GRUMBLE_LINES: &[&str] = &["Nope.", "Too tired.", "Band work!"];
-
-/// Han's grumbles for a band zone of gate kind `topic` (on top of [`GRUMBLE_LINES`]).
-pub fn grumble_lines(topic: Topic) -> &'static [&'static str] {
-    match topic {
-        Topic::Giant => &["Toot it up!", "Giant Steps!"],
-        Topic::Gap => &["Nuggets first!", "Fire 'em up!"],
-        Topic::Waltz => &["Waltz job!", "ONE-two-three!"],
-        Topic::Grip => &["Too slippy!", "Get sweaty!"],
-        Topic::Stain => &["Splat job!", "Splat it!"],
-        _ => &[],
-    }
-}
-
-/// Grumble number `n` (counting from 0) in a band zone of kind `topic` (`None`: a generated
-/// room's zone): the kind's lines and the general ones, in turn.
-pub fn grumble_line(topic: Option<Topic>, n: u32) -> &'static str {
-    let own = topic.map_or(&[][..], grumble_lines);
-    // Alternating: the gate's own line, a general one, ...
-    let order: Vec<&str> = (0..own.len().max(GRUMBLE_LINES.len()))
-        .flat_map(|i| [own.get(i), GRUMBLE_LINES.get(i)])
-        .flatten()
-        .copied()
-        .collect();
-    order[n as usize % order.len()]
-}
-
-/// At most one grumble this often (s).
-pub const GRUMBLE_EVERY: f32 = 2.0;
+/// A weak boost in a band zone: Han doesn't say no, he points up at the band (the counter that
+/// opens the gate flashes on the strip: [`HanPointsAtBand`](crate::events::HanPointsAtBand)),
+/// at most this often (s), holding the pose this long.
+pub const POINT_EVERY: f32 = 2.0;
+pub const POINT_SECS: f32 = 1.6;
 pub const JET_LINES: &[&str] = &["Pssht! Ha!", "Lavender?", "Tickles!"];
 pub const FLY_LINE: &str = "Shoo! Shoo!";
 
@@ -176,16 +147,6 @@ pub const NERVOUS_LINE: &str = "Slow-mo! Breathe.";
 pub fn go_ahead_delay(e: f32) -> f32 {
     let e = e.clamp(0.0, 1.0);
     if e <= 0.5 { 2.0 - e } else { 1.5 - 1.6 * (e - 0.5) }
-}
-
-/// Boosts in a row before his back goes: 3 lazy, 5 neutral, 7 eager.
-pub fn overuse_limit(e: f32) -> u32 {
-    3 + (4.0 * e.clamp(0.0, 1.0)).round() as u32
-}
-
-/// His breather (s, no boosts): 3 s lazy .. 1.5 s eager.
-pub fn breather(e: f32) -> f32 {
-    3.0 - 1.5 * e.clamp(0.0, 1.0)
 }
 
 /// How far (px, sideways) he braces for a Nat coming down: 1.5 tiles lazy .. 3.5 eager.
@@ -225,8 +186,10 @@ pub enum HanPose {
     March,
     /// Floating down on his plunger.
     Parachute,
-    /// Hands on knees: his back (overuse).
+    /// Hands on knees, puffing.
     Winded,
+    /// Pointing up at the band: a weak boost in a band zone (the band opens those gates).
+    Point,
     /// Splatted in sewage, sinking.
     Splat,
     /// Giant Steps: paddling in the air.
@@ -270,7 +233,7 @@ fn nervous_line(
     *was = groove.harmony;
     if groove.grip() {
         let text = if active.level.has_grease() { GRIP_LINE } else { NERVOUS_LINE };
-        says.write(crate::events::HanSays { text: text.to_string() });
+        says.write(crate::events::HanSays::bark(text.to_string()));
     }
 }
 
@@ -282,11 +245,8 @@ mod tests {
     /// Han is nearly silent: everything he says (intros aside) is a bark.
     #[test]
     fn han_only_barks() {
-        let topics = crate::level::Topic::ALL.into_iter().flat_map(|t| grumble_lines(t).iter());
-        let lines = [LEMME_LINE, PRO_LINE, BACK_WARN_LINE, UNION_LINE, FLY_LINE, GRIP_LINE, NERVOUS_LINE, BOING_LINE]
+        let lines = [LEMME_LINE, PRO_LINE, FLY_LINE, GRIP_LINE, NERVOUS_LINE, BOING_LINE]
             .into_iter()
-            .chain(GRUMBLE_LINES.iter().copied())
-            .chain(topics.copied())
             .chain(JET_LINES.iter().copied())
             .chain(DEATH_LINES.iter().copied())
             .chain(crate::game::pickups::CHECKPOINT_QUIPS.iter().copied())

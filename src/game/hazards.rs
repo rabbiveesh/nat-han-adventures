@@ -330,7 +330,7 @@ pub(super) fn check_hazards(
     // Han pipes up on the 1st, 4th, 7th... death.
     if run.deaths % 3 == 1 {
         let line = DEATH_LINES[(run.deaths as usize / 3) % DEATH_LINES.len()];
-        says.write(HanSays { text: line.to_string() });
+        says.write(HanSays::bark(line.to_string()));
     }
 }
 
@@ -353,6 +353,15 @@ pub fn death_skill(level: &Level, pos: Vec2, cause: DeathCause) -> Skill {
     }
     if hazard {
         return Skill::HazardTiming;
+    }
+    // A level built around whole-level calls has no marks: a fall there counts against its
+    // (first) call.
+    if pit && let Some(&call) = level.calls.first() {
+        return match call {
+            crate::level::Call::Giant => Skill::GiantSteps,
+            crate::level::Call::Fired => Skill::FiredUp,
+            crate::level::Call::Waltz => Skill::Waltz,
+        };
     }
     let on_platform_run = level.platforms.iter().any(|p| {
         let (c0, r0) = (p.col as i32, p.row as i32);
@@ -430,10 +439,11 @@ mod tests {
         assert_eq!(death_skill(l, at(90.0, 11.0, l), DeathCause::Spikes), Skill::Stains);
         assert_eq!(death_skill(l, at(90.0, 9.0, l), DeathCause::Fly), Skill::HazardTiming);
         assert_eq!(death_skill(l, Vec2::new(20.0 * TILE, -20.0), DeathCause::Pit), Skill::Precision);
-        // A fall at level 7's glide launch is a failed launch.
+        // Level 7 is built around the waltz level-wide (`calls: waltz`): a fall is a failed
+        // waltz.
         let l = &levels.0[6];
-        let m = l.gates.iter().find(|g| g.topic == crate::level::Topic::Waltz).expect("level 7 has a glide launch");
-        let fell = Vec2::new((m.c0 + m.c1) as f32 / 2.0 * TILE, -20.0);
+        assert!(l.gates.is_empty() && !l.calls.is_empty());
+        let fell = Vec2::new(26.0 * TILE, -20.0);
         assert_eq!(death_skill(l, fell, DeathCause::Pit), Skill::Waltz);
     }
 }

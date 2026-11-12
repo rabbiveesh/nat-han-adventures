@@ -14,8 +14,8 @@ Status: built (see "As built" at the end for the decisions and numbers).
 - **Lost** (no route, e.g. Nat used a mode Han can't follow): he **parachutes in on his plunger**.
   Never teleports.
 - **He's no use at the band's gates** (giant walls and the rest): he follows Nat right up to
-  them, but there his plunger boost is a feeble hop and he grumbles ("Nope. Need more music in
-  my soul for that one."), so they always need their mode — no buddy shortcut.
+  them, but there his plunger boost is a feeble hop and, wordless, he points up at the band
+  (the gate's counter flashes on the strip), so they always need their mode — no buddy shortcut.
 - CPU: graph built once per level load (or precomputed at build time if too slow on phones);
   A* over a few thousand nodes well under 1 ms; trivial per-frame steering.
 
@@ -59,23 +59,25 @@ Status: built (see "As built" at the end for the decisions and numbers).
 - **Raft lifetimes slide with the adaptive assist dial** (up to ~2×) but **never below a floor**
   (Nat 12 s, Han 30 s). **Solvability is always computed with the floors**, so assists only
   loosen things that are already provably solvable.
-- **Overuse**: stomping him a lot in a row → he complains ("My back! I'm union, Nat!") and, past a
-  limit, needs a short breather (cooldown). The limit/cooldown **slides with the adaptive assist
-  dial**. **Carve-out: no overuse limit inside fired-up chasms**.
+- **No refusals** (2026-11-10, Veesh: "his refusals are really annoying"): the old overuse
+  limit ("Union break!", a breather with no boosts) is gone; his head boosts as often as Nat
+  jumps on it.
 
 ## Readable behaviour (so players can learn the AI)
 - Distinct poses: **braced** (plunger up, feet planted), **intercepting** (arms out like a
-  goalkeeper), going-ahead (determined march), parachuting, winded.
+  goalkeeper), going-ahead (determined march), parachuting, pointing up at the band.
 - Simple, predictable rules above. Han is **nearly silent**: poses plus barks of 1-3 words
   ("Hop on!", "Lemme check.", "BOING!"); only a level's intro is a sentence. Every mechanic,
   his tricks included, is taught by a freeze-frame **lesson card** at its first hint spot
   (`ui::lesson`), shown again when he repeats that hint after repeated deaths. The validator
-  enforces the barks and that every hint names its topic.
+  enforces the barks and that every hint names its topic. Chatter (quips, encouragement,
+  checkpoint and death lines: `HanSays::bark`) only gets said after 8 s with no bubble up
+  (`ui::bubble::QUIET`), otherwise it's dropped; cues (intros, hints, secrets, the encores,
+  Side B) always are. The bubble draws behind Han, Nat and the nuggets, and under the HUD.
 
 ## Adaptive coupling
 Han's helpfulness follows the adaptive assist dial: struggling → he intercepts more eagerly,
-goes ahead sooner (~0.7 s still instead of 1.5 s), drops hints after repeated failures, looser
-overuse limit; doing great → lazier, later, quieter. Never labelled.
+goes ahead sooner (~0.7 s still instead of 1.5 s), drops hints after repeated failures; doing great → lazier, later, quieter. Never labelled.
 
 ## Per-mode Han physics
 | Mode | Han |
@@ -100,8 +102,7 @@ overuse limit; doing great → lazier, later, quieter. Never labelled.
   behind 3 spikes (so no mode alone, fired up included, makes it), under a ceiling that ends
   over the gap for his plunger. Their zone weakens his boost except in the waltz.
 - **Giant walls**: **gold music-staff trim + a note emblem**. Han's boost is feeble near them.
-- **Fired-up chasms**: crossable only by the fired-up band's throw off Han (no overuse limit
-  inside).
+- **Fired-up chasms**: crossable only by the fired-up band's throw off Han.
 - Free play gets all of these as rooms (`src/freeplay/templates.rs`: mega wall, buddy raft
   pool, fired-up chasm, cling shaft, trapeze), served once the story level that teaches each is unlocked;
   the adaptive engine tracks them as one **Buddy** skill. Each keeps its gate a band zone's
@@ -182,9 +183,9 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   (giant, gap, waltz, grip, stain) Han follows as usual, but jumping off his head is the
   **weak boost**: 300 px/s (`WEAK_BOOST_SPEED`, Nat's feet ~2.9 tiles over Han's floor, about a
   normal jump; it refreshes the toot like any landing: ≤ 85 px with the toot, 11 px under a
-  giant wall), even when he's winded, and from the coyote time after stepping off him too (no
-  laughing-band bounce off him there either). He grumbles (`grumble_line`: the gate's own lines
-  and general ones in turn, at most every 2 s) and his back doesn't count it. In the zone his
+  giant wall), and from the coyote time after stepping off him too (no
+  laughing-band bounce off him there either). He points up at the band (`HanPose::Point`,
+  `HanPointsAtBand`: the gate's counter blinks on the strip, at most every 2 s), no words. In the zone his
   head only holds Nat while he stands (no mid-air catches, no intercepts, no going ahead), and
   he keeps off a chute's grease (`Level::han_keeps_out`). Everywhere, his head holds Nat in
   mid-air only while the band's fired up, over a fired-up chasm's mark,
@@ -211,9 +212,6 @@ played with the real Han), `tests/han_nav.rs` (nav timings), `tests/levels.rs` (
   plugged stays plugged while he escorts (and 0.5 s after); flies circle away from him.
 - **Sewage**: sinks 1 s, gone 3 s (held while he's the pool float), parachutes back ("I'm fine!
   I'm a professional!"); his raft is 3 tiles from the splat on. Not Nat's death.
-- **Overuse**: 3 / 5 / 7 boosts in a row (lazy / neutral / eager; reset after 1.2 s on real
-  ground or 4 s without a boost) → "My back! I'm union, Nat!", a breather of 3 to 1.5 s with
-  no boosts (his head still holds you). No limit inside `chain` marks.
 - **Modes**: Giant Steps gravity x0.8 more than Nat's and paddling; fired up he speeds up as
   Nat does (x1.35) and throws, the waltz: steps only in the first 40% of each beat;
   nervous: 0.8-tile follow gap, trembling; laughing band: bounces (x1.3), rolls.

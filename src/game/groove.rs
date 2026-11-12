@@ -493,7 +493,7 @@ fn call_the_step(
     for _ in ones.read() {
         count.0 += 1;
         if count.0.is_multiple_of(WALTZ_ONE_LINE_EVERY) {
-            says.write(crate::events::HanSays { text: WALTZ_ONE_LINE.to_string() });
+            says.write(crate::events::HanSays::bark(WALTZ_ONE_LINE.to_string()));
         }
     }
 }

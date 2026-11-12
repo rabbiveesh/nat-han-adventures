@@ -285,7 +285,7 @@ pub(super) fn start(
     cues.write(EncoreCue::Start);
     // (No Han to say it in NAT ALONE: the words on screen do.)
     if gag == Gag::Throne {
-        says.write(HanSays { text: "Encore!".into() });
+        says.write(HanSays::cue("Encore!"));
     }
 }
 
@@ -387,7 +387,7 @@ fn run_encore(
                 commands.entity(nat).insert(Finished);
                 body.vel = Vec2::ZERO;
                 cues.write(EncoreCue::Knock { pos: from });
-                says.write(HanSays { text: "NAT!!".into() });
+                says.write(HanSays::cue("NAT!!"));
             }
         }
         EncorePhase::Knocked if e.gag == Gag::Grate => {
@@ -446,7 +446,7 @@ fn run_encore(
                 hp.0 = from.lerp(spot, s) + Vec2::new(0.0, 30.0 * 4.0 * s * (1.0 - s));
                 anim.pose = if s < 1.0 { HanPose::Jump } else { HanPose::Braced };
                 if e.t >= HAN_POPS + HAN_HOP && e.t - dt < HAN_POPS + HAN_HOP {
-                    says.write(HanSays { text: "Nat?!".into() });
+                    says.write(HanSays::cue("Nat?!"));
                 }
             }
             if e.t >= UPSTAIRS_SECS {
@@ -460,7 +460,7 @@ fn run_encore(
                 && e.t - dt < SHUT_SECS
             {
                 cues.write(EncoreCue::Slam { pos: Vec2::new(seam.hole, seam.top) });
-                says.write(HanSays { text: "NAT!!".into() });
+                says.write(HanSays::cue("NAT!!"));
                 if let Ok((_, mut anim)) = stage_han.single_mut() {
                     anim.pose = HanPose::Intercept;
                     anim.wobble = 0.6;
@@ -495,7 +495,7 @@ fn run_encore(
             if e.t >= FLUSH_SECS {
                 e.phase = EncorePhase::Continued;
                 e.t = 0.0;
-                says.write(HanSays { text: "...Nat?".into() });
+                says.write(HanSays::cue("...Nat?"));
             }
         }
         // (Side B's: `side_b::run`.)

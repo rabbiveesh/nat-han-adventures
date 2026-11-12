@@ -16,8 +16,11 @@ use crate::state::AppState;
 pub fn plugin(app: &mut App) {
     use crate::game::sideb::SideB;
     // (Side B has its set list instead: `ui::sideb`.)
-    app.add_systems(OnEnter(AppState::Playing), spawn_strip.run_if(not(resource_exists::<SideB>)))
-        .add_systems(Update, update_strip.run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))))
+    app.add_systems(OnEnter(AppState::Playing), spawn_strip.after(super::hud::spawn_hud).run_if(not(resource_exists::<SideB>)))
+        .add_systems(
+            Update,
+            (update_strip, flash_pointed).chain().run_if(in_state(AppState::Playing).and_then(not(resource_exists::<SideB>))),
+        )
         .add_systems(Update, hide_strip.run_if(resource_exists::<SideB>));
 }
 
@@ -95,26 +98,24 @@ struct TimerFill(BandCounter);
 #[derive(Component)]
 struct Divider;
 
-fn spawn_strip(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>) {
+fn spawn_strip(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, slots: Query<(Entity, &super::hud::HudSlot)>) {
     let sprites = sprites.as_deref();
-    commands
-        .spawn((
+    let slot = slots.iter().find(|(_, s)| **s == super::hud::HudSlot::Strip).map(|(e, _)| e);
+    let mut root = commands.spawn((
             Name::new("BandStrip"),
             Strip,
             DespawnOnExit(AppState::Playing),
             Visibility::Hidden,
             // Above a lesson card's dimming (it points at the strip).
             GlobalZIndex(31),
-            Node {
-                position_type: PositionType::Absolute,
-                top: px(STRIP_TOP),
-                width: percent(100.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                ..default()
-            },
-        ))
-        .with_children(|root| {
+            // In the HUD's stack under the level name (`hud::HudSlot`), out of the layout till
+            // a counter's taught.
+            Node { flex_direction: FlexDirection::Column, align_items: AlignItems::Center, display: Display::None, ..default() },
+        ));
+    if let Some(slot) = slot {
+        root.insert(ChildOf(slot));
+    }
+    root.with_children(|root| {
             // The panel with the counters.
             root.spawn((
                 Node {
@@ -225,20 +226,23 @@ pub fn strip_view(meters: &crate::audio::director::Meters, progress: &Progress) 
 fn update_strip(
     meters: Option<Res<BandMeters>>,
     progress: Res<Progress>,
-    mut strip: Query<&mut Visibility, (With<Strip>, Without<CallMark>)>,
-    mut nodes: Query<(&mut Node, Option<&Cell>, Option<&CallSlot>, Option<&Pips>, Option<&ModeTimer>, Has<Divider>), Without<TimerFill>>,
+    mut strip: Query<(&mut Visibility, &mut Node), (With<Strip>, Without<CallMark>)>,
+    mut nodes: Query<(&mut Node, Option<&Cell>, Option<&CallSlot>, Option<&Pips>, Option<&ModeTimer>, Has<Divider>), (Without<TimerFill>, Without<Strip>)>,
     mut cells: Query<(&Cell, &mut BackgroundColor, &mut BorderColor), (Without<Pip>, Without<TimerFill>)>,
     mut pips: Query<(&Pip, &mut BackgroundColor), (Without<Cell>, Without<TimerFill>)>,
-    mut fills: Query<(&TimerFill, &mut Node), (Without<Cell>, Without<CallSlot>, Without<Pips>, Without<ModeTimer>)>,
+    mut fills: Query<(&TimerFill, &mut Node), (Without<Cell>, Without<CallSlot>, Without<Pips>, Without<ModeTimer>, Without<Strip>)>,
     mut marks: Query<(&CallMark, &mut Visibility), Without<Strip>>,
 ) {
     let m = meters.map(|m| m.0).unwrap_or_default();
     let v = strip_view(&m, &progress);
     let any = v.shown.iter().any(|&s| s);
-    for mut vis in &mut strip {
-        vis.set_if_neq(if any { Visibility::Inherited } else { Visibility::Hidden });
-    }
     let display = |on: bool| if on { Display::Flex } else { Display::None };
+    for (mut vis, mut node) in &mut strip {
+        vis.set_if_neq(if any { Visibility::Inherited } else { Visibility::Hidden });
+        if node.display != display(any) {
+            node.display = display(any);
+        }
+    }
     for (mut node, cell, slot, pips_node, timer, divider) in &mut nodes {
         let want = match (cell, slot, pips_node, timer) {
             (Some(Cell(c)), ..) | (_, Some(CallSlot(c)), ..) => v.shown[c.index()],
@@ -280,8 +284,54 @@ fn update_strip(
 }
 
 /// A free play Side B room: the set list's up there instead.
-fn hide_strip(mut strip: Query<&mut Visibility, With<Strip>>) {
-    for mut v in &mut strip {
+fn hide_strip(mut strip: Query<(&mut Visibility, &mut Node), With<Strip>>) {
+    for (mut v, mut node) in &mut strip {
         v.set_if_neq(Visibility::Hidden);
+        if node.display != Display::None {
+            node.display = Display::None;
+        }
+    }
+}
+
+/// The counter a band zone of kind `topic` wants (`None`: none on the strip opens it).
+pub fn counter_for(topic: crate::level::Topic) -> Option<BandCounter> {
+    use crate::level::Topic::*;
+    match topic {
+        Giant | Mega => Some(BandCounter::Horn),
+        Gap | Chain => Some(BandCounter::Nugget),
+        Waltz | Trapeze => Some(BandCounter::Note),
+        Grip | Shaft => Some(BandCounter::Sweat),
+        _ => None,
+    }
+}
+
+/// How long a counter flashes when Han points up at it.
+pub const FLASH_SECS: f32 = 1.6;
+
+/// Han pointed up at the band (a weak boost in a band zone): the counter that opens that gate
+/// blinks (cream rim) for [`FLASH_SECS`]. A generated room's zone (no kind) flashes the counter a
+/// call would play, if any. Untaught counters stay hidden.
+fn flash_pointed(
+    time: Res<Time>,
+    meters: Option<Res<BandMeters>>,
+    mut pointed: MessageReader<crate::events::HanPointsAtBand>,
+    mut flash: Local<Option<(BandCounter, f32)>>,
+    mut cells: Query<(&Cell, &mut BackgroundColor, &mut BorderColor)>,
+) {
+    for p in pointed.read() {
+        let ready = meters.as_ref().and_then(|m| m.0.ready).and_then(|h| SUMMON_ORDER.iter().position(|&s| s == h)).map(|i| BandCounter::ALL[i]);
+        if let Some(c) = p.topic.map_or(ready, counter_for) {
+            *flash = Some((c, FLASH_SECS));
+        }
+    }
+    let Some((c, left)) = *flash else { return };
+    let left = left - time.delta_secs();
+    *flash = (left > 0.0).then_some((c, left));
+    let on = left > 0.0 && ((left * 8.0) as i32) % 2 == 0;
+    for (Cell(cell), mut bg, mut border) in &mut cells {
+        if *cell == c && on {
+            bg.set_if_neq(BackgroundColor(READY_FILL));
+            border.set_if_neq(BorderColor::all(CREAM));
+        }
     }
 }

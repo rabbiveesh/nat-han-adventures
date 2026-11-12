@@ -2,7 +2,9 @@
 //! secret's grate, [`HanGlimpse`]) showing his
 //! [`HanSays`] lines with a typewriter reveal. A newer line replaces the old one once that has
 //! been readable for [`MIN_READ`] after its reveal (lines queue meanwhile, at most
-//! [`QUEUE_MAX`]: a hint right after a checkpoint line doesn't wipe it).
+//! [`QUEUE_MAX`]: a hint right after a checkpoint line doesn't wipe it). Barks (chatter,
+//! [`HanSays::bark`]) are dropped unless he's been quiet [`QUIET`]; cues always queue.
+//! The bubble sits behind Han, Nat and the nuggets ([`Z`]), and the HUD draws over it.
 
 use bevy::prelude::*;
 use bevy::sprite::Anchor;
@@ -25,10 +27,13 @@ const TAIL: f32 = 4.0;
 /// Typewriter speed, characters per second.
 const REVEAL_CPS: f32 = 40.0;
 /// How long the bubble stays once fully revealed.
-const STAY: f32 = 3.5;
+const STAY: f32 = 2.5;
 /// Tip of the tail, above Han's origin.
 const OFFSET: Vec2 = Vec2::new(0.0, 11.0);
-const Z: f32 = 10.0;
+/// Behind Han (4), Nat (5) and the things (nuggets, hazards: 2); over the tiles and platforms.
+const Z: f32 = 1.5;
+/// A bark needs this long (s) with no bubble up and none waiting.
+pub const QUIET: f32 = 8.0;
 /// Keep the box at least this far (world px) inside the camera view's left/right edges.
 const EDGE_MARGIN: f32 = 4.0;
 /// A line said while there's no Han (e.g. the same frame his level spawns) waits this long for him.
@@ -39,7 +44,8 @@ pub const MIN_READ: f32 = 1.0;
 pub const QUEUE_MAX: usize = 2;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(Update, (receive, spawn_pending, typewriter).chain())
+    app.insert_resource(Quiet(QUIET))
+        .add_systems(Update, (receive, spawn_pending, typewriter).chain())
         .add_systems(
             PostUpdate,
             follow
@@ -54,6 +60,10 @@ struct Pending {
     queue: std::collections::VecDeque<String>,
     wait: f32,
 }
+
+/// Seconds since Han last had a bubble up (barks wait for [`QUIET`]).
+#[derive(Resource)]
+struct Quiet(f32);
 
 #[derive(Component)]
 pub struct SpeechBubble {
@@ -119,11 +129,26 @@ fn revealed(lines: &[String], n: usize) -> String {
     out
 }
 
-fn receive(mut commands: Commands, pending: Option<ResMut<Pending>>, mut reader: MessageReader<HanSays>) {
-    let new: Vec<String> = reader.read().map(|m| m.text.clone()).collect();
+fn receive(
+    mut commands: Commands,
+    pending: Option<ResMut<Pending>>,
+    quiet: Option<ResMut<Quiet>>,
+    mut reader: MessageReader<HanSays>,
+) {
+    let busy = pending.as_ref().is_some_and(|p| !p.queue.is_empty());
+    let mut quiet = quiet.map_or(QUIET, |q| q.0);
+    let mut new = Vec::new();
+    for m in reader.read() {
+        // Chatter only into a quiet spell (and one bark per spell).
+        if m.cue || (!busy && new.is_empty() && quiet >= QUIET) {
+            new.push(m.text.clone());
+            quiet = 0.0;
+        }
+    }
     if new.is_empty() {
         return;
     }
+    commands.insert_resource(Quiet(0.0));
     let mut queue = pending.map(|mut p| std::mem::take(&mut p.queue)).unwrap_or_default();
     queue.extend(new);
     while queue.len() > QUEUE_MAX {
@@ -229,10 +254,12 @@ fn spawn_pending(
 fn typewriter(
     mut commands: Commands,
     time: Res<Time>,
+    mut quiet: ResMut<Quiet>,
     mut bubbles: Query<(Entity, &mut SpeechBubble)>,
     children: Query<&Children>,
     mut texts: Query<&mut Text2d, With<BubbleText>>,
 ) {
+    quiet.0 = if bubbles.is_empty() { quiet.0 + time.delta_secs() } else { 0.0 };
     for (e, mut b) in &mut bubbles {
         b.age += time.delta_secs();
         let total: usize = b.lines.iter().map(|l| l.chars().count()).sum();

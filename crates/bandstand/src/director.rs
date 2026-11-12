@@ -302,6 +302,10 @@ pub struct Band {
     /// How long a call holds, when not [`SUMMON_HOLD_SECS`] (Side B's set list: a few bars).
     /// Reset at a level start.
     pub hold_secs: Option<f32>,
+    /// A call holds until the next checkpoint or death (a new call replaces it) instead
+    /// of for [`Band::hold_len`]: a game's levels built around whole-level modes. Kept across
+    /// [`Band::start`].
+    pub hold_to_checkpoint: bool,
     /// Jumps in threes completed this level (the music hears each as a waltz step).
     pub steps_taken: u32,
     /// Per [`SUMMON_ORDER`]: charged, and when its counter was last ticked (the count of
@@ -339,7 +343,8 @@ fn slot(h: Harmony) -> Option<usize> {
 impl Band {
     /// A level (re)starts at play time `now`: everything resets, the band plays it straight.
     pub fn start(&mut self, now: f32) -> (Filters, &'static str) {
-        *self = Band { level_start: now, next_check: now + MUSIC_CHECK_SECS, ..Band::default() };
+        let hold_to_checkpoint = self.hold_to_checkpoint;
+        *self = Band { level_start: now, next_check: now + MUSIC_CHECK_SECS, hold_to_checkpoint, ..Band::default() };
         (Filters::default(), "")
     }
 
@@ -383,7 +388,9 @@ impl Band {
         let of = [GIANT_STEPS_TOOTS, FIRED_UP_NUGGETS, 3];
         let summons = std::array::from_fn(|i| {
             let full = self.charged[i].is_some();
-            let active = held.filter(|&(h, _)| h == SUMMON_ORDER[i]).map(|(_, until)| ((until - now) / self.hold_len()).clamp(0.0, 1.0));
+            let active = held
+                .filter(|&(h, _)| h == SUMMON_ORDER[i])
+                .map(|(_, until)| if until.is_finite() { ((until - now) / self.hold_len()).clamp(0.0, 1.0) } else { 1.0 });
             Meter { lit: if full { of[i] } else { lit[i].min(of[i]) }, of: of[i], full, active }
         });
         let deaths = self.stats.mood_deaths.min(NERVOUS_DEATHS);
@@ -417,7 +424,9 @@ impl Band {
                 continue;
             }
             if held == Some(h) {
-                self.hold = Some((h, now + self.hold_len()));
+                if !self.hold_to_checkpoint {
+                    self.hold = Some((h, now + self.hold_len()));
+                }
                 ticks[i] = 0;
             } else if self.charged[i].is_some() {
                 self.charged[i] = Some(frame);
@@ -457,6 +466,13 @@ impl Band {
                 self.window.fill(&mut self.stats, now, self.level_start);
             }
         }
+        // Held to the checkpoint: reaching one, or a death, ends the hold (a call this frame
+        // starts afresh).
+        if self.hold_to_checkpoint && (ev.checkpoints > 0 || ev.deaths > 0) {
+            if let Some((h, _)) = self.hold {
+                self.hold = Some((h, now));
+            }
+        }
         // A call plays the ready mode.
         let called = ev.call_mode.filter(|&h| summonable(h)).or(if ev.calls > 0 { self.ready() } else { None });
         if let Some(h) = called {
@@ -482,7 +498,8 @@ impl Band {
     /// A call of `h` starts: its charge spent, its hold started, the mood forgotten.
     fn begin(&mut self, h: Harmony, now: f32) {
         self.charged[slot(h).expect("summonable")] = None;
-        self.hold = Some((h, now + self.hold_len()));
+        let until = if self.hold_to_checkpoint { f32::INFINITY } else { now + self.hold_len() };
+        self.hold = Some((h, until));
         self.stats.mood_deaths = 0;
         self.stats.last_summon = Some(h);
     }
@@ -679,6 +696,29 @@ mod tests {
             b.step(t, NUGGET);
         }
         assert_eq!(b.ready(), None);
+    }
+
+    /// Held to the checkpoint: no timer; the next checkpoint or a death ends it.
+    #[test]
+    fn a_call_can_hold_to_the_next_checkpoint() {
+        let mut b = Band { hold_to_checkpoint: true, ..Band::default() };
+        b.start(0.0);
+        assert!(b.hold_to_checkpoint, "kept across a start");
+        for t in 1..=5 {
+            b.step(t as f32, TOOT);
+        }
+        assert_eq!(harmony(b.step(6.0, CALL)), Some(Harmony::Coltrane));
+        assert_eq!(b.meters(100.0).summons[0].active, Some(1.0));
+        assert_eq!(harmony(b.step(100.0, NOTHING)), Some(Harmony::Coltrane), "no timer: the periodic check keeps it");
+        assert_eq!(harmony(b.step(110.0, CHECKPOINT)), Some(Harmony::Original), "the checkpoint ends it");
+        assert_eq!(b.held(111.0), None);
+        for t in 1..=5 {
+            b.step(111.0 + t as f32, TOOT);
+        }
+        b.step(117.0, CALL);
+        assert_eq!(b.held(118.0), Some(Harmony::Coltrane));
+        b.step(119.0, DEATH);
+        assert_eq!(b.held(120.0), None, "a death ends it");
     }
 
     #[test]

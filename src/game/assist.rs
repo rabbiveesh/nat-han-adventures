@@ -22,7 +22,7 @@ pub struct Assists {
     /// × raft lifetimes (≥ 1; the floor is what the validator uses).
     pub raft_life_mult: f32,
     /// How eager Han is to help, 0 (lazy) ..= 1 (very eager): how soon he braces, intercepts,
-    /// goes ahead into hazards, and how forgiving his overuse limit is. 0.5 = neutral.
+    /// goes ahead into hazards. 0.5 = neutral.
     pub han_eagerness: f32,
 }
 

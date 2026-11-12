@@ -101,10 +101,15 @@ pub fn frame_duration(fps: u32) -> Option<Duration> {
     Some(step * (hz / fps))
 }
 
-/// The window for a capture: a fixed 1280x720, no vsync wait.
+/// The window for a capture: a fixed 1280x720 (`NATHAN_CAPTURE_SIZE=WxH` for another shape,
+/// e.g. `960x720` to check the HUD at 4:3; the Xvfb screen must be at least as big), no vsync wait.
 pub fn capture_window(window: Window) -> Window {
+    let (w, h) = std::env::var("NATHAN_CAPTURE_SIZE")
+        .ok()
+        .and_then(|s| s.split_once('x').and_then(|(w, h)| Some((w.parse().ok()?, h.parse().ok()?))))
+        .unwrap_or((1280, 720));
     Window {
-        resolution: bevy::window::WindowResolution::new(1280, 720),
+        resolution: bevy::window::WindowResolution::new(w, h),
         resizable: false,
         present_mode: bevy::window::PresentMode::AutoNoVsync,
         ..window

@@ -33,6 +33,11 @@
 //!   it, feet on the cell's floor. The first time in a level visit Nat comes within
 //!   [`SECRET_RADIUS`] of it, Han barks the line and the save remembers it was found
 //!   (`game::secret`). [`validate`] checks Nat can get that close.
+//! - `calls: <call>...` (`giant`, `fired`, `waltz`): the level is built around these band
+//!   calls *level-wide*, not around single gates: a call holds until the next checkpoint or
+//!   death (`director::Band::hold_to_checkpoint`), and the validator checks the whole level
+//!   (the goal out of reach with no call, Han's boost full strength, reachable with each call,
+//!   each call's road its own) instead of gate marks, which such a level doesn't have.
 //! - `shout: <col>`: from that column on, the band plays shout choruses (the closing stretch);
 //!   `shout: row <row>` (a tower): once above that row.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
@@ -92,7 +97,7 @@
 //! - **Han's boost is feeble near the band's gates** (and the death gates): within the *band
 //!   zone*, [`HAN_BERTH`] columns (and [`HAN_BERTH_ROWS`] rows) of a `giant`, `gap`, `waltz`,
 //!   `grip`, `stain`, `mega`, `shaft` or `trapeze` mark ([`Level::in_band_zone`]), jumping off his head is the weak boost
-//!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he grumbles; there his head only
+//!   (`game::WEAK_BOOST_SPEED`, about a normal jump) and he points up at the band; there his head only
 //!   holds Nat while he's standing on the ground. He follows normally, but keeps off the
 //!   grease in a grease chute's zone ([`Level::han_keeps_out`]).
 //!   So no boost, and no chain of boosts, ever opens them: they always need their mode (the
@@ -111,9 +116,8 @@
 //!   the ceiling's edge and swings (`buddy::trapeze_swing`), through the bottom on ONE; Nat
 //!   rides his cap, and a jump off it is a full boost plus the swing's speed. In a trapeze's
 //!   zone his boost is weak out of the waltz.
-//! - **Fired-up chasms** (`chain`) have no overuse limit: Han throws you as often as it takes
-//!   while you're in the mark's columns ([`Level::in_chasm`]), and only there does his head
-//!   catch you in mid-air (fired up) to throw you again.
+//! - **Fired-up chasms** (`chain`): only in the mark's columns ([`Level::in_chasm`]) does
+//!   Han's head catch you in mid-air (fired up) to throw you again.
 //! - **Markers** are drawn from them: giant walls get gold music-staff trim and a note
 //!   emblem, glide launches a 3/4 emblem in the ground at each end, mega walls red
 //!   plunger-handle notches and yellow plumber's tape.
@@ -934,6 +938,43 @@ pub struct Level {
     pub secret: Option<Spot>,
     /// `shout:` where the shout choruses start.
     pub shout: Option<Shout>,
+    /// `calls:` the band calls the level is built around, level-wide (empty: an older level
+    /// built around gate marks).
+    pub calls: Vec<Call>,
+}
+
+/// A band call a level is built around (`calls:`): its mode remixes the whole level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum Call {
+    /// Giant Steps: everything light.
+    Giant,
+    /// Fired up: everything rushes.
+    Fired,
+    /// The waltz: everything on the beat.
+    Waltz,
+}
+
+impl Call {
+    pub fn word(self) -> &'static str {
+        match self {
+            Call::Giant => "giant",
+            Call::Fired => "fired",
+            Call::Waltz => "waltz",
+        }
+    }
+
+    /// The lesson its hints teach.
+    pub fn topic(self) -> Topic {
+        match self {
+            Call::Giant => Topic::Giant,
+            Call::Fired => Topic::Gap,
+            Call::Waltz => Topic::Waltz,
+        }
+    }
+
+    pub fn from_word(w: &str) -> Option<Call> {
+        [Call::Giant, Call::Fired, Call::Waltz].into_iter().find(|c| c.word() == w)
+    }
 }
 
 /// Where a level's closing stretch starts (`shout:`): past a column, or (a tower) above a row.
@@ -1002,8 +1043,7 @@ impl Level {
         self.gates.iter().any(|g| g.topic == Topic::Grip && greasy && g.berth().contains((c, r)))
     }
 
-    /// Is column `col` inside a fired-up chasm mark (no overuse limit there, and Han catches
-    /// Nat in mid-air)?
+    /// Is column `col` inside a fired-up chasm mark (where Han catches Nat in mid-air)?
     pub fn in_chasm(&self, col: i32) -> bool {
         self.gates.iter().any(|g| g.topic == Topic::Chain && (g.c0..=g.c1).contains(&col))
     }
@@ -1123,6 +1163,7 @@ impl Level {
         let mut secret = None;
         let mut shout = None;
         let mut gates = Vec::new();
+        let mut calls = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
 
@@ -1151,6 +1192,11 @@ impl Level {
                     solo = true;
                 }
                 "say" => says.push(value.to_string()),
+                "calls" => {
+                    for w in value.split_whitespace() {
+                        calls.push(Call::from_word(w).ok_or_else(|| format!("calls: `{w}` is not a call (giant, fired, waltz)"))?);
+                    }
+                }
                 "shout" => {
                     let bad = || format!("bad shout `{value}` (want `<col>` or `row <row>`)");
                     shout = Some(match value.strip_prefix("row ") {
@@ -1414,6 +1460,7 @@ impl Level {
             solo,
             secret,
             shout,
+            calls,
         })
     }
 }

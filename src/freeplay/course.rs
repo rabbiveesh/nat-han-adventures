@@ -80,6 +80,7 @@ impl Course {
             solo: false,
             secret: None,
             shout: None,
+            calls: Vec::new(),
         };
         (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)
     }
@@ -124,7 +125,7 @@ impl Course {
         for s in &room.say_at {
             level.say_at.push(crate::level::Spot { col: s.col + col0, row: s.row + dr, ..s.clone() });
         }
-        // Gate marks (Han's boost is weak around the band's gates; no overuse limit in chasms).
+        // Gate marks (Han's boost is weak around the band's gates).
         for g in &room.gates {
             level.gates.push(crate::level::GateMark {
                 c0: g.c0 + col0 as i32,

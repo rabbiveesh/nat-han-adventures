@@ -26,7 +26,11 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
 - `src/input.rs` leafwing `Action`s on one global entity: `Single<&ActionState<Action>>`.
 - `src/events.rs` gameplay messages (NuggetCollected, Jumped, Landed, PlayerDied, ...).
 - `src/level.rs` the ASCII level format (documented at the top of the file, gate marks
-  included) and parser; `src/level/validate.rs` the level validator (reachability, platform carry, gates,
+  included) and parser; a `calls:` level (3 and 7 so far: the level-wide modes pilot) has no gate
+  marks: a call holds until the next checkpoint or death (`Band::hold_to_checkpoint`), Han's boost
+  is full strength everywhere, and the validator checks it level-wide (`calls_errors`: no call
+  can't finish it, each call can, each call has a road of its own; `cargo run --example
+  check_level -- <file>` shows its report); `src/level/validate.rs` the level validator (reachability, platform carry, gates,
   splat stains, grease chutes, Han's gates, teaching hints); `src/level/nav.rs` Han's lazily
   built nav graph; `src/level/buddy.rs` Han's physics and reflexes (shared by the game and the
   validator). Pure and wasm-safe; `tests/levels.rs` runs the validator on the campaign.

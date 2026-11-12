@@ -16,7 +16,7 @@ use crate::state::AppState;
 use crate::touch::TouchMode;
 
 pub fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::Playing), spawn.run_if(resource_exists::<SideB>))
+    app.add_systems(OnEnter(AppState::Playing), spawn.after(super::hud::spawn_hud).run_if(resource_exists::<SideB>))
         .add_systems(
             Update,
             (respawn, update).chain().run_if(in_state(AppState::Playing).and_then(resource_exists::<SideB>)),
@@ -70,6 +70,7 @@ fn respawn(
     touch: Option<Res<TouchMode>>,
     strip: Query<(Entity, &SetList)>,
     banner: Query<Entity, With<Banner>>,
+    slots: Query<(Entity, &super::hud::HudSlot)>,
 ) {
     if !strip.is_empty() && strip.iter().all(|(_, s)| s.0 == side.level) {
         return;
@@ -77,7 +78,7 @@ fn respawn(
     for e in strip.iter().map(|(e, _)| e).chain(&banner) {
         commands.entity(e).despawn();
     }
-    spawn(commands, font, sprites, side, touch);
+    spawn(commands, font, sprites, side, touch, slots);
 }
 
 #[derive(Component)]
@@ -124,7 +125,14 @@ fn icon_of(c: SetCall) -> SpriteId {
     }
 }
 
-fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>>, side: Res<SideB>, touch: Option<Res<TouchMode>>) {
+fn spawn(
+    mut commands: Commands,
+    font: Res<UiFont>,
+    sprites: Option<Res<Sprites>>,
+    side: Res<SideB>,
+    touch: Option<Res<TouchMode>>,
+    slots: Query<(Entity, &super::hud::HudSlot)>,
+) {
     let sprites = sprites.as_deref();
     // (On a phone: along the bottom, a big cell over each third of the screen, its tap zone.)
     let phone = touch.is_some_and(|t| t.0);
@@ -133,23 +141,27 @@ fn spawn(mut commands: Commands, font: Res<UiFont>, sprites: Option<Res<Sprites>
     } else {
         (Node { top: px(strip::STRIP_TOP), ..default() }, 8.0)
     };
-    commands
-        .spawn((
-            Name::new("SetList"),
-            SetList(side.level),
-            DespawnOnExit(AppState::Playing),
-            Node {
-                position_type: PositionType::Absolute,
-                top: place.top,
-                bottom: place.bottom,
-                width: percent(100.0),
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                row_gap: px(2.0),
-                ..default()
-            },
-        ))
-        .with_children(|root| {
+    // (Off a phone: in the HUD's stack, where the story's counter strip goes: `hud::HudSlot`.)
+    let slot = (!phone).then(|| super::hud::slot(&slots, super::hud::HudSlot::Strip)).flatten();
+    let mut list = commands.spawn((
+        Name::new("SetList"),
+        SetList(side.level),
+        DespawnOnExit(AppState::Playing),
+        Node {
+            position_type: if slot.is_some() { PositionType::Relative } else { PositionType::Absolute },
+            top: if slot.is_some() { Val::Auto } else { place.top },
+            bottom: place.bottom,
+            width: if slot.is_some() { Val::Auto } else { percent(100.0) },
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            row_gap: px(2.0),
+            ..default()
+        },
+    ));
+    if let Some(slot) = slot {
+        list.insert(ChildOf(slot));
+    }
+    list.with_children(|root| {
             if !phone {
                 root.spawn(label(&font, "SET LIST", 8.0, DIM_CREAM));
             }

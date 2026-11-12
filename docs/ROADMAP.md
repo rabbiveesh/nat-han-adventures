@@ -44,8 +44,8 @@ Live: https://rabbiveesh.github.io/nat-han-adventures/ · deploys on every push 
 - **Death as a mechanic**: splat stains on spikes (standable), rafts in sewage, side splats that
   fade at grease-chute ends; stain pits and chutes in the levels.
 - **Han** (`docs/han-buddy.md`): graph navigation, plunger boost (refreshes the toot), mid-air
-  intercepts, shield escort through sprays, sewage rafts, per-mode physics, weak boost + grumbles
-  near band gates, overuse limit, the fired-up running throw, the Giant Steps mega-boost, the nervous wall-cling, the waltz trapeze; mega walls,
+  intercepts, shield escort through sprays, sewage rafts, per-mode physics, weak boost + pointing at the band
+  near band gates, the fired-up running throw, the Giant Steps mega-boost, the nervous wall-cling, the waltz trapeze; mega walls,
   cling shafts, trapezes, fired-up chasms, buddy raft pools.
 - **Adaptive difficulty** (`src/adapt/`, `src/game/adaptive.rs`): invisible story-mode assists
   (coyote/buffer/hitboxes/raft life/hidden respawn/Han eagerness & hints), band mood → musician
