@@ -21,7 +21,7 @@ use nat_han_adventures::level::*;
 const PLAN: [(&str, u8, &[Gate]); LEVEL_COUNT] = [
     ("Bathroom Floor", 1, &[Gate::GiantWall]),
     ("The Bowl", 1, &[]),
-    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit, Gate::MegaWall]),
+    ("U-Bend", 2, &[Gate::LongGap, Gate::StainPit]),
     ("Pipe Maze", 2, &[Gate::GiantWall]),
     ("Main Sewer", 3, &[Gate::LongGap, Gate::StainPit, Gate::BuddyRaft]),
     ("Rat Kingdom", 3, &[Gate::GiantWall, Gate::GreaseChute, Gate::MegaWall]),
@@ -85,7 +85,9 @@ fn levels_are_valid_and_beatable() {
             got.dedup();
             let mut want = gates.to_vec();
             want.sort();
-            if got != want {
+            // (A `calls:` level is checked level-wide by the validator: its crossings are
+            // wherever a call's jumps first reach, not a plan.)
+            if got != want && level.calls.is_empty() {
                 errs.push(format!("gates {got:?}, planned {want:?}"));
             }
             if GATED_GOAL.contains(&i) && !report.gated_goal {

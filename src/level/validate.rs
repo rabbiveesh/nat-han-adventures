@@ -79,9 +79,9 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use super::buddy::{Chasm, HAN_CHASM_CATCH_RISE, HanPhys, TRAPEZE_SPEED, trapeze_swing};
 use super::{
     BUMPER_LIFT, BUMPER_SPEED, CLING_ROWS, CUSHION_HOLD, Crusher, FAN_LIFT, FAN_RISE, FIRED_UP_TILES, GIANT_CUSHION_BAT, GIANT_FAN_REACH,
-    GateMark, Granted, cushion_shot, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
+    Call, GateMark, Granted, cushion_shot, HAN_BERTH, Level, MAX_BARK_WORDS, MAX_LINE, SPRING_SPEED, TILE, ThingKind, Tile, Topic, WALTZ_SPRING_BOOST, WIND_SPEED,
 };
-use crate::audio::{Harmony, director::NERVOUS_DEATHS, waltz::WALTZ_BPM};
+use crate::audio::{Harmony, director::{FIRED_UP_NUGGETS, NERVOUS_DEATHS}, waltz::WALTZ_BPM};
 use crate::game::{
     ALIEN_PULSE, BOOST_SPEED, KICK_CARRY, THROW_CARRY, THROW_SPEED, BeatClock, DRUNK_SWAY, MELTING_JUMP, RAFT_LIFE_FLOOR, Groove, SPRAY_CYCLE, WALTZ_ONE_BOOST, WALTZ_ONE_TOOT_SPEED, WALTZ_ONE_WINDOW,
     WEAK_BOOST_SPEED, spray_on,
@@ -597,6 +597,9 @@ pub struct Map<'a> {
     /// marked as they're found (Han's boost is weak around them like around marked ones).
     derive_marks: bool,
     pub(crate) derived: Vec<GateMark>,
+    /// May [`reach`] use the band's modes (false: normal physics and Han alone, for a
+    /// `calls:` level's checks, [`calls_errors`])?
+    band: bool,
 }
 
 impl<'a> Map<'a> {
@@ -799,6 +802,7 @@ impl<'a> Map<'a> {
                 .collect(),
             carry,
             derive_marks: false,
+            band: true,
             derived: Vec::new(),
         }
     }
@@ -2155,6 +2159,12 @@ impl Graph {
 
 /// Follow every normal-physics arc from `seeds`, adding to `g`; returns the cells added.
 fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &mut Graph) -> Vec<Cell> {
+    explore_with(map, &[arcs], seeds, origin, g)
+}
+
+/// [`explore`] with every arc of several sets (a mode's jumps, all level long).
+fn explore_with(map: &Map, sets: &[&Arcs], seeds: Vec<Cell>, origin: Option<usize>, g: &mut Graph) -> Vec<Cell> {
+    let arcs = sets[0];
     let mut added = Vec::new();
     let mut queue = seeds;
     let mut buf = Vec::new();
@@ -2185,24 +2195,26 @@ fn explore(map: &Map, arcs: &Arcs, seeds: Vec<Cell>, origin: Option<usize>, g: &
                 }
             }
         }
-        for s in arcs.at(map, cell) {
-            let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
-            match simulate(map, &arcs.env, cell, s, x0, &mut buf) {
-                Outcome::Land(land) => {
-                    if !out.contains(&land) {
-                        out.push(land);
+        for arcs in sets {
+            for s in arcs.at(map, cell) {
+                let Some(x0) = take_off(map, &arcs.env, cell, s) else { continue };
+                match simulate(map, &arcs.env, cell, s, x0, &mut buf) {
+                    Outcome::Land(land) => {
+                        if !out.contains(&land) {
+                            out.push(land);
+                        }
+                        for &t in &buf {
+                            g.touch(t);
+                        }
                     }
-                    for &t in &buf {
-                        g.touch(t);
+                    Outcome::Died(Some(d)) => {
+                        let e = g.deaths.entry(d).or_insert((origin, Vec::new()));
+                        if e.1.len() < 3 && !e.1.contains(&cell) {
+                            e.1.push(cell);
+                        }
                     }
+                    _ => {}
                 }
-                Outcome::Died(Some(d)) => {
-                    let e = g.deaths.entry(d).or_insert((origin, Vec::new()));
-                    if e.1.len() < 3 && !e.1.contains(&cell) {
-                        e.1.push(cell);
-                    }
-                }
-                _ => {}
             }
         }
         out.retain(|&c| c != cell);
@@ -2436,6 +2448,19 @@ impl Default for Physics {
     }
 }
 
+/// The jumps [`reach`] walks with: normal physics, and in a `calls:` level (the band free)
+/// each call's too, as if it played wherever it's wanted ([`calls_errors`] checks it can be
+/// charged and held there).
+fn walk_arcs<'p>(map: &Map, phys: &'p Physics) -> Vec<&'p Arcs> {
+    let mut v = vec![phys.human(Mode::Normal)];
+    if map.band {
+        for &c in &map.level.calls {
+            v.extend(call_arcs(phys, c).into_iter().filter(|a| !std::ptr::eq(*a, phys.human(Mode::Normal))));
+        }
+    }
+    v
+}
+
 /// Stain pit search: the fewest splats (beam search, at most [`MAX_PIT_DEATHS`]) that let
 /// normal jumps past `pit`. Returns the stains, the take-off cell and the first cell past it.
 fn cross_pit(map: &Map, phys: &Physics, g: &Graph, pit: &Pit) -> Option<(Vec<Cell>, Cell, Cell)> {
@@ -2597,7 +2622,7 @@ fn cross_dying(
 /// made for pits stay in `map`.
 fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
     let mut g = Graph::new(map.w, map.h);
-    explore(map, phys.human(Mode::Normal), vec![start], None, &mut g);
+    explore_with(map, &walk_arcs(map, phys), vec![start], None, &mut g);
     let mut crossings: Vec<Crossing> = Vec::new();
     let mut tried: Vec<bool> = vec![false; (map.w * map.h) as usize];
     let mut pits_done: Vec<bool> = vec![false; map.pits.len()];
@@ -2625,7 +2650,7 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
                     if let Some(e) = g.idx(from).and_then(|ix| g.edges[ix].as_mut()) {
                         e.extend(seeds.iter().copied());
                     }
-                    let new = explore(map, phys.human(Mode::Normal), seeds, Some(i), &mut g);
+                    let new = explore_with(map, &walk_arcs(map, phys), seeds, Some(i), &mut g);
                     derive_mark(map, Gate::StainPit, from, to);
                     crossings.push(Crossing { gate: Gate::StainPit, from, to, new, stains, flags });
                     crossed = true;
@@ -2649,6 +2674,9 @@ fn reach(map: &mut Map, phys: &Physics, start: Cell) -> (Graph, Vec<Crossing>) {
         let mut found: Vec<(Gate, Cell, Cell, Vec<Cell>)> = Vec::new();
         for &cell in &todo {
             tried[g.idx(cell).unwrap()] = true;
+            if !map.band {
+                continue;
+            }
             let modes = [
                 (Mode::GiantSteps, phys.human(Mode::GiantSteps)),
                 (Mode::FiredUp, phys.human(Mode::FiredUp)),
@@ -2721,7 +2749,7 @@ fn take(map: &mut Map, phys: &Physics, g: &mut Graph, crossings: &mut Vec<Crossi
             g.touch(t);
         }
         let flags = map.flags.clone();
-        let new = explore(map, phys.human(Mode::Normal), vec![to], Some(crossings.len()), g);
+        let new = explore_with(map, &walk_arcs(map, phys), vec![to], Some(crossings.len()), g);
         crossings.push(Crossing { gate, from, to, new, stains: Vec::new(), flags });
     }
 }
@@ -2822,7 +2850,7 @@ fn buddy_found(map: &Map, phys: &Physics, g: &Graph, tried: &mut [bool]) -> Vec<
                 }
             }
         }
-        for ch in &map.chasms {
+        for ch in map.chasms.iter().filter(|_| map.band) {
             for dir in [-1, 1] {
                 // Han standing at the edge (or a few steps back), the band fired up: the throw.
                 let edge = if dir > 0 { ch.c0 - 1 } else { ch.c1 + 1 };
@@ -3644,8 +3672,10 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             crossings.iter().filter(|c| c.gate.needs_han() && !c.gate.zoned_han()).map(|c| mark_of(c.gate, c.from, c.to)),
         );
     }
-    // (Nat alone: the marks only tame Han's boost, and there's no Han.)
-    for c in crossings.iter().filter(|_| !map.derive_marks && !level.solo) {
+    // (Nat alone: the marks only tame Han's boost, and there's no Han. A `calls:` level has no
+    // marks: its checks are level-wide, below.)
+    let called = !level.calls.is_empty();
+    for c in crossings.iter().filter(|_| !map.derive_marks && !level.solo && !called) {
         let t = c.gate.topic();
         if !level.gates.iter().any(|m| m.topic == t && m.contains(c.from) && m.contains(c.to)) {
             errs.push(format!(
@@ -3689,7 +3719,9 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
     let mut gate_lines = String::new();
     let mut deaths = 0;
     for (i, c) in crossings.iter().enumerate() {
-        errs.extend(exclusive(&map, phys, &g, &crossings, i));
+        if !called {
+            errs.extend(exclusive(&map, phys, &g, &crossings, i));
+        }
         let behind: HashSet<Cell> = c.new.iter().copied().collect();
         let nuggets = level
             .things
@@ -3713,7 +3745,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         if on_way {
             deaths += splats;
         }
-        if !on_way && nuggets < DETOUR_NUGGETS {
+        if !on_way && nuggets < DETOUR_NUGGETS && !called {
             errs.push(format!(
                 "{} from col {} row {} to col {} row {} leads nowhere much ({nuggets} nuggets, not the goal)",
                 c.gate.name(),
@@ -3740,6 +3772,12 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
             "`deaths: {}` but the design needs {deaths} (stain pit splats + {NERVOUS_DEATHS} per grease chute, and for a cling shaft with no chute before it)",
             level.deaths.unwrap_or(0)
         ));
+    }
+
+    // A `calls:` level: the band's modes level-wide.
+    let mut call_lines = String::new();
+    if called && errs.is_empty() {
+        errs.extend(calls_errors(level, &base, phys, start, goal, &cps, &mut call_lines));
     }
 
     // Respawn spacing: walk P -> checkpoints (in order of distance) -> G.
@@ -3806,7 +3844,7 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
 
     let dump = opts.dump.then(|| {
         format!(
-            "=== {:?}: {}x{}, {} checkpoints, {n} nuggets ({} unreachable), segments: {:?}, deaths: {deaths}\n{gate_lines}{}",
+            "=== {:?}: {}x{}, {} checkpoints, {n} nuggets ({} unreachable), segments: {:?}, deaths: {deaths}\n{gate_lines}{call_lines}{}",
             level.name,
             level.width,
             level.height,
@@ -3817,6 +3855,98 @@ fn check_impl(level: &Level, opts: &Options, phys: &Physics, check_deaths: bool)
         )
     });
     Report { errs, gates, gated_goal: !to_goal.is_empty(), deaths, lessons, segments, dump, marks }
+}
+
+/// Cells only a call's road holds: at least this many, or the call barely changes the level.
+pub const ROAD_MIN: usize = 12;
+
+/// A call's jumps all level long: its own (the waltz: on ONE, off its gliding platforms, and
+/// plain ones between the ONEs).
+fn call_arcs(phys: &Physics, call: Call) -> Vec<&Arcs> {
+    match call {
+        Call::Giant => vec![phys.human(Mode::GiantSteps)],
+        Call::Fired => vec![phys.human(Mode::FiredUp)],
+        Call::Waltz => vec![phys.human(Mode::Normal), phys.human(Mode::Waltz), &phys.glide],
+    }
+}
+
+/// Can a call be charged from what normal physics reaches in `g`? Giant Steps' toots go
+/// anywhere; fired up wants [`FIRED_UP_NUGGETS`] nuggets; the waltz a flat run for three even
+/// hops ([`WALTZ_RUNWAY`], 2 tiles of headroom).
+fn chargeable(map: &Map, g: &Graph, call: Call) -> bool {
+    match call {
+        Call::Giant => true,
+        Call::Fired => {
+            let nuggets = map.level.things.iter().filter(|t| t.kind == ThingKind::Nugget);
+            nuggets.filter(|t| g.touched((t.col as i32, t.row as i32))).count() >= FIRED_UP_NUGGETS as usize
+        }
+        Call::Waltz => g.order.iter().any(|&c| {
+            map.flat_run(c).iter().filter(|f| (1..=2).all(|k| !map.is_solid(f.0, f.1 - k))).count() >= WALTZ_RUNWAY
+        }),
+    }
+}
+
+/// From respawn point `from`: what normal physics and Han reach (stain pits included), and
+/// with `call` (charged there, then held), what its road reaches too.
+fn chorus(base: &Map, phys: &Physics, call: Option<Call>, from: Cell) -> (HashSet<Cell>, HashSet<Cell>) {
+    let mut map = Map { band: false, ..base.clone() };
+    let (g0, _) = reach(&mut map, phys, from);
+    let plain: HashSet<Cell> = g0.order.iter().copied().collect();
+    let mut road = HashSet::new();
+    if let Some(call) = call
+        && chargeable(&map, &g0, call)
+    {
+        let mut gm = Graph::new(map.w, map.h);
+        explore_with(&map, &call_arcs(phys, call), g0.order.clone(), None, &mut gm);
+        road.extend(gm.order.iter().copied().filter(|c| !plain.contains(c)));
+    }
+    (plain, road)
+}
+
+/// A `calls:` level, checked level-wide (no gate marks): with no call the goal is out of
+/// reach (Han's boost full strength everywhere); with each call (charged after a respawn, held
+/// to the next checkpoint) it's in reach; each call has a road of its own. Buddy lines (Han's
+/// boost onto a call's road) are a feature: listed in `lines`, never an error.
+fn calls_errors(level: &Level, base: &Map, phys: &Physics, start: Cell, goal: Cell, cps: &[Cell], lines: &mut String) -> Vec<String> {
+    let mut errs = Vec::new();
+    // Walk respawn to respawn: from each, whatever reaches the next checkpoint or the goal.
+    let walk = |call: Option<Call>| -> bool {
+        let mut todo = vec![start];
+        let mut seen = HashSet::from([start]);
+        while let Some(p) = todo.pop() {
+            let (plain, road) = chorus(base, phys, call, p);
+            if plain.contains(&goal) || road.contains(&goal) {
+                return true;
+            }
+            for &c in cps {
+                if (plain.contains(&c) || road.contains(&c)) && seen.insert(c) {
+                    todo.push(c);
+                }
+            }
+        }
+        false
+    };
+    if walk(None) {
+        errs.push(format!("calls: the goal at col {} row {} is reachable with no call (Han's boost full strength)", goal.0, goal.1));
+    }
+    let mut roads = Vec::new();
+    for &call in &level.calls {
+        if !walk(Some(call)) {
+            errs.push(format!("calls: {} doesn't get to the goal (charged after each respawn, held to the next checkpoint)", call.word()));
+        }
+        // Its road: cells only it reaches, from the start, all level long.
+        let (_, road) = chorus(base, phys, Some(call), start);
+        roads.push((call, road));
+    }
+    for (call, road) in &roads {
+        let own = road.iter().filter(|c| !roads.iter().any(|(o, r)| o != call && r.contains(c))).count();
+        let cols = road.iter().map(|c| c.0).fold((i32::MAX, i32::MIN), |(a, b), c| (a.min(c), b.max(c)));
+        *lines += &format!("  calls: {} reaches {} cells normal physics and Han don't ({own} only it), cols {}..={}\n", call.word(), road.len(), cols.0, cols.1);
+        if own < ROAD_MIN {
+            errs.push(format!("calls: {}'s road is {own} cells of its own (want {ROAD_MIN}+): the call barely changes the level", call.word()));
+        }
+    }
+    errs
 }
 
 /// Every mechanic's first appearance (by path cost from the start), with its best hint.
@@ -3895,6 +4025,34 @@ fn lessons(
     }
     for c in crossings {
         see(c.gate.topic(), c.from);
+    }
+    // A `calls:` level's calls: first met where the way to the goal (fewest hops) first takes
+    // off onto cells normal physics and Han don't reach.
+    if !level.calls.is_empty() {
+        let start = (level.start.0 as i32, level.start.1 as i32);
+        let goal = (level.goal.0 as i32, level.goal.1 as i32);
+        let (plain, _) = chorus(base, phys, None, start);
+        let mut parent: HashMap<Cell, Cell> = HashMap::new();
+        let mut queue = std::collections::VecDeque::from([start]);
+        parent.insert(start, start);
+        while let Some(c) = queue.pop_front() {
+            for &e in g.edges(c) {
+                if let std::collections::hash_map::Entry::Vacant(v) = parent.entry(e) {
+                    v.insert(c);
+                    queue.push_back(e);
+                }
+            }
+        }
+        let mut path = vec![goal];
+        while let Some(&p) = parent.get(path.last().unwrap()).filter(|&&p| p != *path.last().unwrap()) {
+            path.push(p);
+        }
+        path.reverse();
+        if let Some(w) = path.windows(2).find(|w| plain.contains(&w[0]) && !plain.contains(&w[1])) {
+            for call in &level.calls {
+                see(call.topic(), w[0]);
+            }
+        }
     }
     // The toot: the first jump only a toot makes (normal physics, no stains).
     {

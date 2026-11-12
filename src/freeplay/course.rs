@@ -80,6 +80,7 @@ impl Course {
             solo: false,
             secret: None,
             shout: None,
+            calls: Vec::new(),
         };
         (Course { rooms: Vec::new(), frontier: 0, cap: None }, level)
     }

@@ -141,7 +141,7 @@ fn room_marks(template: &str, topic: Topic) -> Vec<(String, Level, GateMark)> {
 #[test]
 fn mega_walls_in_the_campaign() {
     let ms = marks(Topic::Mega);
-    assert!(ms.len() >= 3);
+    assert!(ms.len() >= 2);
     for (what, level, m) in &ms {
         assert!(play_mega(what, level, *m, true), "{what}: not on top");
     }

@@ -549,11 +549,11 @@ fn direct(
     mut named_calls: MessageReader<crate::game::sideb::CallMode>,
     mut meters: ResMut<BandMeters>,
     mut groove_for_grip: Option<ResMut<Groove>>,
-    side: Option<Res<crate::game::sideb::SideB>>,
+    (side, active): (Option<Res<crate::game::sideb::SideB>>, Option<Res<crate::game::ActiveLevel>>),
 ) {
     let playing = *state.get() == AppState::Playing;
     // (A free play Side B room starts the band afresh for Han, as a rewind does.)
-    let room_starts = side.is_some_and(|s| s.is_added() && s.room.is_some());
+    let room_starts = side.as_ref().is_some_and(|s| s.is_added() && s.room.is_some());
     let restarted = restart.read().count() > 0 || room_starts;
     let mut ev = director::Events::default();
     for j in jumped.read() {
@@ -590,7 +590,9 @@ fn direct(
     let mut decision = None;
     let mut level_start = false;
     if playing && (!d.was_playing || restarted) {
-        // Level start: everything resets, the band plays it straight.
+        // Level start: everything resets, the band plays it straight. A level built around
+        // whole-level calls (`calls:`) holds a call until the next checkpoint or death.
+        d.band.hold_to_checkpoint = side.as_ref().is_none() && active.as_ref().is_some_and(|a| !a.level.calls.is_empty());
         decision = Some(d.band.start(now));
         d.melt_until = None;
         d.nervous_until = None;

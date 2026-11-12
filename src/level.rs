@@ -33,6 +33,11 @@
 //!   it, feet on the cell's floor. The first time in a level visit Nat comes within
 //!   [`SECRET_RADIUS`] of it, Han barks the line and the save remembers it was found
 //!   (`game::secret`). [`validate`] checks Nat can get that close.
+//! - `calls: <call>...` (`giant`, `fired`, `waltz`): the level is built around these band
+//!   calls *level-wide*, not around single gates: a call holds until the next checkpoint or
+//!   death (`director::Band::hold_to_checkpoint`), and the validator checks the whole level
+//!   (the goal out of reach with no call, Han's boost full strength, reachable with each call,
+//!   each call's road its own) instead of gate marks, which such a level doesn't have.
 //! - `shout: <col>`: from that column on, the band plays shout choruses (the closing stretch);
 //!   `shout: row <row>` (a tower): once above that row.
 //! - `deaths: N`: the deaths the level's design *expects* (splat-stain stepping stones, the
@@ -933,6 +938,43 @@ pub struct Level {
     pub secret: Option<Spot>,
     /// `shout:` where the shout choruses start.
     pub shout: Option<Shout>,
+    /// `calls:` the band calls the level is built around, level-wide (empty: an older level
+    /// built around gate marks).
+    pub calls: Vec<Call>,
+}
+
+/// A band call a level is built around (`calls:`): its mode remixes the whole level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Reflect)]
+pub enum Call {
+    /// Giant Steps: everything light.
+    Giant,
+    /// Fired up: everything rushes.
+    Fired,
+    /// The waltz: everything on the beat.
+    Waltz,
+}
+
+impl Call {
+    pub fn word(self) -> &'static str {
+        match self {
+            Call::Giant => "giant",
+            Call::Fired => "fired",
+            Call::Waltz => "waltz",
+        }
+    }
+
+    /// The lesson its hints teach.
+    pub fn topic(self) -> Topic {
+        match self {
+            Call::Giant => Topic::Giant,
+            Call::Fired => Topic::Gap,
+            Call::Waltz => Topic::Waltz,
+        }
+    }
+
+    pub fn from_word(w: &str) -> Option<Call> {
+        [Call::Giant, Call::Fired, Call::Waltz].into_iter().find(|c| c.word() == w)
+    }
 }
 
 /// Where a level's closing stretch starts (`shout:`): past a column, or (a tower) above a row.
@@ -1121,6 +1163,7 @@ impl Level {
         let mut secret = None;
         let mut shout = None;
         let mut gates = Vec::new();
+        let mut calls = Vec::new();
         let mut platform_cfg: [Option<(f32, f32, f32, f32, PlatformKind)>; 10] = [None; 10];
         let mut crusher_phase: Vec<((i32, i32), Option<f32>, Option<u8>)> = Vec::new();
 
@@ -1149,6 +1192,11 @@ impl Level {
                     solo = true;
                 }
                 "say" => says.push(value.to_string()),
+                "calls" => {
+                    for w in value.split_whitespace() {
+                        calls.push(Call::from_word(w).ok_or_else(|| format!("calls: `{w}` is not a call (giant, fired, waltz)"))?);
+                    }
+                }
                 "shout" => {
                     let bad = || format!("bad shout `{value}` (want `<col>` or `row <row>`)");
                     shout = Some(match value.strip_prefix("row ") {
@@ -1412,6 +1460,7 @@ impl Level {
             solo,
             secret,
             shout,
+            calls,
         })
     }
 }
