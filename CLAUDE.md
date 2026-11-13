@@ -53,7 +53,7 @@ It's a (loving) prank on the dev's brother: keep it cartoonish and silly, never 
   backend, builds for wasm; `kira` feature: `live::playback`, `reflect` feature: Reflect derives;
   renders its own `Frame`; `soundfont` feature: `live::font`, channels played through a General
   MIDI `.sf2` via rustysynth, live, per channel, for the ear-training game, never in Nat Han;
-  `cargo run --release -p bandstand --features soundfont --example font_render` renders chip vs font). Its `src/` holds what was `src/audio/` (MML parser, NES-style synth
+  `cargo run --release -p bandstand --features soundfont --example font_render` renders chip vs font). Low horns (`live::horns`: bass trombone, bari, tuba doubling the bass line, pedals, pads, hits; `EngineConfig::horns`, off in the game) and stems (`live::stems`, `Engine::tap`; `--example stems`: a WAV and a note file per part, for training a stem separator) are SoundFont-only. Its `src/` holds what was `src/audio/` (MML parser, NES-style synth
   blocks, sfx, the director, `live/`), re-exported as `crate::audio::*` so game paths are unchanged;
   its `music/` holds the songs, `.player` files and bass lines (inside the crate so it can be
   published). Below, `src/audio/live/` and `music/` mean those under `crates/bandstand/`.

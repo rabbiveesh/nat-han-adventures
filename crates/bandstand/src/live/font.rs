@@ -25,8 +25,9 @@ use crate::Frame;
 use crate::mml::Drum;
 
 /// The engine's channels (0 pulse 1: the lead, 1 pulse 2: the comp, 2 triangle: the bass,
-/// 3 noise: the drums, 4 pulse 3: the soli's tenor).
-pub const CHANNELS: usize = 5;
+/// 3 noise: the drums, 4 pulse 3: the soli's tenor, 5 on: the horns, [`super::horns`]), one
+/// MIDI channel each (the drums on 10).
+pub const CHANNELS: usize = 16;
 /// The GM drum channel.
 const DRUM_CH: u8 = 9;
 
@@ -48,9 +49,25 @@ impl fmt::Debug for FontVoicing {
 }
 
 impl FontVoicing {
-    /// A jazz combo: trumpet lead, piano comp, upright bass, the GM kit, tenor in the soli.
+    /// A jazz combo: trumpet lead, piano comp, upright bass, the GM kit, tenor in the soli; and
+    /// the horns, should the engine have any ([`super::horns::Horn::program`]).
     pub fn combo(font: Arc<SoundFont>) -> Self {
-        FontVoicing { font, programs: [Some(56), Some(0), Some(32), Some(0), Some(66)], gain: 2.0 }
+        let mut programs = [None; CHANNELS];
+        for (ch, p) in [56, 0, 32, 0, 66].into_iter().enumerate() {
+            programs[ch] = Some(p);
+        }
+        for h in super::horns::Horn::ALL {
+            programs[h.ch() as usize] = Some(h.program());
+        }
+        FontVoicing { font, programs, gain: 2.0 }
+    }
+
+    /// Channel `ch` on GM program `program` (`None`: the chip).
+    pub fn with(mut self, ch: u8, program: Option<u8>) -> Self {
+        if let Some(p) = self.programs.get_mut(ch as usize) {
+            *p = program;
+        }
+        self
     }
 
     /// Parse an `.sf2` file's bytes.
@@ -93,7 +110,17 @@ pub(crate) struct FontVoices {
 
 impl FontVoices {
     pub(crate) fn new(voicing: FontVoicing, sample_rate: u32) -> Result<Self, String> {
-        let settings = SynthesizerSettings::new(sample_rate as i32);
+        Self::build(voicing, sample_rate, false)
+    }
+
+    /// Dry and centred: no reverb or chorus, every channel in the middle (a stem: [`super::stems`]).
+    pub(crate) fn dry(voicing: FontVoicing, sample_rate: u32) -> Result<Self, String> {
+        Self::build(voicing, sample_rate, true)
+    }
+
+    fn build(voicing: FontVoicing, sample_rate: u32, dry: bool) -> Result<Self, String> {
+        let mut settings = SynthesizerSettings::new(sample_rate as i32);
+        settings.enable_reverb_and_chorus = !dry;
         let mut synth = Synthesizer::new(&voicing.font, &settings).map_err(|e| format!("soundfont synth: {e:?}"))?;
         for (ch, p) in voicing.programs.iter().enumerate() {
             let (Some(p), Some(m)) = (p, midi_channel(ch as u8)) else { continue };
@@ -102,13 +129,16 @@ impl FontVoices {
             }
             // Lead a little left, comp right, bass and drums centred; a touch of room.
             let pan = match ch {
+                _ if dry => 64,
                 0 => 52,
                 1 => 76,
                 4 => 44,
+                5 => 58,
+                6 => 70,
                 _ => 64,
             };
             synth.process_midi_message(m as i32, 0xB0, 0x0A, pan);
-            synth.process_midi_message(m as i32, 0xB0, 0x5B, 30);
+            synth.process_midi_message(m as i32, 0xB0, 0x5B, if dry { 0 } else { 30 });
         }
         Ok(FontVoices { voicing, synth, msgs: BinaryHeap::new(), seq: 0, queued: Vec::new(), tied: [[0; 128]; 16], last: [None; 16], left: Vec::new(), right: Vec::new() })
     }
@@ -149,13 +179,7 @@ impl FontVoices {
                 self.last[ch as usize] = None;
             }
             Sound::Drum(d) => {
-                let (k, scale) = match d {
-                    Drum::Kick => (36, 0.6),
-                    Drum::Snare => (38, 0.7),
-                    Drum::ClosedHat => (51, 0.75),
-                    Drum::OpenHat => (51, 0.95),
-                    Drum::Crash => (49, 0.9),
-                };
+                let (k, scale) = drum_key(*d);
                 self.send(ev.start, true, DRUM_CH, k, ((vel as f32 * scale) as u8).max(1));
                 self.send(end, false, DRUM_CH, k, 0);
             }
@@ -220,9 +244,23 @@ impl FontVoices {
 /// The MIDI channel an engine channel plays on.
 fn midi_channel(ch: u8) -> Option<u8> {
     match ch {
-        0..=2 | 4 => Some(ch),
         3 => Some(DRUM_CH),
+        // Channel 10 is the kit's: engine channel 9 takes the drums' MIDI channel.
+        9 => Some(3),
+        0..16 => Some(ch),
         _ => None,
+    }
+}
+
+/// The GM kit's key for a drum (the hats as a ride, as a jazz drummer plays them), and how
+/// hard it's struck against the event's velocity.
+pub(crate) fn drum_key(d: Drum) -> (u8, f32) {
+    match d {
+        Drum::Kick => (36, 0.6),
+        Drum::Snare => (38, 0.7),
+        Drum::ClosedHat => (51, 0.75),
+        Drum::OpenHat => (51, 0.95),
+        Drum::Crash => (49, 0.9),
     }
 }
 
