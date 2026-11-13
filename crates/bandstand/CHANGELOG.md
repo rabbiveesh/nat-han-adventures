@@ -12,6 +12,12 @@ GitHub Release's notes.
   double the bass line (unison or octaves), hold a pedal, pad root-position long notes,
   hit ONE, lay out, or take the line while the bass lays out; rolled from the seed by
   the chorus, or `Input::ForceLowEnd`. No horns (the default) changes nothing.
+- **Big band.** A Freddie Green rhythm guitar (four to the bar, root-7-3 shells) and the
+  upper sections (four trumpets, two altos, two tenors, a channel each), voiced from the
+  arranging books: four-way close under the tune, drop 2, diminished passing chords,
+  guide-tone pads, brass punches on the band's hits. Per section a role (soli, tutti,
+  pads, punches, tacet), or `Input::ForceUpper`. `Horns::BIG_BAND`, `Horns::ALL`.
+- `Yes! We Have No Bananas` (1923) joins the library.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the
   mix exactly) and writes its notes as text. `examples/stems.rs` makes seeded takes.

@@ -123,6 +123,9 @@ pub enum Input {
     /// Override what the low horns play ([`super::horns::LowRole`]; `None`: the arranger
     /// picks a role per section), from the next bar committed.
     ForceLowEnd(Option<super::horns::LowRole>),
+    /// Override what the upper sections play ([`super::horns::UpperRole`]; `None`: the
+    /// arranger picks), from the next bar committed.
+    ForceUpper(Option<super::horns::UpperRole>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -272,6 +275,8 @@ pub struct CommittedBar {
     pub thought: Option<soloist::Thought>,
     /// What the low horns play in it (`None`: no horns).
     pub low: Option<super::horns::LowRole>,
+    /// What the upper sections play in it (`None`: no upper sections).
+    pub upper: Option<super::horns::UpperRole>,
 }
 
 /// One musician, for UIs.
@@ -448,6 +453,7 @@ pub struct Engine {
     /// Who's soloing, and in which loop pass ([`EngineConfig::soloist`]).
     soloing: Option<(u64, Soloist)>,
     forced_low: Option<super::horns::LowRole>,
+    forced_upper: Option<super::horns::UpperRole>,
     /// The horns' notes for the bar being committed.
     horn_buf: Vec<NoteEvent>,
     /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
@@ -526,6 +532,7 @@ impl Engine {
             prev_harmony: None,
             soloing: None,
             forced_low: None,
+            forced_upper: None,
             horn_buf: Vec::with_capacity(256),
             tapped: None,
         })
@@ -830,6 +837,8 @@ impl Engine {
             *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
         let low = super::horns::write(&ctx, self.config.horns, self.forced_low, &mut self.scratch, &mut self.horn_buf);
+        super::horns::write_guitar(&ctx, self.config.horns, &mut self.horn_buf);
+        let upper = super::horns::write_upper(&ctx, self.config.horns, self.forced_upper, &mut self.scratch, &mut self.horn_buf);
         self.scratch.append(&mut self.horn_buf);
         let events = self.scratch.len() as u32;
         // What the soloist hears next bar: the comp's figure in this one.
@@ -875,7 +884,7 @@ impl Engine {
             self.committed.pop_front();
         }
         let thought = self.musicians[0].thought();
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low, upper });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
@@ -1055,6 +1064,10 @@ impl Engine {
             }
             Input::ForceLowEnd(r) => {
                 self.forced_low = r;
+                None
+            }
+            Input::ForceUpper(r) => {
+                self.forced_upper = r;
                 None
             }
             Input::SetBalance(b) => {

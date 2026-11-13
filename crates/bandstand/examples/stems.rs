@@ -4,14 +4,15 @@
 //! ```text
 //! cargo run --release -p bandstand --features soundfont --example stems -- \
 //!     /usr/share/sounds/sf2/FluidR3_GM.sf2 out/ [--seed N] [--song stem] [--horns bone4,bari,tuba]
-//!     [--low unison|octave|pedal|pads|hits|tacet] [--chorus shout|soli|...] [--passes N]
+//!     [--low unison|octave|pedal|pads|hits|tacet|alone] [--upper soli|tutti|pads|punches|tacet]
+//!     [--chorus shout|soli|...] [--passes N]
 //!     [--freedom 0..1]
 //! ```
 //!
 //! Anything not given is rolled from the seed (the song, who's on the stand, the freedom), so
 //! `--seed 1..1000` makes a thousand different takes. Writes, at 44.1 kHz:
 //! `<song>-<seed>-<part>.wav` (mono f32, dry; parts: lead, piano, bass, drums, tenor, bone4,
-//! bari, tuba), `<song>-<seed>-<part>.txt` (its notes: `start end note volume gain tie slur`,
+//! bari, tuba, guitar, trumpets, altos, tenors), `<song>-<seed>-<part>.txt` (its notes: `start end note volume gain tie slur`,
 //! [`bandstand::live::stems::events_txt`]), `<song>-<seed>-mix.wav` (the sum) and
 //! `<song>-<seed>.json` (the choices, and each bar's chorus and low-horn role).
 
@@ -21,7 +22,7 @@ use std::path::Path;
 use bandstand::Frame;
 use bandstand::live::chorus::{Call, Chorus};
 use bandstand::live::font::FontVoicing;
-use bandstand::live::horns::{Horn, Horns, LowRole};
+use bandstand::live::horns::{Horn, Horns, LowRole, UpperRole};
 use bandstand::live::{Engine, EngineConfig, Input, library, stems};
 
 const RATE: u32 = 44_100;
@@ -38,11 +39,12 @@ fn main() {
     let song_arg = flag(&mut args, "--song");
     let horns_arg = flag(&mut args, "--horns");
     let low = flag(&mut args, "--low").map(|s| LowRole::parse(&s).unwrap_or_else(|| panic!("no role `{s}`")));
+    let upper = flag(&mut args, "--upper").map(|s| UpperRole::parse(&s).unwrap_or_else(|| panic!("no role `{s}`")));
     let chorus = flag(&mut args, "--chorus").map(|s| Chorus::parse(&s).unwrap_or_else(|| panic!("no chorus `{s}`")));
     let passes: u64 = flag(&mut args, "--passes").map_or(2, |s| s.parse().expect("passes"));
     let freedom_arg: Option<f32> = flag(&mut args, "--freedom").map(|s| s.parse().expect("freedom"));
     if args.len() < 2 {
-        eprintln!("usage: stems <font.sf2> <out dir> [--seed N] [--song stem] [--horns bone4,bari,tuba] [--low role] [--chorus c] [--passes N] [--freedom f]");
+        eprintln!("usage: stems <font.sf2> <out dir> [--seed N] [--song stem] [--horns bone4,bari,tuba] [--low role] [--upper role] [--chorus c] [--passes N] [--freedom f]");
         std::process::exit(2);
     }
     let font = FontVoicing::load(&std::fs::read(&args[0]).expect("read the soundfont")).expect("parse the soundfont");
@@ -62,7 +64,7 @@ fn main() {
         Some(s) => Horns::parse(&s).unwrap_or_else(|| panic!("bad --horns `{s}`")),
         None => {
             let mut h = Horns::NONE;
-            for (horn, p) in [(Horn::BassTrombone, 0.85), (Horn::Bari, 0.85), (Horn::Tuba, 0.3)] {
+            for (horn, p) in [(Horn::BassTrombone, 0.85), (Horn::Bari, 0.85), (Horn::Tuba, 0.3), (Horn::Guitar, 0.7), (Horn::Trumpets, 0.7), (Horn::Altos, 0.7), (Horn::Tenors, 0.7)] {
                 if roll() < p {
                     h = h.with(horn);
                 }
@@ -82,6 +84,7 @@ fn main() {
     e.post(Input::LevelStart);
     e.post(Input::SetFreedom { lead: freedom, comp: freedom, bass: freedom, drums: freedom, dynamics: 0.5 });
     e.post(Input::ForceLowEnd(low));
+    e.post(Input::ForceUpper(upper));
     if let Some(chorus) = chorus {
         e.post(Input::ForceChorus(Some(Call { chorus, key_up: false })));
     }
@@ -97,13 +100,14 @@ fn main() {
         for b in e.state().upcoming.iter().filter(|b| b.slot.index < bars) {
             seen.entry(b.slot.index).or_insert_with(|| {
                 format!(
-                    "{{\"bar\":{},\"pass\":{},\"song_bar\":{},\"chorus\":\"{}\",\"feel\":\"{}\",\"low\":\"{}\"}}",
+                    "{{\"bar\":{},\"pass\":{},\"song_bar\":{},\"chorus\":\"{}\",\"feel\":\"{}\",\"low\":\"{}\",\"upper\":\"{}\"}}",
                     b.slot.index,
                     b.slot.pass,
                     b.slot.song_bar,
                     b.band.chorus.slug(),
                     b.band.feel.slug(),
-                    b.low.map_or("", LowRole::slug)
+                    b.low.map_or("", LowRole::slug),
+                    b.upper.map_or("", UpperRole::slug)
                 )
             });
         }
