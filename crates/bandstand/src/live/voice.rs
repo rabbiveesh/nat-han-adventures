@@ -681,7 +681,9 @@ impl VoiceBank {
         match ev.ch {
             0..=2 => self.tones[ev.ch as usize].push(ev),
             4 => self.tones[3].push(ev),
-            _ => self.drums.push(ev),
+            3 => self.drums.push(ev),
+            // The horns play only through a SoundFont.
+            _ => {}
         }
     }
 
@@ -694,6 +696,9 @@ impl VoiceBank {
             if ch == 1 {
                 f.set_channel_gain(4, g);
             }
+        }
+        if ch > 4 {
+            return;
         }
         let (l, r) = match ch {
             0 => pan(PULSE1_PAN, PULSE_GAIN),

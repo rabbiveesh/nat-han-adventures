@@ -847,7 +847,10 @@ pub fn range(ch: usize) -> (i32, i32) {
     match ch {
         0 => (lead::LO, lead::HI),
         1 | 4 => (comp::LO, comp::HI),
-        _ => (bass::LO - 4, bass::HI + 4),
+        c => match super::horns::Horn::from_ch(c as u8) {
+            Some(h) => h.range(),
+            None => (bass::LO - 4, bass::HI + 4),
+        },
     }
 }
 

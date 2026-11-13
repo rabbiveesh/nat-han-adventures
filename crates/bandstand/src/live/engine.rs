@@ -117,6 +117,15 @@ pub enum Input {
     /// Each channel's level (pulse 1, pulse 2, triangle, noise): 1 as written, 0 muted. A mixer
     /// (an editor's mute / solo / volume): it applies at once, not at a bar line.
     SetMix([f32; 4]),
+    /// One channel's level (any channel, the horns' too: [`super::horns::Horn::ch`]): 1 as
+    /// written, 0 muted. At once, like [`Input::SetMix`].
+    SetChannelGain { ch: u8, gain: f32 },
+    /// Override what the low horns play ([`super::horns::LowRole`]; `None`: the arranger
+    /// picks a role per section), from the next bar committed.
+    ForceLowEnd(Option<super::horns::LowRole>),
+    /// Override what the upper sections play ([`super::horns::UpperRole`]; `None`: the
+    /// arranger picks), from the next bar committed.
+    ForceUpper(Option<super::horns::UpperRole>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -150,11 +159,13 @@ pub struct EngineConfig {
     pub soloist: Option<Soloist>,
     /// The comp and drums step back under the lead's phrases, the bass sits lower ([`super::mix`]).
     pub duck: bool,
+    /// The horns on the stand ([`super::horns`]; none: the combo alone).
+    pub horns: super::horns::Horns,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true, horns: super::horns::Horns::NONE }
     }
 }
 
@@ -262,6 +273,10 @@ pub struct CommittedBar {
     pub soloist: Soloist,
     /// The soloist's thinking in it (when it solos like a player).
     pub thought: Option<soloist::Thought>,
+    /// What the low horns play in it (`None`: no horns).
+    pub low: Option<super::horns::LowRole>,
+    /// What the upper sections play in it (`None`: no upper sections).
+    pub upper: Option<super::horns::UpperRole>,
 }
 
 /// One musician, for UIs.
@@ -437,6 +452,12 @@ pub struct Engine {
     prev_harmony: Option<Harmony>,
     /// Who's soloing, and in which loop pass ([`EngineConfig::soloist`]).
     soloing: Option<(u64, Soloist)>,
+    forced_low: Option<super::horns::LowRole>,
+    forced_upper: Option<super::horns::UpperRole>,
+    /// The horns' notes for the bar being committed.
+    horn_buf: Vec<NoteEvent>,
+    /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
+    tapped: Option<Vec<NoteEvent>>,
 }
 
 impl Engine {
@@ -510,6 +531,10 @@ impl Engine {
             heard: soloist::Figure::default(),
             prev_harmony: None,
             soloing: None,
+            forced_low: None,
+            forced_upper: None,
+            horn_buf: Vec::with_capacity(256),
+            tapped: None,
         })
     }
 
@@ -811,6 +836,10 @@ impl Engine {
         for (m, o) in self.musicians.iter_mut().zip(&mut orns) {
             *o = m.commit_next_bar(&ctx, &mut self.scratch);
         }
+        let low = super::horns::write(&ctx, self.config.horns, self.forced_low, &mut self.scratch, &mut self.horn_buf);
+        super::horns::write_guitar(&ctx, self.config.horns, &mut self.horn_buf);
+        let upper = super::horns::write_upper(&ctx, self.config.horns, self.forced_upper, &mut self.scratch, &mut self.horn_buf);
+        self.scratch.append(&mut self.horn_buf);
         let events = self.scratch.len() as u32;
         // What the soloist hears next bar: the comp's figure in this one.
         self.heard = soloist::Figure::default();
@@ -846,13 +875,16 @@ impl Engine {
         for mut e in self.scratch.drain(..) {
             e.seq = self.seq;
             self.seq += 1;
+            if let Some(t) = self.tapped.as_mut() {
+                t.push(e);
+            }
             self.bank.push(e);
         }
         if self.committed.len() == self.committed.capacity() {
             self.committed.pop_front();
         }
         let thought = self.musicians[0].thought();
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low, upper });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
@@ -1026,6 +1058,18 @@ impl Engine {
                 }
                 None
             }
+            Input::SetChannelGain { ch, gain } => {
+                self.bank.set_channel_gain(ch as usize, gain);
+                None
+            }
+            Input::ForceLowEnd(r) => {
+                self.forced_low = r;
+                None
+            }
+            Input::ForceUpper(r) => {
+                self.forced_upper = r;
+                None
+            }
             Input::SetBalance(b) => {
                 self.desk.set_balance(b);
                 None
@@ -1135,6 +1179,17 @@ impl Engine {
         }
         s.end_step = self.bar_at_playhead().and_then(|b| b.band.ending).map(|e| e.step());
         s.finished = self.finished();
+    }
+
+    /// Keep (`true`) every event as it's committed, for [`Engine::take_tapped`] (an offline
+    /// render that writes each part to its own file: [`super::stems`]), or stop.
+    pub fn tap(&mut self, on: bool) {
+        self.tapped = on.then(|| self.tapped.take().unwrap_or_default());
+    }
+
+    /// The events committed since the last call (with [`Engine::tap`] on), in commit order.
+    pub fn take_tapped(&mut self) -> Vec<NoteEvent> {
+        self.tapped.as_mut().map(std::mem::take).unwrap_or_default()
     }
 
     /// Committed events that haven't started yet (for tests and UIs).

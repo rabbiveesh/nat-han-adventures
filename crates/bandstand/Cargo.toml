@@ -27,3 +27,7 @@ soundfont = ["dep:rustysynth"]
 [[example]]
 name = "font_render"
 required-features = ["soundfont"]
+
+[[example]]
+name = "stems"
+required-features = ["soundfont"]

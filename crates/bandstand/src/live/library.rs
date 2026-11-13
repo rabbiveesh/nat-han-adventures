@@ -6,7 +6,7 @@ use super::song::SongError;
 use crate::Music;
 
 /// `(file stem, text)` of every song.
-pub const FILES: [(&str, &str); 12] = [
+pub const FILES: [(&str, &str); 13] = [
     ("sweet_georgia_brown", include_str!("../../music/sweet_georgia_brown.song")),
     ("the_entertainer", include_str!("../../music/the_entertainer.song")),
     ("tiger_rag", include_str!("../../music/tiger_rag.song")),
@@ -19,6 +19,7 @@ pub const FILES: [(&str, &str); 12] = [
     ("after_youve_gone", include_str!("../../music/after_youve_gone.song")),
     ("sunny_side", include_str!("../../music/sunny_side.song")),
     ("body_and_soul", include_str!("../../music/body_and_soul.song")),
+    ("yes_we_have_no_bananas", include_str!("../../music/yes_we_have_no_bananas.song")),
 ];
 
 /// The file for a piece of the game's music.
