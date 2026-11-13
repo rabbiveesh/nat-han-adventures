@@ -93,7 +93,8 @@ fn main() {
     let mut t = 0u64;
     let mut seen: BTreeMap<u64, String> = BTreeMap::new();
     let mut events = Vec::new();
-    while e.beat_clock().position.bar < bars {
+    // (A one-shot, the jingle, plays once and ends: stop when it has.)
+    while e.beat_clock().position.bar < bars && !e.finished() {
         e.fill(&mut buf);
         t += buf.len() as u64;
         events.extend(e.take_tapped());
