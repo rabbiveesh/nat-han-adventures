@@ -69,6 +69,16 @@ impl Horn {
         }
     }
 
+    /// Its level against the band (a section sits around the bass, not over it: FluidR3's
+    /// bari and tuba are much hotter than its upright).
+    fn level(self) -> f32 {
+        match self {
+            Horn::BassTrombone => 0.45,
+            Horn::Bari => 0.3,
+            Horn::Tuba => 0.3,
+        }
+    }
+
     /// Its General MIDI program (0-based: GM has no bass trombone, so the trombone).
     pub fn program(self) -> u8 {
         match self {
@@ -244,7 +254,7 @@ pub fn write(ctx: &Ctx, horns: Horns, force: Option<LowRole>, band: &mut Vec<Not
     let up = unit(ctx.seed, ctx.bar.pass, (ctx.bar.song_bar / SECTION) as u64, 3) < 0.5;
     for (k, h) in horns.iter().enumerate() {
         let ch = h.ch();
-        let at = |e: NoteEvent| NoteEvent { ch, inst: 0, anchor: 0, ..e };
+        let at = |e: NoteEvent| NoteEvent { ch, inst: 0, anchor: 0, gain: e.gain * h.level(), ..e };
         match role {
             LowRole::Unison | LowRole::Octave | LowRole::Alone => {
                 let octave = role == LowRole::Octave && h != Horn::Tuba && ((k % 2 == 1) ^ up);
