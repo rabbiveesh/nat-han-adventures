@@ -92,6 +92,7 @@ pub mod chorus;
 pub mod desk;
 pub mod engine;
 pub mod feel;
+pub mod arranger;
 pub mod horns;
 #[cfg(feature = "soundfont")]
 pub mod font;

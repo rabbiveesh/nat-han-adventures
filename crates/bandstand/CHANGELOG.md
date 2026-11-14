@@ -17,6 +17,14 @@ GitHub Release's notes.
   arranging books: four-way close under the tune, drop 2, diminished passing chords,
   guide-tone pads, brass punches on the band's hits. Per section a role (soli, tutti,
   pads, punches, tacet), or `Input::ForceUpper`. `Horns::BIG_BAND`, `Horns::ALL`.
+- **The arranger** (`live::arranger`) plans the upper sections a chorus at a time. In a
+  head the tune is passed round (the lead, a sax soli, a trumpet, tenor or alto standing
+  up, tutti on the last eight); in a solo chorus the soloist stands up from a section
+  that suits them (Miles and Pops on trumpet, Trane, Sonny and Wayne on tenor, Bird on
+  alto) and the backgrounds build behind them: alone, pads, then a two-bar riff (one
+  per chorus, sometimes the tune's own opening rhythm, its theme) or answers in the
+  soloist's rests. The theme plays the intro; in a shout the brass call and the saxes
+  answer. New roles `Riff` and `Answers`; `Input::ForceMelody`; `CommittedBar::melody`.
 - `Yes! We Have No Bananas` (1923) joins the library.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the

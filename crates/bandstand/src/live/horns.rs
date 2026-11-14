@@ -30,15 +30,19 @@
 //! sixth string, beats two and four a touch harder. It lays out in the other feels and the
 //! breaks.
 //!
-//! **The upper sections** get an [`UpperRole`] per section the same way
-//! ([`super::Input::ForceUpper`]):
+//! **The upper sections** are planned a chorus at a time by [`super::arranger`]: who has the
+//! line ([`Melody`]: the tune passed round in a head, a soloist standing up from a section) and
+//! an [`UpperRole`] per section behind it ([`super::Input::ForceUpper`],
+//! [`super::Input::ForceMelody`]):
 //!
 //! | Role | What they play |
 //! |---|---|
-//! | Soli | the saxes voice the tune: the lead alto on it, four-way close under it, dropped two |
+//! | Soli | the saxes voice the tune: the lead alto on it, four-way close under it, dropped two; the brass answer in its rests |
 //! | Tutti | the trumpets on the tune an octave up, four-way close; the saxes the same an octave down, dropped two |
-//! | Pads | the saxes behind: a drop-2 chord per change, the top on a guide tone |
+//! | Pads | guide-tone pads behind the line, a long chord's top stepping down |
 //! | Punches | brass stabs: the band's hits, or one figure a bar |
+//! | Riff | the chorus's two-bar riff (or the tune's theme), voiced through the changes |
+//! | Answers | short figures in the line's rests and under its long notes, brass and saxes in turn |
 //! | Tacet | the rhythm section and the soloist |
 //!
 //! Voicing is the arranging books' four-way close: the melody on top, the next three chord tones
@@ -51,6 +55,8 @@ use super::band::{BandPlan, HitKind};
 use super::chorus::Chorus;
 use super::musician::Ctx;
 use super::voice::{NoteEvent, Sound};
+
+pub use super::arranger::{Melody, Section, UpperRole};
 
 /// The first horn's channel (0-4 are the combo's: lead, comp, bass, drums, the soli's tenor).
 pub const FIRST_CH: u8 = 5;
@@ -115,7 +121,7 @@ impl Horn {
 
     /// Its level against the band (a section sits around the bass, not over it: FluidR3's
     /// bari and tuba are much hotter than its upright).
-    fn level(self) -> f32 {
+    pub(super) fn level(self) -> f32 {
         match self {
             Horn::BassTrombone => 0.32,
             Horn::Bari => 0.21,
@@ -257,74 +263,8 @@ impl LowRole {
     }
 }
 
-/// What the upper sections do in a section.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum UpperRole {
-    Tacet,
-    Soli,
-    Tutti,
-    Pads,
-    Punches,
-}
-
-impl UpperRole {
-    pub const ALL: [UpperRole; 5] = [UpperRole::Tacet, UpperRole::Soli, UpperRole::Tutti, UpperRole::Pads, UpperRole::Punches];
-
-    pub fn slug(self) -> &'static str {
-        match self {
-            UpperRole::Tacet => "tacet",
-            UpperRole::Soli => "soli",
-            UpperRole::Tutti => "tutti",
-            UpperRole::Pads => "pads",
-            UpperRole::Punches => "punches",
-        }
-    }
-
-    pub fn parse(s: &str) -> Option<UpperRole> {
-        UpperRole::ALL.into_iter().find(|r| r.slug() == s)
-    }
-
-    /// Weights (in [`UpperRole::ALL`] order) for a section of `chorus`. The sections take the
-    /// tune only where the lead plays it (not under a solo).
-    fn weights(chorus: Chorus) -> [u32; 5] {
-        match chorus {
-            Chorus::Shout => [0, 10, 70, 0, 20],
-            Chorus::Soli => [0, 80, 20, 0, 0],
-            Chorus::StopTime => [20, 0, 20, 0, 60],
-            Chorus::Breaks => [30, 0, 30, 20, 20],
-            Chorus::Head | Chorus::TwoFeel => [20, 15, 15, 30, 20],
-            _ => [35, 0, 0, 35, 30],
-        }
-    }
-}
-
-/// The upper sections' role for the section `ctx`'s bar is in.
-pub fn upper_role(ctx: &Ctx, force: Option<UpperRole>) -> UpperRole {
-    if let Some(r) = force {
-        return r;
-    }
-    let band = ctx.band;
-    if band.intro.is_some() {
-        return UpperRole::Pads;
-    }
-    if band.ending.is_some() {
-        return UpperRole::Punches;
-    }
-    let section = (ctx.bar.song_bar / SECTION) as u64;
-    let w = UpperRole::weights(band.chorus);
-    let total: u32 = w.iter().sum();
-    let mut x = (unit(ctx.seed, ctx.bar.pass, section, 12) * total as f64) as u32;
-    for (r, &k) in UpperRole::ALL.iter().zip(&w) {
-        if x < k {
-            return *r;
-        }
-        x -= k;
-    }
-    UpperRole::Tacet
-}
-
 /// Bars in a section (a role holds this long).
-const SECTION: usize = 8;
+pub(super) const SECTION: usize = 8;
 
 /// The role for the section `ctx`'s bar is in.
 pub fn role(ctx: &Ctx, force: Option<LowRole>) -> LowRole {
@@ -441,7 +381,7 @@ pub fn write(ctx: &Ctx, horns: Horns, force: Option<LowRole>, band: &mut Vec<Not
 }
 
 /// The bar's chord changes: (beat, beats, root pitch class, the bari takes the fifth).
-fn changes(ctx: &Ctx) -> Vec<(f64, f64, i32, bool)> {
+pub(super) fn changes(ctx: &Ctx) -> Vec<(f64, f64, i32, bool)> {
     let bb = ctx.bb();
     let mut out: Vec<(f64, f64, i32, bool)> = Vec::new();
     let mut b = 0.0;
@@ -499,7 +439,7 @@ fn shell(c: crate::chart::Chord) -> [u8; 3] {
 
 /// A chord's four-note form, as pitch classes over the root (a sixth on a triad, the ninth for
 /// the root in a ninth chord).
-fn four(c: crate::chart::Chord) -> [i32; 4] {
+pub(super) fn four(c: crate::chart::Chord) -> [i32; 4] {
     use crate::chart::Quality::*;
     let iv: [i32; 4] = match c.quality {
         Major | Six => [0, 4, 7, 9],
@@ -521,7 +461,7 @@ fn four(c: crate::chart::Chord) -> [i32; 4] {
 /// Four-way close under `top` (top first): the next three tones of `c` below it; a short
 /// passing note (`passing`) gets the diminished chord, and a tension's next tone down skips a
 /// chord tone a half step under it.
-fn close(top: i32, c: crate::chart::Chord, passing: bool) -> [i32; 4] {
+pub(super) fn close(top: i32, c: crate::chart::Chord, passing: bool) -> [i32; 4] {
     let pcs = four(c);
     if !pcs.contains(&top.rem_euclid(12)) && passing {
         return [top, top - 3, top - 6, top - 9];
@@ -540,136 +480,10 @@ fn close(top: i32, c: crate::chart::Chord, passing: bool) -> [i32; 4] {
 
 /// Drop 2: the second voice from the top down an octave (returned top first, then the rest
 /// high to low).
-fn drop2(v: [i32; 4]) -> [i32; 4] {
+pub(super) fn drop2(v: [i32; 4]) -> [i32; 4] {
     let mut d = [v[0], v[2], v[3], v[1] - 12];
     d[1..].sort_by(|a, b| b.cmp(a));
     d
-}
-
-/// The upper sections' bar.
-pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<UpperRole> {
-    let (tp, al, te) = (horns.has(Horn::Trumpets), horns.has(Horn::Altos), horns.has(Horn::Tenors));
-    if !(tp || al || te) {
-        return None;
-    }
-    let mut role = upper_role(ctx, force);
-    let plan = ctx.band;
-    if plan.tacet || plan.solo_break || role == UpperRole::Tacet {
-        return Some(role);
-    }
-    // The tune as written, ties joined.
-    let mut tune: Vec<(f64, f64, i32)> = Vec::new();
-    let mut written = Vec::with_capacity(64);
-    ctx.written(0, &mut written);
-    for w in &written {
-        let Sound::Note(n) = w.sound else { continue };
-        let (b, d) = (ctx.rel(w), ctx.len(w));
-        match tune.last_mut() {
-            Some(last) if w.tie && last.2 == n as i32 => last.1 = b + d - last.0,
-            _ => tune.push((b, d, n as i32)),
-        }
-    }
-    if matches!(role, UpperRole::Soli | UpperRole::Tutti) && tune.is_empty() {
-        role = UpperRole::Pads;
-    }
-    let tmpl = |h: Horn, vol: u8| {
-        let mut t = ctx.template(1, None);
-        t.ch = h.ch();
-        t.inst = 0;
-        t.anchor = 0;
-        t.gain *= h.level();
-        t.volume = vol;
-        t
-    };
-    let chord = |b: f64| ctx.harm_at(b.max(0.0)).map(|h| h.chord);
-    let play = |out: &mut Vec<NoteEvent>, h: Horn, vol: u8, b: f64, d: f64, notes: &[i32]| {
-        if !horns.has(h) {
-            return;
-        }
-        let (lo, hi) = h.range();
-        let ns: Vec<u8> = notes
-            .iter()
-            .map(|&n| {
-                let mut n = n;
-                while n < lo {
-                    n += 12;
-                }
-                while n > hi {
-                    n -= 12;
-                }
-                n as u8
-            })
-            .collect();
-        push(out, ctx.make(&tmpl(h, vol), b, d, Sound::Arp(crate::mml::Arp::new(&ns))));
-    };
-    let octave_into = |n: i32, lo: i32, hi: i32| {
-        let mut n = n;
-        while n < lo {
-            n += 12;
-        }
-        while n > hi {
-            n -= 12;
-        }
-        n
-    };
-    match role {
-        UpperRole::Soli | UpperRole::Tutti => {
-            for &(b, d, n) in &tune {
-                let Some(c) = chord(b) else { continue };
-                let passing = d < 0.75 && b.fract() > 0.1;
-                if role == UpperRole::Soli {
-                    let top = octave_into(n, 62, 77);
-                    let v = drop2(close(top, c, passing));
-                    play(out, Horn::Altos, 12, b, d, &v[..2]);
-                    play(out, Horn::Tenors, 12, b, d, &v[2..]);
-                } else {
-                    let top = octave_into(n, 67, 84);
-                    let v = close(top, c, passing);
-                    play(out, Horn::Trumpets, 13, b, d, &v);
-                    let s = drop2(v.map(|x| x - 12));
-                    play(out, Horn::Altos, 12, b, d, &s[..2]);
-                    play(out, Horn::Tenors, 12, b, d, &s[2..]);
-                }
-            }
-            // The sections have the tune: the lead lays out.
-            band.retain(|e| e.ch != 0);
-        }
-        UpperRole::Pads => {
-            for (b, d, root, _) in changes(ctx) {
-                let Some(c) = chord(b) else { continue };
-                let pcs = four(c);
-                // The top on a guide tone (the third or the seventh) near A4.
-                let guide = [pcs[1], pcs[3]];
-                let top = (60..=74).rev().filter(|n| guide.contains(&(n % 12))).min_by_key(|n| (n - 69).abs()).unwrap_or(69 + (root % 12));
-                let v = drop2(close(top, c, false));
-                play(out, Horn::Altos, 8, b, (d - 0.1).max(0.5), &v[..2]);
-                play(out, Horn::Tenors, 8, b, (d - 0.1).max(0.5), &v[2..]);
-            }
-        }
-        UpperRole::Punches => {
-            let mut at: Vec<f64> = (0..16).filter(|k| plan.hits & 1 << k != 0).map(|k| k as f64 / 4.0).filter(|&b| b < ctx.bb()).collect();
-            if at.is_empty() {
-                let figures: [&[f64]; 4] = [&[1.5], &[2.5], &[0.0, 1.5], &[3.5]];
-                let f = figures[(unit(ctx.seed, ctx.bar.index, 0, 13) * 4.0) as usize % 4];
-                at = f.iter().copied().filter(|&b| b < ctx.bb()).collect();
-                if plan.hit_kind == HitKind::Stop {
-                    at = vec![0.0];
-                }
-            }
-            for b in at {
-                let Some(c) = chord(b) else { continue };
-                let pcs = four(c);
-                let top = (70..=80).rev().find(|n| pcs.contains(&(n % 12))).unwrap_or(76);
-                let v = close(top, c, false);
-                play(out, Horn::Trumpets, 14, b, 0.4, &v);
-                let s = drop2(v.map(|x| x - 12));
-                play(out, Horn::Altos, 12, b, 0.4, &s[..2]);
-                play(out, Horn::Tenors, 12, b, 0.4, &s[2..]);
-            }
-        }
-        UpperRole::Tacet => {}
-    }
-    Some(role)
 }
 
 fn push(out: &mut Vec<NoteEvent>, e: NoteEvent) {
@@ -677,7 +491,7 @@ fn push(out: &mut Vec<NoteEvent>, e: NoteEvent) {
 }
 
 /// A deterministic coin in [0, 1).
-fn unit(seed: u64, a: u64, b: u64, what: u64) -> f64 {
+pub(super) fn unit(seed: u64, a: u64, b: u64, what: u64) -> f64 {
     let mut x = seed ^ 0x686f_726e_73 ^ a.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ b.wrapping_mul(0xC2B2_AE3D_27D4_EB4F) ^ what.wrapping_mul(0x1656_67B1_9E37_79F9);
     x ^= x >> 33;
     x = x.wrapping_mul(0xff51_afd7_ed55_8ccd);
@@ -718,7 +532,7 @@ mod tests {
         let a = take(Horns::NONE, &[], "sweet_georgia_brown");
         assert!(a.iter().all(|e| e.ch < FIRST_CH));
         // (Any role but Alone, which takes the bass out.)
-        let b = take(Horns::ALL, &[Input::ForceLowEnd(Some(LowRole::Pads)), Input::ForceUpper(Some(UpperRole::Pads))], "sweet_georgia_brown");
+        let b = take(Horns::ALL, &[Input::ForceLowEnd(Some(LowRole::Pads)), Input::ForceUpper(Some(UpperRole::Pads)), Input::ForceMelody(Some(Melody::Lead))], "sweet_georgia_brown");
         let band: Vec<_> = b.iter().filter(|e| e.ch < FIRST_CH).map(|e| (e.ch, e.start, e.end, e.sound)).collect();
         assert_eq!(a.iter().map(|e| (e.ch, e.start, e.end, e.sound)).collect::<Vec<_>>(), band);
     }
@@ -773,7 +587,7 @@ mod tests {
     fn upper_sections_voice_the_tune() {
         for role in UpperRole::ALL {
             for song in ["sweet_georgia_brown", "body_and_soul", "yes_we_have_no_bananas"] {
-                let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(role))], song);
+                let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(role)), Input::ForceMelody(Some(Melody::Lead))], song);
                 for e in &evs {
                     let Some(h) = Horn::from_ch(e.ch) else { continue };
                     let (lo, hi) = h.range();
@@ -786,7 +600,7 @@ mod tests {
                 let sx = evs.iter().filter(|e| e.ch == Horn::Altos.ch()).count();
                 match role {
                     UpperRole::Tutti => assert!(tp > 40 && sx > 40 && lead < 10, "{song}: {tp} {sx} {lead}"),
-                    UpperRole::Soli => assert!(tp == 0 && sx > 40 && lead < 10, "{song}: {tp} {sx} {lead}"),
+                    UpperRole::Soli => assert!(tp * 2 < sx && sx > 40 && lead < 10, "{song}: {tp} {sx} {lead}"),
                     UpperRole::Tacet => assert!(tp == 0 && sx == 0, "{song}"),
                     _ => assert!(tp + sx > 10, "{song} {role:?}"),
                 }
@@ -831,5 +645,57 @@ mod tests {
             roles.extend(e.state().upcoming.iter().filter_map(|b| b.low));
         }
         assert!(roles.len() >= 3, "{roles:?}");
+    }
+
+    /// A horn standing up takes the lead's line: one note at a time, in its range, the lead
+    /// out of the way.
+    #[test]
+    fn the_line_moves_to_a_horn() {
+        for (m, h) in [(Melody::Tenor, Horn::Tenors), (Melody::Trumpet, Horn::Trumpets), (Melody::Alto, Horn::Altos)] {
+            let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(UpperRole::Tacet)), Input::ForceMelody(Some(m))], "sweet_georgia_brown");
+            let lead = evs.iter().filter(|e| e.ch == 0).count();
+            let line: Vec<_> = evs.iter().filter(|e| e.ch == h.ch()).collect();
+            assert!(lead == 0 && line.len() > 40, "{m:?}: lead {lead}, {}", line.len());
+            let (lo, hi) = h.range();
+            for e in &line {
+                assert!(e.sound.notes().len() == 1 && (lo..=hi).contains(&(e.sound.notes()[0] as i32)), "{m:?}: {:?}", e.sound);
+            }
+        }
+    }
+
+    /// Answers come in where the line rests or holds, not on its attacks.
+    #[test]
+    fn answers_fill_the_rests() {
+        let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(UpperRole::Answers)), Input::ForceMelody(Some(Melody::Lead))], "body_and_soul");
+        let lead: Vec<_> = evs.iter().filter(|e| e.ch == 0).collect();
+        let horns: Vec<_> = evs.iter().filter(|e| [Horn::Trumpets, Horn::Altos, Horn::Tenors].iter().any(|h| h.ch() == e.ch)).collect();
+        assert!(horns.len() > 20, "{}", horns.len());
+        let clash = horns.iter().filter(|h| lead.iter().any(|l| l.start.abs_diff(h.start) < 2_000)).count();
+        assert!(clash * 10 < horns.len(), "{clash} of {}", horns.len());
+    }
+
+    /// Over a long take the arranger uses its whole kit: the line passed round, riffs, answers,
+    /// pads; and every tune has a theme.
+    #[test]
+    fn the_chart_passes_the_line_round() {
+        let mut melodies = std::collections::HashSet::new();
+        let mut roles = std::collections::HashSet::new();
+        for seed in [3, 9] {
+            let mut e = Engine::with_config(&library::load("sweet_georgia_brown").unwrap(), 32_000, EngineConfig { seed, horns: Horns::BIG_BAND, ..EngineConfig::default() }).unwrap();
+            e.post(Input::LevelStart);
+            e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
+            let mut buf = [Frame::ZERO; 1024];
+            while e.beat_clock().position.bar < 32 * 6 {
+                e.fill(&mut buf);
+                for b in &e.state().upcoming {
+                    melodies.extend(b.melody);
+                    roles.extend(b.upper);
+                }
+            }
+        }
+        assert!(melodies.len() >= 3, "{melodies:?}");
+        for r in [UpperRole::Riff, UpperRole::Answers, UpperRole::Pads] {
+            assert!(roles.contains(&r), "{r:?} never: {roles:?}");
+        }
     }
 }

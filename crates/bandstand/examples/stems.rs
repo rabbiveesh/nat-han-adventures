@@ -4,7 +4,8 @@
 //! ```text
 //! cargo run --release -p bandstand --features soundfont --example stems -- \
 //!     /usr/share/sounds/sf2/FluidR3_GM.sf2 out/ [--seed N] [--song stem] [--horns bone4,bari,tuba]
-//!     [--low unison|octave|pedal|pads|hits|tacet|alone] [--upper soli|tutti|pads|punches|tacet]
+//!     [--low unison|octave|pedal|pads|hits|tacet|alone]
+//!     [--upper soli|tutti|pads|punches|riff|answers|tacet] [--melody lead|trumpet|alto|tenor]
 //!     [--chorus shout|soli|...] [--passes N]
 //!     [--freedom 0..1]
 //! ```
@@ -22,7 +23,7 @@ use std::path::Path;
 use bandstand::Frame;
 use bandstand::live::chorus::{Call, Chorus};
 use bandstand::live::font::FontVoicing;
-use bandstand::live::horns::{Horn, Horns, LowRole, UpperRole};
+use bandstand::live::horns::{Horn, Horns, LowRole, Melody, UpperRole};
 use bandstand::live::{Engine, EngineConfig, Input, library, stems};
 
 const RATE: u32 = 44_100;
@@ -40,11 +41,12 @@ fn main() {
     let horns_arg = flag(&mut args, "--horns");
     let low = flag(&mut args, "--low").map(|s| LowRole::parse(&s).unwrap_or_else(|| panic!("no role `{s}`")));
     let upper = flag(&mut args, "--upper").map(|s| UpperRole::parse(&s).unwrap_or_else(|| panic!("no role `{s}`")));
+    let melody = flag(&mut args, "--melody").map(|s| Melody::parse(&s).unwrap_or_else(|| panic!("no melody `{s}`")));
     let chorus = flag(&mut args, "--chorus").map(|s| Chorus::parse(&s).unwrap_or_else(|| panic!("no chorus `{s}`")));
     let passes: u64 = flag(&mut args, "--passes").map_or(2, |s| s.parse().expect("passes"));
     let freedom_arg: Option<f32> = flag(&mut args, "--freedom").map(|s| s.parse().expect("freedom"));
     if args.len() < 2 {
-        eprintln!("usage: stems <font.sf2> <out dir> [--seed N] [--song stem] [--horns bone4,bari,tuba] [--low role] [--upper role] [--chorus c] [--passes N] [--freedom f]");
+        eprintln!("usage: stems <font.sf2> <out dir> [--seed N] [--song stem] [--horns bone4,bari,tuba] [--low role] [--upper role] [--melody m] [--chorus c] [--passes N] [--freedom f]");
         std::process::exit(2);
     }
     let font = FontVoicing::load(&std::fs::read(&args[0]).expect("read the soundfont")).expect("parse the soundfont");
@@ -85,6 +87,7 @@ fn main() {
     e.post(Input::SetFreedom { lead: freedom, comp: freedom, bass: freedom, drums: freedom, dynamics: 0.5 });
     e.post(Input::ForceLowEnd(low));
     e.post(Input::ForceUpper(upper));
+    e.post(Input::ForceMelody(melody));
     if let Some(chorus) = chorus {
         e.post(Input::ForceChorus(Some(Call { chorus, key_up: false })));
     }
@@ -101,14 +104,16 @@ fn main() {
         for b in e.state().upcoming.iter().filter(|b| b.slot.index < bars) {
             seen.entry(b.slot.index).or_insert_with(|| {
                 format!(
-                    "{{\"bar\":{},\"pass\":{},\"song_bar\":{},\"chorus\":\"{}\",\"feel\":\"{}\",\"low\":\"{}\",\"upper\":\"{}\"}}",
+                    "{{\"bar\":{},\"pass\":{},\"song_bar\":{},\"chorus\":\"{}\",\"feel\":\"{}\",\"low\":\"{}\",\"upper\":\"{}\",\"melody\":\"{}\",\"soloist\":\"{:?}\"}}",
                     b.slot.index,
                     b.slot.pass,
                     b.slot.song_bar,
                     b.band.chorus.slug(),
                     b.band.feel.slug(),
                     b.low.map_or("", LowRole::slug),
-                    b.upper.map_or("", UpperRole::slug)
+                    b.upper.map_or("", UpperRole::slug),
+                    b.melody.map_or("", Melody::slug),
+                    b.soloist
                 )
             });
         }

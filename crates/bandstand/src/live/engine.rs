@@ -126,6 +126,10 @@ pub enum Input {
     /// Override what the upper sections play ([`super::horns::UpperRole`]; `None`: the
     /// arranger picks), from the next bar committed.
     ForceUpper(Option<super::horns::UpperRole>),
+    /// Override who plays the lead's line ([`super::arranger::Melody`]: the lead, or a horn
+    /// standing up from its section; `None`: the arranger passes it round), from the next bar
+    /// committed.
+    ForceMelody(Option<super::arranger::Melody>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -277,6 +281,8 @@ pub struct CommittedBar {
     pub low: Option<super::horns::LowRole>,
     /// What the upper sections play in it (`None`: no upper sections).
     pub upper: Option<super::horns::UpperRole>,
+    /// Who plays the lead's line in it (`None`: no upper sections).
+    pub melody: Option<super::arranger::Melody>,
 }
 
 /// One musician, for UIs.
@@ -454,6 +460,7 @@ pub struct Engine {
     soloing: Option<(u64, Soloist)>,
     forced_low: Option<super::horns::LowRole>,
     forced_upper: Option<super::horns::UpperRole>,
+    forced_melody: Option<super::arranger::Melody>,
     /// The horns' notes for the bar being committed.
     horn_buf: Vec<NoteEvent>,
     /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
@@ -533,6 +540,7 @@ impl Engine {
             soloing: None,
             forced_low: None,
             forced_upper: None,
+            forced_melody: None,
             horn_buf: Vec::with_capacity(256),
             tapped: None,
         })
@@ -838,7 +846,8 @@ impl Engine {
         }
         let low = super::horns::write(&ctx, self.config.horns, self.forced_low, &mut self.scratch, &mut self.horn_buf);
         super::horns::write_guitar(&ctx, self.config.horns, &mut self.horn_buf);
-        let upper = super::horns::write_upper(&ctx, self.config.horns, self.forced_upper, &mut self.scratch, &mut self.horn_buf);
+        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, &mut self.scratch, &mut self.horn_buf);
+        let (upper, melody) = (section.map(|s| s.role), section.map(|s| s.melody));
         self.scratch.append(&mut self.horn_buf);
         let events = self.scratch.len() as u32;
         // What the soloist hears next bar: the comp's figure in this one.
@@ -884,7 +893,7 @@ impl Engine {
             self.committed.pop_front();
         }
         let thought = self.musicians[0].thought();
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low, upper });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low, upper, melody });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
@@ -1068,6 +1077,10 @@ impl Engine {
             }
             Input::ForceUpper(r) => {
                 self.forced_upper = r;
+                None
+            }
+            Input::ForceMelody(m) => {
+                self.forced_melody = m;
                 None
             }
             Input::SetBalance(b) => {
