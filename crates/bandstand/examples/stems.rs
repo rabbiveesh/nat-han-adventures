@@ -80,7 +80,7 @@ fn main() {
     let song = library::load(&song_stem).unwrap_or_else(|e| panic!("{e}"));
     let config = EngineConfig { seed, horns, ..EngineConfig::default() };
     let mut e = Engine::with_config(&song, RATE, config).expect("engine");
-    let voicing = FontVoicing::combo(font).with(0, Some(lead));
+    let voicing = FontVoicing::big_band(font).with(0, Some(lead));
     e.use_font(voicing.clone()).expect("font");
     e.tap(true);
     e.post(Input::LevelStart);

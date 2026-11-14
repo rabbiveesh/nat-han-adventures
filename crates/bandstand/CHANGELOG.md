@@ -25,6 +25,14 @@ GitHub Release's notes.
   per chorus, sometimes the tune's own opening rhythm, its theme) or answers in the
   soloist's rests. The theme plays the intro; in a shout the brass call and the saxes
   answer. New roles `Riff` and `Answers`; `Input::ForceMelody`; `CommittedBar::melody`.
+- **Phrasing** (SoundFont voices): `Fx::swell` (a crescendo, or fp-crescendo), and the
+  SoundFont now plays `Fx` slides and falls with the pitch bend (a 12-semitone range) and
+  expression, so the lead's falls sound too. The sections phrase like a band: an 8th on
+  the and accented, a phrase's last note clipped, quarters detached, long notes swelling,
+  falls and doits off phrase ends, a build through each 8 bars; the low horns' held hits
+  are struck and swell back.
+- `FontVoicing::big_band` balances the band as big band records do (drums up, bass and
+  guitar down); `FontVoicing::trims` sets any channel's level (MIDI expression).
 - `Yes! We Have No Bananas` (1923) joins the library.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the

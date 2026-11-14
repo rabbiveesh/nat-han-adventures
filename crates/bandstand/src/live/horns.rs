@@ -368,7 +368,12 @@ pub fn write(ctx: &Ctx, horns: Horns, force: Option<LowRole>, band: &mut Vec<Not
                     let Some(h0) = ctx.harm_at(b) else { continue };
                     let root = h0.chord.bass.unwrap_or(h0.chord.root) as i32;
                     let n = h.fit(h.home() + (root - h.home()).rem_euclid(12));
-                    push(out, NoteEvent { volume: 15, ..at(ctx.make(&t, b, d, Sound::Note(n as u8))) });
+                    let mut e = NoteEvent { volume: 15, ..at(ctx.make(&t, b, d, Sound::Note(n as u8))) };
+                    // A held hit: the "bwaah", struck and swelling back.
+                    if d >= 1.0 {
+                        e.fx.swell = -6;
+                    }
+                    push(out, e);
                 }
             }
             LowRole::Tacet => {}

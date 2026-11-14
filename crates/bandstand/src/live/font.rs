@@ -40,6 +40,9 @@ pub struct FontVoicing {
     pub programs: [Option<u8>; CHANNELS],
     /// Overall level of the SoundFont voices against the chip's.
     pub gain: f32,
+    /// Each channel's level in the balance, 0..=1 (amplitude; MIDI expression): the mix a band
+    /// sits in ([`FontVoicing::big_band`]). 1 everywhere in a combo.
+    pub trims: [f32; CHANNELS],
 }
 
 impl fmt::Debug for FontVoicing {
@@ -59,7 +62,35 @@ impl FontVoicing {
         for h in super::horns::Horn::ALL {
             programs[h.ch() as usize] = Some(h.program());
         }
-        FontVoicing { font, programs, gain: 2.0 }
+        FontVoicing { font, programs, gain: 2.0, trims: [1.0; CHANNELS] }
+    }
+
+    /// [`Self::combo`] balanced as a big band: the drums up to drive the band (+8 dB against
+    /// the combo), the bass and the rhythm guitar felt more than heard (-3), the low horns up
+    /// a little (+3), the sections and the piano a touch up (+1), the lead a touch down (-1).
+    /// Balanced from renders against the levels big band records sit at.
+    pub fn big_band(font: Arc<SoundFont>) -> Self {
+        let mut v = Self::combo(font);
+        // dB against the combo; the loudest (the drums) sets the overall gain.
+        let mut db = [0.0f32; CHANNELS];
+        db[0] = -1.0;
+        db[1] = 1.0;
+        db[2] = -3.0;
+        db[3] = 8.0;
+        db[4] = 1.0;
+        for h in super::horns::Horn::ALL {
+            db[h.ch() as usize] = match h {
+                super::horns::Horn::Guitar => -3.0,
+                h if h.is_low() => 3.0,
+                _ => 1.0,
+            };
+        }
+        let top = db.iter().copied().fold(f32::MIN, f32::max);
+        for (t, d) in v.trims.iter_mut().zip(db) {
+            *t = 10f32.powf((d - top) / 20.0);
+        }
+        v.gain *= 10f32.powf(top / 20.0);
+        v
     }
 
     /// Channel `ch` on GM program `program` (`None`: the chip).
@@ -80,8 +111,8 @@ impl FontVoicing {
     }
 }
 
-/// A MIDI message at a sample. Ordered by time, then note-offs before note-ons (a repeated
-/// note re-attacks), then queue order.
+/// A MIDI message at a sample. Ordered by time, then note-offs (and controls) before note-ons
+/// (a repeated note re-attacks, a bend resets before the next note), then queue order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 struct Msg {
     at: u64,
@@ -90,7 +121,21 @@ struct Msg {
     ch: u8,
     key: u8,
     vel: u8,
+    ctl: Ctl,
 }
+
+/// A control change a note's shape sends ([`Fx`]: slides, falls, swells).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Ctl {
+    None,
+    /// Pitch bend, 0..16383 (8192 centred), over [`BEND_RANGE`].
+    Bend(u16),
+    /// Expression, as a gain in dB (tenths) against the channel's trim.
+    Expr(i16),
+}
+
+/// The pitch-bend range set on every melodic channel, in semitones (falls and doits go far).
+const BEND_RANGE: i32 = 12;
 
 /// The SoundFont side of the voice bank.
 pub(crate) struct FontVoices {
@@ -106,6 +151,7 @@ pub(crate) struct FontVoices {
     last: [Option<(u8, u64)>; 16],
     left: Vec<f32>,
     right: Vec<f32>,
+    sample_rate: f32,
 }
 
 impl FontVoices {
@@ -138,9 +184,21 @@ impl FontVoices {
                 _ => 64,
             };
             synth.process_midi_message(m as i32, 0xB0, 0x0A, pan);
+            // Expression squared is the gain (the GM curve): the trim's square root.
+            let expr = (127.0 * voicing.trims[ch].clamp(0.0, 1.0).sqrt()).round() as i32;
+            if expr < 127 {
+                synth.process_midi_message(m as i32, 0xB0, 0x0B, expr);
+            }
             synth.process_midi_message(m as i32, 0xB0, 0x5B, if dry { 0 } else { 30 });
+            if m != DRUM_CH {
+                // The bend range (RPN 0), for falls and doits.
+                synth.process_midi_message(m as i32, 0xB0, 0x65, 0);
+                synth.process_midi_message(m as i32, 0xB0, 0x64, 0);
+                synth.process_midi_message(m as i32, 0xB0, 0x06, BEND_RANGE);
+                synth.process_midi_message(m as i32, 0xB0, 0x26, 0);
+            }
         }
-        Ok(FontVoices { voicing, synth, msgs: BinaryHeap::new(), seq: 0, queued: Vec::new(), tied: [[0; 128]; 16], last: [None; 16], left: Vec::new(), right: Vec::new() })
+        Ok(FontVoices { voicing, synth, msgs: BinaryHeap::new(), seq: 0, queued: Vec::new(), tied: [[0; 128]; 16], last: [None; 16], left: Vec::new(), right: Vec::new(), sample_rate: sample_rate as f32 })
     }
 
     pub(crate) fn routes(&self, ch: u8) -> bool {
@@ -149,7 +207,62 @@ impl FontVoices {
 
     fn send(&mut self, at: u64, on: bool, ch: u8, key: u8, vel: u8) {
         self.seq += 1;
-        self.msgs.push(Reverse(Msg { at, on, seq: self.seq, ch, key, vel }));
+        self.msgs.push(Reverse(Msg { at, on, seq: self.seq, ch, key, vel, ctl: Ctl::None }));
+    }
+
+    fn control(&mut self, at: u64, ch: u8, ctl: Ctl) {
+        self.seq += 1;
+        self.msgs.push(Reverse(Msg { at, on: false, seq: self.seq, ch, key: 0, vel: 0, ctl }));
+    }
+
+    /// A note's shape on its MIDI channel `ch` (melodic only): a slide onto it, a swell
+    /// through it, a fall (or a doit, up) off its end; the bend and the level back after.
+    fn shape(&mut self, ch: u8, ev: &NoteEvent, end: u64) {
+        let fx = ev.fx;
+        // (Not the piano or the guitar: they don't bend or swell.)
+        if matches!(engine_channel(ch), 1 | 8) {
+            return;
+        }
+        if (fx.slide == 0 || fx.slide_frames == 0) && fx.fall == 0 && fx.swell == 0 {
+            return;
+        }
+        let len = (end - ev.start) as f64;
+        let sr = self.sample_rate as f64;
+        let frames = |f: u8| (f as f64 * sr / 60.0).min(len);
+        let bend = |semis: f64| Ctl::Bend((8192.0 + semis / BEND_RANGE as f64 * 8192.0).round().clamp(0.0, 16383.0) as u16);
+        const STEPS: u64 = 8;
+        if fx.slide != 0 && fx.slide_frames > 0 {
+            let l = frames(fx.slide_frames);
+            for k in 0..=STEPS {
+                let x = k as f64 / STEPS as f64;
+                self.control(ev.start + (l * x) as u64, ch, bend(fx.slide as f64 * (1.0 - x)));
+            }
+        }
+        if fx.swell != 0 {
+            // Up from `swell` dB under (a crescendo), or (negative) an attack falling away
+            // `swell` dB and growing back (fp, crescendo).
+            let db = fx.swell.unsigned_abs() as f64;
+            for k in 0..=STEPS {
+                let x = k as f64 / STEPS as f64;
+                let g = if fx.swell > 0 { -db * (1.0 - x) } else if x < 0.25 { -db * x / 0.25 } else { -db * (1.0 - (x - 0.25) / 0.75) };
+                self.control(ev.start + (len * x) as u64, ch, Ctl::Expr((g * 10.0).round() as i16));
+            }
+        }
+        if fx.fall != 0 {
+            let l = frames(fx.fall_frames.max(1));
+            let from = end - l as u64;
+            for k in 1..=STEPS {
+                let x = k as f64 / STEPS as f64;
+                // Slow, then away: the lip lets go.
+                self.control(from + (l * x) as u64, ch, bend(fx.fall as f64 * x * x));
+                if fx.fall < 0 {
+                    self.control(from + (l * x) as u64, ch, Ctl::Expr((-12.0 * x * 10.0) as i16));
+                }
+            }
+        }
+        // Back to centre once it's off.
+        self.control(end + 1, ch, bend(0.0));
+        self.control(end + 1, ch, Ctl::Expr(0));
     }
 
     /// Queue a committed event on a routed channel.
@@ -159,6 +272,7 @@ impl FontVoices {
         let end = ev.end.max(ev.start + 1);
         match &ev.sound {
             Sound::Note(n) => {
+                self.shape(ch, &ev, end);
                 let k = (*n).min(127);
                 if ev.tie && self.last[ch as usize].is_some_and(|(l, e)| l == k && e >= ev.start) {
                     // Held over: just end later.
@@ -170,6 +284,7 @@ impl FontVoices {
                 self.last[ch as usize] = Some((k, end));
             }
             Sound::Arp(a) => {
+                self.shape(ch, &ev, end);
                 let vel = (vel as f32 * 0.85) as u8;
                 for &n in a.notes() {
                     let k = n.min(127);
@@ -185,6 +300,19 @@ impl FontVoices {
             }
         }
         self.queued.push(ev);
+    }
+
+    /// The MIDI bytes for a control message (`None`: a note).
+    fn ctl_message(&self, m: Msg) -> Option<(i32, i32, i32)> {
+        match m.ctl {
+            Ctl::None => None,
+            Ctl::Bend(v) => Some((0xE0, (v & 0x7f) as i32, (v >> 7) as i32)),
+            Ctl::Expr(tenths) => {
+                let ch = engine_channel(m.ch);
+                let trim = self.voicing.trims[ch as usize].clamp(0.0, 1.0) * 10f32.powf(tenths as f32 / 200.0);
+                Some((0xB0, 0x0B, (127.0 * trim.clamp(0.0, 1.0).sqrt()).round() as i32))
+            }
+        }
     }
 
     /// Channel `ch`'s volume (0 mutes, 1 as written), from the next block.
@@ -221,7 +349,9 @@ impl FontVoices {
                     break;
                 }
                 self.msgs.pop();
-                if m.on {
+                if let Some((status, a, b)) = self.ctl_message(m) {
+                    self.synth.process_midi_message(m.ch as i32, status, a, b);
+                } else if m.on {
                     self.synth.note_on(m.ch as i32, m.key as i32, m.vel as i32);
                 } else if self.tied[m.ch as usize][m.key as usize] <= m.at {
                     // Not held over by a tie.
@@ -238,6 +368,15 @@ impl FontVoices {
             }
             pos = next;
         }
+    }
+}
+
+/// The engine channel a MIDI channel plays (the inverse of [`midi_channel`]).
+fn engine_channel(m: u8) -> u8 {
+    match m {
+        DRUM_CH => 3,
+        3 => 9,
+        c => c,
     }
 }
 
@@ -304,5 +443,60 @@ mod tests {
         let rms = (out.iter().map(|f| (f.left as f64).powi(2)).sum::<f64>() / out.len() as f64).sqrt();
         assert!(rms > 0.02, "silent: {rms}");
         assert!(out.iter().all(|f| f.left.is_finite() && f.left.abs() <= 1.0));
+    }
+
+    /// A fall bends the note's end down and the channel comes back level for the next one; a
+    /// swell starts it soft. (Same SoundFont as above, skipped without one.)
+    #[test]
+    fn falls_and_swells_shape_a_note() {
+        use crate::live::voice::Fx;
+        let path = std::env::var("BANDSTAND_SF2").unwrap_or_else(|_| "/usr/share/sounds/sf2/FluidR3_GM.sf2".into());
+        let Ok(bytes) = std::fs::read(&path) else {
+            eprintln!("no soundfont at {path}: skipped");
+            return;
+        };
+        let sr = 32_000u64;
+        let render = |fx: Fx| {
+            let mut v = FontVoices::dry(FontVoicing::combo(FontVoicing::load(&bytes).unwrap()), sr as u32).unwrap();
+            let note = |start: u64, fx: Fx| NoteEvent {
+                ch: 0,
+                bar: 0,
+                start,
+                end: start + sr / 2,
+                sound: Sound::Note(72),
+                volume: 12,
+                duty: 2,
+                tie: false,
+                slur_out: false,
+                gain: 1.0,
+                beat: 0.0,
+                phrase_beat: 0.0,
+                waltz: false,
+                loop_start: 0,
+                salt: 0,
+                tuning: Default::default(),
+                anchor: 0,
+                inst: 0,
+                fx,
+                seq: 0,
+            };
+            v.push(note(0, fx));
+            v.push(note(sr, Fx::NONE));
+            let mut out = vec![Frame::ZERO; (sr * 2) as usize];
+            v.render(&mut out, 0);
+            out.iter().map(|f| f.left).collect::<Vec<f32>>()
+        };
+        let plain = render(Fx::NONE);
+        let fall = render(Fx { fall: -7, fall_frames: 12, ..Fx::NONE });
+        let swell = render(Fx { swell: 6, ..Fx::NONE });
+        let rms = |x: &[f32]| (x.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / x.len() as f64).sqrt();
+        let n = sr as usize;
+        // The same attack; a different end; the next note just as it was.
+        assert!((rms(&plain[..n / 8]) - rms(&fall[..n / 8])).abs() < 1e-6);
+        assert!(plain[n / 3..n / 2].iter().zip(&fall[n / 3..n / 2]).any(|(a, b)| (a - b).abs() > 1e-3));
+        assert!((rms(&plain[n + n / 8..n + n / 2]) / rms(&fall[n + n / 8..n + n / 2]) - 1.0).abs() < 0.02);
+        // The swell starts under the plain note and the next note is level again.
+        assert!(rms(&swell[..n / 16]) < rms(&plain[..n / 16]) * 0.8);
+        assert!((rms(&plain[n + n / 8..n + n / 2]) / rms(&swell[n + n / 8..n + n / 2]) - 1.0).abs() < 0.02);
     }
 }

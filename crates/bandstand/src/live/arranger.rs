@@ -439,9 +439,64 @@ struct Writer<'a, 'b> {
     ctx: &'a Ctx<'b>,
     /// The sections free to play (the one with the line standing out).
     free: Horns,
+    /// How the notes about to be played are phrased ([`Writer::phrase`]).
+    art: std::cell::Cell<Art>,
 }
 
-impl Writer<'_, '_> {
+/// How a note is played: louder or not, how much of its length, a fall (negative) or doit
+/// (positive) off its end (semitones, the trumpets'; the saxes go two thirds as far), a swell
+/// (dB, [`super::voice::Fx::swell`]).
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
+struct Art {
+    accent: i8,
+    len: f64,
+    fall: i8,
+    swell: i8,
+}
+
+impl Art {
+    const PLAIN: Art = Art { accent: 0, len: 1.0, fall: 0, swell: 0 };
+}
+
+impl<'a, 'b> Writer<'a, 'b> {
+    fn new(ctx: &'a Ctx<'b>, free: Horns) -> Self {
+        Writer { ctx, free, art: std::cell::Cell::new(Art::PLAIN) }
+    }
+
+    /// Phrase the next notes like a big band section: an 8th on the and accented, a phrase's
+    /// last short note clipped ("dat"), quarters detached, an anticipation accented, a long
+    /// note swelling (soft: a crescendo; loud: fp, crescendo) or, ending a phrase with room
+    /// after it, falling off (or a doit, in a shout). `last`: it ends a phrase; `room`: beats
+    /// of rest after it; `loud`: a shout or tutti.
+    fn phrase(&self, b: f64, d: f64, last: bool, room: f64, loud: bool) {
+        let off = (b.fract() - 0.5).abs() < 0.01;
+        let coin = unit(self.ctx.seed, self.ctx.bar.index, (b * 8.0) as u64, 70);
+        let mut a = Art::PLAIN;
+        if off {
+            a.accent = 2;
+        }
+        if d <= 0.55 {
+            a.len = if last { 0.55 } else { 0.9 };
+        } else if d <= 1.1 {
+            a.len = if last { 0.6 } else { 0.75 };
+            if last && loud && coin < 0.3 {
+                a.fall = 4;
+            }
+        } else if last && room >= 0.75 && coin < if loud { 0.5 } else { 0.25 } {
+            a.fall = if loud { -7 } else { -5 };
+            a.len = 0.95;
+        } else {
+            a.swell = if loud { -6 } else { 5 };
+            a.len = 0.95;
+        }
+        self.art.set(a);
+    }
+
+    /// The section's dynamics: a step up in its fifth and sixth bars, two in its last two.
+    fn build(&self) -> i32 {
+        [0, 0, 0, 0, 1, 1, 2, 2][self.ctx.bar.song_bar % SECTION]
+    }
+
     fn brass(&self) -> bool {
         self.free.has(Horn::Trumpets)
     }
@@ -468,13 +523,24 @@ impl Writer<'_, '_> {
         }
         let (lo, hi) = h.range();
         let ns: Vec<u8> = notes.iter().map(|&n| octave_into(n, lo, hi) as u8).collect();
+        let a = self.art.get();
         let mut t = self.ctx.template(1, None);
         t.ch = h.ch();
         t.inst = 0;
         t.anchor = 0;
         t.gain *= h.level();
-        t.volume = vol;
-        out.push(self.ctx.make(&t, b, d, Sound::Arp(crate::mml::Arp::new(&ns))));
+        t.volume = (vol as i32 + a.accent as i32).clamp(1, 15) as u8;
+        let d = (d * a.len).max(0.2);
+        let mut e = self.ctx.make(&t, b, d, Sound::Arp(crate::mml::Arp::new(&ns)));
+        e.fx.swell = a.swell;
+        if a.fall != 0 {
+            let fall = if h == Horn::Trumpets { a.fall } else { a.fall * 2 / 3 };
+            // Over the note's last half, a quarter second at most.
+            let frames_per_beat = 3600.0 / self.ctx.shape.bpm.max(1.0) as f64;
+            e.fx.fall = fall;
+            e.fx.fall_frames = (d * frames_per_beat * 0.5).clamp(5.0, 16.0) as u8;
+        }
+        out.push(e);
     }
 
     /// A chord under `top` by `group`: trumpets in four-way close; the saxes in drop 2 an octave
@@ -505,7 +571,7 @@ impl Writer<'_, '_> {
     }
 
     /// This bar's half of the chorus's riff.
-    fn riff(&self, out: &mut Vec<NoteEvent>, fig: &Figure, shout: bool) {
+    fn riff(&self, out: &mut Vec<NoteEvent>, fig: &Figure, shout: bool) -> Option<()> {
         let ctx = self.ctx;
         let bb = ctx.bb();
         let half = (ctx.bar.song_bar % 2) as u8;
@@ -521,17 +587,24 @@ impl Writer<'_, '_> {
         } else {
             (Group::Saxes, 11)
         };
-        let Some(group) = self.group(want) else { return };
+        let group = self.group(want)?;
+        let vol = (vol + self.build()).min(14) as u8;
         let center = if group == Group::Saxes { 69 } else { 74 };
-        for &(bar, b, d, step) in fig.iter().filter(|f| f.0 == half) {
-            let _ = bar;
+        let at = |f: &(u8, f64, f64, i32)| f.0 as f64 * 4.0 + f.1;
+        for (i, f) in fig.iter().enumerate().filter(|(_, f)| f.0 == half) {
+            let &(_, b, d, step) = f;
             if b >= bb - 1e-9 {
                 continue;
             }
             let Some(h) = ctx.harm_at(b) else { continue };
             let d = d.min(bb - b + if half == 0 { bb } else { 0.25 });
+            // The figure repeats: after its last note, the rest up to its first again.
+            let next = fig.get(i + 1).map_or(8.0 + at(&fig[0]), at);
+            let room = next - (at(f) + d);
+            self.phrase(b, d, room >= 0.75, room, shout);
             self.chord(out, group, vol, b, d, top_at(h.chord, center, step), h.chord, false);
         }
+        Some(())
     }
 
     /// Answers in the line's rests and under its long notes (`line`: its notes this bar, as
@@ -569,13 +642,17 @@ impl Writer<'_, '_> {
             let want = if (ctx.bar.index as usize + i).is_multiple_of(2) { Group::Brass } else { Group::Saxes };
             let Some(group) = self.group(want) else { return };
             let center = if group == Group::Saxes { 69 } else { 74 };
-            for &(b, d, step) in ANSWERS[k] {
+            let vol = (vol as i32 + self.build()).min(14) as u8;
+            let n = ANSWERS[k].len();
+            for (j, &(b, d, step)) in ANSWERS[k].iter().enumerate() {
                 let b = start + b;
                 if b >= g1 - 0.25 || b >= bb {
                     continue;
                 }
                 let d = d.min(g1 - b - 0.1).max(0.3);
                 let Some(h) = ctx.harm_at(b) else { continue };
+                let last = j + 1 == n;
+                self.phrase(b, d, last, if last { g1 - b - d } else { 0.0 }, false);
                 self.chord(out, group, vol, b, d, top_at(h.chord, center, step), h.chord, false);
             }
         }
@@ -584,7 +661,9 @@ impl Writer<'_, '_> {
     /// Guide-tone pads, a long chord's top stepping down halfway through.
     fn pads(&self, out: &mut Vec<NoteEvent>) {
         let Some(group) = self.group(Group::Saxes) else { return };
-        let vol = if group == Group::Brass { 9 } else { 10 };
+        let vol = (if group == Group::Brass { 9 } else { 10 }) + self.build() as u8;
+        // Every pad swells into the next change.
+        self.art.set(Art { swell: 6, len: 1.0, ..Art::PLAIN });
         for (b, d, _, _) in changes(self.ctx) {
             let Some(h) = self.ctx.harm_at(b) else { continue };
             if d >= 4.0 - 1e-9 {
@@ -614,7 +693,9 @@ impl Writer<'_, '_> {
             let pcs = four(h.chord);
             let top = (70..=80).rev().find(|n| pcs.contains(&(n % 12))).unwrap_or(76);
             // (Already on the grid: the hits are where they sound.)
-            self.chord_at(out, Group::All, 14, b, 0.4, top, h.chord);
+            let stop = plan.hit_kind == HitKind::Stop && unit(ctx.seed, ctx.bar.index, 0, 71) < 0.3;
+            self.art.set(Art { accent: 1, len: 1.0, fall: if stop { -7 } else { 0 }, swell: 0 });
+            self.chord_at(out, Group::All, 14, b, if stop { 1.0 } else { 0.4 }, top, h.chord);
         }
     }
 
@@ -637,10 +718,14 @@ impl Writer<'_, '_> {
     /// The tune in the sections (soli: the saxes; tutti: everyone).
     fn tune(&self, out: &mut Vec<NoteEvent>, tune: &[(f64, f64, i32)], tutti: bool) {
         let ctx = self.ctx;
-        for &(b, d, n) in tune {
+        let bb = ctx.bb();
+        for (i, &(b, d, n)) in tune.iter().enumerate() {
             let Some(h) = ctx.harm_at(b) else { continue };
             let c = h.chord;
             let passing = d < 0.75 && b.fract() > 0.1;
+            // A phrase ends where the tune rests (unknown past the bar line: only inside it).
+            let room = tune.get(i + 1).map_or(if b + d < bb - 0.75 { bb - b - d } else { 0.0 }, |x| x.0 - b - d);
+            self.phrase(b, d, room >= 0.75, room, tutti);
             if !tutti {
                 let v = drop2(close(octave_into(n, 62, 77), c, passing));
                 self.play(out, Horn::Altos, 12, b, d, &v[..2]);
@@ -708,12 +793,12 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
     if plan_.tacet || plan_.solo_break {
         return Some(sec);
     }
-    let w = Writer { ctx, free };
+    let w = Writer::new(ctx, free);
     match sec.role {
         UpperRole::Soli => {
             w.tune(out, &tune, false);
             let held: Vec<(f64, f64)> = tune.iter().map(|&(b, d, _)| (b, b + d)).collect();
-            let brass = Writer { ctx, free: if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE } };
+            let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE });
             brass.answers(out, &held, 12);
             band.retain(|e| e.ch != 0);
         }
@@ -723,7 +808,9 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         }
         UpperRole::Pads => w.pads(out),
         UpperRole::Punches => w.punches(out),
-        UpperRole::Riff => w.riff(out, &figure(ctx), plan_.chorus == Chorus::Shout),
+        UpperRole::Riff => {
+            w.riff(out, &figure(ctx), plan_.chorus == Chorus::Shout);
+        }
         UpperRole::Answers => w.answers(out, &line, 12),
         UpperRole::Tacet => {}
     }

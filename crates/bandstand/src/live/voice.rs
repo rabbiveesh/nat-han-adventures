@@ -79,10 +79,13 @@ pub struct Fx {
     /// vibrato and fade carry on where that note left them instead of starting over, so a
     /// grace note, mordent or turn and the note it ornaments sound as one gesture.
     pub legato: bool,
+    /// A swell, in dB (SoundFont voices only): up from this far under to full over the note,
+    /// or (negative) an accent that falls away this far and grows back (fp, crescendo).
+    pub swell: i8,
 }
 
 impl Fx {
-    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false, legato: false };
+    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false, legato: false, swell: 0 };
 
     pub fn is_none(&self) -> bool {
         *self == Fx::NONE
