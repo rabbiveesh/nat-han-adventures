@@ -42,6 +42,11 @@ GitHub Release's notes.
   an inner voice, or a 4-3 suspension.
 - A new note takes its channel's bend, expression and vibrato over (a fall no longer
   drags the next note flat).
+- **The devices in more places**: each pass picks its colour (a device, unison or not, an
+  ending). A riff's long notes open up with the device and its quick ones go unison; an
+  answer can start in unison and bloom on its last note; the shout plays its fast notes in
+  octaves (trumpets over saxes) and ends a phrase in a wedge (top up, bottom down a half
+  step at a time) or a bloom.
 - **Less is more**: the sections and low horns lay out far more, a riff behind a soloist
   breathes two bars on and two off, one answer a bar at most.
 - **Soli with sections**: in a soli chorus the saxes play the quartet's counterpoint

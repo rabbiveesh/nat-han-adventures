@@ -580,6 +580,43 @@ impl<'a, 'b> Writer<'a, 'b> {
         out
     }
 
+    /// One note in unison: the trumpets on it, the saxes an octave under (a line, not a
+    /// chord: how a band plays its fast notes and its calls).
+    fn unison(&self, out: &mut Vec<NoteEvent>, group: Group, vol: u8, b: f64, d: f64, top: i32) {
+        let b = self.ctx.swing8(b);
+        let brass = group != Group::Saxes && self.brass();
+        let top_tp = octave_into(top, 67, 82);
+        if brass {
+            self.play(out, Horn::Trumpets, vol + 1, b, d, &[top_tp]);
+        }
+        if group != Group::Brass {
+            let n = if brass { top_tp - 12 } else { octave_into(top, 62, 76) };
+            self.play(out, Horn::Altos, vol, b, d, &[n]);
+            self.play(out, Horn::Tenors, vol, b, d, &[n - 12 * brass as i32]);
+        }
+    }
+
+    /// A wedge: the voicing's top climbs and its bottom sinks a half step at a time while the
+    /// inner voices hold, the chord opening outward (a phrase's last long note).
+    #[allow(clippy::too_many_arguments)]
+    fn wedge(&self, out: &mut Vec<NoteEvent>, group: Group, vol: u8, b: f64, d: f64, top: i32, c: Chord) {
+        let voices = self.voices(group, top, c, false);
+        let all: Vec<i32> = voices.iter().flat_map(|v| v.1.iter().copied()).collect();
+        let (Some(&hi), Some(&lo)) = (all.iter().max(), all.iter().min()) else { return };
+        let b = self.ctx.swing8(b);
+        let steps = if d >= 3.0 { 3 } else { 2 };
+        let seg = (d / (steps as f64 + 1.0)).max(0.25);
+        for k in 0..=steps {
+            let at = b + k as f64 * seg;
+            let len = if k == steps { b + d - at } else { seg };
+            self.art.set(if k == steps { Art { swell: 6, len: 1.0, ..Art::PLAIN } } else { Art { len: 0.98, ..Art::PLAIN } });
+            for (h, ns, under) in &voices {
+                let moved: Vec<i32> = ns.iter().map(|&n| if n == hi { n + k } else if n == lo { n - k } else { n }).collect();
+                self.play(out, *h, vol.saturating_sub(*under), at, len, &moved);
+            }
+        }
+    }
+
     /// One pad, shaped by the section's inner-voice device ([`Device`]): `b`, `d` beats,
     /// the chord `c` under `top`.
     #[allow(clippy::too_many_arguments)]
@@ -701,7 +738,16 @@ impl<'a, 'b> Writer<'a, 'b> {
             let next = fig.get(i + 1).map_or(8.0 + at(&fig[0]), at);
             let room = next - (at(f) + d);
             self.phrase(b, d, room >= 0.75, room, shout);
-            self.chord(out, group, vol, b, d, top_at(h.chord, center, step), h.chord, false);
+            let top = top_at(h.chord, center, step);
+            let colour = Colour::of(ctx);
+            if d >= 1.5 && colour.device != Device::Plain {
+                // A long note opens up inside: the chorus's device.
+                self.pad(out, group, vol, ctx.swing8(b), d, top, h.chord, colour.device);
+            } else if d < 0.75 && colour.unison {
+                self.unison(out, group, vol, b, d, top);
+            } else {
+                self.chord(out, group, vol, b, d, top, h.chord, false);
+            }
         }
         Some(())
     }
@@ -754,7 +800,15 @@ impl<'a, 'b> Writer<'a, 'b> {
                 let Some(h) = ctx.harm_at(b) else { continue };
                 let last = j + 1 == n;
                 self.phrase(b, d, last, if last { g1 - b - d } else { 0.0 }, false);
-                self.chord(out, group, vol, b, d, top_at(h.chord, center, step), h.chord, false);
+                let top = top_at(h.chord, center, step);
+                // Some answers start in unison and open into harmony.
+                if j == 0 && n > 1 && unit(ctx.seed, ctx.bar.index, i as u64, 61) < 0.4 {
+                    self.unison(out, group, vol, b, d, top);
+                } else if last && d >= 1.5 && unit(ctx.seed, ctx.bar.index, i as u64, 62) < 0.4 {
+                    self.pad(out, group, vol, ctx.swing8(b), d, top, h.chord, Device::Bloom);
+                } else {
+                    self.chord(out, group, vol, b, d, top, h.chord, false);
+                }
             }
         }
     }
@@ -829,6 +883,25 @@ impl<'a, 'b> Writer<'a, 'b> {
             // A phrase ends where the tune rests (unknown past the bar line: only inside it).
             let room = tune.get(i + 1).map_or(if b + d < bb - 0.75 { bb - b - d } else { 0.0 }, |x| x.0 - b - d);
             self.phrase(b, d, room >= 0.75, room, tutti);
+            let colour = Colour::of(ctx);
+            if tutti && d < 0.75 && colour.unison {
+                // The fast notes in octaves, the long ones voiced: the line pops out.
+                self.unison(out, Group::All, 13, b, d, octave_into(n, 67, 84));
+                continue;
+            }
+            if tutti && d >= 1.5 && room >= 0.75 {
+                match colour.ending {
+                    Ending::Wedge => {
+                        self.wedge(out, Group::All, 13, b, d, octave_into(n, 67, 84), c);
+                        continue;
+                    }
+                    Ending::Bloom => {
+                        self.pad(out, Group::All, 13, ctx.swing8(b), d, octave_into(n, 67, 84), c, Device::Bloom);
+                        continue;
+                    }
+                    Ending::Plain => {}
+                }
+            }
             if !tutti {
                 // (Soli up front: the section has the tune.)
                 let v = drop2(close(octave_into(n, 62, 77), c, passing));
@@ -976,6 +1049,32 @@ impl Device {
     fn of(ctx: &Ctx) -> Device {
         let x = unit(ctx.seed, ctx.bar.pass, (ctx.bar.song_bar / SECTION) as u64, 80);
         pick(x, &[(Device::Plain, 0.2), (Device::Bloom, 0.25), (Device::Pyramid, 0.2), (Device::Cliche, 0.2), (Device::Suspension, 0.15)])
+    }
+}
+
+/// How a phrase's last long note ends in a tutti.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Ending {
+    Plain,
+    Wedge,
+    Bloom,
+}
+
+/// A chorus's colour, rolled once a pass: its riffs' long notes opening by a [`Device`], fast
+/// notes in unison (octaves) or voiced, how a tutti phrase ends.
+#[derive(Clone, Copy, Debug)]
+struct Colour {
+    device: Device,
+    unison: bool,
+    ending: Ending,
+}
+
+impl Colour {
+    fn of(ctx: &Ctx) -> Colour {
+        let c = |what: u64| unit(ctx.seed, ctx.bar.pass, 0, what);
+        let device = pick(c(90), &[(Device::Plain, 0.3), (Device::Bloom, 0.2), (Device::Pyramid, 0.15), (Device::Cliche, 0.2), (Device::Suspension, 0.15)]);
+        let ending = pick(c(92), &[(Ending::Plain, 0.4), (Ending::Wedge, 0.3), (Ending::Bloom, 0.3)]);
+        Colour { device, unison: c(91) < 0.5, ending }
     }
 }
 
