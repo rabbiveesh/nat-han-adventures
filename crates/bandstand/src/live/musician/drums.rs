@@ -131,12 +131,11 @@ impl Musician for Drums {
                 push(&mut self.dst, hit(ctx, &tmpl, hb, Drum::Kick, vol + 2));
                 push(&mut self.dst, hit(ctx, &tmpl, hb, Drum::Snare, vol));
             }
-            let mut b = 1.0;
-            while b < bb - 1e-9 {
+            // The hats on 2 and 4 (in five, the second pulse of each group).
+            for &b in ctx.shape.pulses().iter().skip(1).step_by(2) {
                 if b > lh + 0.25 {
                     push(&mut self.dst, hit(ctx, &tmpl, b, Drum::ClosedHat, (vol / 2).max(2)));
                 }
-                b += 2.0;
             }
             fired.add(Orn::Stop);
         } else if mid(f) > 0.0 {

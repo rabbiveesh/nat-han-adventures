@@ -356,7 +356,7 @@ pub fn write(ctx: &Ctx, horns: Horns, force: Option<LowRole>, band: &mut Vec<Not
                 if one && !plan.anticipated {
                     hits.push((0.0, if short { 0.5 } else { (bb - 1.0).max(1.0) }));
                 }
-                for k in 0..16 {
+                for k in 0..32 {
                     if plan.hits & 1 << k != 0 {
                         let b = k as f64 / 4.0;
                         if b < bb && hits.iter().all(|&(x, d)| b >= x + d.min(0.5)) {

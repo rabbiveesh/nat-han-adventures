@@ -7,6 +7,12 @@ GitHub Release's notes.
 
 ## Unreleased
 
+- **Five.** A song can be in 5/4 with a chord chart (`meter = 5/4`; two chords to a bar
+  split 3+2, `chart::parse_in`). Every bar has pulses (`live::arrange::pulses`: in five,
+  0, 1½, 3 and 4, the 3 as two dotted quarters): the walking bass steps on them, the
+  two-feel bass plays the 3 and the 2, the Charleston, Freddie Green and stop-time hats
+  follow them, and a pulse is never swung (`synth::apply_swing_in`). No feels in five, as
+  in the waltz. The band's hits are a `u32` of 16ths (a bar up to 8 beats).
 - **Low horns.** `EngineConfig::horns` puts a bass trombone, a bari and a tuba on the
   stand (`live::horns`), each on a channel of its own (5 on). Per 8-bar section they
   double the bass line (unison or octaves), hold a pedal, pad root-position long notes,

@@ -191,7 +191,7 @@ pub struct Call {
 /// the waltz; a force overrides the band).
 pub fn decide(input: &BandInput) -> Call {
     let s = input.slot;
-    if input.waltz || input.intro.is_some() || input.ending.is_some() {
+    if input.waltz || (input.bar_beats - 4.0).abs() > 1e-9 || input.intro.is_some() || input.ending.is_some() {
         return Call { feel: Feel::Swing, since: s.index, next: Feel::Swing };
     }
     let d = dial(input.freedom);

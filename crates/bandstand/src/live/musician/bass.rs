@@ -119,7 +119,7 @@ impl Musician for Bass {
             }
         } else if has_harm && orns.has(Orn::TwoFeel) {
             let mut p = prev;
-            let halves: &[f64] = if bb >= 4.0 { &[0.0, 2.0] } else { &[0.0] };
+            let halves = ctx.shape.halves();
             for (k, &b) in halves.iter().enumerate() {
                 let h = ctx.harm_at(b).expect("a chart");
                 let same = k > 0 && ctx.harm_at(0.0).is_some_and(|x| x.chord == h.chord);
@@ -137,8 +137,10 @@ impl Musician for Bass {
             let dominant = h.chord.family() == Family::Dominant || band.intro.is_some();
             let pc = if dominant { (key + 7) % 12 } else { key };
             let n = nearest_pc(pc, prev, LO, HI);
-            for k in 0..bb as usize {
-                push(&mut self.dst, ctx.make(&tmpl, k as f64, 0.9, Sound::Note(n)));
+            let pulses = ctx.shape.pulses();
+            for (k, &b) in pulses.iter().enumerate() {
+                let len = pulses.get(k + 1).copied().unwrap_or(bb) - b;
+                push(&mut self.dst, ctx.make(&tmpl, b, 0.9 * len, Sound::Note(n)));
             }
             fired.add(Orn::Pedal);
         } else {
@@ -432,20 +434,23 @@ impl Bass {
     fn walk(&mut self, ctx: &Ctx, t: &NoteEvent, prev: i32, slip: bool, r: &mut Rng) {
         let w = ctx.bassist.unwrap_or_else(|| ctx.soloist.bassist());
         let bb = ctx.bb();
-        let beats = bb.round() as usize;
+        // A step on each pulse (in five, 3+2: dotted quarters, then quarters).
+        let pulses = ctx.shape.pulses();
+        let beats = pulses.len();
+        let four = (bb - 4.0).abs() < 1e-9;
         let mut p = prev;
         let h0 = ctx.harm_at(0.0).expect("a chart");
-        let pedal = (beats >= 3 && (1..beats).all(|k| ctx.harm_at(k as f64).is_some_and(|x| x.chord == h0.chord)) && r.chance(w.pedal as f64))
+        let pedal = (beats >= 3 && pulses[1..].iter().all(|&x| ctx.harm_at(x).is_some_and(|x| x.chord == h0.chord)) && r.chance(w.pedal as f64))
             .then(|| nearest_pc(h0.chord.bass_pc(), p, LO, HI - 5) as i32);
         // A bar in two: half notes on 1 and 3 (a 4/4 bar whose chords change only there).
         let two = pedal.is_none()
-            && beats == 4
+            && four
             && [1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord))
             && r.chance(w.two as f64);
         let step_beats = if two { 2 } else { 1 };
         // Paired quarters (a two-feel struck in four): beat 2 the note of 1 (and 4 of 3, the
         // second pair the same note or its 4th or 5th), short and even.
-        let paired = if two || pedal.is_some() || beats != 4 || ![1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord)) {
+        let paired = if two || pedal.is_some() || !four || ![1.0, 3.0].iter().all(|&b| ctx.harm_at(b).zip(ctx.harm_at(b - 1.0)).is_some_and(|(x, y)| x.chord == y.chord)) {
             0
         } else {
             match pick(r, &[w.pair[0], w.pair[1], 1.0 - w.pair[0] - w.pair[1]]) {
@@ -455,11 +460,13 @@ impl Bass {
             }
         };
         for k in (0..beats).step_by(step_beats) {
-            let b = k as f64;
+            let b = pulses[k];
             let h = ctx.harm_at(b).expect("a chart");
-            let ahead = (k + step_beats) as f64;
+            let ahead = pulses.get(k + step_beats).copied().unwrap_or(bb);
+            // This step's length (a beat; a dotted quarter in five's 3; a half note walked in two).
+            let dur = ahead - b;
             let next = if k + step_beats < beats { ctx.harm_at(ahead) } else { ctx.plain_harm_at(bb) }.unwrap_or(h);
-            let change = k > 0 && ctx.harm_at(b - 1.0).is_some_and(|x| x.chord != h.chord) || k == 0 && self.walked.is_some_and(|c| c != h.chord);
+            let change = k > 0 && ctx.harm_at(pulses[k - 1]).is_some_and(|x| x.chord != h.chord) || k == 0 && self.walked.is_some_and(|c| c != h.chord);
             // A bar line inside one chord is walked through, not landed on.
             let first = change || k == 0 && (self.walked.is_none() || two);
             let last = next.chord != h.chord;
@@ -512,22 +519,22 @@ impl Bass {
             let skip = w.skip as f64 * (1.0 - 0.65 * fast as f64) * if last { 1.1 } else { 0.9 };
             let ghost = |e: NoteEvent, r: &mut Rng| if r.chance(w.ghost as f64) { NoteEvent { volume: e.volume.saturating_sub(4).max(1), ..e } } else { e };
             if two {
-                push(&mut self.dst, ctx.make(t, b, 2.0, Sound::Note(n as u8)));
+                push(&mut self.dst, ctx.make(t, b, dur, Sound::Note(n as u8)));
             } else if pedal.is_none() && r.chance(w.rake as f64) {
                 // A rake: the beat in triplets, the last two muted, into the next beat.
                 for j in 0..3 {
-                    let e = ctx.make(t, b + j as f64 / 3.0, 0.3, Sound::Note(n as u8));
+                    let e = ctx.make(t, b + j as f64 * dur / 3.0, 0.3 * dur, Sound::Note(n as u8));
                     push(&mut self.dst, if j == 0 { e } else { NoteEvent { volume: e.volume.saturating_sub(5).max(1), ..e } });
                 }
             } else if pedal.is_none() && r.chance(skip) {
-                let at = w.skip_at.map_or_else(|| ctx.swing8(b + 0.5), |x| b + x as f64);
+                let at = w.skip_at.map_or_else(|| ctx.swing8(b + dur - 0.5), |x| b + x as f64 * dur);
                 let octave = w.ghost == 0.0 || r.chance(0.5);
                 let (skip, soft) = if !octave { (n, 4) } else if n + 12 <= HI { (n + 12, 0) } else { (n - 12, 0) };
                 push(&mut self.dst, ghost(ctx.make(t, b, at - b, Sound::Note(n as u8)), r));
-                let e = ctx.make(t, at, b + 1.0 - at, Sound::Note(skip as u8));
+                let e = ctx.make(t, at, b + dur - at, Sound::Note(skip as u8));
                 push(&mut self.dst, NoteEvent { volume: e.volume.saturating_sub(soft).max(1), ..e });
             } else {
-                let e = ctx.make(t, b, if pairs_here { 0.7 } else { 1.0 }, Sound::Note(n as u8));
+                let e = ctx.make(t, b, if pairs_here { 0.7 } else { dur }, Sound::Note(n as u8));
                 push(&mut self.dst, if first { e } else { ghost(e, r) });
             }
             p = n;

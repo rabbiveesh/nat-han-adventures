@@ -859,7 +859,7 @@ pub struct Thought {
 /// the bar line), and the comp's figure in the bar before.
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct Heard {
-    pub hits: u16,
+    pub hits: u32,
     pub crash: bool,
     pub fill_from: Option<f64>,
     pub comp: Figure,
@@ -1268,7 +1268,7 @@ impl Line {
         if !self.look || !self.started {
             return;
         }
-        let first_hit = (0..16).find(|k| heard.hits >> k & 1 == 1).map(|k| k as f64 * 0.25).filter(|&h| h < bb);
+        let first_hit = (0..32).find(|k| heard.hits >> k & 1 == 1).map(|k| k as f64 * 0.25).filter(|&h| h < bb);
         if let Some(hb) = first_hit {
             if self.phrase > hb + 0.5 && hb >= 0.5 && r.chance(0.5) {
                 self.cut_to(hb + 0.01);
@@ -2116,7 +2116,7 @@ mod tests {
     #[test]
     fn the_soloist_catches_the_bands_hits_and_comes_in_off_a_fill() {
         let p = prof(Soloist::Trane);
-        let ends_on = |hits: u16| {
+        let ends_on = |hits: u32| {
             let all = planned(p, 1500, 0, 0.0, |_| Heard { hits, ..Heard::default() });
             let lasts: Vec<f64> = all.iter().filter(|(_, k)| k.last).map(|(t, _)| t % 4.0).collect();
             lasts.iter().filter(|&&b| (b - 1.5).abs() < 1e-6).count() as f64 / lasts.len() as f64

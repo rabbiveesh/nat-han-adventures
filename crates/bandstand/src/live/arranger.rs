@@ -679,7 +679,7 @@ impl<'a, 'b> Writer<'a, 'b> {
     fn punches(&self, out: &mut Vec<NoteEvent>) {
         let ctx = self.ctx;
         let plan = ctx.band;
-        let mut at: Vec<f64> = (0..16).filter(|k| plan.hits & 1 << k != 0).map(|k| k as f64 / 4.0).filter(|&b| b < ctx.bb()).collect();
+        let mut at: Vec<f64> = (0..32).filter(|k| plan.hits & 1 << k != 0).map(|k| k as f64 / 4.0).filter(|&b| b < ctx.bb()).collect();
         if at.is_empty() {
             let figures: [&[f64]; 4] = [&[1.5], &[2.5], &[0.0, 1.5], &[3.5]];
             let f = figures[(unit(ctx.seed, ctx.bar.index, 0, 13) * 4.0) as usize % 4];

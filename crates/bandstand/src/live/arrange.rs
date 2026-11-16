@@ -13,7 +13,7 @@
 
 use crate::chart::Chart;
 use crate::mml::{EventKind, Track};
-use crate::synth::apply_swing;
+use crate::synth::apply_swing_in;
 use crate::{Harmony, accomp, melody, theory, tuning, waltz};
 
 use super::ornament::{Harm, Scale};
@@ -55,7 +55,38 @@ pub struct Shape {
     pub waltz: bool,
 }
 
+/// A bar's pulses, in beats from its bar line: where a walking bass steps, the comp stabs and
+/// the kick falls. A beat each, except in five: 3+2, the 3 as two dotted quarters.
+pub fn pulses(bar_beats: f64) -> &'static [f64] {
+    match bar_beats.round() as u32 {
+        5 => &[0.0, 1.5, 3.0, 4.0],
+        3 => &[0.0, 1.0, 2.0],
+        2 => &[0.0, 1.0],
+        _ => &[0.0, 1.0, 2.0, 3.0],
+    }
+}
+
+/// A bar's big beats (a two-feel bass's halves): 1 and 3; in five the 3 and the 2; in three,
+/// ONE.
+pub fn halves(bar_beats: f64) -> &'static [f64] {
+    match bar_beats.round() as u32 {
+        5 => &[0.0, 3.0],
+        3 | 2 => &[0.0],
+        _ => &[0.0, 2.0],
+    }
+}
+
 impl Shape {
+    /// This shape's [`pulses`].
+    pub fn pulses(&self) -> &'static [f64] {
+        pulses(self.bar_beats)
+    }
+
+    /// This shape's [`halves`].
+    pub fn halves(&self) -> &'static [f64] {
+        halves(self.bar_beats)
+    }
+
     pub fn new(song: &SongFile, sample_rate: u32) -> Self {
         Self::build(song, sample_rate, song.bpm, song.beats(), song.bar_beats(), false, None)
     }
@@ -235,7 +266,7 @@ fn inherit_instruments(track: &mut Track, written: &Track, warp: bool) {
 #[derive(Debug, Clone)]
 pub struct Arrangement {
     pub harmony: Harmony,
-    /// pulse1, pulse2, triangle, noise; swung ([`apply_swing`]) like the offline renderer.
+    /// pulse1, pulse2, triangle, noise; swung ([`crate::synth::apply_swing`]) like the offline renderer.
     pub tracks: [Track; 4],
     /// Per melodic channel, the tonic the tunings anchor on ([`tuning::anchor_tonic`]).
     pub anchors: [u8; 3],
@@ -279,7 +310,7 @@ impl Arrangement {
                 inherit_instruments(t, &song.tracks[ch], warp);
             }
         }
-        let tracks = [p1, p2, tri, noise].map(|t| apply_swing(&t, song.swing));
+        let tracks = [p1, p2, tri, noise].map(|t| apply_swing_in(&t, song.swing, song.bar_beats()));
         let anchors = std::array::from_fn(|ch| {
             let notes = || {
                 tracks[ch].events.iter().flat_map(|e| match &e.kind {
@@ -337,4 +368,69 @@ fn harmony_slots(chart: &Chart, harmony: Harmony) -> Vec<(f64, f64, Harm)> {
             (s.start, s.end(), Harm { chord: s.chord, scale })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod five {
+    use super::super::{Engine, EngineConfig, Input, SongFile, chorus::{Call, Chorus}, feel::Feel};
+    use crate::Frame;
+
+    /// Two bars of 5/4 (3+2) a chorus: the bass on the pulses, the comp on the dotted beat.
+    const SONG: &str = "[song]\ntitle = Five\nbpm = 160\nswing = 0.3\nkey = F\nloop = yes\nmeter = 5/4\n\
+        [chords]\n| F Bb | C7 F |\n\
+        [pulse1]\nv12 o4 f4. c4. f4 b-4 | a4. g4. f2 |\n\
+        [pulse2]\nv7 r4. {f a > c}8 r8 r8 r8 {f b- > d}8 r8 {f b- > d}8 | r4. {e g b-}8 r8 r8 r8 {f a > c}8 r8 {f a > c}8 |\n\
+        [triangle]\no2 f4. > c4. < b-4 f4 | > c4. < g4. f4 > c4 |\n\
+        [noise]\nv9 k8 h8 h8 k8 h8 h8 s8 h8 s8 h8 | k8 h8 h8 k8 h8 h8 s8 h8 s8 h8 |\n";
+
+    /// Each channel's onsets, in beats from their bar line (on the grid), over `bars` bars.
+    fn onsets(chorus: Option<Chorus>, freedom: f32, bars: u64) -> (Vec<Vec<f64>>, Vec<Feel>) {
+        let file = SongFile::parse(SONG).unwrap();
+        let mut e = Engine::with_config(&file, 32_000, EngineConfig { seed: 3, ..EngineConfig::on_grid() }).unwrap();
+        e.tap(true);
+        e.post(Input::LevelStart);
+        e.post(Input::SetFreedom { lead: freedom, comp: freedom, bass: freedom, drums: freedom, dynamics: 0.0 });
+        if let Some(chorus) = chorus {
+            e.post(Input::ForceChorus(Some(Call { chorus, key_up: false })));
+        }
+        let mut buf = [Frame::ZERO; 512];
+        let mut feels = Vec::new();
+        while e.state().position.bar < bars {
+            e.fill(&mut buf);
+            feels.push(e.state().feel);
+        }
+        let mut out = vec![Vec::new(); 5];
+        for ev in e.take_tapped() {
+            out[ev.ch as usize].push(ev.beat.rem_euclid(5.0));
+        }
+        (out, feels)
+    }
+
+    fn on(b: f64, at: &[f64]) -> bool {
+        at.iter().any(|p| (p - b).abs() < 1e-6)
+    }
+
+    #[test]
+    fn five_parses_and_plays_as_written() {
+        let (ch, _) = onsets(None, 0.0, 4);
+        assert!(ch[2].iter().all(|&b| on(b, &[0.0, 1.5, 3.0, 4.0])), "bass {:?}", ch[2]);
+        // The comp's stab on the second dotted beat stays put (a pulse isn't swung)...
+        assert!(ch[1].iter().any(|&b| on(b, &[1.5])), "comp {:?}", ch[1]);
+        // ...the 8ths inside the 2s swing.
+        assert!(ch[1].iter().any(|&b| b > 3.5 + 1e-6 && b < 4.0), "comp {:?}", ch[1]);
+    }
+
+    #[test]
+    fn the_band_walks_and_plays_in_two_on_the_pulses_with_no_feels() {
+        let pulses = [0.0, 1.5, 3.0, 4.0];
+        let (walk, feels) = onsets(Some(Chorus::Blowing), 0.8, 24);
+        // (A skip note or a rake may sit between the pulses; most steps land on them.)
+        let landed = walk[2].iter().filter(|&&b| on(b, &pulses)).count();
+        assert!(landed as f64 >= 0.7 * walk[2].len() as f64, "walking bass {:?}", walk[2]);
+        // (A skip in a dotted beat falls on its last 8th: beat 2's, never on beat 3 of a 4/4 bar.)
+        assert!(walk[2].iter().any(|&b| on(b, &[1.5])) && !walk[2].iter().any(|&b| on(b, &[2.0])), "walking bass {:?}", walk[2]);
+        let (two, _) = onsets(Some(Chorus::TwoFeel), 0.8, 12);
+        assert!(two[2].iter().filter(|&&b| b < 3.0).all(|&b| on(b, &[0.0])), "two-feel bass {:?}", two[2]);
+        assert!(feels.iter().all(|f| *f == Feel::Swing), "no feels in five");
+    }
 }

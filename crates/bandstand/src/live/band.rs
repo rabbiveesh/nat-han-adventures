@@ -120,7 +120,7 @@ pub struct BandPlan {
     /// The absolute bar.
     pub bar: u64,
     /// Hit positions, bit `k` = the `k`-th 16th of the bar.
-    pub hits: u16,
+    pub hits: u32,
     pub hit_kind: HitKind,
     /// Up to two substitutions (the backdoor's ii and V).
     pub subs: [Option<Sub>; 2],
@@ -184,7 +184,7 @@ impl BandPlan {
 
     /// Hit positions as beats from the bar line.
     pub fn hit_beats(&self) -> impl Iterator<Item = f64> + '_ {
-        (0..16).filter(move |k| self.hits & (1 << k) != 0).map(|k| k as f64 * 0.25)
+        (0..32).filter(move |k| self.hits & (1 << k) != 0).map(|k| k as f64 * 0.25)
     }
 }
 
@@ -459,7 +459,13 @@ impl BandPlan {
             let big_fill = matches!(plan.fill, Fill::Full | Fill::PressRoll);
             if ending && r.f() < p_end && plan.fill != Fill::PressRoll {
                 // Charleston hits (1, the "and" of 2), or 3 and the "and" of 4.
-                plan.hits = if r.chance(0.5) || sixteenths < 16 { 1 | 1 << 6 } else { 1 << 8 | 1 << 14 };
+                plan.hits = if r.chance(0.5) || sixteenths < 16 {
+                    1 | 1 << 6
+                } else {
+                    // The bar's back half: 3 and the "and" of 4 (in five, the 2's: 4 and its "and").
+                    let back = sixteenths - 8;
+                    1 << back | 1 << (back + 6)
+                };
                 plan.hit_kind = HitKind::Ending;
                 // The figure is the fill.
                 if plan.flourish != Flourish::Summon {
