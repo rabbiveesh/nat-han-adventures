@@ -549,24 +549,116 @@ impl<'a, 'b> Writer<'a, 'b> {
     /// one sax section if it's alone.
     #[allow(clippy::too_many_arguments)]
     fn chord(&self, out: &mut Vec<NoteEvent>, group: Group, vol: u8, b: f64, d: f64, top: i32, c: Chord, passing: bool) {
-        let (s, d) = (self.ctx.swing8(b), d);
+        let s = self.ctx.swing8(b);
+        for (h, notes, under) in self.voices(group, top, c, passing) {
+            self.play(out, h, vol.saturating_sub(under), s, d, &notes);
+        }
+    }
+
+    /// [`Self::chord`]'s voicing: each section's notes (and how much softer it plays).
+    fn voices(&self, group: Group, top: i32, c: Chord, passing: bool) -> Vec<(Horn, Vec<i32>, u8)> {
+        let mut out = Vec::new();
         let brass = group != Group::Saxes && self.brass();
         let saxes = group != Group::Brass && self.saxes();
         let top_tp = octave_into(top, 67, 82);
         if brass {
-            self.play(out, Horn::Trumpets, vol, s, d, &close(top_tp, c, passing));
+            out.push((Horn::Trumpets, close(top_tp, c, passing).to_vec(), 0));
         }
         if saxes {
             let top_sx = if brass { top_tp - 12 } else { octave_into(top, 62, 76) };
             let v = drop2(close(top_sx, c, passing));
             match (self.free.has(Horn::Altos), self.free.has(Horn::Tenors)) {
                 (true, true) => {
-                    self.play(out, Horn::Altos, vol.saturating_sub(1), s, d, &v[..2]);
-                    self.play(out, Horn::Tenors, vol.saturating_sub(1), s, d, &v[2..]);
+                    out.push((Horn::Altos, v[..2].to_vec(), 1));
+                    out.push((Horn::Tenors, v[2..].to_vec(), 1));
                 }
-                (true, false) => self.play(out, Horn::Altos, vol.saturating_sub(1), s, d, &close(top_sx, c, passing)),
-                (false, true) => self.play(out, Horn::Tenors, vol.saturating_sub(1), s, d, &close(top_sx - 5, c, passing)),
+                (true, false) => out.push((Horn::Altos, close(top_sx, c, passing).to_vec(), 1)),
+                (false, true) => out.push((Horn::Tenors, close(top_sx - 5, c, passing).to_vec(), 1)),
                 _ => {}
+            }
+        }
+        out
+    }
+
+    /// One pad, shaped by the section's inner-voice device ([`Device`]): `b`, `d` beats,
+    /// the chord `c` under `top`.
+    #[allow(clippy::too_many_arguments)]
+    fn pad(&self, out: &mut Vec<NoteEvent>, group: Group, vol: u8, b: f64, d: f64, top: i32, c: Chord, device: Device) {
+        let voices = self.voices(group, top, c, false);
+        let all: Vec<i32> = voices.iter().flat_map(|v| v.1.iter().copied()).collect();
+        if voices.is_empty() || all.is_empty() {
+            return;
+        }
+        let device = if d < 2.0 - 1e-9 { Device::Plain } else { device };
+        let swell = Art { swell: 6, len: 1.0, ..Art::PLAIN };
+        let plain = Art::PLAIN;
+        // Each voice by itself, as a note on its section's channel.
+        let one = |out: &mut Vec<NoteEvent>, h: Horn, under: u8, at: f64, len: f64, n: i32| self.play(out, h, vol.saturating_sub(under), at, len.max(0.25), &[n]);
+        match device {
+            Device::Plain => {
+                self.art.set(swell);
+                self.chord(out, group, vol, b, d, top, c, false);
+            }
+            Device::Bloom => {
+                // Unison, then out: every voice starts on the voicing's middle note and fans out
+                // to its place in two steps, contrary motion round the middle.
+                let mid = all.iter().sum::<i32>() / all.len() as i32;
+                for (k, x) in [0.0, 0.5, 1.0].into_iter().enumerate() {
+                    let at = b + k as f64 * 0.5;
+                    let len = if k == 2 { d - 1.0 } else { 0.5 };
+                    self.art.set(if k == 2 { swell } else { Art { len: 0.98, ..plain } });
+                    for (h, notes, under) in &voices {
+                        let mut ns: Vec<i32> = notes.iter().map(|&t| mid + ((t - mid) as f64 * x).round() as i32).collect();
+                        ns.dedup();
+                        self.play(out, *h, vol.saturating_sub(*under), at, len, &ns);
+                    }
+                }
+            }
+            Device::Pyramid => {
+                // The voices come in one by one, bottom up, and hold.
+                let mut order: Vec<(i32, Horn, u8)> = voices.iter().flat_map(|(h, ns, u)| ns.iter().map(move |&n| (n, *h, *u))).collect();
+                order.sort_by_key(|o| o.0);
+                let step = (d / (order.len() as f64 + 1.0)).min(0.5);
+                self.art.set(swell);
+                for (i, &(n, h, under)) in order.iter().enumerate() {
+                    let at = b + i as f64 * step;
+                    one(out, h, under, at, b + d - at, n);
+                }
+            }
+            Device::Cliche | Device::Suspension => {
+                // One inner voice moves while the rest hold: a line cliché off the fifth (5 #5
+                // 6 #5) or the root (1 7 b7 6), or the third suspended (4, then 3).
+                let root = c.root as i32;
+                let third = four(c)[1];
+                let pick = |want: &dyn Fn(i32) -> bool| voices.iter().enumerate().find_map(|(vi, (_, ns, _))| ns.iter().position(|&n| want(n.rem_euclid(12))).map(|ni| (vi, ni)));
+                let (moving, line): (Option<(usize, usize)>, Vec<(f64, i32)>) = if device == Device::Suspension {
+                    let m = pick(&|pc| pc == third && (pc - root).rem_euclid(12) >= 3);
+                    let up = (root + 5 - third).rem_euclid(12);
+                    (m, vec![(0.0, up), (1.0, 0)])
+                } else if let Some(m) = pick(&|pc| pc == (root + 7) % 12) {
+                    (Some(m), (0..4).map(|k| (k as f64 * d / 4.0, [0, 1, 2, 1][k])).collect())
+                } else {
+                    (pick(&|pc| pc == root), (0..4).map(|k| (k as f64 * d / 4.0, [0, -1, -2, -3][k])).collect())
+                };
+                let Some((vi, ni)) = moving else {
+                    self.art.set(swell);
+                    self.chord(out, group, vol, b, d, top, c, false);
+                    return;
+                };
+                self.art.set(swell);
+                for (k, (h, ns, under)) in voices.iter().enumerate() {
+                    let rest: Vec<i32> = ns.iter().enumerate().filter(|&(j, _)| !(k == vi && j == ni)).map(|(_, &n)| n).collect();
+                    if !rest.is_empty() {
+                        self.play(out, *h, vol.saturating_sub(*under), b, d, &rest);
+                    }
+                }
+                let (h, ns, under) = &voices[vi];
+                let n0 = ns[ni];
+                self.art.set(Art { len: 0.98, ..plain });
+                for (j, &(at, off)) in line.iter().enumerate() {
+                    let to = line.get(j + 1).map_or(d, |x| x.0);
+                    one(out, *h, under.saturating_sub(1), b + at, to - at, n0 + off);
+                }
             }
         }
     }
@@ -671,16 +763,18 @@ impl<'a, 'b> Writer<'a, 'b> {
     fn pads(&self, out: &mut Vec<NoteEvent>) {
         let Some(group) = self.group(Group::Saxes) else { return };
         let vol = (if group == Group::Brass { 9 } else { 10 }) + self.build() as u8;
-        // Every pad swells into the next change.
-        self.art.set(Art { swell: 6, len: 1.0, ..Art::PLAIN });
-        for (b, d, _, _) in changes(self.ctx) {
-            let Some(h) = self.ctx.harm_at(b) else { continue };
-            if d >= 4.0 - 1e-9 {
+        let ctx = self.ctx;
+        let device = Device::of(ctx);
+        for (b, d, _, _) in changes(ctx) {
+            let Some(h) = ctx.harm_at(b) else { continue };
+            let top = top_at(h.chord, 69, 0);
+            if d >= 4.0 - 1e-9 && device == Device::Plain {
+                // Every pad swells into the next change, a long one's top stepping down.
                 let half = (d / 2.0).floor();
-                self.chord(out, group, vol, b, half - 0.1, top_at(h.chord, 69, 0), h.chord, false);
-                self.chord(out, group, vol, b + half, d - half - 0.1, top_at(h.chord, 69, -1), h.chord, false);
+                self.pad(out, group, vol, b, half - 0.1, top, h.chord, Device::Plain);
+                self.pad(out, group, vol, b + half, d - half - 0.1, top_at(h.chord, 69, -1), h.chord, Device::Plain);
             } else {
-                self.chord(out, group, vol, b, (d - 0.1).max(0.5), top_at(h.chord, 69, 0), h.chord, false);
+                self.pad(out, group, vol, b, (d - 0.1).max(0.5), top, h.chord, device);
             }
         }
     }
@@ -863,6 +957,25 @@ fn saxes_take_the_soli(band: &mut [NoteEvent], free: Horns) {
         e.volume = e.volume.max(10);
         e.fx.slide = 0;
         e.fx.slide_frames = 0;
+    }
+}
+
+/// What a section's pads do inside the chord ([`Writer::pad`]): held plain; a bloom (from a
+/// unison out to the voicing, contrary motion); a pyramid (the voices entering bottom up); a
+/// line cliché in an inner voice; a suspended fourth resolving to the third. One per section.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Device {
+    Plain,
+    Bloom,
+    Pyramid,
+    Cliche,
+    Suspension,
+}
+
+impl Device {
+    fn of(ctx: &Ctx) -> Device {
+        let x = unit(ctx.seed, ctx.bar.pass, (ctx.bar.song_bar / SECTION) as u64, 80);
+        pick(x, &[(Device::Plain, 0.2), (Device::Bloom, 0.25), (Device::Pyramid, 0.2), (Device::Cliche, 0.2), (Device::Suspension, 0.15)])
     }
 }
 

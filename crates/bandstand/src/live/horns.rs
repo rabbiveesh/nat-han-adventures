@@ -704,4 +704,14 @@ mod tests {
             assert!(roles.contains(&r), "{r:?} never: {roles:?}");
         }
     }
+
+    /// Pads aren't all block chords: some voices move or enter by themselves (a bloom, a
+    /// pyramid, a line cliché, a suspension).
+    #[test]
+    fn pads_move_inside() {
+        let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(UpperRole::Pads)), Input::ForceMelody(Some(Melody::Lead))], "body_and_soul");
+        let saxes: Vec<_> = evs.iter().filter(|e| e.ch == Horn::Altos.ch() || e.ch == Horn::Tenors.ch()).collect();
+        let single = saxes.iter().filter(|e| e.sound.notes().len() == 1).count();
+        assert!(single > 10 && single < saxes.len(), "{single} of {}", saxes.len());
+    }
 }

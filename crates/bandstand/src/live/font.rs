@@ -124,6 +124,8 @@ struct Msg {
     key: u8,
     vel: u8,
     ctl: Ctl,
+    /// The note it belongs to (later notes win a channel's bend, expression and vibrato).
+    owner: u64,
 }
 
 /// A control change a note's shape sends ([`Fx`]: slides, falls, swells).
@@ -156,6 +158,9 @@ pub(crate) struct FontVoices {
     left: Vec<f32>,
     right: Vec<f32>,
     sample_rate: f32,
+    /// The note being queued ([`Msg::owner`]), and each channel's latest note sounding.
+    note: u64,
+    owner: [u64; 16],
 }
 
 impl FontVoices {
@@ -203,7 +208,7 @@ impl FontVoices {
                 synth.process_midi_message(m as i32, 0xB0, 0x26, 0);
             }
         }
-        Ok(FontVoices { voicing, synth, msgs: BinaryHeap::new(), seq: 0, queued: Vec::new(), tied: [[0; 128]; 16], last: [None; 16], left: Vec::new(), right: Vec::new(), sample_rate: sample_rate as f32 })
+        Ok(FontVoices { voicing, synth, msgs: BinaryHeap::new(), seq: 0, queued: Vec::new(), tied: [[0; 128]; 16], last: [None; 16], left: Vec::new(), right: Vec::new(), sample_rate: sample_rate as f32, note: 0, owner: [0; 16] })
     }
 
     pub(crate) fn routes(&self, ch: u8) -> bool {
@@ -212,12 +217,12 @@ impl FontVoices {
 
     fn send(&mut self, at: u64, on: bool, ch: u8, key: u8, vel: u8) {
         self.seq += 1;
-        self.msgs.push(Reverse(Msg { at, on, seq: self.seq, ch, key, vel, ctl: Ctl::None }));
+        self.msgs.push(Reverse(Msg { at, on, seq: self.seq, ch, key, vel, ctl: Ctl::None, owner: self.note }));
     }
 
     fn control(&mut self, at: u64, ch: u8, ctl: Ctl) {
         self.seq += 1;
-        self.msgs.push(Reverse(Msg { at, on: false, seq: self.seq, ch, key: 0, vel: 0, ctl }));
+        self.msgs.push(Reverse(Msg { at, on: false, seq: self.seq, ch, key: 0, vel: 0, ctl, owner: self.note }));
     }
 
     /// A note's shape on its MIDI channel `ch` (melodic only): a slide onto it, a swell
@@ -287,6 +292,7 @@ impl FontVoices {
     /// Queue a committed event on a routed channel.
     pub(crate) fn push(&mut self, ev: NoteEvent) {
         let Some(ch) = midi_channel(ev.ch) else { return };
+        self.note += 1;
         let vel = velocity(ev.volume, ev.gain);
         let end = ev.end.max(ev.start + 1);
         match &ev.sound {
@@ -349,6 +355,12 @@ impl FontVoices {
         }
     }
 
+    /// A channel's shape back to plain: no bend, its trim's expression, no vibrato.
+    fn neutral(&self, m: u8) -> [(i32, i32, i32); 3] {
+        let trim = self.voicing.trims[engine_channel(m) as usize].clamp(0.0, 1.0);
+        [(0xE0, 0, 64), (0xB0, 0x0B, (127.0 * trim.sqrt()).round() as i32), (0xB0, 0x01, 0)]
+    }
+
     /// The MIDI bytes for a control message (`None`: a note).
     fn ctl_message(&self, m: Msg) -> Option<(i32, i32, i32)> {
         match m.ctl {
@@ -397,6 +409,22 @@ impl FontVoices {
                     break;
                 }
                 self.msgs.pop();
+                // A new note takes its channel's shape over: the last one's bend, swell and
+                // vibrato end where it starts (a fall never drags the next note flat); the
+                // old note's late shaping is dropped.
+                let c = m.ch as usize;
+                if m.ch != DRUM_CH && (m.on || m.ctl != Ctl::None) {
+                    if m.owner < self.owner[c] {
+                        if m.ctl != Ctl::None {
+                            continue;
+                        }
+                    } else if m.owner > self.owner[c] {
+                        self.owner[c] = m.owner;
+                        for (status, a, b) in self.neutral(m.ch) {
+                            self.synth.process_midi_message(m.ch as i32, status, a, b);
+                        }
+                    }
+                }
                 if let Some((status, a, b)) = self.ctl_message(m) {
                     self.synth.process_midi_message(m.ch as i32, status, a, b);
                 } else if m.on {

@@ -37,6 +37,11 @@ GitHub Release's notes.
   off and its own velocity, the lead voice on top; the guitar strums; held horn notes
   grow a vibrato (CC 1). `big_band` picks the jazz kit (the drum channel's program now
   picks the kit) and the guitar plays the GM jazz guitar. Tried with GeneralUser GS.
+- **Inner voices**: each section's pads take a device: a bloom (from a unison out to the
+  voicing in contrary motion), a pyramid (voices entering bottom up), a line cliché in
+  an inner voice, or a 4-3 suspension.
+- A new note takes its channel's bend, expression and vibrato over (a fall no longer
+  drags the next note flat).
 - **Less is more**: the sections and low horns lay out far more, a riff behind a soloist
   breathes two bars on and two off, one answer a bar at most.
 - **Soli with sections**: in a soli chorus the saxes play the quartet's counterpoint

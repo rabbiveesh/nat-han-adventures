@@ -10,6 +10,9 @@
 //!     [--freedom 0..1]
 //! ```
 //!
+//! GeneralUser GS (S. Christian Collins; free for any music, commercial included) sounds
+//! far less like a keyboard than FluidR3 here: https://github.com/mrbumpy409/GeneralUser-GS.
+//!
 //! Anything not given is rolled from the seed (the song, who's on the stand, the freedom), so
 //! `--seed 1..1000` makes a thousand different takes. Writes, at 44.1 kHz:
 //! `<song>-<seed>-<part>.wav` (mono f32, dry; parts: lead, piano, bass, drums, tenor, bone4,
