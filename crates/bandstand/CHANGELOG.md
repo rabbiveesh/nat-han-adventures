@@ -33,6 +33,17 @@ GitHub Release's notes.
   are struck and swell back.
 - `FontVoicing::big_band` balances the band as big band records do (drums up, bass and
   guitar down); `FontVoicing::trims` sets any channel's level (MIDI expression).
+- **Sections sound like players** (SoundFont): each voice of a section chord a few ms
+  off and its own velocity, the lead voice on top; the guitar strums; held horn notes
+  grow a vibrato (CC 1). `big_band` picks the jazz kit (the drum channel's program now
+  picks the kit) and the guitar plays the GM jazz guitar. Tried with GeneralUser GS.
+- **Less is more**: the sections and low horns lay out far more, a riff behind a soloist
+  breathes two bars on and two off, one answer a bar at most.
+- **Soli with sections**: in a soli chorus the saxes play the quartet's counterpoint
+  itself (the tune and the alto line on the altos, the tenor line on the tenors), up
+  front; the block-chord soli is louder.
+- With upper sections on the stand the band reharms a third as often, and only behind
+  a solo (`BandInput::sections`).
 - `Yes! We Have No Bananas` (1923) joins the library.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the

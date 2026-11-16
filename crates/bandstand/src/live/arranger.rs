@@ -243,13 +243,13 @@ fn chorus_plan(ctx: &Ctx, horns: Horns, s: usize) -> Section {
             // A blowing chorus builds: alone, then pads or answers, then the riff.
             _ => {
                 if s == 0 && n > 1 {
-                    pick(c(s, 31), &[(Tacet, 0.7), (Pads, 0.3)])
+                    pick(c(s, 31), &[(Tacet, 0.85), (Pads, 0.15)])
                 } else if last {
-                    pick(c(s, 32), &[(Riff, 0.6), (Answers, 0.4)])
+                    pick(c(s, 32), &[(Riff, 0.55), (Answers, 0.3), (Tacet, 0.15)])
                 } else if s == 1 {
-                    pick(c(s, 33), &[(Pads, 0.5), (Answers, 0.5)])
+                    pick(c(s, 33), &[(Tacet, 0.35), (Pads, 0.35), (Answers, 0.3)])
                 } else {
-                    pick(c(s, 34), &[(Riff, 0.5), (Answers, 0.3), (Pads, 0.2)])
+                    pick(c(s, 34), &[(Tacet, 0.3), (Riff, 0.35), (Answers, 0.35)])
                 }
             }
         };
@@ -261,7 +261,7 @@ fn chorus_plan(ctx: &Ctx, horns: Horns, s: usize) -> Section {
         Chorus::Shout => line(if last || c(s, 35) < 0.5 { Tutti } else { Riff }),
         Chorus::StopTime => line(Punches),
         Chorus::Riffs => line(Riff),
-        Chorus::Breaks => line(pick(c(s, 36), &[(Pads, 0.4), (Punches, 0.3), (Answers, 0.3)])),
+        Chorus::Breaks => line(pick(c(s, 36), &[(Tacet, 0.3), (Pads, 0.2), (Punches, 0.3), (Answers, 0.2)])),
         Chorus::Strolling => line(Tacet),
         _ => head(ctx, horns, s, n),
     }
@@ -300,10 +300,11 @@ fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
             Take::Soli => Section { role: Soli, melody: Melody::Lead },
             Take::Tutti => Section { role: Tutti, melody: Melody::Lead },
             Take::Line(melody) => {
+                // Less is more: the tune often alone with the rhythm section.
                 let role = if two || (k == 0 && ctx.bar.pass == 0) {
-                    pick(c(k, 42), &[(Tacet, 0.35), (Pads, 0.45), (Answers, 0.2)])
+                    pick(c(k, 42), &[(Tacet, 0.6), (Pads, 0.25), (Answers, 0.15)])
                 } else {
-                    pick(c(k, 43), &[(Pads, 0.35), (Answers, 0.4), (Riff, 0.25)])
+                    pick(c(k, 43), &[(Tacet, 0.35), (Pads, 0.25), (Answers, 0.3), (Riff, 0.1)])
                 };
                 Section { role, melody }
             }
@@ -588,6 +589,12 @@ impl<'a, 'b> Writer<'a, 'b> {
             (Group::Saxes, 11)
         };
         let group = self.group(want)?;
+        // Behind a soloist the riff breathes: two bars on, two off (the Riffs chorus keeps
+        // its ostinato going; a shout, an intro and a section's last bars play through).
+        let ostinato = ctx.band.chorus == Chorus::Riffs || shout || ctx.band.intro.is_some() || build;
+        if !ostinato && ctx.bar.song_bar % 4 >= 2 {
+            return None;
+        }
         let vol = (vol + self.build()).min(14) as u8;
         let center = if group == Group::Saxes { 69 } else { 74 };
         let at = |f: &(u8, f64, f64, i32)| f.0 as f64 * 4.0 + f.1;
@@ -628,10 +635,12 @@ impl<'a, 'b> Writer<'a, 'b> {
         if bb - cursor >= 1.5 {
             gaps.push((cursor, bb));
         }
-        for (i, &(g0, g1)) in gaps.iter().take(2).enumerate() {
+        // One answer a bar at most, in a real rest, and every other bar unless the line
+        // leaves the whole bar open: room for the line to breathe too.
+        for (i, &(g0, g1)) in gaps.iter().take(1).enumerate() {
             let start = ((g0 + 0.25) * 2.0).ceil() / 2.0;
             let room = g1 - start;
-            if room < 1.0 {
+            if room < 1.5 || (ctx.bar.index % 2 == 1 && room < 3.0) {
                 continue;
             }
             let fits: Vec<(usize, f64)> = ANSWERS.iter().enumerate().filter(|(_, a)| a.iter().map(|n| n.0 + n.1).fold(0.0, f64::max) <= room + 0.5).map(|(k, _)| (k, 1.0)).collect();
@@ -727,9 +736,10 @@ impl<'a, 'b> Writer<'a, 'b> {
             let room = tune.get(i + 1).map_or(if b + d < bb - 0.75 { bb - b - d } else { 0.0 }, |x| x.0 - b - d);
             self.phrase(b, d, room >= 0.75, room, tutti);
             if !tutti {
+                // (Soli up front: the section has the tune.)
                 let v = drop2(close(octave_into(n, 62, 77), c, passing));
-                self.play(out, Horn::Altos, 12, b, d, &v[..2]);
-                self.play(out, Horn::Tenors, 12, b, d, &v[2..]);
+                self.play(out, Horn::Altos, 15, b, d, &v[..2]);
+                self.play(out, Horn::Tenors, 14, b, d, &v[2..]);
             } else {
                 let v = close(octave_into(n, 67, 84), c, passing);
                 self.play(out, Horn::Trumpets, 13, b, d, &v);
@@ -796,7 +806,14 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
     let w = Writer::new(ctx, free);
     match sec.role {
         UpperRole::Soli => {
-            w.tune(out, &tune, false);
+            if ctx.band.soli.is_some() && free.has(Horn::Altos) {
+                // The quartet's soli, orchestrated: the tune and the comp's alto line on the
+                // altos, its tenor line on the tenors (the counterpoint as written: front line,
+                // canon, chorale...), each a player, up front.
+                saxes_take_the_soli(band, free);
+            } else {
+                w.tune(out, &tune, false);
+            }
             let held: Vec<(f64, f64)> = tune.iter().map(|&(b, d, _)| (b, b + d)).collect();
             let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE });
             brass.answers(out, &held, 12);
@@ -815,5 +832,37 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         UpperRole::Tacet => {}
     }
     Some(sec)
+}
+
+/// The quartet's soli ([`super::soli`]) onto the saxes: the lead's tune and the comp's alto
+/// line (its single notes; the piano keeps its chords) to the altos, the third pulse's tenor
+/// line to the tenors (or the altos, with no tenors). Lines, not chords: each at a soloist's
+/// level, and no slides (a section shares its channel's bend).
+fn saxes_take_the_soli(band: &mut [NoteEvent], free: Horns) {
+    let tenors = if free.has(Horn::Tenors) { Horn::Tenors } else { Horn::Altos };
+    for e in band.iter_mut() {
+        let to = match (e.ch, e.sound) {
+            (0, Sound::Note(_) | Sound::Arp(_)) => (Horn::Altos, Melody::Alto.level()),
+            (1, Sound::Note(_)) => (Horn::Altos, Melody::Alto.level() * 0.85),
+            (4, Sound::Note(_)) => (tenors, Melody::Tenor.level() * 1.6),
+            _ => continue,
+        };
+        let (h, level) = to;
+        let (lo, hi) = h.range();
+        e.sound = match e.sound {
+            Sound::Arp(a) => Sound::Note(a.notes().iter().copied().max().unwrap_or(60)),
+            s => s,
+        };
+        if let Sound::Note(n) = e.sound {
+            e.sound = Sound::Note(octave_into(n as i32, lo, hi) as u8);
+        }
+        e.ch = h.ch();
+        e.inst = 0;
+        e.anchor = 0;
+        e.gain *= level;
+        e.volume = e.volume.max(10);
+        e.fx.slide = 0;
+        e.fx.slide_frames = 0;
+    }
 }
 

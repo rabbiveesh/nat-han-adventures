@@ -71,9 +71,11 @@ impl FontVoicing {
     /// Balanced from renders against the levels big band records sit at.
     pub fn big_band(font: Arc<SoundFont>) -> Self {
         let mut v = Self::combo(font);
+        // The jazz kit (the standard one where a font has none).
+        v.programs[3] = Some(32);
         // dB against the combo; the loudest (the drums) sets the overall gain.
         let mut db = [0.0f32; CHANNELS];
-        db[0] = -1.0;
+        db[0] = 2.0;
         db[1] = 1.0;
         db[2] = -3.0;
         db[3] = 8.0;
@@ -132,6 +134,8 @@ enum Ctl {
     Bend(u16),
     /// Expression, as a gain in dB (tenths) against the channel's trim.
     Expr(i16),
+    /// Modulation (the GM vibrato depth), 0..127.
+    Mod(u8),
 }
 
 /// The pitch-bend range set on every melodic channel, in semitones (falls and doits go far).
@@ -170,7 +174,8 @@ impl FontVoices {
         let mut synth = Synthesizer::new(&voicing.font, &settings).map_err(|e| format!("soundfont synth: {e:?}"))?;
         for (ch, p) in voicing.programs.iter().enumerate() {
             let (Some(p), Some(m)) = (p, midi_channel(ch as u8)) else { continue };
-            if m != DRUM_CH {
+            // (On the drums, the program picks the kit: 0 standard, 32 jazz, 40 brushes.)
+            if m != DRUM_CH || *p > 0 {
                 synth.process_midi_message(m as i32, 0xC0, *p as i32, 0);
             }
             // Lead a little left, comp right, bass and drums centred; a touch of room.
@@ -222,6 +227,20 @@ impl FontVoices {
         // (Not the piano or the guitar: they don't bend or swell.)
         if matches!(engine_channel(ch), 1 | 8) {
             return;
+        }
+        // A held note grows a vibrato after its attack, as a horn player's does.
+        let depth = self.vibrato(engine_channel(ch));
+        let secs = (end - ev.start) as f64 / self.sample_rate as f64;
+        if depth > 0 && secs >= 0.45 {
+            let sr = self.sample_rate as f64;
+            let from = ev.start + (0.22 * sr) as u64;
+            for k in 0..=4u64 {
+                let at = from + (k as f64 * 0.08 * sr) as u64;
+                if at < end {
+                    self.control(at, ch, Ctl::Mod((depth as u64 * k / 4) as u8));
+                }
+            }
+            self.control(end + 1, ch, Ctl::Mod(0));
         }
         if (fx.slide == 0 || fx.slide_frames == 0) && fx.fall == 0 && fx.swell == 0 {
             return;
@@ -286,9 +305,25 @@ impl FontVoices {
             Sound::Arp(a) => {
                 self.shape(ch, &ev, end);
                 let vel = (vel as f32 * 0.85) as u8;
-                for &n in a.notes() {
+                // A section is players, not a keyboard: each voice a few ms off and a little
+                // louder or softer, the lead voice (the top) over the rest; the guitar strums.
+                let section = ev.ch >= super::horns::FIRST_CH;
+                let strum = super::horns::Horn::from_ch(ev.ch) == Some(super::horns::Horn::Guitar);
+                let top = a.notes().iter().copied().max().unwrap_or(0);
+                let ms = self.sample_rate as f64 / 1000.0;
+                for (i, &n) in a.notes().iter().enumerate() {
                     let k = n.min(127);
-                    self.send(ev.start, true, ch, k, vel.max(1));
+                    let h = spread(ev.salt, i as u64);
+                    let (at, v) = if strum {
+                        let rank = a.notes().iter().filter(|&&x| x < n).count();
+                        (ev.start + (rank as f64 * 5.0 * ms) as u64, vel as i32 + (h * 8.0 - 4.0) as i32)
+                    } else if section {
+                        let lead = if n == top { 6 } else { 0 };
+                        (ev.start + (h * 18.0 * ms) as u64, vel as i32 + lead + ((spread(ev.salt ^ 0x55, i as u64) * 14.0) as i32 - 7))
+                    } else {
+                        (ev.start, vel as i32)
+                    };
+                    self.send(at.min(end.saturating_sub(1)), true, ch, k, v.clamp(1, 127) as u8);
                     self.send(end, false, ch, k, 0);
                 }
                 self.last[ch as usize] = None;
@@ -302,11 +337,24 @@ impl FontVoices {
         self.queued.push(ev);
     }
 
+    /// How deep a held note's vibrato goes on engine channel `ch` (CC 1): the saxes and
+    /// clarinet more, the brass lighter, the rest none.
+    fn vibrato(&self, ch: u8) -> u8 {
+        match self.voicing.programs.get(ch as usize).copied().flatten() {
+            Some(64..=68) => 70,
+            Some(71) => 50,
+            Some(56 | 59) => 35,
+            Some(57 | 58 | 60 | 61) => 25,
+            _ => 0,
+        }
+    }
+
     /// The MIDI bytes for a control message (`None`: a note).
     fn ctl_message(&self, m: Msg) -> Option<(i32, i32, i32)> {
         match m.ctl {
             Ctl::None => None,
             Ctl::Bend(v) => Some((0xE0, (v & 0x7f) as i32, (v >> 7) as i32)),
+            Ctl::Mod(v) => Some((0xB0, 0x01, v as i32)),
             Ctl::Expr(tenths) => {
                 let ch = engine_channel(m.ch);
                 let trim = self.voicing.trims[ch as usize].clamp(0.0, 1.0) * 10f32.powf(tenths as f32 / 200.0);
@@ -369,6 +417,15 @@ impl FontVoices {
             pos = next;
         }
     }
+}
+
+/// A deterministic spread in [0, 1) for voice `i` of a note salted `salt`.
+fn spread(salt: u64, i: u64) -> f64 {
+    let mut x = salt ^ i.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0x5eed_5eed;
+    x ^= x >> 33;
+    x = x.wrapping_mul(0xff51_afd7_ed55_8ccd);
+    x ^= x >> 33;
+    (x >> 11) as f64 / (1u64 << 53) as f64
 }
 
 /// The engine channel a MIDI channel plays (the inverse of [`midi_channel`]).

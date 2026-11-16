@@ -828,6 +828,7 @@ impl Engine {
             intro,
             ending,
             reharm: soloist.profile().map_or(soloist::BAND_REHARM, |p| p.reharm()),
+            sections: [super::horns::Horn::Trumpets, super::horns::Horn::Altos, super::horns::Horn::Tenors].into_iter().any(|h| self.config.horns.has(h)),
         });
         ctx.band = &band;
         // A feel section gets the feel's own soloists (measured over funk and Latin grooves);
