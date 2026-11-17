@@ -62,7 +62,7 @@ impl FontVoicing {
         for h in super::horns::Horn::ALL {
             programs[h.ch() as usize] = Some(h.program());
         }
-        FontVoicing { font, programs, gain: 2.0, trims: [1.0; CHANNELS] }
+        FontVoicing { font, programs, gain: 3.0, trims: [1.0; CHANNELS] }
     }
 
     /// [`Self::combo`] balanced as a big band: the drums up to drive the band (+8 dB against
@@ -75,16 +75,20 @@ impl FontVoicing {
         v.programs[3] = Some(32);
         // dB against the combo; the loudest (the drums) sets the overall gain.
         let mut db = [0.0f32; CHANNELS];
-        db[0] = 2.0;
-        db[1] = 1.0;
-        db[2] = -3.0;
+        use super::horns::Horn;
+        db[0] = 2.3;
+        db[1] = 2.3;
+        db[2] = -4.0;
         db[3] = 8.0;
-        db[4] = 1.0;
-        for h in super::horns::Horn::ALL {
+        db[4] = 2.3;
+        for h in Horn::ALL {
             db[h.ch() as usize] = match h {
-                super::horns::Horn::Guitar => -3.0,
-                h if h.is_low() => 3.0,
-                _ => 1.0,
+                Horn::Guitar => -1.0,
+                Horn::BassTrombone => 2.7,
+                Horn::Bari | Horn::Tuba => 4.0,
+                Horn::Trumpets => 0.0,
+                Horn::Altos => 0.7,
+                _ => -0.3,
             };
         }
         let top = db.iter().copied().fold(f32::MIN, f32::max);
@@ -303,7 +307,9 @@ impl FontVoices {
                     // Held over: just end later.
                     self.tied[ch as usize][k as usize] = end;
                 } else {
-                    self.send(ev.start, true, ch, k, vel);
+                    // No two notes struck quite alike (the drums have their own feel).
+                    let h = spread(ev.salt ^ 0xd1, 0);
+                    self.send(ev.start, true, ch, k, (vel as i32 + (h * 9.0) as i32 - 4).clamp(1, 127) as u8);
                 }
                 self.send(end, false, ch, k, 0);
                 self.last[ch as usize] = Some((k, end));
@@ -488,10 +494,13 @@ pub(crate) fn drum_key(d: Drum) -> (u8, f32) {
     }
 }
 
-/// MIDI velocity from the chip's 0..=15 volume and the dynamics gain.
+/// MIDI velocity from the chip's 0..=15 volume and the dynamics gain. GM players' level
+/// goes about as 40 log10(velocity), so a volume step near the top is about 1 dB, 12 against
+/// 15 about 3 dB and 6 about 13 dB: the musicians' dynamics as wide as a player's. (The gain,
+/// mostly a part's level, keeps the gentler square root it always had.)
 fn velocity(volume: u8, gain: f32) -> u8 {
-    let v = (volume.min(15) as f32 / 15.0) * gain.max(0.0);
-    (20.0 + 107.0 * v.sqrt()).round().clamp(1.0, 127.0) as u8
+    let v = (volume.min(15) as f32 / 15.0).powf(0.85) * gain.max(0.0).sqrt();
+    (127.0 * v).round().clamp(8.0, 127.0) as u8
 }
 
 #[cfg(test)]
@@ -501,7 +510,7 @@ mod tests {
 
     #[test]
     fn velocity_follows_volume_and_dynamics() {
-        assert_eq!(velocity(0, 1.0), 20);
+        assert_eq!(velocity(0, 1.0), 8);
         assert_eq!(velocity(15, 1.0), 127);
         assert!(velocity(8, 1.0) < velocity(12, 1.0));
         assert!(velocity(12, 0.5) < velocity(12, 1.0));

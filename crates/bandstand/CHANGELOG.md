@@ -42,6 +42,14 @@ GitHub Release's notes.
   an inner voice, or a 4-3 suspension.
 - A new note takes its channel's bend, expression and vibrato over (a fall no longer
   drags the next note flat).
+- **Dynamics you can hear** (SoundFont): the velocity curve follows the musicians'
+  volume about as a player's level goes (12 against 15 about 3 dB, 6 about 13 dB; it was
+  under 3 dB across the whole range), every single note struck a little differently, and
+  the default gain up to match (3.0). With sections the tune is shaped like a horn
+  player shapes it (louder up high, the 8th before an and ghosted, long notes swelling,
+  the section rising to its seventh bar); the sections play two under what's asked, so
+  accents and the build (now to +3) have room, and the punches build and lean on
+  anticipations. `big_band`'s trims rebalanced to keep each part's level.
 - **The devices in more places**: each pass picks its colour (a device, unison or not, an
   ending). A riff's long notes open up with the device and its quick ones go unison; an
   answer can start in unison and bloom on its last note; the shout plays its fast notes in

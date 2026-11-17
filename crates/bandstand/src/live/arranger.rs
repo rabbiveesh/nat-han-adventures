@@ -475,6 +475,9 @@ impl<'a, 'b> Writer<'a, 'b> {
         let mut a = Art::PLAIN;
         if off {
             a.accent = 2;
+        } else if b.fract() < 0.01 && d <= 0.55 && !last {
+            // The 8th before an and: ghosted.
+            a.accent = -2;
         }
         if d <= 0.55 {
             a.len = if last { 0.55 } else { 0.9 };
@@ -495,7 +498,7 @@ impl<'a, 'b> Writer<'a, 'b> {
 
     /// The section's dynamics: a step up in its fifth and sixth bars, two in its last two.
     fn build(&self) -> i32 {
-        [0, 0, 0, 0, 1, 1, 2, 2][self.ctx.bar.song_bar % SECTION]
+        [0, 0, 0, 1, 1, 2, 3, 3][self.ctx.bar.song_bar % SECTION]
     }
 
     fn brass(&self) -> bool {
@@ -530,7 +533,8 @@ impl<'a, 'b> Writer<'a, 'b> {
         t.inst = 0;
         t.anchor = 0;
         t.gain *= h.level();
-        t.volume = (vol as i32 + a.accent as i32).clamp(1, 15) as u8;
+        // (Two under what's asked, so the accents and the build have room.)
+        t.volume = (vol as i32 - 2 + a.accent as i32).clamp(1, 15) as u8;
         let d = (d * a.len).max(0.2);
         let mut e = self.ctx.make(&t, b, d, Sound::Arp(crate::mml::Arp::new(&ns)));
         e.fx.swell = a.swell;
@@ -851,7 +855,10 @@ impl<'a, 'b> Writer<'a, 'b> {
             let top = (70..=80).rev().find(|n| pcs.contains(&(n % 12))).unwrap_or(76);
             // (Already on the grid: the hits are where they sound.)
             let stop = plan.hit_kind == HitKind::Stop && unit(ctx.seed, ctx.bar.index, 0, 71) < 0.3;
-            self.art.set(Art { accent: 1, len: 1.0, fall: if stop { -7 } else { 0 }, swell: 0 });
+            // On the beat a stab; ahead of it (an anticipation) leaned on; louder through
+            // the section.
+            let push = if b.fract() > 0.01 { 2 } else { 0 };
+            self.art.set(Art { accent: push + self.build() as i8 - 1, len: 1.0, fall: if stop { -7 } else { 0 }, swell: 0 });
             self.chord_at(out, Group::All, 14, b, if stop { 1.0 } else { 0.4 }, top, h.chord);
         }
     }
@@ -967,6 +974,9 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
             e.gain *= sec.melody.level();
         }
     }
+    if !plan_.chorus.lead_solos(ctx.freedom[0]) {
+        shape_line(ctx, band);
+    }
     if plan_.tacet || plan_.solo_break {
         return Some(sec);
     }
@@ -999,6 +1009,52 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         UpperRole::Tacet => {}
     }
     Some(sec)
+}
+
+/// The tune played like a horn player plays it, not as written: louder up high, softer down
+/// low; an 8th on the and leaned on and the one before it ghosted; a long note leaned into;
+/// a phrase's last short note let go; the 8-bar section rising to its sixth and seventh
+/// bars. (The line's notes this bar, wherever it went; a soloist shapes their own.)
+fn shape_line(ctx: &Ctx, band: &mut [NoteEvent]) {
+    let line_ch = [0, Horn::Trumpets.ch(), Horn::Altos.ch(), Horn::Tenors.ch()];
+    let mut idx: Vec<usize> = (0..band.len()).filter(|&i| line_ch.contains(&band[i].ch) && matches!(band[i].sound, Sound::Note(_))).collect();
+    if idx.is_empty() {
+        return;
+    }
+    idx.sort_by(|&a, &b| band[a].start.cmp(&band[b].start));
+    let pitch = |e: &NoteEvent| if let Sound::Note(n) = e.sound { n as f64 } else { 0.0 };
+    let (lo, hi) = idx.iter().fold((f64::MAX, f64::MIN), |(l, h), &i| (l.min(pitch(&band[i])), h.max(pitch(&band[i]))));
+    let mid = (lo + hi) / 2.0;
+    let arc = [-1, -1, 0, 0, 0, 1, 1, 0][ctx.bar.song_bar % SECTION];
+    let starts: Vec<f64> = idx.iter().map(|&i| ctx.rel(&band[i])).collect();
+    for (k, &i) in idx.iter().enumerate() {
+        let e = &band[i];
+        let (b, d) = (starts[k], ctx.len(e));
+        let next = starts.get(k + 1).copied().unwrap_or(f64::MAX);
+        let room = next - (b + d);
+        let off = (b.fract() - 0.5).abs() < 0.1 || (b.fract() - 0.67).abs() < 0.05;
+        let on_before_and = b.fract() < 0.05 && d <= 0.7 && (next - b - 0.5).abs() < 0.2;
+        let mut v = arc;
+        // Up high, louder (a horn has to push to get there).
+        v += ((pitch(e) - mid) / 4.0).round().clamp(-2.0, 2.0) as i32;
+        if off && d <= 0.7 {
+            v += 1;
+        }
+        if on_before_and {
+            v -= 2;
+        }
+        if d >= 1.5 {
+            v += 1;
+        }
+        if d < 0.75 && room >= 1.0 {
+            v -= 1;
+        }
+        let e = &mut band[i];
+        e.volume = (e.volume as i32 - 1 + v).clamp(2, 15) as u8;
+        if d >= 1.5 && e.fx.swell == 0 && e.fx.fall == 0 {
+            e.fx.swell = 6;
+        }
+    }
 }
 
 /// The quartet's soli ([`super::soli`]) onto the saxes: the lead's tune and the comp's alto
