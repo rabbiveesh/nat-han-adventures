@@ -1008,7 +1008,26 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         UpperRole::Answers => w.answers(out, &line, 12),
         UpperRole::Tacet => {}
     }
+    piano_in_the_holes(ctx, band, out);
     Some(sec)
+}
+
+/// The pianist in a big band "ignores the horn figures and plays in the holes": a comp
+/// chord struck with a section's chord or under one held drops out (its single notes, a
+/// line, stay). Two chord instruments in one register is mud, and the horns' voicings are
+/// what the arrangement is for.
+fn piano_in_the_holes(ctx: &Ctx, band: &mut Vec<NoteEvent>, out: &[NoteEvent]) {
+    let horns: Vec<(f64, f64)> = out.iter().filter(|e| matches!(e.sound, Sound::Arp(_)) && Horn::from_ch(e.ch).is_some_and(|h| !h.is_low() && h != Horn::Guitar)).map(|e| (ctx.rel(e), ctx.rel(e) + ctx.len(e))).collect();
+    if horns.is_empty() {
+        return;
+    }
+    band.retain(|e| {
+        if e.ch != 1 || !matches!(e.sound, Sound::Arp(_)) {
+            return true;
+        }
+        let b = ctx.rel(e);
+        !horns.iter().any(|&(s, end)| (b - s).abs() < 0.3 || (b > s && b < end - 0.1))
+    });
 }
 
 /// The tune played like a horn player plays it, not as written: louder up high, softer down

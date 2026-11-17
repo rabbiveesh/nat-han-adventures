@@ -65,10 +65,12 @@ impl FontVoicing {
         FontVoicing { font, programs, gain: 3.0, trims: [1.0; CHANNELS] }
     }
 
-    /// [`Self::combo`] balanced as a big band: the drums up to drive the band (+8 dB against
-    /// the combo), the bass and the rhythm guitar felt more than heard (-3), the low horns up
-    /// a little (+3), the sections and the piano a touch up (+1), the lead a touch down (-1).
-    /// Balanced from renders against the levels big band records sit at.
+    /// [`Self::combo`] balanced as a big band record is: the horns on top, the rhythm section
+    /// the floor under them (the arranging and mixing books: the brass the apex, the saxes
+    /// colour a few dB under, the bass and piano felt under the ensemble, the drums driving
+    /// but behind the horns). Measured in a shout chorus through GeneralUser GS: trumpets
+    /// about 3 dB over the altos, 6 over the low horns and the drums, 7 over bass and piano,
+    /// the guitar 13 under. With the stage panned ([`FontVoices`]) and a room round the horns.
     pub fn big_band(font: Arc<SoundFont>) -> Self {
         let mut v = Self::combo(font);
         // The jazz kit (the standard one where a font has none).
@@ -77,25 +79,26 @@ impl FontVoicing {
         let mut db = [0.0f32; CHANNELS];
         use super::horns::Horn;
         db[0] = 2.3;
-        db[1] = 2.3;
-        db[2] = -4.0;
-        db[3] = 8.0;
+        db[1] = -0.7;
+        db[2] = -7.0;
+        db[3] = 7.0;
         db[4] = 2.3;
         for h in Horn::ALL {
             db[h.ch() as usize] = match h {
                 Horn::Guitar => -1.0,
-                Horn::BassTrombone => 2.7,
-                Horn::Bari | Horn::Tuba => 4.0,
-                Horn::Trumpets => 0.0,
-                Horn::Altos => 0.7,
-                _ => -0.3,
+                Horn::BassTrombone => 7.7,
+                Horn::Bari | Horn::Tuba => 10.0,
+                Horn::Trumpets => 4.5,
+                Horn::Altos => 9.0,
+                _ => 8.0,
             };
         }
         let top = db.iter().copied().fold(f32::MIN, f32::max);
         for (t, d) in v.trims.iter_mut().zip(db) {
             *t = 10f32.powf((d - top) / 20.0);
         }
-        v.gain *= 10f32.powf(top / 20.0);
+        // (Headroom for the shout's peaks.)
+        v.gain *= 10f32.powf((top - 4.0) / 20.0);
         v
     }
 
@@ -187,14 +190,22 @@ impl FontVoices {
             if m != DRUM_CH || *p > 0 {
                 synth.process_midi_message(m as i32, 0xC0, *p as i32, 0);
             }
-            // Lead a little left, comp right, bass and drums centred; a touch of room.
+            // The bandstand as a stereo record hears it: the soloist out front in the
+            // middle, bass and drums centred, the piano left and the guitar right, the saxes
+            // across the left (altos in, tenors, the bari at the end), the brass on the right
+            // (trumpets out, the bass trombone and tuba in). Parts apart are parts heard.
             let pan = match ch {
                 _ if dry => 64,
-                0 => 52,
-                1 => 76,
-                4 => 44,
-                5 => 58,
-                6 => 70,
+                0 => 64,
+                1 => 36,
+                4 => 46,
+                5 => 74,
+                6 => 34,
+                7 => 70,
+                8 => 90,
+                9 => 86,
+                10 => 52,
+                11 => 42,
                 _ => 64,
             };
             synth.process_midi_message(m as i32, 0xB0, 0x0A, pan);
@@ -203,7 +214,9 @@ impl FontVoices {
             if expr < 127 {
                 synth.process_midi_message(m as i32, 0xB0, 0x0B, expr);
             }
-            synth.process_midi_message(m as i32, 0xB0, 0x5B, if dry { 0 } else { 30 });
+            // A room round the horns (the band's glue), the rhythm section drier.
+            let room = if (5..16).contains(&ch) && ch != 8 { 48 } else { 28 };
+            synth.process_midi_message(m as i32, 0xB0, 0x5B, if dry { 0 } else { room });
             if m != DRUM_CH {
                 // The bend range (RPN 0), for falls and doits.
                 synth.process_midi_message(m as i32, 0xB0, 0x65, 0);

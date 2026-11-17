@@ -42,6 +42,12 @@ GitHub Release's notes.
   an inner voice, or a 4-3 suspension.
 - A new note takes its channel's bend, expression and vibrato over (a fall no longer
   drags the next note flat).
+- **Mixed like a big band record** (SoundFont): `big_band` puts the horns on top (the
+  trumpets the apex, the saxes a few dB under, the low horns and drums under them, the
+  bass, piano and guitar the floor), the stage panned (saxes left, brass right, piano
+  left, guitar right, soloist, bass and drums centred) with a room round the horns and
+  the rhythm section drier, and the piano plays in the holes: with upper sections on the
+  stand its chords drop out where a section chord is struck or held.
 - **Dynamics you can hear** (SoundFont): the velocity curve follows the musicians'
   volume about as a player's level goes (12 against 15 about 3 dB, 6 about 13 dB; it was
   under 3 dB across the whole range), every single note struck a little differently, and
