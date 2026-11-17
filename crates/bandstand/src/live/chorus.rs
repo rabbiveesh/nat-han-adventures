@@ -56,6 +56,7 @@
 use crate::chart::{Chord, Quality};
 
 use super::band::{self, ramp};
+use super::taste::{Context, Taste, Tune, lean, pick};
 
 /// What a loop pass is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -225,6 +226,84 @@ pub struct Call {
 
 /// The chorus of loop pass `pass` (the head's first pass is 0) at `dial`: see the module docs.
 pub fn auto(seed: u64, pass: u64, dial: f32) -> Call {
+    auto_with(seed, pass, dial, &Taste::NEUTRAL, &Tune::default())
+}
+
+/// [`auto`] with a critic leaning the dice ([`super::taste`]): each candidate's odds times
+/// `exp(score)` in the moment (the tune, the chorus before). A neutral taste rolls exactly as
+/// [`auto`] always did.
+pub fn auto_with(seed: u64, pass: u64, dial: f32, taste: &Taste, tune: &Tune) -> Call {
+    if taste.is_neutral() {
+        return auto_plain(seed, pass, dial);
+    }
+    let head = Call::default();
+    if dial < MIN_DIAL {
+        return head;
+    }
+    let call = |chorus| Call { chorus, key_up: false };
+    if pass == 0 {
+        let ctx = Context::new(tune, 0, None);
+        let s = taste.chorus_score(call(Chorus::TwoFeel), &ctx) - taste.chorus_score(head, &ctx);
+        let two = band::rng(seed, 8, 0, 1).f() < lean(0.6 * ramp(dial, 0.3, 0.5), s);
+        return call(if two { Chorus::TwoFeel } else { Chorus::Head });
+    }
+    match (pass - 1) % ARC {
+        0 | 1 => middle_with(seed, pass, dial, taste, tune),
+        2 => {
+            let before = auto_with(seed, pass - 1, dial, taste, tune);
+            let ctx = Context::new(tune, pass, Some(before.chorus));
+            let mut r = band::rng(seed, 8, pass, 2);
+            let shout = call(Chorus::Shout);
+            if r.f() < lean(ramp(dial, 0.5, 0.7), taste.chorus_score(shout, &ctx) - middle_score(taste, &ctx, dial)) {
+                let up = Call { chorus: Chorus::Shout, key_up: true };
+                let s = taste.chorus_score(up, &ctx) - taste.chorus_score(shout, &ctx);
+                Call { chorus: Chorus::Shout, key_up: r.f() < lean(0.6 * ramp(dial, 0.6, 0.85), s) }
+            } else {
+                middle_after(seed, pass, dial, taste, &ctx, before)
+            }
+        }
+        _ => head,
+    }
+}
+
+/// The odds of each middle candidate at `dial`: the head, then [`menu`]'s.
+fn middle_odds(dial: f32) -> [(Chorus, f64); 8] {
+    let m = menu(dial);
+    let total: f64 = m.iter().map(|x| x.1).sum();
+    let p = if total > 0.0 { chance(dial) } else { 0.0 };
+    let mut out = [(Chorus::Head, 1.0 - p); 8];
+    for (o, (c, w)) in out[1..].iter_mut().zip(m) {
+        *o = (c, if total > 0.0 { p * w / total } else { 0.0 });
+    }
+    out
+}
+
+/// What a middle chorus scores on average at `dial` (the shout is weighed against it).
+fn middle_score(taste: &Taste, ctx: &Context, dial: f32) -> f32 {
+    let odds = middle_odds(dial);
+    let total: f64 = odds.iter().map(|x| x.1).sum();
+    let e: f64 = odds.iter().map(|&(c, w)| w * (taste.chorus_score(Call { chorus: c, key_up: false }, ctx) as f64).exp()).sum();
+    if total > 0.0 && e > 0.0 { (e / total).ln() as f32 } else { 0.0 }
+}
+
+/// A middle chorus, leaned: never the arranged chorus the pass before played.
+fn middle_with(seed: u64, pass: u64, dial: f32, taste: &Taste, tune: &Tune) -> Call {
+    let before = auto_with(seed, pass - 1, dial, taste, tune);
+    let ctx = Context::new(tune, pass, Some(before.chorus));
+    middle_after(seed, pass, dial, taste, &ctx, before)
+}
+
+fn middle_after(seed: u64, pass: u64, dial: f32, taste: &Taste, ctx: &Context, before: Call) -> Call {
+    let odds = middle_odds(dial);
+    let w = odds.map(|(c, w)| {
+        if c != Chorus::Head && c == before.chorus { 0.0 } else { w * (taste.chorus_score(Call { chorus: c, key_up: false }, ctx) as f64).exp() }
+    });
+    let mut r = band::rng(seed, 8, pass, 0);
+    Call { chorus: pick(&w, r.f()).map_or(Chorus::Head, |i| odds[i].0), key_up: false }
+}
+
+/// The chorus as the dice always rolled it (no critic).
+fn auto_plain(seed: u64, pass: u64, dial: f32) -> Call {
     let head = Call::default();
     if dial < MIN_DIAL {
         return head;

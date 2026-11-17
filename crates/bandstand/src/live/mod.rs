@@ -109,6 +109,7 @@ pub mod soloist;
 pub mod walkers;
 pub mod song;
 pub mod syntax;
+pub mod taste;
 pub mod voice;
 
 pub use engine::{BeatClock, Engine, EngineConfig, EngineState, Input};
