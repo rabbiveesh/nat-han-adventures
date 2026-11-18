@@ -92,6 +92,8 @@ pub mod chorus;
 pub mod desk;
 pub mod engine;
 pub mod feel;
+pub mod arranger;
+pub mod horns;
 #[cfg(feature = "soundfont")]
 pub mod font;
 pub mod instrument;
@@ -106,6 +108,8 @@ pub mod soli;
 pub mod player_file;
 pub mod riffs;
 pub mod soloist;
+#[cfg(feature = "soundfont")]
+pub mod stems;
 pub mod walkers;
 pub mod song;
 pub mod syntax;

@@ -79,10 +79,13 @@ pub struct Fx {
     /// vibrato and fade carry on where that note left them instead of starting over, so a
     /// grace note, mordent or turn and the note it ornaments sound as one gesture.
     pub legato: bool,
+    /// A swell, in dB (SoundFont voices only): up from this far under to full over the note,
+    /// or (negative) an accent that falls away this far and grows back (fp, crescendo).
+    pub swell: i8,
 }
 
 impl Fx {
-    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false, legato: false };
+    pub const NONE: Fx = Fx { slide: 0, slide_frames: 0, fall: 0, fall_frames: 0, vib: 0, sweep: 0, wah: false, legato: false, swell: 0 };
 
     pub fn is_none(&self) -> bool {
         *self == Fx::NONE
@@ -681,7 +684,9 @@ impl VoiceBank {
         match ev.ch {
             0..=2 => self.tones[ev.ch as usize].push(ev),
             4 => self.tones[3].push(ev),
-            _ => self.drums.push(ev),
+            3 => self.drums.push(ev),
+            // The horns play only through a SoundFont.
+            _ => {}
         }
     }
 
@@ -694,6 +699,9 @@ impl VoiceBank {
             if ch == 1 {
                 f.set_channel_gain(4, g);
             }
+        }
+        if ch > 4 {
+            return;
         }
         let (l, r) = match ch {
             0 => pan(PULSE1_PAN, PULSE_GAIN),

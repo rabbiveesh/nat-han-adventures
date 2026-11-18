@@ -1,0 +1,74 @@
+Targets, devices and modes in the Weimar Jazz Database v2.1, by player. Strong beats: 1 and 3,
+on the beat, inside a phrase (not its first note). Shares in %.
+
+miles: 10 solos
+  targets, major/minor/other (n=217)  chord tone 58.5  tension 33.2  chromatic 8.3
+  targets, dominant (n=307)             plain 57.7  natural tension 19.5  altered 11.7  chromatic 11.1
+  targets, dominant to minor (n=83)    plain 57.8  natural tension 9.6  altered 24.1  chromatic 8.4
+    as .player: dom_tensions 0.31  altered 0.38
+  devices into them (n=524)  enclosure 8.8  scale run 19.1  blues run 0.8  arpeggio 0.8  half step 14.3  whole step 11.8  leap 21.4  after a rest 23.1
+  phrase modes (n=192, 6+ notes)  changes 44.8  scalar 45.8  blues 9.4
+
+trane: 7 solos
+  targets, major/minor/other (n=1580)  chord tone 49.8  tension 28.7  chromatic 21.5
+  targets, dominant (n=157)             plain 66.9  natural tension 21.0  altered 5.1  chromatic 7.0
+  targets, dominant to minor (n=20)    plain 70.0  natural tension 25.0  altered 5.0  chromatic 0.0
+    as .player: dom_tensions 0.26  altered 0.2
+  devices into them (n=1737)  enclosure 6.6  scale run 7.5  blues run 1.7  arpeggio 1.3  half step 9.3  whole step 13.8  leap 47.7  after a rest 12.1
+  phrase modes (n=586, 6+ notes)  changes 80.0  scalar 15.0  blues 4.9
+
+bird: 16 solos
+  targets, major/minor/other (n=370)  chord tone 51.9  tension 28.4  chromatic 19.7
+  targets, dominant (n=336)             plain 51.5  natural tension 22.6  altered 13.4  chromatic 12.5
+  targets, dominant to minor (n=132)    plain 50.8  natural tension 21.2  altered 14.4  chromatic 13.6
+    as .player: dom_tensions 0.36  altered 0.37
+  devices into them (n=706)  enclosure 11.2  scale run 25.9  blues run 2.1  arpeggio 2.5  half step 11.3  whole step 8.1  leap 36.5  after a rest 2.3
+  phrase modes (n=277, 6+ notes)  changes 71.1  scalar 27.1  blues 1.8
+
+sonny: 7 solos
+  targets, major/minor/other (n=159)  chord tone 52.2  tension 28.9  chromatic 18.9
+  targets, dominant (n=240)             plain 50.4  natural tension 30.0  altered 9.6  chromatic 10.0
+  targets, dominant to minor (n=54)    plain 55.6  natural tension 20.4  altered 14.8  chromatic 9.3
+    as .player: dom_tensions 0.4  altered 0.24
+  devices into them (n=399)  enclosure 11.3  scale run 18.8  blues run 1.3  arpeggio 2.5  half step 11.3  whole step 8.3  leap 34.3  after a rest 12.3
+  phrase modes (n=134, 6+ notes)  changes 79.1  scalar 17.9  blues 3.0
+
+wayne: 7 solos
+  targets, major/minor/other (n=158)  chord tone 46.2  tension 34.2  chromatic 19.6
+  targets, dominant (n=128)             plain 39.8  natural tension 28.9  altered 14.8  chromatic 16.4
+  targets, dominant to minor (n=36)    plain 33.3  natural tension 36.1  altered 13.9  chromatic 16.7
+    as .player: dom_tensions 0.44  altered 0.34
+  devices into them (n=286)  enclosure 5.9  scale run 17.1  blues run 3.8  arpeggio 1.0  half step 8.7  whole step 14.7  leap 36.0  after a rest 12.6
+  phrase modes (n=108, 6+ notes)  changes 54.6  scalar 42.6  blues 2.8
+
+pops: 8 solos
+  targets, major/minor/other (n=133)  chord tone 55.6  tension 32.3  chromatic 12.0
+  targets, dominant (n=94)             plain 58.5  natural tension 27.7  altered 6.4  chromatic 7.4
+  targets, dominant to minor (n=10)    plain 60.0  natural tension 20.0  altered 20.0  chromatic 0.0
+    as .player: dom_tensions 0.34  altered 0.19
+  devices into them (n=227)  enclosure 4.8  scale run 6.6  blues run 0.9  arpeggio 2.6  half step 8.8  whole step 11.0  leap 52.9  after a rest 12.3
+  phrase modes (n=81, 6+ notes)  changes 86.4  scalar 11.1  blues 2.5
+
+funk: 18 solos
+  targets, major/minor/other (n=786)  chord tone 45.3  tension 25.6  chromatic 29.1
+  targets, dominant (n=241)             plain 59.8  natural tension 15.4  altered 16.6  chromatic 8.3
+  targets, dominant to minor (n=18)    plain 50.0  natural tension 22.2  altered 16.7  chromatic 11.1
+    as .player: dom_tensions 0.32  altered 0.52
+  devices into them (n=1027)  enclosure 8.2  scale run 11.5  blues run 3.2  arpeggio 0.5  half step 12.7  whole step 14.1  leap 41.9  after a rest 8.0
+  phrase modes (n=451, 6+ notes)  changes 55.4  scalar 32.6  blues 12.0
+
+latin: 23 solos
+  targets, major/minor/other (n=927)  chord tone 53.1  tension 25.9  chromatic 21.0
+  targets, dominant (n=683)             plain 53.0  natural tension 18.7  altered 15.7  chromatic 12.6
+  targets, dominant to minor (n=271)    plain 50.9  natural tension 19.6  altered 20.3  chromatic 9.2
+    as .player: dom_tensions 0.34  altered 0.46
+  devices into them (n=1610)  enclosure 11.3  scale run 14.5  blues run 0.9  arpeggio 1.7  half step 10.0  whole step 11.6  leap 39.9  after a rest 10.0
+  phrase modes (n=485, 6+ notes)  changes 69.1  scalar 28.2  blues 2.7
+
+all: 402 solos
+  targets, major/minor/other (n=14608)  chord tone 52.1  tension 26.1  chromatic 21.9
+  targets, dominant (n=11934)             plain 50.6  natural tension 22.6  altered 15.0  chromatic 11.8
+  targets, dominant to minor (n=2723)    plain 49.8  natural tension 19.2  altered 18.9  chromatic 12.2
+    as .player: dom_tensions 0.38  altered 0.4
+  devices into them (n=26542)  enclosure 10.6  scale run 18.3  blues run 2.0  arpeggio 1.2  half step 11.7  whole step 10.4  leap 33.9  after a rest 12.0
+  phrase modes (n=7862, 6+ notes)  changes 67.6  scalar 28.0  blues 4.4

@@ -39,7 +39,7 @@ fn main() {
         _ => 66,
     };
 
-    for (name, voicing) in [("chip", None), ("font", Some(FontVoicing { programs: [Some(horn), Some(0), Some(32), Some(0), Some(66)], ..FontVoicing::combo(font.clone()) }))] {
+    for (name, voicing) in [("chip", None), ("font", Some(FontVoicing::combo(font.clone()).with(0, Some(horn))))] {
         let config = EngineConfig { seed, soloist: Some(soloist), ..EngineConfig::default() };
         let mut e = Engine::with_config(&song, RATE, config).expect("engine");
         if let Some(v) = voicing {

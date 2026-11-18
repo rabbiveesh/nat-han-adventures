@@ -225,6 +225,10 @@ pub struct BandInput<'a> {
     /// The reharm the soloist's lines ask for: rate against the dial's, and the weights of a
     /// tritone sub and a ii-V ([`super::soloist::Profile::reharm`]).
     pub reharm: [f32; 3],
+    /// Upper sections on the stand ([`super::horns`]): eight horns voicing the changes take a
+    /// reharm far harder than a piano does, so the band reharms a third as often, and only
+    /// behind a solo (never under the tune).
+    pub sections: bool,
     /// The critic leaning the arranger's dice ([`super::taste`]), and what it knows of the tune.
     pub taste: &'a Taste,
     pub tune: Tune,
@@ -496,8 +500,10 @@ impl BandPlan {
 
         // The band's reharmonization: comp and bass together, high freedom (a soli's lines
         // follow it too).
-        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet {
+        let under_tune = input.sections && !plan.chorus.lead_solos(input.freedom[0]);
+        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet && !under_tune {
             let [rate, w_tri, w_iiv] = input.reharm;
+            let rate = if input.sections { rate / 3.0 } else { rate };
             let p = (0.5 * high(comp) * rate as f64).min(0.9);
             if let Some(h) = harm_now
                 && h.chord.family() == Family::Dominant
