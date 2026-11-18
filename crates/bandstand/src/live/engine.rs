@@ -847,7 +847,7 @@ impl Engine {
         }
         let low = super::horns::write(&ctx, self.config.horns, self.forced_low, &mut self.scratch, &mut self.horn_buf);
         super::horns::write_guitar(&ctx, self.config.horns, &mut self.horn_buf);
-        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, &mut self.scratch, &mut self.horn_buf);
+        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, self.musicians[0].ahead(), &mut self.scratch, &mut self.horn_buf);
         let (upper, melody) = (section.map(|s| s.role), section.map(|s| s.melody));
         self.scratch.append(&mut self.horn_buf);
         let events = self.scratch.len() as u32;
