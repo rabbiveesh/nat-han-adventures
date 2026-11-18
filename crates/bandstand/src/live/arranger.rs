@@ -937,7 +937,7 @@ impl<'a, 'b> Writer<'a, 'b> {
     fn punches(&self, out: &mut Vec<NoteEvent>, tune: &[(f64, f64, i32)]) {
         let ctx = self.ctx;
         let plan = ctx.band;
-        let mut at: Vec<f64> = (0..16).filter(|k| plan.hits & 1 << k != 0).map(|k| k as f64 / 4.0).filter(|&b| b < ctx.bb()).collect();
+        let mut at: Vec<f64> = (0..32).filter(|k| plan.hits & 1 << k != 0).map(|k| k as f64 / 4.0).filter(|&b| b < ctx.bb()).collect();
         if at.is_empty() {
             // The tune's own kicks: its pushed notes (an 8th ahead of a beat, held) punched
             // with it, as an ensemble kicks the melody's anticipations.

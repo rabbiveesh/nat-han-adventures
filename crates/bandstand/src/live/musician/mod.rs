@@ -278,7 +278,9 @@ impl Ctx<'_> {
             return b;
         }
         let k = (b * 2.0).round();
-        if (k * 0.5 - b).abs() < 1e-9 && (k as i64) % 2 == 1 { b + self.arrangement.swing.clamp(0.0, 0.9) as f64 * 0.5 } else { b }
+        // (A pulse stays put: in five, the second dotted quarter of the 3.)
+        let pulse = self.shape.pulses().iter().any(|p| (p - b.rem_euclid(self.bb())).abs() < 1e-9);
+        if (k * 0.5 - b).abs() < 1e-9 && (k as i64) % 2 == 1 && !pulse { b + self.arrangement.swing.clamp(0.0, 0.9) as f64 * 0.5 } else { b }
     }
 
     /// The bar's feel.

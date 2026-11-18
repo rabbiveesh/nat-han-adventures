@@ -285,10 +285,10 @@ impl SongFile {
                 if text.is_empty() {
                     (text, None)
                 } else {
-                    if meter != Meter::default() {
-                        return Err(err(*line, "chord charts are 4/4 only (for now)"));
+                    if meter.unit != 4 || !matches!(meter.beats, 4 | 5) {
+                        return Err(err(*line, "chord charts are 4/4 or 5/4 only (for now)"));
                     }
-                    let c = chart::parse(&text).map_err(|e| err(*line, e.to_string()))?;
+                    let c = chart::parse_in(&text, meter.beats as u32).map_err(|e| err(*line, e.to_string()))?;
                     if (c.beats() - beats).abs() > 1e-6 {
                         return Err(err(*line, format!("the chart has {} bars but the song is {} bars", c.bars, beats / bar_beats)));
                     }

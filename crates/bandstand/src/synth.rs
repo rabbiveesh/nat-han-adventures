@@ -65,14 +65,23 @@ impl Rendered {
 /// 16ths, dotted rhythms, quarters and every downbeat stay put, and since each event is placed
 /// from its own unswung time, no error ever accumulates.
 pub fn apply_swing(track: &Track, swing: f32) -> Track {
+    apply_swing_in(track, swing, 4.0)
+}
+
+/// [`apply_swing`] in bars of `bar_beats`: an off-beat 8th that is one of the bar's pulses
+/// ([`crate::live::arrange::pulses`]: in five, the second dotted quarter of the 3) stays put.
+pub fn apply_swing_in(track: &Track, swing: f32, bar_beats: f64) -> Track {
     const EPS: f64 = 1e-6;
     if swing == 0.0 {
         return track.clone();
     }
     let delay = swing.clamp(0.0, 0.9) as f64 * 0.5;
+    let pulses = crate::live::arrange::pulses(bar_beats);
     let swung = |e: &Event| {
         let frac = e.start - e.start.floor();
-        (frac - 0.5).abs() < EPS && (e.dur - 0.5).abs() < EPS
+        let in_bar = e.start.rem_euclid(bar_beats);
+        let pulse = pulses.iter().any(|p| (p - in_bar).abs() < EPS);
+        (frac - 0.5).abs() < EPS && (e.dur - 0.5).abs() < EPS && !pulse
     };
     let ev = &track.events;
     let start = |e: &Event| if swung(e) { e.start + delay } else { e.start };

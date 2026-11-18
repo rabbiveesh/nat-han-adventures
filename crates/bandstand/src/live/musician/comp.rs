@@ -168,7 +168,15 @@ impl Musician for Comp {
                 fired.add(Orn::ShoutStabs);
             } else if h0.is_some() && (orns.has(Orn::Charleston) || orns.has(Orn::FreddieGreen)) {
                 let charleston = orns.has(Orn::Charleston);
-                let hits: &[(f64, f64)] = if charleston { &[(0.0, 0.6), (1.5, 0.45)] } else { &[(0.0, 0.4), (1.0, 0.4), (2.0, 0.4), (3.0, 0.4)] };
+                let five = (bb - 5.0).abs() < 1e-9;
+                let hits: &[(f64, f64)] = match (charleston, five) {
+                    (true, false) => &[(0.0, 0.6), (1.5, 0.45)],
+                    // In five the Charleston leans on the 3+2: both dotted beats, then the 2.
+                    (true, true) => &[(0.0, 0.6), (1.5, 0.45), (3.0, 0.6)],
+                    // Four to the bar, on the pulses (in five, the lurch).
+                    (false, true) => &[(0.0, 0.4), (1.5, 0.4), (3.0, 0.4), (4.0, 0.4)],
+                    (false, false) => &[(0.0, 0.4), (1.0, 0.4), (2.0, 0.4), (3.0, 0.4)],
+                };
                 let mut inv = 0;
                 let mut prev: Option<Harm> = None;
                 for &(b, d) in hits.iter().filter(|(b, _)| *b < bb - 1e-9) {

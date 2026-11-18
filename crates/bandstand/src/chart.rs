@@ -306,6 +306,12 @@ pub fn parse_chord(token: &str) -> Result<Chord, String> {
 /// Parse a chart. An empty (or all-whitespace) chart is an error: a song without one has no
 /// chart at all (`SongFile::chart` is `None`).
 pub fn parse(src: &str) -> Result<Chart, ChartError> {
+    parse_in(src, 4)
+}
+
+/// [`parse`] in a meter of `meter` beats a bar. In 4/4 a bar holds 1, 2 or 4 chords, split
+/// evenly; in 5/4 (3+2) 1 or 2, the second on beat 4; in 3/4 1 or 3.
+pub fn parse_in(src: &str, meter: u32) -> Result<Chart, ChartError> {
     let trimmed = src.trim().trim_matches('|');
     if trimmed.trim().is_empty() {
         return Err(ChartError { bar: 1, token: String::new(), msg: "the chart is empty".into() });
@@ -316,13 +322,26 @@ pub fn parse(src: &str) -> Result<Chart, ChartError> {
     for (b, bar) in trimmed.split('|').enumerate() {
         let tokens: Vec<&str> = bar.split_whitespace().collect();
         let err = |token: &str, msg: String| ChartError { bar: b + 1, token: token.to_string(), msg };
-        if !matches!(tokens.len(), 1 | 2 | 4) {
-            return Err(err(
-                bar.trim(),
-                format!("a bar holds 1, 2 or 4 chords, found {} (use `%` to repeat a chord)", tokens.len()),
-            ));
-        }
-        let dur = 4.0 / tokens.len() as f64;
+        let splits: &[f64] = match (meter, tokens.len()) {
+            (4, 1) => &[0.0, 4.0],
+            (4, 2) => &[0.0, 2.0, 4.0],
+            (4, 4) => &[0.0, 1.0, 2.0, 3.0, 4.0],
+            (5, 1) => &[0.0, 5.0],
+            (5, 2) => &[0.0, 3.0, 5.0],
+            (3, 1) => &[0.0, 3.0],
+            (3, 3) => &[0.0, 1.0, 2.0, 3.0],
+            _ => {
+                let allowed = match meter {
+                    5 => "1 or 2 (3+2)",
+                    3 => "1 or 3",
+                    _ => "1, 2 or 4",
+                };
+                return Err(err(
+                    bar.trim(),
+                    format!("a bar holds {allowed} chords, found {} (use `%` to repeat a chord)", tokens.len()),
+                ));
+            }
+        };
         for (k, tok) in tokens.iter().enumerate() {
             let chord = if *tok == "%" {
                 prev.ok_or_else(|| err(tok, "`%` repeats the previous chord, but there isn't one yet".into()))?
@@ -330,11 +349,12 @@ pub fn parse(src: &str) -> Result<Chart, ChartError> {
                 parse_chord(tok).map_err(|m| err(tok, m))?
             };
             prev = Some(chord);
-            slots.push(Slot { start: b as f64 * 4.0 + k as f64 * dur, dur, chord });
+            let start = b as f64 * meter as f64 + splits[k];
+            slots.push(Slot { start, dur: splits[k + 1] - splits[k], chord });
         }
         bars += 1;
     }
-    Ok(Chart { slots, bars, meter: 4 })
+    Ok(Chart { slots, bars, meter })
 }
 
 #[cfg(test)]
@@ -360,6 +380,15 @@ mod tests {
             assert_eq!(parse_chord(&format!("C{s}")).unwrap().quality, q);
         }
         assert_eq!(c.to_text(), "D7 | D7 | Bb7 Gbm7b5 | C7/E Ebmaj7 Am6 Gdim7");
+    }
+
+    #[test]
+    fn five_splits_three_and_two() {
+        let c = parse_in("| F Bb | C7 |", 5).unwrap();
+        let s: Vec<String> = c.slots.iter().map(|s| format!("{}@{}+{}", s.chord, s.start, s.dur)).collect();
+        assert_eq!(s, ["F@0+3", "Bb@3+2", "C7@5+5"]);
+        assert_eq!(c.beats(), 10.0);
+        assert!(parse_in("| C D E F |", 5).unwrap_err().to_string().contains("1 or 2 (3+2)"));
     }
 
     #[test]
