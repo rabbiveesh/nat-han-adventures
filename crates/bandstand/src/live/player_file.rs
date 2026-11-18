@@ -146,7 +146,7 @@ impl PlayerFile {
                 "name" | "lay_back" | "swing" | "legato" | "register" | "reharm" => "player",
                 "phrase" | "rest" | "cells" | "intervals" | "step_back" | "end_chord_tone" | "approach" | "from_below" | "enclosure" | "pentatonic"
                 | "anticipation" | "falls" | "strong_chord_tone" | "end_beats" | "end_push" | "end_tones" | "end_chromatic" | "start_place" | "start_on" | "start_and" | "start_tones"
-                | "start_chromatic" | "start_up" | "sixteenths" | "sections" | "phrase_tempo" | "rest_tempo" | "resolve" | "blue" => "line",
+                | "start_chromatic" | "start_up" | "sixteenths" | "sections" | "phrase_tempo" | "rest_tempo" | "resolve" | "blue" | "modes" | "devices" | "dom_tensions" | "altered" => "line",
                 "arch" | "per_octave" | "ghost" | "accent" | "long" | "scatter" => "dynamics",
                 "motif" | "sequence" | "carry" | "moves" => "motifs",
                 _ => return Err(err(n, format!("unknown key `{key}` in [{sec}]"))),
@@ -228,6 +228,14 @@ impl PlayerFile {
                 }
                 "resolve" => p.resolve = share()?,
                 "blue" => p.blue = share()?,
+                "dom_tensions" => p.dom_tensions = share()?,
+                "altered" => p.altered = share()?,
+                "modes" => {
+                    p.modes = floats::<3>(v).filter(|w| w.iter().all(|x| (0.0..=1.0).contains(x)) && w.iter().any(|x| *x > 0.0)).ok_or_else(|| bad("expected 3 weights 0..1 (over the changes, scalar, blues)"))?
+                }
+                "devices" => {
+                    p.devices = floats::<3>(v).filter(|w| w.iter().all(|x| (0.0..=1.0).contains(x))).ok_or_else(|| bad("expected 3 shares 0..1 (a scale run, a blues run, an arpeggio into a target)"))?
+                }
                 "sections" => {
                     p.sections = floats::<9>(v).filter(|w| w.iter().all(|x| (0.2..3.0).contains(x))).ok_or_else(|| bad("expected 9 ratios (bars 1-8 of a section, the turnaround)"))?
                 }

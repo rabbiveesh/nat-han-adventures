@@ -9,7 +9,7 @@ use nat_han_adventures::audio::live::band::{Fill, SubKind, Trade};
 use nat_han_adventures::audio::live::engine::CommittedBar;
 use nat_han_adventures::audio::live::feel::Feel;
 use nat_han_adventures::audio::live::ornament::Orn;
-use nat_han_adventures::audio::live::soloist::{self, HEARD_CRASH, HEARD_FILL, HEARD_HIT_END, HEARD_HIT_IN, Idea, Soloist};
+use nat_han_adventures::audio::live::soloist::{self, Device, HEARD_CRASH, HEARD_FILL, HEARD_HIT_END, HEARD_HIT_IN, Idea, Mode, Soloist};
 
 use crate::app::Editor;
 use crate::theme::*;
@@ -289,6 +289,7 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 Idea::Restate | Idea::Fragment if ph.by != 0 => format!("{} {:+}", ph.idea.label(), ph.by),
                 _ => ph.idea.label().to_string(),
             };
+            let label = if ph.mode == Mode::Changes { label } else { format!("{label} · {}", ph.mode.label()) };
             let (cx0, cx1) = clip_x(r.left(), r.right());
             ui.painter_at(Rect::from_min_max(pos2(cx0, r.top()), pos2(cx1, r.bottom())))
                 .text(pos2(cx0 + 6.0, r.center().y), Align2::LEFT_CENTER, label, small.clone(), TEXT);
@@ -314,14 +315,22 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
             tips.push((
                 Rect::from_min_max(pos2(cx0, r.top()), pos2(cx1, r.bottom())),
                 format!(
-                    "{} · {:.1} beats · lands on beat {:.1}{}\nskeleton: {}",
+                    "{} · {} · {:.1} beats · lands on beat {:.1}{}\nskeleton: {}",
                     ph.idea.label(),
+                    ph.mode.label(),
                     ph.len,
                     (ph.end as f64).rem_euclid(bb) + 1.0,
                     if ph.push { " (anticipated)" } else { "" },
                     if goals.is_empty() { "none".into() } else { goals.join(" → ") }
                 ),
             ));
+        }
+        // How the line got into each target: a word over it on the roll.
+        for &(at, device, target) in &t.devices[..t.ndevices as usize] {
+            let x = x_of(b0 + at as f64 / bb);
+            if device != Device::Direct && x >= grid.left() && x <= grid.right() {
+                rp.text(pos2(x, y_of(target as f32) - 11.0), Align2::CENTER_BOTTOM, device.label(), mono(9.0), TEXT_DIM);
+            }
         }
         // HEARD: what the soloist heard and acted on.
         let xa = x_of(b0);
