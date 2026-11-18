@@ -17,6 +17,8 @@
 
 use super::chorus::{Call, Chorus};
 use super::feel::Feel;
+use super::soloist::Moment;
+use crate::chart::Family;
 
 /// Features of the moment a choice is made in.
 pub const FEATURES: usize = 10;
@@ -73,6 +75,84 @@ impl Context {
     }
 }
 
+/// The soloist's features of the moment: bias; slow / fast (as for the arranger); its first
+/// chorus / its third or later; the chord a dominant / a minor; the solo hot / cool (its
+/// chorus shape's heat, [`super::soloist::Arc::heat`]); a dominant resolving to minor.
+pub const SOLO_FEATURE_NAMES: [&str; FEATURES] = ["bias", "slow", "fast", "first", "later", "dominant", "minor", "hot", "cool", "to-minor"];
+
+impl Context {
+    /// The moment a soloist's choice is made in.
+    pub fn solo(m: &Moment) -> Context {
+        let b = |x: bool| if x { 1.0 } else { 0.0 };
+        let known = m.bpm > 0.0;
+        Context([
+            1.0,
+            b(known && m.bpm < SLOW_BPM),
+            b(known && m.bpm >= FAST_BPM),
+            b(m.chorus == 1),
+            b(m.chorus >= 3),
+            b(m.family == Some(Family::Dominant)),
+            b(matches!(m.family, Some(Family::Minor | Family::HalfDim))),
+            b(m.heat.is_some_and(|h| h > 0.66)),
+            b(m.heat.is_some_and(|h| h < 0.33)),
+            b(m.resolves_minor),
+        ])
+    }
+}
+
+/// The soloist's choices a [`Taste`] leans, each a table of rows (candidates).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Table {
+    /// A chorus's shape ([`super::soloist::Arc`]).
+    Arc,
+    /// Whether a phrase picks up the comp, plays a lick, carries a cell (each against a new
+    /// idea; [`super::soloist::Idea`]).
+    Idea,
+    /// A phrase's mode ([`super::soloist::Mode`]).
+    Mode,
+    /// How a line gets into a target ([`super::soloist::Device`]).
+    Device,
+    /// A target's degree (`target_weights`' order).
+    Target,
+}
+
+impl Table {
+    pub const ALL: [Table; 5] = [Table::Arc, Table::Idea, Table::Mode, Table::Device, Table::Target];
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            Table::Arc => "arc",
+            Table::Idea => "idea",
+            Table::Mode => "mode",
+            Table::Device => "device",
+            Table::Target => "target",
+        }
+    }
+
+    /// Its rows' names in the text.
+    pub fn rows(self) -> &'static [&'static str] {
+        match self {
+            Table::Arc => &["arch", "builds", "front", "flat"],
+            Table::Idea => &["echo", "lick", "carry"],
+            Table::Mode => &["changes", "scalar", "blues"],
+            Table::Device => &["direct", "chromatic", "enclosure", "scale", "blues", "arpeggio"],
+            Table::Target => &["R", "3", "5", "7", "9", "b9", "+9", "+11", "13", "b13"],
+        }
+    }
+
+    /// Its first row among [`Taste::solo`]'s.
+    fn at(self) -> usize {
+        Table::ALL.iter().take_while(|&&t| t != self).map(|t| t.rows().len()).sum()
+    }
+
+    pub fn parse(s: &str) -> Option<Table> {
+        Table::ALL.into_iter().find(|t| t.slug() == s)
+    }
+}
+
+/// Rows of the soloist's tables, all told.
+pub const SOLO_ROWS: usize = 4 + 3 + 3 + 6 + 10;
+
 /// Rows of the chorus table: one per chorus, then the key-up.
 pub const CHORUS_ROWS: usize = 10;
 /// The key-up's row.
@@ -85,6 +165,8 @@ pub struct Taste {
     pub chorus: [[f32; FEATURES]; CHORUS_ROWS],
     /// Rows indexed like [`Feel::ALL`].
     pub feel: [[f32; FEATURES]; 5],
+    /// The soloist's tables ([`Table`]), one after another.
+    pub solo: [[f32; FEATURES]; SOLO_ROWS],
 }
 
 impl Default for Taste {
@@ -107,7 +189,7 @@ fn feel_row(f: Feel) -> usize {
 
 impl Taste {
     /// No opinions: the dice as they were.
-    pub const NEUTRAL: Taste = Taste { chorus: [[0.0; FEATURES]; CHORUS_ROWS], feel: [[0.0; FEATURES]; 5] };
+    pub const NEUTRAL: Taste = Taste { chorus: [[0.0; FEATURES]; CHORUS_ROWS], feel: [[0.0; FEATURES]; 5], solo: [[0.0; FEATURES]; SOLO_ROWS] };
 
     pub fn is_neutral(&self) -> bool {
         *self == Taste::NEUTRAL
@@ -122,6 +204,36 @@ impl Taste {
     /// A feel's score in a moment.
     pub fn feel_score(&self, feel: Feel, ctx: &Context) -> f32 {
         dot(&self.feel[feel_row(feel)], ctx)
+    }
+
+    /// Row `i` of the soloist's `table`, scored in a moment.
+    pub fn solo_score(&self, table: Table, i: usize, ctx: &Context) -> f32 {
+        dot(&self.solo[table.at() + i], ctx)
+    }
+
+    /// Lean a soloist's weights `w` (one per row of `table`): each times `exp(score)`. A neutral
+    /// taste leaves them exactly as they were.
+    pub fn lean(&self, table: Table, w: &mut [f32], ctx: &Context) {
+        for (i, x) in w.iter_mut().enumerate().take(table.rows().len()) {
+            let s = self.solo_score(table, i, ctx);
+            if s != 0.0 {
+                *x *= s.exp();
+            }
+        }
+    }
+
+    /// A row of the soloist's `table` by name.
+    pub fn solo_row_mut(&mut self, table: Table, row: &str) -> Option<&mut [f32; FEATURES]> {
+        let i = table.rows().iter().position(|&r| r == row)?;
+        Some(&mut self.solo[table.at() + i])
+    }
+
+    /// The features a soloist's row lights up, flattened like [`Taste::weights`].
+    pub fn solo_features(table: Table, i: usize, ctx: &Context) -> [f32; WEIGHTS] {
+        let mut out = [0.0; WEIGHTS];
+        let at = (CHORUS_ROWS + 5 + table.at() + i) * FEATURES;
+        out[at..at + FEATURES].copy_from_slice(&ctx.0);
+        out
     }
 
     /// The features a chorus candidate lights up, flattened like [`Taste::weights`] (for
@@ -147,7 +259,7 @@ impl Taste {
     /// Every weight, flattened: the chorus rows, then the feel rows.
     pub fn weights(&self) -> [f32; WEIGHTS] {
         let mut out = [0.0; WEIGHTS];
-        for (i, row) in self.chorus.iter().chain(self.feel.iter()).enumerate() {
+        for (i, row) in self.chorus.iter().chain(self.feel.iter()).chain(self.solo.iter()).enumerate() {
             out[i * FEATURES..(i + 1) * FEATURES].copy_from_slice(row);
         }
         out
@@ -155,7 +267,7 @@ impl Taste {
 
     pub fn from_weights(w: &[f32; WEIGHTS]) -> Taste {
         let mut t = Taste::NEUTRAL;
-        for (i, row) in t.chorus.iter_mut().chain(t.feel.iter_mut()).enumerate() {
+        for (i, row) in t.chorus.iter_mut().chain(t.feel.iter_mut()).chain(t.solo.iter_mut()).enumerate() {
             row.copy_from_slice(&w[i * FEATURES..(i + 1) * FEATURES]);
         }
         t
@@ -183,7 +295,7 @@ impl Taste {
                 section = match s.trim() {
                     "chorus" => "chorus",
                     "feel" => "feel",
-                    other => return Err(format!("line {}: unknown section [{other}]", n + 1)),
+                    other => Table::parse(other).map(Table::slug).ok_or_else(|| format!("line {}: unknown section [{other}]", n + 1))?,
                 };
                 continue;
             }
@@ -193,7 +305,11 @@ impl Taste {
                 "chorus" if name == "key-up" => &mut t.chorus[KEY_UP_ROW],
                 "chorus" => &mut t.chorus[chorus_row(Chorus::parse(name).ok_or_else(|| format!("line {}: no chorus \"{name}\"", n + 1))?)],
                 "feel" => &mut t.feel[feel_row(Feel::parse(name).ok_or_else(|| format!("line {}: no feel \"{name}\"", n + 1))?)],
-                _ => return Err(format!("line {}: a row before any [section]", n + 1)),
+                "" => return Err(format!("line {}: a row before any [section]", n + 1)),
+                table => {
+                    let table = Table::parse(table).unwrap_or(Table::Arc);
+                    t.solo_row_mut(table, name).ok_or_else(|| format!("line {}: no {} \"{name}\"", n + 1, table.slug()))?
+                }
             };
             for (i, w) in words.enumerate() {
                 if i >= FEATURES {
@@ -227,12 +343,20 @@ impl Taste {
         for (f, w) in Feel::ALL.iter().zip(&self.feel) {
             row(&mut s, f.slug(), w);
         }
+        let solo_head = format!("# {:<10}{}\n", "", SOLO_FEATURE_NAMES.map(|f| format!("{f:>11}")).join(""));
+        for table in Table::ALL {
+            s.push_str(&format!("\n[{}]\n", table.slug()));
+            s.push_str(&solo_head);
+            for (i, name) in table.rows().iter().enumerate() {
+                row(&mut s, name, &self.solo[table.at() + i]);
+            }
+        }
         s
     }
 }
 
 /// Weights in a [`Taste`].
-pub const WEIGHTS: usize = (CHORUS_ROWS + 5) * FEATURES;
+pub const WEIGHTS: usize = (CHORUS_ROWS + 5 + SOLO_ROWS) * FEATURES;
 
 /// The taste the band plays with by default (`music/taste.critic`).
 pub fn shipped() -> Taste {
@@ -276,6 +400,8 @@ mod tests {
         t.chorus[3][1] = 0.5;
         t.chorus[KEY_UP_ROW][9] = -1.25;
         t.feel[2][0] = 2.0;
+        t.solo_row_mut(Table::Device, "enclosure").unwrap()[3] = 0.75;
+        t.solo_row_mut(Table::Target, "+11").unwrap()[5] = -0.5;
         let back = Taste::parse(&t.to_text()).unwrap();
         assert_eq!(back, t);
         assert!(Taste::parse("[chorus]\nnope 1").is_err());
@@ -285,7 +411,7 @@ mod tests {
     #[test]
     fn features_match_scores() {
         let mut t = Taste::NEUTRAL;
-        for (i, w) in t.chorus.iter_mut().flatten().chain(t.feel.iter_mut().flatten()).enumerate() {
+        for (i, w) in t.chorus.iter_mut().flatten().chain(t.feel.iter_mut().flatten()).chain(t.solo.iter_mut().flatten()).enumerate() {
             *w = (i as f32 * 0.37).sin();
         }
         let ctx = Context::new(&Tune { bpm: 220.0, density: 0.5, bars: 12 }, 6, Some(Chorus::Breaks));
@@ -299,6 +425,11 @@ mod tests {
         }
         for f in Feel::ALL {
             assert!((dotw(Taste::feel_features(f, &ctx)) - t.feel_score(f, &ctx)).abs() < 1e-5);
+        }
+        for table in Table::ALL {
+            for i in 0..table.rows().len() {
+                assert!((dotw(Taste::solo_features(table, i, &ctx)) - t.solo_score(table, i, &ctx)).abs() < 1e-5);
+            }
         }
         assert_eq!(Taste::from_weights(&w), t);
     }
@@ -430,5 +561,52 @@ mod planning {
         assert!(seen.iter().any(|&(p, c, f)| p == 0 && c == Chorus::StopTime && f == Feel::Swing), "{:?}", &seen[..4]);
         assert!(seen.iter().any(|&(p, c, f)| p == 1 && c == Chorus::Blowing && f == Feel::Bossa), "{:?}", seen.last());
         assert!(!seen.iter().any(|&(p, c, _)| p == 1 && c != Chorus::Blowing));
+    }
+}
+
+#[cfg(test)]
+mod soloing {
+    use super::super::band::PassPlan;
+    use super::super::chorus::{Call, Chorus};
+    use super::super::engine::{Engine, EngineConfig, Input};
+    use super::super::feel::Feel;
+    use super::super::library;
+    use super::super::soloist::{Mode, Soloist};
+    use super::*;
+    use crate::Frame;
+
+    /// Phrase modes and chorus shapes a Trane chorus over Tiger Rag plays with `taste`.
+    fn played(taste: Taste) -> (Vec<Mode>, Vec<super::super::soloist::Arc>) {
+        let file = library::load("tiger_rag").unwrap();
+        let mut e = Engine::with_config(&file, 16_000, EngineConfig { seed: 3, taste, soloist: Some(Soloist::Trane), ..EngineConfig::default() }).unwrap();
+        e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
+        for pass in 0..3 {
+            e.post(Input::PlanPass(PassPlan { pass, chorus: Some(Call { chorus: Chorus::Blowing, key_up: false }), feel: Some(Feel::Swing) }));
+        }
+        let (mut modes, mut arcs, mut seen) = (Vec::new(), Vec::new(), std::collections::HashSet::new());
+        let mut buf = [Frame::ZERO; 512];
+        for _ in 0..3000 {
+            e.fill(&mut buf);
+            for b in &e.state().upcoming {
+                if let Some(t) = b.thought.filter(|_| seen.insert(b.slot.index)) {
+                    arcs.push(t.arc);
+                    modes.extend(t.phrases[..t.nphrases as usize].iter().map(|p| p.mode));
+                }
+            }
+        }
+        (modes, arcs)
+    }
+
+    #[test]
+    fn a_taste_leans_the_soloist() {
+        let (plain, plain_arcs) = played(Taste::NEUTRAL);
+        assert_eq!(played(Taste::NEUTRAL), (plain.clone(), plain_arcs.clone()), "a neutral taste plays the same solo");
+        let mut t = Taste::NEUTRAL;
+        t.solo_row_mut(Table::Mode, "scalar").unwrap()[0] = 6.0;
+        t.solo_row_mut(Table::Arc, "flat").unwrap()[0] = 8.0;
+        let (leaned, arcs) = played(t);
+        let share = |m: &[Mode]| m.iter().filter(|&&x| x == Mode::Scalar).count() as f32 / m.len().max(1) as f32;
+        assert!(!plain.is_empty() && share(&leaned) > share(&plain) + 0.2, "{} -> {}", share(&plain), share(&leaned));
+        assert!(arcs.iter().all(|&a| a == super::super::soloist::Arc::Flat), "{arcs:?}");
     }
 }

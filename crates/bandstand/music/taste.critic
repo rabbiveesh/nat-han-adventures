@@ -7,6 +7,12 @@
 # (notes a beat >= 1.1 / <= 0.72); long form (> 32 bars); the chorus before was the head
 # (after-head), stop-time or breaks (after-out), or a solo chorus (after-solo); late (pass 5+).
 # For a feel, the after-* columns describe the pass's own chorus.
+#
+# The soloist's tables ([arc] [idea] [mode] [device] [target]) have their own features: bias;
+# slow / fast; the solo's first chorus / its third or later; the chord a dominant / a minor
+# (or half-diminished); the solo hot / cool (its chorus shape's heat above 0.66 / below 0.33);
+# a dominant resolving to minor. [idea] rows lean picking up the comp, a lick, carrying a cell,
+# each against a new idea. Targets: +9 is #9, +11 is #11.
 
 [chorus]
 [feel]

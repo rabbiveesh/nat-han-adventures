@@ -5,7 +5,10 @@
 //! `taps.tsv`: one tap a line, tab-separated: `kind song before chorus a b winner`, as the
 //! taste booth page stores them (`kind`: `chorus` or `feel`; `chorus`: the pass's chorus for a
 //! feel pair, `-` for a chorus pair; `a`, `b`: chorus slugs, `shout+key-up`, or feel slugs;
-//! `winner`: `a`, `b` or `tie`). A Bradley-Terry model: the chance A wins is
+//! `winner`: `a`, `b` or `tie`; `kind` `solo`: a soloist's table, `before` its name (`arc`,
+//! `mode`, `device`, `target`, `idea`), `a` and `b` rows of it, or `-` for the dice as written,
+//! each take a chorus played with its row leaned hard, and the preference read as one about
+//! the rows in the tune's tempo). A Bradley-Terry model: the chance A wins is
 //! `sigmoid(score(A) - score(B))`, the scores linear in the features of the moment
 //! (`taste::Context`), with an L2 pull to neutral so a few taps can't swing the band far.
 //! Prints how well it predicts held-out taps (5-fold) and the fitted table; `--write` saves it
@@ -15,7 +18,8 @@ use bandstand::live::{
     chorus::{Call, Chorus},
     feel::Feel,
     library,
-    taste::{Context, Taste, Tune, WEIGHTS},
+    soloist::Moment,
+    taste::{Context, Table, Taste, Tune, WEIGHTS},
 };
 use std::collections::HashMap;
 
@@ -97,6 +101,25 @@ fn main() {
                     continue;
                 };
                 let (fa, fb) = (Taste::feel_features(a, &ctx), Taste::feel_features(b, &ctx));
+                std::array::from_fn(|i| fa[i] - fb[i])
+            }
+            "solo" => {
+                let Some(table) = Table::parse(f[2]) else {
+                    skipped += 1;
+                    continue;
+                };
+                let ctx = Context::solo(&Moment { bpm: tune.bpm, chorus: 1, ..Moment::default() });
+                let row = |name: &str| -> Option<[f32; WEIGHTS]> {
+                    if name == "-" {
+                        return Some([0.0; WEIGHTS]);
+                    }
+                    let i = table.rows().iter().position(|&r| r == name)?;
+                    Some(Taste::solo_features(table, i, &ctx))
+                };
+                let (Some(fa), Some(fb)) = (row(f[4]), row(f[5])) else {
+                    skipped += 1;
+                    continue;
+                };
                 std::array::from_fn(|i| fa[i] - fb[i])
             }
             _ => {

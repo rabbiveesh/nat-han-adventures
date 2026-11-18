@@ -800,6 +800,7 @@ impl Engine {
             soloist,
             bassist: self.bassist,
             heard: self.heard,
+            taste: &self.config.taste,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {

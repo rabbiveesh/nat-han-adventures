@@ -881,6 +881,10 @@ impl Lead {
 }
 
 impl Changes for Ctx<'_> {
+    fn taste(&self) -> &crate::live::taste::Taste {
+        self.taste
+    }
+
     fn bar_beats(&self) -> f64 {
         self.bb()
     }

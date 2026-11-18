@@ -30,6 +30,7 @@
 //! the lead keeps between bars. Pure, no allocation.
 
 use crate::accomp::Rng;
+use super::taste::{Context, Table, Taste, lean};
 use crate::chart::Family;
 use std::sync::OnceLock;
 
@@ -634,9 +635,15 @@ struct Carry {
     from: u8,
 }
 
+/// The neutral critic, for lines whose [`Changes`] bring none.
+static NEUTRAL_TASTE: Taste = Taste::NEUTRAL;
+
 /// The line, carried over bar lines.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Line {
+    /// The critic's lean on this phrase's ideas: picking up the comp, a lick, carrying a cell
+    /// (scores against a new idea, [`Table::Idea`]).
+    idea_lean: [f32; 3],
     /// The last note played (none at the start: the register's centre).
     cur: Option<i32>,
     dir: i32,
@@ -938,6 +945,10 @@ pub trait Changes {
     fn heard(&self) -> Heard {
         Heard::default()
     }
+    /// The critic leaning the soloist's dice ([`super::taste`]; neutral: the dice as written).
+    fn taste(&self) -> &Taste {
+        &NEUTRAL_TASTE
+    }
     /// Is beat `b` of the bar a strong one (1 or 3 in 4/4; the downbeat otherwise)?
     fn strong(&self, b: f64) -> bool {
         let bb = self.bar_beats();
@@ -962,7 +973,10 @@ impl Line {
             let x = at / len.max(1.0);
             if !self.started || x < self.at - 1e-9 {
                 // A new chorus: a new shape.
-                self.arc = [Arc::Arch, Arc::Builds, Arc::Front, Arc::Flat][pick(&ARCS, r)];
+                let mut w = ARCS;
+                let m = Moment { bpm: ch.bpm(), chorus: self.chorus + 1, ..Moment::default() };
+                ch.taste().lean(Table::Arc, &mut w, &Context::solo(&m));
+                self.arc = [Arc::Arch, Arc::Builds, Arc::Front, Arc::Flat][pick(&w, r)];
                 self.chorus += 1;
             }
             self.at = x;
@@ -1062,7 +1076,10 @@ impl Line {
                     // (Onto the skeleton's note, if the phrase planned one there.)
                     let at = self.total - self.phrase + (cell_end - b);
                     let target = self.goal_at(at).unwrap_or_else(|| h.nearest_chord_tone((cur + 2 * self.dir).clamp(0, 127) as u8));
-                    let device = Device::ALL[pick(&device_weights(p, self.mode, k, &self.moment(ch, Some(h))), r)];
+                    let m = self.moment(ch, Some(h));
+                    let mut w = device_weights(p, self.mode, k, &m);
+                    ch.taste().lean(Table::Device, &mut w, &Context::solo(&m));
+                    let device = Device::ALL[pick(&w, r)];
                     let now = ch.harm(b).unwrap_or(h);
                     let blues = blues_scale(ch.key(), &now);
                     // The run comes in from the side the line is on.
@@ -1191,7 +1208,11 @@ impl Line {
             self.total = self.phrase;
         }
         // Between its targets: over the changes, scalar, or the blues.
-        self.mode = Mode::ALL[pick(&mode_weights(p, &self.moment(ch, h)), r)];
+        let m = self.moment(ch, h);
+        let mut w = mode_weights(p, &m);
+        ch.taste().lean(Table::Mode, &mut w, &Context::solo(&m));
+        self.mode = Mode::ALL[pick(&w, r)];
+        self.idea_lean = std::array::from_fn(|i| ch.taste().solo_score(Table::Idea, i, &Context::solo(&m)));
         self.plan(p, ch, r, b, bb);
         let t = &mut self.thought;
         if (t.nphrases as usize) < t.phrases.len() {
@@ -1248,7 +1269,9 @@ impl Line {
                     // plain chord tones on major and minor, tensions on a dominant.
                     let mut m = self.moment(ch, Some(h));
                     m.resolves_minor = h.chord.family() == Family::Dominant && resolves_minor(ch, a, &h);
-                    let degree = pick(&target_weights(p, &m), r);
+                    let mut w = target_weights(p, &m);
+                    ch.taste().lean(Table::Target, &mut w, &Context::solo(&m));
+                    let degree = pick(&w, r);
                     let lean = match shape {
                         0 if t < total * 0.5 => 3,
                         0 => -3,
@@ -1422,7 +1445,7 @@ impl Line {
         if self.look
             && self.figure.n >= 2
             && let Some(h) = h
-            && r.chance(ECHO)
+            && r.chance(lean(ECHO, self.idea_lean[0]))
         {
             // The comp's last figure picked up: its rhythm and its top line's shape, from a chord
             // tone near the line.
@@ -1442,7 +1465,7 @@ impl Line {
             self.idea_kind = Idea::Echo;
             return;
         }
-        if let Some(h) = h.filter(|_| !p.licks.is_empty() && r.chance(p.licks.rate as f64))
+        if let Some(h) = h.filter(|_| !p.licks.is_empty() && r.chance(lean(p.licks.rate as f64, self.idea_lean[1])))
             && let Some(mut lick) = p.licks.pick(h.chord.family(), r)
             // (A lick in 16ths only as often as the tempo plays them.)
             && (lick.dur[..lick.n].iter().all(|&d| d > 0.3) || r.chance(self.k16.min(1.0) as f64))
@@ -1471,7 +1494,7 @@ impl Line {
         }
         // Maybe with a cell of the last phrase in it: 5 notes with a turn or a leap, its
         // intervals at any point (the front most often), in the new phrase's own rhythm.
-        if prev.n >= 6 && r.chance(p.carry as f64) {
+        if prev.n >= 6 && r.chance(lean(p.carry as f64, self.idea_lean[2])) {
             let shaped = |s: usize| {
                 let iv = &prev.iv[s + 1..s + 5];
                 iv.iter().any(|i| i.abs() >= 3) || iv.windows(2).any(|w| w[0].signum() * w[1].signum() < 0)
