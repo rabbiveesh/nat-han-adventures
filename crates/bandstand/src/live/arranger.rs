@@ -23,7 +23,8 @@ use super::band::HitKind;
 use super::chorus::Chorus;
 use super::horns::{Horn, Horns, SECTION, changes, close, drop2, four, unit};
 use super::musician::Ctx;
-use super::soloist::Soloist;
+use super::ornament::Harm;
+use super::soloist::{LineAhead, Soloist};
 use super::voice::{NoteEvent, Sound};
 use crate::chart::Chord;
 use crate::mml::EventKind;
@@ -512,6 +513,25 @@ impl<'a, 'b> Writer<'a, 'b> {
         Writer { ctx, free, art: std::cell::Cell::new(Art::PLAIN) }
     }
 
+    /// A section's top note on `h` near `near`, aimed as the featured soloist aims their
+    /// strong beats ([`super::soloist::target_weights`]: 3 5 7 and 9ths, a dominant's
+    /// tensions as often as they take them), the records' even spread under the band's own
+    /// line. Seeded by the bar and the beat.
+    fn aim(&self, h: &Harm, near: i32, b: f64) -> i32 {
+        use super::soloist::{Moment, choose, target_note, target_weights};
+        let ctx = self.ctx;
+        let m = Moment { bpm: ctx.shape.bpm, family: Some(h.chord.family()), ..Moment::default() };
+        let w = match ctx.soloist.profile() {
+            Some(p) => target_weights(p, &m),
+            None => [0.142, 0.136, 0.147, 0.136, 0.178, 0.0, 0.0, 0.0, 0.0, 0.0],
+        };
+        let mut r = crate::accomp::Rng::new(ctx.seed ^ ctx.bar.index.wrapping_mul(0x9E37_79B9) ^ ((b * 8.0) as u64) << 40 ^ 0xa1);
+        let k = choose(&w, &mut r);
+        let n = target_note(h, k, near.clamp(0, 127) as u8) as i32;
+        // (A root on top sounds like an ending: the guide tone it was, then.)
+        if k == 0 { near } else { n }
+    }
+
     /// Phrase the next notes like a big band section: an 8th on the and accented, a phrase's
     /// last short note clipped ("dat"), quarters detached, an anticipation accented, a long
     /// note swelling (soft: a crescendo; loud: fp, crescendo) or, ending a phrase with room
@@ -791,7 +811,10 @@ impl<'a, 'b> Writer<'a, 'b> {
             let next = fig.get(i + 1).map_or(8.0 + at(&fig[0]), at);
             let room = next - (at(f) + d);
             self.phrase(b, d, room >= 0.75, room, shout);
-            let top = top_at(h.chord, center, step);
+            let mut top = top_at(h.chord, center, step);
+            if d >= 1.5 && b.fract() < 0.01 && (b as usize).is_multiple_of(2) {
+                top = self.aim(&h, top, b);
+            }
             let colour = Colour::of(ctx);
             if d >= 1.5 && colour.device != Device::Plain {
                 // A long note opens up inside: the chorus's device.
@@ -807,7 +830,7 @@ impl<'a, 'b> Writer<'a, 'b> {
 
     /// Answers in the line's rests and under its long notes (`line`: its notes this bar, as
     /// (beat, end)).
-    fn answers(&self, out: &mut Vec<NoteEvent>, line: &[(f64, f64)], heard: &[(f64, f64, i32)], vol: u8) {
+    fn answers(&self, out: &mut Vec<NoteEvent>, line: &[(f64, f64)], heard: &[(f64, f64, i32)], ahead: Option<LineAhead>, vol: u8) {
         let ctx = self.ctx;
         let bb = ctx.bb();
         let mut gaps: Vec<(f64, f64)> = Vec::new();
@@ -826,10 +849,25 @@ impl<'a, 'b> Writer<'a, 'b> {
         if bb - cursor >= 1.5 {
             gaps.push((cursor, bb));
         }
+        // What the soloist has planned past the bar line ([`LineAhead`]): a phrase still
+        // going is only breathing at the bar's end (leave it be, unless the whole bar's
+        // open); a rest runs on to the next phrase's start, and an answer can ring into it.
+        if let (Some(a), Some(last)) = (ahead, gaps.last_mut())
+            && (last.1 - bb).abs() < 1e-9
+        {
+            match a.end {
+                Some(_) if last.1 - last.0 < 3.0 => {
+                    gaps.pop();
+                }
+                Some(_) => {}
+                None => last.1 = bb + a.next_start.clamp(0.0, bb),
+            }
+        }
         // One answer a bar at most, in a real rest: room for the line to breathe too.
         for (i, &(g0, g1)) in gaps.iter().take(1).enumerate() {
             let start = ((g0 + 0.25) * 2.0).ceil() / 2.0;
-            let room = g1 - start;
+            // (Notes start in this bar; only the last rings past the bar line.)
+            let room = g1.min(bb + 1.0) - start;
             if room < 1.5 {
                 continue;
             }
@@ -857,9 +895,13 @@ impl<'a, 'b> Writer<'a, 'b> {
                 }
                 let d = d.min(g1 - b - 0.1).max(0.3);
                 let Some(h) = ctx.harm_at(b) else { continue };
-                let last = j + 1 == n;
+                let last = j + 1 == n || fig.get(j + 1).is_some_and(|f| start + f.0 >= bb);
                 self.phrase(b, d, last, if last { g1 - b - d } else { 0.0 }, false);
-                let top = top_at(h.chord, center, step);
+                let mut top = top_at(h.chord, center, step);
+                if last && d >= 0.9 {
+                    // Where the answer lands, aimed as the soloist aims a phrase's end.
+                    top = self.aim(&h, top, b);
+                }
                 // Some answers start in unison and open into harmony.
                 if j == 0 && n > 1 && unit(ctx.seed, ctx.bar.index, i as u64, 61) < 0.4 {
                     self.unison(out, group, vol, b, d, top);
@@ -987,7 +1029,7 @@ impl<'a, 'b> Writer<'a, 'b> {
 
 /// The upper sections' bar: the section's plan played, the line moved onto the horn that has
 /// it. Returns the plan (`None`: no upper sections on the stand).
-pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melody: Option<Melody>, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<Section> {
+pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melody: Option<Melody>, ahead: Option<LineAhead>, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<Section> {
     let upper = Horns::NONE.with(Horn::Trumpets).with(Horn::Altos).with(Horn::Tenors);
     let mine = horns.iter().filter(|h| upper.has(*h)).fold(Horns::NONE, Horns::with);
     if mine.is_empty() {
@@ -1064,7 +1106,7 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
             }
             let held: Vec<(f64, f64)> = tune.iter().map(|&(b, d, _)| (b, b + d)).collect();
             let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE });
-            brass.answers(out, &held, &tune, 13);
+            brass.answers(out, &held, &tune, None, 13);
             band.retain(|e| e.ch != 0);
         }
         UpperRole::Tutti => {
@@ -1076,7 +1118,7 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         UpperRole::Riff => {
             w.riff(out, &figure(ctx), plan_.chorus == Chorus::Shout);
         }
-        UpperRole::Answers => w.answers(out, &line, &heard, 13),
+        UpperRole::Answers => w.answers(out, &line, &heard, ahead, 13),
         UpperRole::Tacet => {}
     }
     piano_in_the_holes(ctx, band, out);

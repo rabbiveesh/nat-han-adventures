@@ -634,6 +634,12 @@ pub trait Musician: Send {
     fn thought(&self) -> Option<super::soloist::Thought> {
         None
     }
+
+    /// Where its improvised line stands after the bar it last committed (the lead's solo
+    /// line: [`super::soloist::Line::plan_ahead`]), for the band to play around it.
+    fn ahead(&self) -> Option<super::soloist::LineAhead> {
+        None
+    }
 }
 
 /// What every musician shares: a role, a dial, a plan.

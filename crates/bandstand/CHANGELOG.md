@@ -13,6 +13,13 @@ GitHub Release's notes.
   two-feel bass plays the 3 and the 2, the Charleston, Freddie Green and stop-time hats
   follow them, and a pulse is never swung (`synth::apply_swing_in`). No feels in five, as
   in the waltz. The band's hits are a `u32` of 16ths (a bar up to 8 beats).
+- **The sections hear the soloist's plan**: the lead's line forecast
+  (`soloist::Line::plan_ahead`) reaches the arranger (`Musician::ahead`): an answer
+  leaves a phrase that's only breathing at the bar line alone, and in a rest rings on
+  into the next bar up to where the soloist comes back in. A section's landing notes
+  (an answer's last, a riff's long notes on one and three) are aimed as the featured
+  soloist aims a phrase's end (`soloist::target_weights`: 3 5 7 and 9ths, a dominant's
+  tensions as often as they take them).
 - **Low horns.** `EngineConfig::horns` puts a bass trombone, a bari and a tuba on the
   stand (`live::horns`), each on a channel of its own (5 on). Per 8-bar section they
   double the bass line (unison or octaves), hold a pedal, pad root-position long notes,
