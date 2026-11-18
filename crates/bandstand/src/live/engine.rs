@@ -52,7 +52,8 @@ use crate::tuning::{self, Medley, Tuning};
 use crate::{Filters, Harmony};
 
 use super::arrange::{Arrangement, Shape};
-use super::band::{BandInput, BandPlan};
+use super::band::{BandInput, BandPlan, PassPlan};
+use super::taste::{Taste, Tune};
 use super::chorus;
 use super::soloist::{self, Soloist};
 use super::feel::{self, Feel};
@@ -99,6 +100,9 @@ pub enum Input {
     /// Override the chorus ([`super::chorus`]; `None`: the band arranges): every pass plays it,
     /// from the next bar committed. A dev override (the editor's chips).
     ForceChorus(Option<chorus::Call>),
+    /// Arrange a loop pass ahead: its chorus and its feel (a listening test's takes, the same
+    /// night but for one choice). The engine keeps the last [`PLANNED`] of them; a force wins.
+    PlanPass(PassPlan),
     /// Override who the lead solos like ([`EngineConfig::soloist`]; `None`: passed round), from
     /// the next bar committed. A dev override (the editor's chips).
     ForceSoloist(Option<Soloist>),
@@ -163,15 +167,32 @@ pub struct EngineConfig {
     pub soloist: Option<Soloist>,
     /// The comp and drums step back under the lead's phrases, the bass sits lower ([`super::mix`]).
     pub duck: bool,
+    /// The critic leaning the arranger's dice ([`super::taste`]; [`Taste::NEUTRAL`]: the dice as
+    /// written). By default the shipped one, `music/taste.critic`.
+    pub taste: Taste,
     /// The horns on the stand ([`super::horns`]; none: the combo alone).
     pub horns: super::horns::Horns,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true, horns: super::horns::Horns::NONE }
+        EngineConfig {
+            seed: 1,
+            commit_lead_beats: 1.0,
+            self_directed: false,
+            intro: false,
+            drift_bpm: DRIFT_BPM,
+            loose: 1.0,
+            soloist: None,
+            duck: true,
+            taste: super::taste::shipped(),
+            horns: super::horns::Horns::NONE,
+        }
     }
 }
+
+/// Passes the engine keeps arranged ahead ([`Input::PlanPass`]).
+pub const PLANNED: usize = 4;
 
 impl EngineConfig {
     /// The default with no tempo drift, every player on the beat and no ducking: the notes
@@ -408,6 +429,15 @@ impl Ending {
     }
 }
 
+/// What the critic knows of a tune: its tempo, its form and how busy the melody (pulse 1) is in
+/// the song as written.
+fn tune_of(shape: &Shape, written: &Option<Arrangement>) -> Tune {
+    let notes = written.as_ref().map_or(0, |a| {
+        a.tracks[0].events.iter().filter(|e| matches!(e.kind, crate::mml::EventKind::Note(_))).count()
+    });
+    Tune { bpm: shape.bpm, density: if shape.beats > 0.0 { (notes as f64 / shape.beats) as f32 } else { 0.0 }, bars: shape.bars }
+}
+
 /// The live engine.
 pub struct Engine {
     title: String,
@@ -428,6 +458,11 @@ pub struct Engine {
     forced_tuning: Option<Tuning>,
     forced_feel: Option<Feel>,
     forced_chorus: Option<chorus::Call>,
+    /// Passes arranged ahead, oldest first ([`Input::PlanPass`]).
+    planned: [PassPlan; PLANNED],
+    n_planned: usize,
+    /// What the critic knows of the tune.
+    tune: Tune,
     /// The intro the tune started with, if any.
     intro: Option<chorus::IntroKind>,
     ending: Option<Ending>,
@@ -502,6 +537,7 @@ impl Engine {
         spans.push_back(Span { waltz: false, start: 0, entry: 0, end: shape.len, pass: 0, first_bar: 0, intro: false });
         // The song's instruments and the feels' (appended: the song's own numbers don't move).
         let instruments = feel::equip(&song.instruments);
+        let tune = tune_of(&shape, &arrangements[0]);
         Ok(Engine {
             title: song.title.clone(),
             bank: VoiceBank::new(sample_rate, [medley.clone(), waltz_medley], &instruments),
@@ -519,6 +555,9 @@ impl Engine {
             forced_tuning: None,
             forced_feel: None,
             forced_chorus: None,
+            planned: [PassPlan::default(); PLANNED],
+            n_planned: 0,
+            tune,
             intro: None,
             ending: None,
             freedom: Freedom::default(),
@@ -567,6 +606,11 @@ impl Engine {
     #[cfg(feature = "soundfont")]
     pub fn use_font(&mut self, voicing: super::font::FontVoicing) -> Result<(), String> {
         self.bank.use_font(voicing)
+    }
+
+    /// What the arranger's critic knows of the tune ([`super::taste`]).
+    pub fn tune(&self) -> Tune {
+        self.tune
     }
 
     pub fn title(&self) -> &str {
@@ -790,6 +834,7 @@ impl Engine {
             soloist,
             bassist: self.bassist,
             heard: self.heard,
+            taste: &self.config.taste,
         };
         for m in &mut self.musicians {
             if replan || !m.current_plan().is_some_and(|p| p.covers(slot.index)) {
@@ -825,6 +870,9 @@ impl Engine {
             looping: shape.looping,
             force_feel: self.forced_feel,
             force_chorus: self.forced_chorus,
+            taste: &self.config.taste,
+            tune: self.tune,
+            planned: &self.planned[..self.n_planned],
             intro,
             ending,
             reharm: soloist.profile().map_or(soloist::BAND_REHARM, |p| p.reharm()),
@@ -1033,6 +1081,18 @@ impl Engine {
             }
             Input::ForceChorus(c) => {
                 self.forced_chorus = c;
+                None
+            }
+            Input::PlanPass(p) => {
+                if let Some(i) = self.planned[..self.n_planned].iter().position(|q| q.pass == p.pass) {
+                    self.planned[i] = p;
+                } else if self.n_planned < PLANNED {
+                    self.planned[self.n_planned] = p;
+                    self.n_planned += 1;
+                } else {
+                    self.planned.copy_within(1.., 0);
+                    self.planned[PLANNED - 1] = p;
+                }
                 None
             }
             Input::ForceSoloist(s) => {

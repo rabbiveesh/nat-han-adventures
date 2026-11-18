@@ -76,6 +76,7 @@ use crate::chart::{Chord, Family, Quality};
 use crate::mml::Arp;
 
 use super::band::{self, BandInput};
+use super::taste::{self, Context, Taste, Tune};
 use super::instrument::{Def, Instruments};
 
 /// A band-wide groove.
@@ -162,6 +163,42 @@ fn roll(seed: u64, slot: u64) -> (f64, bool, bool, Feel) {
 /// bars), at `dial`: see the module docs. Pure; monotone in the dial (a higher dial keeps every
 /// feel a lower one had).
 pub fn auto(seed: u64, pass: u64, song_bar: usize, bars: usize, dial: f32) -> Feel {
+    auto_with(seed, pass, song_bar, bars, dial, &Taste::NEUTRAL, &Context::new(&Tune::default(), pass, None))
+}
+
+/// [`auto`] with a critic leaning the dice ([`super::taste`]) in the moment `ctx` (the tune,
+/// the pass's chorus): whether a slot gets a feel at all (still monotone in the dial), and which.
+/// A neutral taste rolls exactly as [`auto`] always did.
+pub fn auto_with(seed: u64, pass: u64, song_bar: usize, bars: usize, dial: f32, taste: &Taste, ctx: &Context) -> Feel {
+    if taste.is_neutral() {
+        return auto_plain(seed, pass, song_bar, bars, dial);
+    }
+    let p = chance(dial);
+    let section = song_bar / 8;
+    if p <= 0.0 || (section + 1) * 8 > bars {
+        return Feel::Swing;
+    }
+    let abs = pass * bars.div_ceil(8) as u64 + section as u64;
+    let (slot, k) = (abs / SLOT_SECTIONS, abs % SLOT_SECTIONS);
+    if k == 0 {
+        return Feel::Swing;
+    }
+    let e = Feel::OTHERS.map(|f| (taste.feel_score(f, ctx) as f64).exp());
+    let a = ((e.iter().sum::<f64>() / 4.0).ln() - taste.feel_score(Feel::Swing, ctx) as f64) as f32;
+    let pick_in = |s: u64, not: Option<usize>| {
+        let mut r = band::rng(seed, 6, s, 0);
+        let (coin, long, late) = (r.f(), r.chance(0.5), r.chance(0.5));
+        let w: [f64; 4] = std::array::from_fn(|i| if Some(i) == not { 0.0 } else { e[i] });
+        (coin, long, late, taste::pick(&w, r.f()).unwrap_or(0))
+    };
+    let before = (slot > 0).then(|| pick_in(slot - 1, None).3);
+    let (coin, long, late, i) = pick_in(slot, before);
+    let on = coin < taste::lean(p, a) && (long || k == if late { 2 } else { 1 });
+    if on { Feel::OTHERS[i] } else { Feel::Swing }
+}
+
+/// The feel as the dice always rolled it (no critic).
+fn auto_plain(seed: u64, pass: u64, song_bar: usize, bars: usize, dial: f32) -> Feel {
     let p = chance(dial);
     let section = song_bar / 8;
     if p <= 0.0 || (section + 1) * 8 > bars {
@@ -197,7 +234,14 @@ pub fn decide(input: &BandInput) -> Call {
     let d = dial(input.freedom);
     // The band's own feels only in the choruses that take one.
     let want = |pass: u64, bar: usize| {
-        input.force_feel.unwrap_or_else(|| if input.chorus(pass).chorus.allows_feel() { auto(input.seed, pass, bar, input.bars, d) } else { Feel::Swing })
+        input.force_feel.or_else(|| input.planned_feel(pass)).unwrap_or_else(|| {
+            let c = input.chorus(pass).chorus;
+            if c.allows_feel() {
+                auto_with(input.seed, pass, bar, input.bars, d, input.taste, &Context::new(&input.tune, pass, Some(c)))
+            } else {
+                Feel::Swing
+            }
+        })
     };
     let now = want(s.pass, s.song_bar);
     let before = if s.song_bar > 0 {
@@ -209,7 +253,7 @@ pub fn decide(input: &BandInput) -> Call {
     };
     let contiguous = input.prev.bar + 1 == s.index;
     let carried = contiguous && input.prev.feel == now;
-    let starts = input.force_feel.is_some() || before != Some(now);
+    let starts = input.force_feel.is_some() || input.planned_feel(s.pass).is_some() || before != Some(now);
     let feel = if now == Feel::Swing || carried || starts { now } else { Feel::Swing };
     let since = if carried && feel != Feel::Swing { input.prev.feel_since } else { s.index };
     let mut next = if s.song_bar + 1 < input.bars {

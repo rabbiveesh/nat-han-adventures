@@ -287,6 +287,21 @@ pub fn role(ctx: &Ctx, force: Option<LowRole>) -> LowRole {
     }
     let section = (ctx.bar.song_bar / SECTION) as u64;
     let w = LowRole::weights(band.chorus);
+    if ctx.taste.has(super::taste::Table::Low) {
+        let s = section as usize;
+        let at = super::taste::Context::section(ctx.shape.bpm, s, ctx.shape.bars.div_ceil(SECTION).max(1), band.chorus, band.chorus.lead_solos(ctx.freedom[0]), ctx.bar.pass);
+        let opts: Vec<(usize, f64)> = w.iter().enumerate().map(|(i, &k)| (i, k as f64)).collect();
+        let opts = ctx.taste.lean_opts(super::taste::Table::Low, &opts, |i| i, &at);
+        let total: f64 = opts.iter().map(|o| o.1).sum();
+        let mut x = unit(ctx.seed, ctx.bar.pass, section, 2) * total;
+        for &(i, k) in &opts {
+            if x < k {
+                return LowRole::ALL[i];
+            }
+            x -= k;
+        }
+        return LowRole::Tacet;
+    }
     let total: u32 = w.iter().sum();
     let mut x = (unit(ctx.seed, ctx.bar.pass, section, 2) * total as f64) as u32;
     for (r, &k) in LowRole::ALL.iter().zip(&w) {

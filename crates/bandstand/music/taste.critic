@@ -1,0 +1,25 @@
+# The band's taste: how the arranger's dice lean in each moment (bandstand::live::taste).
+# A row per candidate, a weight per feature of the moment; a candidate's odds are multiplied
+# by exp(its score). All zeros: no leaning, the dice as written in chorus.rs and feel.rs.
+# Fitted from A/B listening by examples/fit_taste.rs; edit by hand if you like.
+#
+# Features: bias (always 1); slow (< 150 bpm) / fast (>= 185 bpm); busy / sparse melody
+# (notes a beat >= 1.1 / <= 0.72); long form (> 32 bars); the chorus before was the head
+# (after-head), stop-time or breaks (after-out), or a solo chorus (after-solo); late (pass 5+).
+# For a feel, the after-* columns describe the pass's own chorus.
+#
+# The soloist's tables ([arc] [idea] [mode] [device] [target]) have their own features: bias;
+# slow / fast; the solo's first chorus / its third or later; the chord a dominant / a minor
+# (or half-diminished); the solo hot / cool (its chorus shape's heat above 0.66 / below 0.33);
+# a dominant resolving to minor. [idea] rows lean picking up the comp, a lick, carrying a cell,
+# each against a new idea. Targets: +9 is #9, +11 is #11.
+#
+# The big band's tables ([upper] [take] [low] [pad] [ending] [riff] [answer], arranger.rs and
+# horns.rs) score each 8-bar section: bias; slow / fast; the chorus's first / last section; a
+# head (or two-feel); behind a solo; a climax (shout, soli, riffs); the first pass / a late one.
+# Choices made once a pass (the riff, the pass's pad colour, endings) score as its first section.
+# [take]'s tutti row and [riff]'s rows lean chances (everyone on the tune; the tune's own motif
+# for the riff, fast notes in unison).
+
+[chorus]
+[feel]

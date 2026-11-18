@@ -40,6 +40,7 @@ use super::feel::{self, Feel};
 use super::musician::{BarSlot, PhrasePlan, Target};
 use super::ornament::{self, Harm};
 use super::soli::{self, SoliBar};
+use super::taste::{Taste, Tune};
 
 /// Who's soloing in a trading-fours stretch.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -228,12 +229,34 @@ pub struct BandInput<'a> {
     /// reharm far harder than a piano does, so the band reharms a third as often, and only
     /// behind a solo (never under the tune).
     pub sections: bool,
+    /// The critic leaning the arranger's dice ([`super::taste`]), and what it knows of the tune.
+    pub taste: &'a Taste,
+    pub tune: Tune,
+    /// Passes arranged ahead ([`super::engine::Input::PlanPass`]).
+    pub planned: &'a [PassPlan],
+}
+
+/// One loop pass arranged ahead: its chorus, its feel (all through it; `Some(Feel::Swing)`:
+/// none), or either left to the band. A force ([`BandInput::force_chorus`],
+/// [`BandInput::force_feel`]) still wins.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct PassPlan {
+    pub pass: u64,
+    pub chorus: Option<chorus::Call>,
+    pub feel: Option<Feel>,
 }
 
 impl BandInput<'_> {
     /// The chorus of loop pass `pass`.
     pub fn chorus(&self, pass: u64) -> chorus::Call {
-        self.force_chorus.unwrap_or_else(|| chorus::auto(self.seed, pass, chorus::dial(self.freedom)))
+        self.force_chorus
+            .or_else(|| self.planned.iter().rev().find(|p| p.pass == pass).and_then(|p| p.chorus))
+            .unwrap_or_else(|| chorus::auto_with(self.seed, pass, chorus::dial(self.freedom), self.taste, &self.tune))
+    }
+
+    /// The feel pass `pass` was arranged to play, if it was.
+    pub fn planned_feel(&self, pass: u64) -> Option<Feel> {
+        self.planned.iter().rev().find(|p| p.pass == pass).and_then(|p| p.feel)
     }
 }
 

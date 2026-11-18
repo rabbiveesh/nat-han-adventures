@@ -142,6 +142,8 @@ pub struct Ctx<'a> {
     pub bassist: Option<&'static super::walkers::Walker>,
     /// The comp's figure in the bar before, as the soloist heard it.
     pub heard: super::soloist::Figure,
+    /// The critic leaning the soloist's dice ([`super::taste`]).
+    pub taste: &'a super::taste::Taste,
 }
 
 impl Ctx<'_> {
