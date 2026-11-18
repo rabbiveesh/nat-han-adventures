@@ -100,6 +100,31 @@ impl Context {
     }
 }
 
+/// The features of a big band section's moment, past the bias: the tempo's band; the chorus's
+/// first or last 8-bar section; a head (the tune, or two-feel); behind a solo; a climax (shout,
+/// soli, riffs); the first pass; a late one.
+pub const SECTION_FEATURE_NAMES: [&str; FEATURES] = ["bias", "slow", "fast", "first", "last", "head", "solo", "climax", "opening", "late"];
+
+impl Context {
+    /// The moment a big band choice is made in: section `s` of `n` in pass `pass` of a
+    /// `chorus`, `solo` when a soloist is up.
+    pub fn section(bpm: f32, s: usize, n: usize, chorus: Chorus, solo: bool, pass: u64) -> Context {
+        let b = |x: bool| if x { 1.0 } else { 0.0 };
+        Context([
+            1.0,
+            b(bpm > 0.0 && bpm < SLOW_BPM),
+            b(bpm >= FAST_BPM),
+            b(s == 0),
+            b(s + 1 >= n),
+            b(matches!(chorus, Chorus::Head | Chorus::TwoFeel)),
+            b(solo),
+            b(matches!(chorus, Chorus::Shout | Chorus::Soli | Chorus::Riffs)),
+            b(pass == 0),
+            b(pass >= LATE_PASS),
+        ])
+    }
+}
+
 /// The soloist's choices a [`Taste`] leans, each a table of rows (candidates).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Table {
@@ -114,10 +139,34 @@ pub enum Table {
     Device,
     /// A target's degree (`target_weights`' order).
     Target,
+    /// The big band's ([`super::arranger`], [`super::horns`]; scored in a
+    /// [`Context::section`]): what the upper sections play behind a line in an 8-bar section.
+    Upper,
+    /// Who takes the tune in a head's section (the tutti row: the last section's chance of
+    /// everyone on it).
+    Take,
+    /// What the low horns play in a section ([`super::horns::LowRole`]).
+    Low,
+    /// How a section's pads (and a chorus's riffs' long notes) open inside the chord.
+    Pad,
+    /// How a tutti phrase's last long note ends.
+    Ending,
+    /// A chorus's riff: the theme row the chance it's the tune's own motif, the unison row its
+    /// fast notes in octaves.
+    Riff,
+    /// Where an answer comes from: the line's figure upside down or as heard, the tune's
+    /// motif, a stock answer.
+    Answer,
 }
 
 impl Table {
-    pub const ALL: [Table; 5] = [Table::Arc, Table::Idea, Table::Mode, Table::Device, Table::Target];
+    pub const ALL: [Table; 12] = [Table::Arc, Table::Idea, Table::Mode, Table::Device, Table::Target, Table::Upper, Table::Take, Table::Low, Table::Pad, Table::Ending, Table::Riff, Table::Answer];
+
+    /// The big band's tables (scored in a [`Context::section`], the rest in a
+    /// [`Context::solo`]).
+    pub fn is_section(self) -> bool {
+        Table::ALL.iter().position(|&t| t == self) >= Table::ALL.iter().position(|&t| t == Table::Upper)
+    }
 
     pub fn slug(self) -> &'static str {
         match self {
@@ -126,6 +175,13 @@ impl Table {
             Table::Mode => "mode",
             Table::Device => "device",
             Table::Target => "target",
+            Table::Upper => "upper",
+            Table::Take => "take",
+            Table::Low => "low",
+            Table::Pad => "pad",
+            Table::Ending => "ending",
+            Table::Riff => "riff",
+            Table::Answer => "answer",
         }
     }
 
@@ -137,6 +193,13 @@ impl Table {
             Table::Mode => &["changes", "scalar", "blues"],
             Table::Device => &["direct", "chromatic", "enclosure", "scale", "blues", "arpeggio"],
             Table::Target => &["R", "3", "5", "7", "9", "b9", "+9", "+11", "13", "b13"],
+            Table::Upper => &["tacet", "pads", "answers", "riff", "punches"],
+            Table::Take => &["lead", "soli", "trumpet", "tenor", "alto", "tutti"],
+            Table::Low => &["tacet", "unison", "octave", "pedal", "pads", "hits", "alone"],
+            Table::Pad => &["plain", "bloom", "pyramid", "cliche", "suspension"],
+            Table::Ending => &["plain", "wedge", "bloom"],
+            Table::Riff => &["theme", "unison"],
+            Table::Answer => &["inverted", "echo", "motif", "stock"],
         }
     }
 
@@ -150,8 +213,8 @@ impl Table {
     }
 }
 
-/// Rows of the soloist's tables, all told.
-pub const SOLO_ROWS: usize = 4 + 3 + 3 + 6 + 10;
+/// Rows of the soloist's and the big band's tables, all told.
+pub const SOLO_ROWS: usize = 4 + 3 + 3 + 6 + 10 + (5 + 6 + 7 + 5 + 3 + 2 + 4);
 
 /// Rows of the chorus table: one per chorus, then the key-up.
 pub const CHORUS_ROWS: usize = 10;
@@ -220,6 +283,22 @@ impl Taste {
                 *x *= s.exp();
             }
         }
+    }
+
+    /// Lean a big band pick's options (each with its row in `table`): each weight times
+    /// `exp(score)`. A neutral taste leaves them exactly as they were.
+    pub fn lean_opts<T: Copy>(&self, table: Table, opts: &[(T, f64)], row: impl Fn(T) -> usize, ctx: &Context) -> Vec<(T, f64)> {
+        opts.iter()
+            .map(|&(t, w)| {
+                let s = self.solo_score(table, row(t), ctx);
+                (t, if s != 0.0 { w * (s as f64).exp() } else { w })
+            })
+            .collect()
+    }
+
+    /// Whether any row of `table` has an opinion.
+    pub fn has(&self, table: Table) -> bool {
+        self.solo[table.at()..table.at() + table.rows().len()].iter().any(|r| r.iter().any(|&x| x != 0.0))
     }
 
     /// A row of the soloist's `table` by name.
@@ -344,9 +423,10 @@ impl Taste {
             row(&mut s, f.slug(), w);
         }
         let solo_head = format!("# {:<10}{}\n", "", SOLO_FEATURE_NAMES.map(|f| format!("{f:>11}")).join(""));
+        let section_head = format!("# {:<10}{}\n", "", SECTION_FEATURE_NAMES.map(|f| format!("{f:>11}")).join(""));
         for table in Table::ALL {
             s.push_str(&format!("\n[{}]\n", table.slug()));
-            s.push_str(&solo_head);
+            s.push_str(if table.is_section() { &section_head } else { &solo_head });
             for (i, name) in table.rows().iter().enumerate() {
                 row(&mut s, name, &self.solo[table.at() + i]);
             }
@@ -608,5 +688,44 @@ mod soloing {
         let share = |m: &[Mode]| m.iter().filter(|&&x| x == Mode::Scalar).count() as f32 / m.len().max(1) as f32;
         assert!(!plain.is_empty() && share(&leaned) > share(&plain) + 0.2, "{} -> {}", share(&plain), share(&leaned));
         assert!(arcs.iter().all(|&a| a == super::super::soloist::Arc::Flat), "{arcs:?}");
+    }
+
+    /// The big band's sections (upper role, low role) through head and blowing passes.
+    fn sections(taste: Taste) -> Vec<(Option<super::super::horns::UpperRole>, Option<super::super::horns::LowRole>)> {
+        let file = library::load("tiger_rag").unwrap();
+        let mut e = Engine::with_config(&file, 16_000, EngineConfig { seed: 5, taste, horns: super::super::horns::Horns::BIG_BAND, ..EngineConfig::default() }).unwrap();
+        e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
+        for pass in 0..8 {
+            let chorus = if pass % 2 == 0 { Chorus::Head } else { Chorus::Blowing };
+            e.post(Input::PlanPass(PassPlan { pass, chorus: Some(Call { chorus, key_up: false }), feel: Some(Feel::Swing) }));
+        }
+        let (mut out, mut seen) = (Vec::new(), std::collections::HashSet::new());
+        let mut buf = [Frame::ZERO; 512];
+        for _ in 0..9000 {
+            e.fill(&mut buf);
+            for b in &e.state().upcoming {
+                if seen.insert(b.slot.index) && b.slot.song_bar % super::super::horns::SECTION == 0 {
+                    out.push((b.upper, b.low));
+                }
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_taste_leans_the_big_band() {
+        use super::super::horns::{LowRole, UpperRole};
+        let plain = sections(Taste::NEUTRAL);
+        assert_eq!(sections(Taste::NEUTRAL), plain, "a neutral taste plays the same chart");
+        let mut t = Taste::NEUTRAL;
+        t.solo_row_mut(Table::Upper, "answers").unwrap()[0] = 8.0;
+        t.solo_row_mut(Table::Low, "pedal").unwrap()[0] = 8.0;
+        let leaned = sections(t);
+        let share = |v: &[(Option<UpperRole>, Option<LowRole>)], f: &dyn Fn(&(Option<UpperRole>, Option<LowRole>)) -> bool| v.iter().filter(|x| f(x)).count() as f32 / v.len().max(1) as f32;
+        let answers = |x: &(Option<UpperRole>, Option<LowRole>)| x.0 == Some(UpperRole::Answers);
+        let pedal = |x: &(Option<UpperRole>, Option<LowRole>)| x.1 == Some(LowRole::Pedal);
+        assert!(plain.len() > 20, "{}", plain.len());
+        assert!(share(&leaned, &answers) > share(&plain, &answers) + 0.2, "answers {} -> {}", share(&plain, &answers), share(&leaned, &answers));
+        assert!(share(&leaned, &pedal) > share(&plain, &pedal) + 0.3, "pedal {} -> {}", share(&plain, &pedal), share(&leaned, &pedal));
     }
 }

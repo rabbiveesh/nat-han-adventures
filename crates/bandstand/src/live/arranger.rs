@@ -24,6 +24,7 @@ use super::chorus::Chorus;
 use super::horns::{Horn, Horns, SECTION, changes, close, drop2, four, unit};
 use super::musician::Ctx;
 use super::soloist::Soloist;
+use super::taste::{Context, Table, lean};
 use super::voice::{NoteEvent, Sound};
 use crate::chart::Chord;
 use crate::mml::EventKind;
@@ -170,6 +171,40 @@ fn pick<T: Copy>(x: f64, opts: &[(T, f64)]) -> T {
     opts[opts.len() - 1].0
 }
 
+/// A section's moment, for the critic ([`super::taste`]).
+fn section(ctx: &Ctx, s: usize) -> Context {
+    Context::section(ctx.shape.bpm, s, sections(ctx), ctx.band.chorus, ctx.band.chorus.lead_solos(ctx.freedom[0]), ctx.bar.pass)
+}
+
+/// An upper role's options in section `s`, leaned by the critic.
+fn upper(ctx: &Ctx, s: usize, opts: &[(UpperRole, f64)]) -> Vec<(UpperRole, f64)> {
+    let row = |r: UpperRole| match r {
+        UpperRole::Pads => 1,
+        UpperRole::Answers => 2,
+        UpperRole::Riff => 3,
+        UpperRole::Punches => 4,
+        _ => 0,
+    };
+    ctx.taste.lean_opts(Table::Upper, opts, row, &section(ctx, s))
+}
+
+/// A head's take's row in [`Table::Take`].
+fn take_row(t: Take) -> usize {
+    match t {
+        Take::Line(Melody::Trumpet) => 2,
+        Take::Line(Melody::Tenor) => 3,
+        Take::Line(Melody::Alto) => 4,
+        Take::Line(_) => 0,
+        Take::Soli => 1,
+        Take::Tutti => 5,
+    }
+}
+
+/// The chance `p` of everyone on the tune in section `s`, leaned by the critic.
+fn tutti_odds(ctx: &Ctx, s: usize, p: f64) -> f64 {
+    lean(p, ctx.taste.solo_score(Table::Take, 5, &section(ctx, s)))
+}
+
 /// Sections in the tune.
 fn sections(ctx: &Ctx) -> usize {
     ctx.shape.bars.div_ceil(SECTION).max(1)
@@ -243,13 +278,13 @@ fn chorus_plan(ctx: &Ctx, horns: Horns, s: usize) -> Section {
             // A blowing chorus builds: alone, then pads or answers, then the riff.
             _ => {
                 if s == 0 && n > 1 {
-                    pick(c(s, 31), &[(Tacet, 0.5), (Pads, 0.25), (Answers, 0.25)])
+                    pick(c(s, 31), &upper(ctx, s, &[(Tacet, 0.5), (Pads, 0.25), (Answers, 0.25)]))
                 } else if last {
-                    pick(c(s, 32), &[(Riff, 0.6), (Answers, 0.35), (Tacet, 0.05)])
+                    pick(c(s, 32), &upper(ctx, s, &[(Riff, 0.6), (Answers, 0.35), (Tacet, 0.05)]))
                 } else if s == 1 {
-                    pick(c(s, 33), &[(Tacet, 0.15), (Pads, 0.3), (Answers, 0.35), (Riff, 0.2)])
+                    pick(c(s, 33), &upper(ctx, s, &[(Tacet, 0.15), (Pads, 0.3), (Answers, 0.35), (Riff, 0.2)]))
                 } else {
-                    pick(c(s, 34), &[(Tacet, 0.1), (Riff, 0.45), (Answers, 0.45)])
+                    pick(c(s, 34), &upper(ctx, s, &[(Tacet, 0.1), (Riff, 0.45), (Answers, 0.45)]))
                 }
             }
         };
@@ -258,10 +293,10 @@ fn chorus_plan(ctx: &Ctx, horns: Horns, s: usize) -> Section {
     let line = |role| Section { role, melody: Melody::Lead };
     match chorus {
         Chorus::Soli => line(Soli),
-        Chorus::Shout => line(if last || c(s, 35) < 0.5 { Tutti } else { Riff }),
+        Chorus::Shout => line(if last || c(s, 35) < tutti_odds(ctx, s, 0.5) { Tutti } else { Riff }),
         Chorus::StopTime => line(Punches),
         Chorus::Riffs => line(Riff),
-        Chorus::Breaks => line(pick(c(s, 36), &[(Tacet, 0.3), (Pads, 0.2), (Punches, 0.3), (Answers, 0.2)])),
+        Chorus::Breaks => line(pick(c(s, 36), &upper(ctx, s, &[(Tacet, 0.3), (Pads, 0.2), (Punches, 0.3), (Answers, 0.2)]))),
         Chorus::Strolling => line(Tacet),
         _ => head(ctx, horns, s, n),
     }
@@ -280,7 +315,7 @@ fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
             Take::Line(Melody::Lead)
         } else if k + 1 >= n {
             let tutti = if ctx.bar.pass == 0 { 0.35 } else { 0.5 };
-            if tp && (al || te) && !two && c(k, 40) < tutti { Take::Tutti } else { Take::Line(Melody::Lead) }
+            if tp && (al || te) && !two && c(k, 40) < tutti_odds(ctx, k, tutti) { Take::Tutti } else { Take::Line(Melody::Lead) }
         } else {
             let opts: Vec<(Take, f64)> = [
                 (Take::Line(Melody::Lead), 3.0, true),
@@ -293,7 +328,7 @@ fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
             .filter(|&(t, _, ok)| ok && t != prev)
             .map(|(t, w, _)| (t, w))
             .collect();
-            pick(c(k, 41), &opts)
+            pick(c(k, 41), &ctx.taste.lean_opts(Table::Take, &opts, take_row, &section(ctx, k)))
         };
         prev = take;
         out = match take {
@@ -302,9 +337,9 @@ fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
             Take::Line(melody) => {
                 // Less is more: the tune often alone with the rhythm section.
                 let role = if two || (k == 0 && ctx.bar.pass == 0) {
-                    pick(c(k, 42), &[(Tacet, 0.4), (Pads, 0.3), (Answers, 0.3)])
+                    pick(c(k, 42), &upper(ctx, k, &[(Tacet, 0.4), (Pads, 0.3), (Answers, 0.3)]))
                 } else {
-                    pick(c(k, 43), &[(Tacet, 0.15), (Pads, 0.25), (Answers, 0.4), (Riff, 0.2)])
+                    pick(c(k, 43), &upper(ctx, k, &[(Tacet, 0.15), (Pads, 0.25), (Answers, 0.4), (Riff, 0.2)]))
                 };
                 Section { role, melody }
             }
@@ -324,7 +359,7 @@ pub fn figure(ctx: &Ctx) -> Figure {
     } else {
         0.5
     };
-    if x < theme_odds {
+    if x < lean(theme_odds, ctx.taste.solo_score(Table::Riff, 0, &section(ctx, 0))) {
         // The intro takes the tune's opening; a chorus any of its first phrases' motifs.
         let k = if ctx.band.intro.is_some() { 0 } else { (unit(ctx.seed, ctx.bar.pass, 0, 52) * 4.0) as usize };
         let t = theme_at(ctx, k);
@@ -836,7 +871,14 @@ impl<'a, 'b> Writer<'a, 'b> {
             // Call and response: the band answers with what it just heard, the line's last
             // figure in its rhythm (its contour, or turned upside down); else one of the
             // tune's own motifs; else a stock answer.
-            let coin = unit(ctx.seed, ctx.bar.index, i as u64, 63);
+            let mut coin = unit(ctx.seed, ctx.bar.index, i as u64, 63);
+            if ctx.taste.has(Table::Answer) {
+                // The critic picks the source (inverted, as heard, the motif, stock) and the
+                // coin lands in its slice of the odds below.
+                const MID: [f64; 4] = [0.15, 0.5, 0.775, 0.925];
+                let opts = ctx.taste.lean_opts(Table::Answer, &[(0, 0.3), (1, 0.4), (2, 0.15), (3, 0.15)], |k| k, &section(ctx, ctx.bar.song_bar / SECTION));
+                coin = MID[pick(coin, &opts)];
+            }
             let fig = echo(heard, g0, room, coin < 0.3)
                 .filter(|_| coin < 0.7)
                 .or_else(|| (coin < 0.85).then(|| motif(&theme_at(ctx, ctx.bar.index as usize % 4), room)).flatten())
@@ -1193,8 +1235,9 @@ enum Device {
 
 impl Device {
     fn of(ctx: &Ctx) -> Device {
-        let x = unit(ctx.seed, ctx.bar.pass, (ctx.bar.song_bar / SECTION) as u64, 80);
-        pick(x, &[(Device::Plain, 0.2), (Device::Bloom, 0.25), (Device::Pyramid, 0.2), (Device::Cliche, 0.2), (Device::Suspension, 0.15)])
+        let s = ctx.bar.song_bar / SECTION;
+        let x = unit(ctx.seed, ctx.bar.pass, s as u64, 80);
+        pick(x, &ctx.taste.lean_opts(Table::Pad, &[(Device::Plain, 0.2), (Device::Bloom, 0.25), (Device::Pyramid, 0.2), (Device::Cliche, 0.2), (Device::Suspension, 0.15)], |d| d as usize, &section(ctx, s)))
     }
 }
 
@@ -1218,9 +1261,11 @@ struct Colour {
 impl Colour {
     fn of(ctx: &Ctx) -> Colour {
         let c = |what: u64| unit(ctx.seed, ctx.bar.pass, 0, what);
-        let device = pick(c(90), &[(Device::Plain, 0.3), (Device::Bloom, 0.2), (Device::Pyramid, 0.15), (Device::Cliche, 0.2), (Device::Suspension, 0.15)]);
-        let ending = pick(c(92), &[(Ending::Plain, 0.4), (Ending::Wedge, 0.3), (Ending::Bloom, 0.3)]);
-        Colour { device, unison: c(91) < 0.5, ending }
+        // Rolled once a pass: scored as at its first section.
+        let at = section(ctx, 0);
+        let device = pick(c(90), &ctx.taste.lean_opts(Table::Pad, &[(Device::Plain, 0.3), (Device::Bloom, 0.2), (Device::Pyramid, 0.15), (Device::Cliche, 0.2), (Device::Suspension, 0.15)], |d| d as usize, &at));
+        let ending = pick(c(92), &ctx.taste.lean_opts(Table::Ending, &[(Ending::Plain, 0.4), (Ending::Wedge, 0.3), (Ending::Bloom, 0.3)], |e| e as usize, &at));
+        Colour { device, unison: c(91) < lean(0.5, ctx.taste.solo_score(Table::Riff, 1, &at)), ending }
     }
 }
 

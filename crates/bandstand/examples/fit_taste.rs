@@ -8,7 +8,8 @@
 //! `winner`: `a`, `b` or `tie`; `kind` `solo`: a soloist's table, `before` its name (`arc`,
 //! `mode`, `device`, `target`, `idea`), `a` and `b` rows of it, or `-` for the dice as written,
 //! each take a chorus played with its row leaned hard, and the preference read as one about
-//! the rows in the tune's tempo). A Bradley-Terry model: the chance A wins is
+//! the rows in the tune's tempo; `kind` `band`: the same for a big band table, `upper`, `take`,
+//! `low`, `pad`, `ending`, `riff`, `answer`, with `chorus` the pass's chorus). A Bradley-Terry model: the chance A wins is
 //! `sigmoid(score(A) - score(B))`, the scores linear in the features of the moment
 //! (`taste::Context`), with an L2 pull to neutral so a few taps can't swing the band far.
 //! Prints how well it predicts held-out taps (5-fold) and the fitted table; `--write` saves it
@@ -103,12 +104,19 @@ fn main() {
                 let (fa, fb) = (Taste::feel_features(a, &ctx), Taste::feel_features(b, &ctx));
                 std::array::from_fn(|i| fa[i] - fb[i])
             }
-            "solo" => {
+            "solo" | "band" => {
                 let Some(table) = Table::parse(f[2]) else {
                     skipped += 1;
                     continue;
                 };
-                let ctx = Context::solo(&Moment { bpm: tune.bpm, chorus: 1, ..Moment::default() });
+                let ctx = if table.is_section() {
+                    // A big band take: a pass of `chorus` (f[3]) with the row leaned all
+                    // through it, read as a middle section's taste.
+                    let chorus = Chorus::parse(f[3]).unwrap_or(Chorus::Head);
+                    Context::section(tune.bpm, 1, 4, chorus, chorus.lead_solos(0.7), 1)
+                } else {
+                    Context::solo(&Moment { bpm: tune.bpm, chorus: 1, ..Moment::default() })
+                };
                 let row = |name: &str| -> Option<[f32; WEIGHTS]> {
                     if name == "-" {
                         return Some([0.0; WEIGHTS]);

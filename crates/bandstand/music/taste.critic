@@ -13,6 +13,13 @@
 # (or half-diminished); the solo hot / cool (its chorus shape's heat above 0.66 / below 0.33);
 # a dominant resolving to minor. [idea] rows lean picking up the comp, a lick, carrying a cell,
 # each against a new idea. Targets: +9 is #9, +11 is #11.
+#
+# The big band's tables ([upper] [take] [low] [pad] [ending] [riff] [answer], arranger.rs and
+# horns.rs) score each 8-bar section: bias; slow / fast; the chorus's first / last section; a
+# head (or two-feel); behind a solo; a climax (shout, soli, riffs); the first pass / a late one.
+# Choices made once a pass (the riff, the pass's pad colour, endings) score as its first section.
+# [take]'s tutti row and [riff]'s rows lean chances (everyone on the tune; the tune's own motif
+# for the riff, fast notes in unison).
 
 [chorus]
 [feel]
