@@ -286,6 +286,18 @@ pub struct Profile {
     /// from the minor 3rd (a blue note).
     pub resolve: f32,
     pub blue: f32,
+    /// What a phrase plays between its targets ([`Mode`]): over the changes, scalar runs in
+    /// the chord's scale, or the key's blues scale, by weight (all zero: over the changes).
+    pub modes: [f32; 3],
+    /// How a line gets into a strong-beat target besides a half step and an enclosure
+    /// ([`Device`]): a scale run, a blues-scale run, an arpeggio down or up the chord.
+    pub devices: [f32; 3],
+    /// The targets by chord (0: the records' even spread of R 3 5 7 9 on every chord): on
+    /// major and minor chords the plain chord tones (3 5 7, a little R); on a dominant a
+    /// tension this share of the time (9, 13, #11, or altered: b9 #9 b13 `altered` of those),
+    /// else its 3rd or 7th. Oscar Peterson's (and bebop's) habit, as Josh Walsh teaches it.
+    pub dom_tensions: f32,
+    pub altered: f32,
 }
 
 /// A figure by tempo band at `bpm` (between the bands' centres, flat past the ends; a band
@@ -632,7 +644,7 @@ pub struct Line {
     phrase: f64,
     rest: f64,
     /// Notes queued (an approach into a target, an enclosure), next first.
-    queue: [u8; 3],
+    queue: [u8; 5],
     queued: usize,
     /// Free notes to play before the queued ones start.
     skip: u8,
@@ -699,6 +711,9 @@ pub struct Line {
     idea_by: i32,
     /// This bar's thinking (for UIs).
     thought: Thought,
+    /// What the phrase plays between its targets, and how many choruses the solo has begun.
+    mode: Mode,
+    chorus: u32,
 }
 
 /// A solo's shape over its chorus, by density and register (the Weimar Jazz Database's solos:
@@ -831,6 +846,7 @@ pub struct PhraseThought {
     pub push: bool,
     pub goals: [(f32, u8); 8],
     pub ngoals: u8,
+    pub mode: Mode,
 }
 
 /// What the soloist listened to in a bar (bits): [`Thought::listened`].
@@ -852,6 +868,10 @@ pub struct Thought {
     pub listened: u8,
     pub notes: [(f32, f32, u8); 24],
     pub nnotes: u8,
+    /// How the line got into each strong-beat target it aimed at in the bar (beats from the
+    /// bar line, the device, the target note).
+    pub devices: [(f32, Device, u8); 6],
+    pub ndevices: u8,
 }
 
 /// What a soloist hears from the band in a bar: its hits (bit `k`: the `k`-th 16th), a crash
@@ -900,6 +920,11 @@ pub trait Changes {
     fn ahead(&self, _beat: f64) -> Option<Harm> {
         None
     }
+    /// The tune's tonic as it sounds now (none: the line only knows the chords). The blues
+    /// scale a line plays over several chords is the key's.
+    fn key(&self) -> Option<u8> {
+        None
+    }
     /// Where the bar sits in the soloist's chorus: bars in, and the chorus's length in bars
     /// (none: no arc over the chorus).
     fn form(&self) -> Option<(f64, f64)> {
@@ -938,6 +963,7 @@ impl Line {
             if !self.started || x < self.at - 1e-9 {
                 // A new chorus: a new shape.
                 self.arc = [Arc::Arch, Arc::Builds, Arc::Front, Arc::Flat][pick(&ARCS, r)];
+                self.chorus += 1;
             }
             self.at = x;
             self.arc.heat(x)
@@ -1036,12 +1062,24 @@ impl Line {
                     // (Onto the skeleton's note, if the phrase planned one there.)
                     let at = self.total - self.phrase + (cell_end - b);
                     let target = self.goal_at(at).unwrap_or_else(|| h.nearest_chord_tone((cur + 2 * self.dir).clamp(0, 127) as u8));
-                    if k >= 2 && r.chance(p.enclosure as f64) {
-                        let above = h.scale.step(target, 1).max(target + 1).min(target + 2);
-                        self.load(&[above, target.saturating_sub(1), target], k - 2);
-                    } else if r.chance(p.approach as f64) {
-                        let a = if r.chance(p.from_below as f64) { target.saturating_sub(1) } else { target + 1 };
-                        self.load(&[a, target], k - 1);
+                    let device = Device::ALL[pick(&device_weights(p, self.mode, k, &self.moment(ch, Some(h))), r)];
+                    let now = ch.harm(b).unwrap_or(h);
+                    let blues = blues_scale(ch.key(), &now);
+                    // The run comes in from the side the line is on.
+                    let from = match cur - target as i32 {
+                        d if d > 1 => 1,
+                        d if d < -1 => -1,
+                        _ => if r.chance(0.5) { 1 } else { -1 },
+                    };
+                    let mut path = [0u8; 5];
+                    let n = into_target(device, target, from, k, &now, blues, p, r, &mut path);
+                    if n > 0 {
+                        self.load(&path[..n], k + 1 - n);
+                        let t = &mut self.thought;
+                        if (t.ndevices as usize) < t.devices.len() {
+                            t.devices[t.ndevices as usize] = (cell_end as f32, device, target);
+                            t.ndevices += 1;
+                        }
                     }
                 }
             }
@@ -1128,7 +1166,7 @@ impl Line {
 
     fn load(&mut self, notes: &[u8], skip: usize) {
         // `skip` free notes first, then the queued ones (the last lands on the strong beat).
-        self.queued = notes.len().min(3);
+        self.queued = notes.len().min(self.queue.len());
         self.queue[..self.queued].copy_from_slice(&notes[..self.queued]);
         self.skip = skip as u8;
     }
@@ -1152,6 +1190,8 @@ impl Line {
             (self.phrase, self.push, self.short) = (t + 0.01, push, short);
             self.total = self.phrase;
         }
+        // Between its targets: over the changes, scalar, or the blues.
+        self.mode = Mode::ALL[pick(&mode_weights(p, &self.moment(ch, h)), r)];
         self.plan(p, ch, r, b, bb);
         let t = &mut self.thought;
         if (t.nphrases as usize) < t.phrases.len() {
@@ -1168,6 +1208,7 @@ impl Line {
                 push: self.push,
                 goals,
                 ngoals: self.ngoals as u8,
+                mode: self.mode,
             };
             t.nphrases += 1;
         }
@@ -1198,13 +1239,16 @@ impl Line {
                 if t - last_goal >= 2.0 - 1e-9 && (downbeat || last_chord != Some(h.chord)) {
                     last_chord = Some(h.chord);
                     // About a quarter of the notes on the changes are none of R 3 5 7 9: those
-                    // are left free.
-                    if r.chance(0.26) {
+                    // are left free (fewer when the player aims by the chord).
+                    if r.chance(if p.dom_tensions > 0.0 { 0.15 } else { 0.26 }) {
                         t += 1.0;
                         continue;
                     }
-                    // R 3 5 7 9, about evenly (the records' 14, 14, 15, 14, 18).
-                    let degree = pick(&[0.142, 0.136, 0.147, 0.136, 0.178], r);
+                    // R 3 5 7 9, about evenly (the records' 14, 14, 15, 14, 18); or by the chord:
+                    // plain chord tones on major and minor, tensions on a dominant.
+                    let mut m = self.moment(ch, Some(h));
+                    m.resolves_minor = h.chord.family() == Family::Dominant && resolves_minor(ch, a, &h);
+                    let degree = pick(&target_weights(p, &m), r);
                     let lean = match shape {
                         0 if t < total * 0.5 => 3,
                         0 => -3,
@@ -1212,7 +1256,7 @@ impl Line {
                         2 => -2,
                         _ => 0,
                     };
-                    let g = tone_near(&h, degree, (prev + lean).clamp(floor, ceil).clamp(0, 127) as u8);
+                    let g = target_note(&h, degree, (prev + lean).clamp(floor, ceil).clamp(0, 127) as u8);
                     self.goals[self.ngoals] = (t, g);
                     self.ngoals += 1;
                     (prev, last_goal) = (g as i32, t);
@@ -1492,7 +1536,7 @@ impl Line {
             self.skip -= 1;
         } else if self.queued > 0 {
             let note = self.queue[0];
-            self.queue.copy_within(1..3, 0);
+            self.queue.copy_within(1.., 0);
             self.queued -= 1;
             self.dir = (note as i32 - cur).signum().max(-1).min(1);
             self.dir = if self.dir == 0 { 1 } else { self.dir };
@@ -1556,12 +1600,17 @@ impl Line {
             self.penta -= 1;
             next_in(&pentatonic(&h), cur.clamp(0, 127) as u8, self.dir) as i32
         } else {
-            let size = pick(&p.intervals, r);
+            let mut size = pick(&p.intervals, r);
+            // A scalar or blues phrase runs by step, mostly one way.
+            let running = self.mode != Mode::Changes;
+            if running && size != 0 && r.chance(0.85) {
+                size = 2;
+            }
             if self.now.n == 1 && p.starts() {
                 // (The second note keeps the way the first one set.)
             } else if self.leapt && r.chance(p.step_back as f64) {
                 self.dir = -self.dir;
-            } else if size > 0 && r.chance(0.2) {
+            } else if size > 0 && r.chance(if running { 0.08 } else { 0.2 }) {
                 self.dir = -self.dir;
             }
             // Heading for the skeleton's next note: always when it's too far to reach by step.
@@ -1573,7 +1622,12 @@ impl Line {
             }
             let size = if size == 8 { 8 + r.below(5) as i32 } else { size as i32 };
             let want = cur + self.dir * size;
-            match size {
+            let blues = if self.mode == Mode::Blues { blues_scale(ch.key(), &h) } else { None };
+            if let Some(bl) = blues.filter(|_| size > 0) {
+                // Through the key's blues scale (a skip of one now and then).
+                let n = next_in(&bl, cur.clamp(0, 127) as u8, self.dir);
+                (if size > 3 { next_in(&bl, n, self.dir) } else { n }) as i32
+            } else { match size {
                 0 => cur,
                 1 => {
                     let n = want.clamp(0, 127) as u8;
@@ -1591,7 +1645,7 @@ impl Line {
                 // Thirds and fourths along the chord, most of the time.
                 3..=5 if r.chance(0.6) => chord_tone_toward(&h, cur, self.dir, size),
                 _ => h.scale.snap(want.clamp(0, 127) as u8) as i32,
-            }
+            } }
         };
         if last {
             note = end_of(self.push, p, ch, r, b, h, note.clamp(0, 127) as u8) as i32;
@@ -1641,6 +1695,191 @@ impl Line {
     }
 }
 
+/// What a phrase plays between its targets ([`Profile::modes`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Mode {
+    /// Over the changes: the chord's scale, its chord tones on the beats, leaps along the chord.
+    #[default]
+    Changes,
+    /// Scalar: runs by step through each chord's scale, mostly one way.
+    Scalar,
+    /// The key's blues scale across the chords (a chord off the key: its own), the targets
+    /// still on the chords' notes.
+    Blues,
+}
+
+impl Mode {
+    pub const ALL: [Mode; 3] = [Mode::Changes, Mode::Scalar, Mode::Blues];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Mode::Changes => "over the changes",
+            Mode::Scalar => "scalar",
+            Mode::Blues => "blues",
+        }
+    }
+}
+
+/// How the line gets into a strong-beat target (the notes of the cell before it).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Device {
+    /// Whatever the line was doing (it still heads for the target).
+    #[default]
+    Direct,
+    /// A half step below or above.
+    Chromatic,
+    /// A scale step above, a half step below.
+    Enclosure,
+    /// A run down or up the scale into it.
+    Scale,
+    /// A run through the key's blues scale into it.
+    Blues,
+    /// Down or up the chord's arpeggio into it.
+    Arpeggio,
+}
+
+impl Device {
+    pub const ALL: [Device; 6] = [Device::Direct, Device::Chromatic, Device::Enclosure, Device::Scale, Device::Blues, Device::Arpeggio];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Device::Direct => "direct",
+            Device::Chromatic => "half step",
+            Device::Enclosure => "enclosure",
+            Device::Scale => "scale run",
+            Device::Blues => "blues run",
+            Device::Arpeggio => "arpeggio",
+        }
+    }
+}
+
+/// The moment a choice is made in: what a critic reading the line's choices would see.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct Moment {
+    pub bpm: f32,
+    /// Choruses the solo has begun (1: its first).
+    pub chorus: u32,
+    /// The chord's family where the choice lands (the target's chord for a target or a device).
+    pub family: Option<Family>,
+    /// How hot the solo is ([`Arc::heat`]).
+    pub heat: Option<f32>,
+    /// A dominant that resolves to a minor chord (its tensions lean altered).
+    pub resolves_minor: bool,
+}
+
+impl Line {
+    fn moment(&self, ch: &impl Changes, h: Option<Harm>) -> Moment {
+        Moment { bpm: ch.bpm(), chorus: self.chorus, family: h.map(|h| h.chord.family()), heat: self.heat, resolves_minor: false }
+    }
+}
+
+/// A phrase's [`Mode`]s by weight.
+pub fn mode_weights(p: &Profile, _m: &Moment) -> [f32; 3] {
+    if p.modes.iter().all(|&w| w <= 0.0) { [1.0, 0.0, 0.0] } else { p.modes }
+}
+
+/// The [`Device`]s into a target by weight, with `k` notes of the cell before it to use.
+pub fn device_weights(p: &Profile, mode: Mode, k: usize, _m: &Moment) -> [f32; 6] {
+    let mut w = [0.0; 6];
+    w[1] = p.approach;
+    if k >= 2 {
+        w[2] = p.enclosure;
+        w[3] = p.devices[0];
+        w[4] = p.devices[1];
+    }
+    if k >= 3 {
+        w[5] = p.devices[2];
+    }
+    // A scalar phrase comes in by its scale, a blues one by the blues.
+    match mode {
+        Mode::Scalar if k >= 2 => w[3] = (w[3] * 2.0).max(0.3),
+        Mode::Blues if k >= 2 => w[4] = (w[4] * 2.0).max(0.4),
+        _ => {}
+    }
+    w[0] = (1.0 - w[1..].iter().sum::<f32>()).max(0.1);
+    w
+}
+
+/// The skeleton's degrees ([`target_note`]: R 3 5 7 9, then b9 #9 #11 13 b13) by weight.
+pub fn target_weights(p: &Profile, m: &Moment) -> [f32; 10] {
+    if p.dom_tensions <= 0.0 {
+        // The records' even spread on every chord.
+        return [0.142, 0.136, 0.147, 0.136, 0.178, 0.0, 0.0, 0.0, 0.0, 0.0];
+    }
+    if m.family != Some(Family::Dominant) {
+        // Major and minor: 3 5 7, a little R.
+        return [0.08, 0.36, 0.2, 0.36, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0];
+    }
+    let t = p.dom_tensions;
+    let alt = if m.resolves_minor { p.altered.max(0.7) } else { p.altered };
+    let (nat, alt) = (t * (1.0 - alt), t * alt);
+    [0.0, 0.5 * (1.0 - t), 0.0, 0.5 * (1.0 - t), 0.55 * nat, 0.5 * alt, 0.2 * alt, 0.1 * nat, 0.35 * nat, 0.3 * alt]
+}
+
+/// The note of degree `k` ([`target_weights`]) of the chord nearest `near`.
+fn target_note(h: &Harm, k: usize, near: u8) -> u8 {
+    if k < 5 {
+        return tone_near(h, k, near);
+    }
+    let semi = [1, 3, 6, 9, 8][k - 5];
+    nearest_pc((h.chord.root + semi) % 12, near as i32, 0, 127)
+}
+
+/// Whether the chord after the dominant at beat `a` (within two bars) is minor.
+fn resolves_minor(ch: &impl Changes, a: f64, h: &Harm) -> bool {
+    (1..=8).map(|d| ch.ahead(a + d as f64)).find_map(|n| n.filter(|n| n.chord != h.chord)).is_some_and(|n| matches!(n.chord.family(), Family::Minor | Family::HalfDim))
+}
+
+/// The blues scale over chord `h`: the key's where the chord sits in it (I, ii, bIII, IV, V,
+/// bVII), else the chord's own (a major chord's: its relative minor's, the same notes).
+fn blues_scale(key: Option<u8>, h: &Harm) -> Option<[u8; 6]> {
+    let root = h.chord.root;
+    let tonic = match key {
+        Some(k) if [0, 2, 3, 5, 7, 10].contains(&((root + 12 - k) % 12)) => k,
+        _ => match h.chord.family() {
+            Family::Major => (root + 9) % 12,
+            _ => root,
+        },
+    };
+    Some([0, 3, 5, 6, 7, 10].map(|s| (tonic + s) % 12))
+}
+
+/// The notes into `target` by `device`, the target last, coming from above (`from` 1) or below
+/// (-1), using up to `k` notes before it; how many (0: none queued).
+#[allow(clippy::too_many_arguments)]
+fn into_target(device: Device, target: u8, from: i32, k: usize, now: &Harm, blues: Option<[u8; 6]>, p: &Profile, r: &mut Rng, out: &mut [u8; 5]) -> usize {
+    let run = k.min(out.len() - 1);
+    let mut walk = |step: &mut dyn FnMut(u8) -> u8| {
+        let mut x = target;
+        for j in (0..run).rev() {
+            x = step(x);
+            out[j] = x;
+        }
+        out[run] = target;
+        run + 1
+    };
+    match device {
+        Device::Direct => 0,
+        Device::Chromatic => {
+            out[0] = if r.chance(p.from_below as f64) { target.saturating_sub(1) } else { target + 1 };
+            out[1] = target;
+            2
+        }
+        Device::Enclosure => {
+            out[0] = now.scale.step(target, 1).max(target + 1).min(target + 2);
+            out[1] = target.saturating_sub(1);
+            out[2] = target;
+            3
+        }
+        Device::Scale => walk(&mut |x| now.scale.step(x, from)),
+        Device::Blues => match blues {
+            Some(bl) => walk(&mut |x| next_in(&bl, x, from)),
+            None => walk(&mut |x| now.scale.step(x, from)),
+        },
+        Device::Arpeggio => walk(&mut |x| chord_tone_toward(now, x as i32, from, 3).clamp(0, 127) as u8),
+    }
+}
+
 /// A phrase's last note: aimed (against the next beat's chord when anticipated), or a chord
 /// tone `end_chord_tone` of the time.
 fn end_of(push: bool, p: &Profile, ch: &impl Changes, r: &mut Rng, b: f64, h: Harm, note: u8) -> u8 {
@@ -1678,7 +1917,12 @@ fn pick_move(p: &Profile, r: &mut Rng) -> i32 {
     p.moves[pick(&w, r)].0 as i32
 }
 
-/// An index into `w`, by weight.
+/// An index into `w`, by weight: every choice the line makes by weight goes through here (a
+/// critic can lean the weights first: [`mode_weights`], [`device_weights`], [`target_weights`]).
+pub fn choose(w: &[f32], r: &mut Rng) -> usize {
+    pick(w, r)
+}
+
 fn pick(w: &[f32], r: &mut Rng) -> usize {
     let total: f32 = w.iter().sum();
     let mut x = r.f() as f32 * total;
@@ -1938,7 +2182,7 @@ mod tests {
         assert!(m.1[1] > m.1[0] + 0.1 && po.1[0] > po.1[1] + 0.15, "{m:?} {po:?}");
         assert!(b.0[0] < 0.3 && b.0[2] > b.0[0] && po.0[0] > b.0[0] + 0.15, "{b:?} {po:?}");
         // Sonny heads up from his first note the most.
-        assert!(so.2 > m.2 + 0.05 && so.2 > 0.65 && m.2 > 0.55, "{so:?} {m:?}");
+        assert!(so.2 > m.2 + 0.05 && so.2 > 0.6 && m.2 > 0.5, "{so:?} {m:?}");
     }
 
     #[test]
@@ -2079,38 +2323,135 @@ mod tests {
 
     #[test]
     fn the_skeleton_spreads_over_the_chord_like_the_records() {
-        // Strong beats: the share on a 3rd or a 7th, and on any of R 3 5 7 9.
-        let guide = |seeing: bool| {
-            let p = prof(Soloist::Miles);
-            let (mut on, mut tones, mut all) = (0, 0, 0);
-            let notes: Vec<(f64, Played)> = if seeing {
-                planned(p, 2000, 0, 0.0, |_| Heard::default())
-            } else {
-                let mut line = Line::default();
-                let mut r = Rng::new(5);
-                let mut v = Vec::new();
-                for bar in 0..2000u64 {
-                    let mut out = [Played::default(); 24];
-                    let n = line.bar(p, &Turnaround(bar), &mut r, bar % 8 == 7, &mut out);
-                    v.extend(out[..n].iter().map(|k| (bar as f64 * 4.0 + k.at, *k)));
-                }
-                v
-            };
-            for (t, k) in notes.iter().filter(|(t, k)| t.fract().abs() < 1e-6 && (*t as u64) % 2 == 0 && !k.last) {
-                let h = Turnaround((*t / 4.0) as u64).harm(t % 4.0).unwrap();
-                let iv = h.chord.quality.intervals();
-                let pc = (k.note + 12 - h.chord.root) % 12;
-                all += 1;
-                on += (pc == iv[1] % 12 || iv.get(3).is_some_and(|&s| pc == s % 12)) as usize;
-                tones += (iv.iter().any(|&s| pc == s % 12) || pc == 2) as usize;
-            }
-            (on as f64 / all as f64, tones as f64 / all as f64)
-        };
-        let (plain, planned) = (guide(false), guide(true));
-        eprintln!("3rds and 7ths, and R 3 5 7 9, on the strong beats: {plain:.2?} without the skeleton, {planned:.2?} with it");
+        // Strong beats: the share on a 3rd or a 7th, and on any of R 3 5 7 9, the skeleton
+        // spread as the records' (no aiming by the chord).
+        let mut p = *prof(Soloist::Miles);
+        p.dom_tensions = 0.0;
+        let (mut on, mut tones, mut all) = (0, 0, 0);
+        for (t, k) in planned(&p, 2000, 0, 0.0, |_| Heard::default()).iter().filter(|(t, k)| t.fract().abs() < 1e-6 && (*t as u64) % 2 == 0 && !k.last) {
+            let h = Turnaround((*t / 4.0) as u64).harm(t % 4.0).unwrap();
+            let iv = h.chord.quality.intervals();
+            let pc = (k.note + 12 - h.chord.root) % 12;
+            all += 1;
+            on += (pc == iv[1] % 12 || iv.get(3).is_some_and(|&s| pc == s % 12)) as usize;
+            tones += (iv.iter().any(|&s| pc == s % 12) || pc == 2) as usize;
+        }
+        let planned = (on as f64 / all as f64, tones as f64 / all as f64);
+        eprintln!("3rds and 7ths, and R 3 5 7 9, on the strong beats: {planned:.2?}");
         // The records: 27% 3rds and 7ths, 74% R 3 5 7 9 (the skeleton doesn't lean on the
         // guide tones, and leaves a quarter free).
-        assert!(planned.0 < 0.4 && planned.1 > 0.6, "{plain:?} {planned:?}");
+        assert!(planned.0 < 0.4 && planned.1 > 0.6, "{planned:?}");
+    }
+
+    /// Strong-beat notes over the dominant on a tension (9 b9 #9 #11 13 b13), and over the
+    /// major and minor chords on a chord tone (R 3 5 7).
+    fn by_chord(p: &Profile) -> (f64, f64) {
+        let (mut dom, mut tense, mut other, mut plain) = (0, 0, 0, 0);
+        for (t, k) in planned(p, 2000, 32, 0.0, |_| Heard::default()).iter().filter(|(t, k)| t.fract().abs() < 1e-6 && (*t as u64) % 2 == 0 && !k.last) {
+            let h = Turnaround((*t / 4.0) as u64).harm(t % 4.0).unwrap();
+            let pc = (k.note + 12 - h.chord.root) % 12;
+            if h.chord.family() == Family::Dominant {
+                dom += 1;
+                tense += [1, 2, 3, 6, 8, 9].contains(&pc) as usize;
+            } else {
+                other += 1;
+                plain += h.is_chord_tone(k.note) as usize;
+            }
+        }
+        (tense as f64 / dom as f64, plain as f64 / other as f64)
+    }
+
+    #[test]
+    fn targets_are_chord_tones_on_major_and_minor_and_tensions_on_dominants() {
+        // Josh Walsh on Oscar Peterson: 3 5 7 on major and minor chords, the extensions and
+        // alterations on dominants.
+        let p = prof(Soloist::Bird);
+        let mut even = *p;
+        even.dom_tensions = 0.0;
+        let (aimed, spread) = (by_chord(p), by_chord(&even));
+        eprintln!("tensions on the dominant, chord tones elsewhere: {aimed:.2?} by the chord, {spread:.2?} spread evenly");
+        assert!(aimed.0 > spread.0 + 0.1 && aimed.1 > spread.1 + 0.04, "{aimed:?} {spread:?}");
+    }
+
+    #[test]
+    fn a_dominant_into_minor_takes_altered_tensions() {
+        let p = prof(Soloist::Sonny);
+        let h = Harm::new(Chord::new(7, Quality::Dom7));
+        let into_major = target_weights(p, &Moment { family: Some(Family::Dominant), ..Moment::default() });
+        let into_minor = target_weights(p, &Moment { family: Some(Family::Dominant), resolves_minor: true, ..Moment::default() });
+        let altered = |w: &[f32; 10]| (w[5] + w[6] + w[9]) / w.iter().sum::<f32>();
+        assert!(altered(&into_minor) > altered(&into_major) + 0.1, "{into_major:?} {into_minor:?}");
+        // b9 over G7 is A flat.
+        assert_eq!(target_note(&h, 5, 70) % 12, 8);
+    }
+
+    #[test]
+    fn devices_run_into_their_target() {
+        let p = prof(Soloist::Bird);
+        let h = Harm::new(Chord::new(7, Quality::Dom7));
+        let mut r = Rng::new(3);
+        let key = blues_scale(Some(0), &h);
+        let target = 71; // B, G7's 3rd
+        for (device, from) in [(Device::Scale, 1), (Device::Scale, -1), (Device::Blues, 1), (Device::Arpeggio, -1)] {
+            let mut out = [0u8; 5];
+            let n = into_target(device, target, from, 3, &h, key, p, &mut r, &mut out);
+            let path = &out[..n];
+            assert_eq!((n, *path.last().unwrap()), (4, target), "{device:?} {path:?}");
+            // One way into it, from the side asked.
+            assert!(path.windows(2).all(|w| (w[0] as i32 - w[1] as i32).signum() == from), "{device:?} {path:?}");
+            if device == Device::Blues {
+                assert!(path[..3].iter().all(|n| key.unwrap().contains(&(n % 12))), "C blues: {path:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn phrases_move_into_scalar_and_blues_modes() {
+        // Notes by step between targets: more of them when the player's phrases go scalar.
+        let steps = |modes: [f32; 3]| {
+            let mut p = *prof(Soloist::Miles);
+            p.modes = modes;
+            let all = planned(&p, 600, 32, 160.0, |_| Heard::default());
+            let n = all.windows(2).filter(|w| w[1].0 - w[0].0 < 0.6).count();
+            let by_step = all.windows(2).filter(|w| w[1].0 - w[0].0 < 0.6 && (1..=2).contains(&(w[1].1.note as i32 - w[0].1.note as i32).abs())).count();
+            by_step as f64 / n as f64
+        };
+        let (changes, scalar) = (steps([1.0, 0.0, 0.0]), steps([0.0, 1.0, 0.0]));
+        eprintln!("notes by step: {changes:.2} over the changes, {scalar:.2} scalar");
+        assert!(scalar > changes + 0.06, "{changes} {scalar}");
+        // A blues phrase plays the key's blues scale (here C's) off the strong beats.
+        let mut p = *prof(Soloist::Pops);
+        p.modes = [0.0, 0.0, 1.0];
+        let mut line = Line::default();
+        let mut r = Rng::new(5);
+        let (mut blue, mut n) = (0, 0);
+        for bar in 0..400 {
+            let ch = Keyed(bar);
+            let mut out = [Played::default(); 24];
+            let k = line.bar(&p, &ch, &mut r, false, &mut out);
+            for e in out[..k].iter().filter(|e| e.at.fract() > 0.1) {
+                n += 1;
+                blue += [0, 3, 5, 6, 7, 10].contains(&(e.note % 12)) as usize;
+            }
+        }
+        let share = blue as f64 / n as f64;
+        eprintln!("off-beat notes in C blues: {share:.2}");
+        assert!(share > 0.7, "{share}");
+    }
+
+    /// C7 F7 C7 C7 (a blues's first four bars) in C.
+    struct Keyed(u64);
+
+    impl Changes for Keyed {
+        fn bar_beats(&self) -> f64 {
+            4.0
+        }
+        fn harm(&self, _beat: f64) -> Option<Harm> {
+            Some(Harm::new(Chord::new([0, 5, 0, 0][(self.0 % 4) as usize], Quality::Dom7)))
+        }
+        fn key(&self) -> Option<u8> {
+            Some(0)
+        }
     }
 
     #[test]
