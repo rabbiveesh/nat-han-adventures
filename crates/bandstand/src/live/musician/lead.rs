@@ -893,6 +893,10 @@ impl Changes for Ctx<'_> {
         self.harm(beat)
     }
 
+    fn key(&self) -> Option<u8> {
+        Some(self.shape.key)
+    }
+
     fn form(&self) -> Option<(f64, f64)> {
         Some((self.bar.song_bar as f64, self.shape.bars as f64))
     }
