@@ -841,7 +841,7 @@ impl Idea {
 /// short (a light bar, a hit, a fill) or move a rest's end a bar either way (a light or busy
 /// bar, a hit, a crash).
 #[derive(Debug, Clone, Copy, Default, PartialEq)]
-pub struct PhrasePlan {
+pub struct LineAhead {
     pub end: Option<f64>,
     pub push: bool,
     pub next_start: f64,
@@ -1146,14 +1146,14 @@ impl Line {
         n
     }
 
-    /// The phrase in progress and the next one's start, after [`Line::bar`]: [`PhrasePlan`].
-    pub fn phrase_plan(&self, p: &Profile) -> PhrasePlan {
+    /// The phrase in progress and the next one's start, after [`Line::bar`]: [`LineAhead`].
+    pub fn plan_ahead(&self, p: &Profile) -> LineAhead {
         if self.phrase <= 1e-9 {
-            return PhrasePlan { end: None, push: false, next_start: self.rest.max(0.0) };
+            return LineAhead { end: None, push: false, next_start: self.rest.max(0.0) };
         }
         let heat = 1.0 - LIFT_PHRASE * self.lift as f64;
         let rest = ((p.rest.0.clamp(0.5, 10.0) * heat * self.tempo_rest * 2.0).round().max(1.0)) / 2.0;
-        PhrasePlan { end: Some(self.phrase), push: self.push, next_start: self.phrase + rest }
+        LineAhead { end: Some(self.phrase), push: self.push, next_start: self.phrase + rest }
     }
 
     /// This bar's thinking (after [`Line::bar`]).
@@ -2410,7 +2410,7 @@ mod tests {
     }
 
     #[test]
-    fn the_phrase_plan_says_where_the_line_ends_and_comes_back() {
+    fn the_line_ahead_says_where_the_line_ends_and_comes_back() {
         // The plan made after each bar against where the notes went.
         let p = prof(Soloist::Bird);
         let mut line = Line::default();
@@ -2422,7 +2422,7 @@ mod tests {
             let mut out = [Played::default(); 24];
             let n = line.bar(p, &ch, &mut r, false, &mut out);
             sounded.extend(out[..n].iter().map(|k| (bar as f64 * 4.0 + k.at, *k)));
-            plans.push((bar as f64 * 4.0 + 4.0, line.phrase_plan(p)));
+            plans.push((bar as f64 * 4.0 + 4.0, line.plan_ahead(p)));
         }
         let (mut ends, mut ends_ok, mut rests, mut rests_ok, mut by) = (0, 0, 0, 0, 0.0);
         for (at, plan) in &plans {
@@ -2447,6 +2447,73 @@ mod tests {
         eprintln!("ends on plan {e:.2} of {ends}, rests on plan {s:.2} of {rests}, next start off by {:.2} beats", by / ends as f64);
         assert!(ends > 200 && rests > 50, "{ends} {rests}");
         assert!(e > 0.75 && s > 0.75, "ends {e:.2}, rests {s:.2}");
+    }
+
+    /// Each soloist's line over a chart in C (ii-Vs, a dominant into minor, a blues turn), as
+    /// a TSV for `scripts/analysis/wjazzd_devices.py --notes`, which reads it as it reads the
+    /// records: `SOLO_TSV=lines.tsv cargo test -p bandstand --lib dump_lines -- --ignored`.
+    #[test]
+    #[ignore]
+    fn dump_lines() {
+        struct Chart {
+            bar: u64,
+        }
+        const CHART: [(u8, Quality); 16] = [
+            (2, Quality::Minor7), (7, Quality::Dom7), (0, Quality::Maj7), (9, Quality::Dom7),
+            (2, Quality::Minor7), (7, Quality::Dom7), (4, Quality::Minor7), (9, Quality::Dom7),
+            (0, Quality::Dom7), (0, Quality::Dom7), (5, Quality::Dom7), (5, Quality::Dom7),
+            (0, Quality::Dom7), (9, Quality::Dom7), (2, Quality::Minor7), (7, Quality::Dom7),
+        ];
+        fn at(bar: u64, beat: f64) -> Harm {
+            let (root, q) = CHART[((bar * 2 + (beat / 2.0).floor() as u64) % 16) as usize];
+            Harm::new(Chord::new(root, q))
+        }
+        impl Changes for Chart {
+            fn bar_beats(&self) -> f64 {
+                4.0
+            }
+            fn harm(&self, beat: f64) -> Option<Harm> {
+                Some(at(self.bar, beat.min(3.99)))
+            }
+            fn ahead(&self, beat: f64) -> Option<Harm> {
+                let bars = (beat / 4.0).floor() as u64;
+                Some(at(self.bar + bars, beat - bars as f64 * 4.0))
+            }
+            fn form(&self) -> Option<(f64, f64)> {
+                Some(((self.bar % 32) as f64, 32.0))
+            }
+            fn bpm(&self) -> f32 {
+                160.0
+            }
+            fn key(&self) -> Option<u8> {
+                Some(0)
+            }
+        }
+        const NAMES: [&str; 12] = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"];
+        let mut tsv = String::from("# solo\tphrase\tbeat\tpitch\tchord\tkey\n");
+        for (name, s) in [("miles", Soloist::Miles), ("trane", Soloist::Trane), ("bird", Soloist::Bird), ("sonny", Soloist::Sonny), ("wayne", Soloist::Wayne), ("pops", Soloist::Pops)] {
+            let p = prof(s);
+            let mut line = Line::default();
+            let mut r = Rng::new(11);
+            let mut phrase = 0;
+            for bar in 0..3000u64 {
+                let mut out = [Played::default(); 24];
+                let n = line.bar(p, &Chart { bar }, &mut r, false, &mut out);
+                for k in &out[..n] {
+                    let h = at(bar, k.at.min(3.99));
+                    let q = match h.chord.family() {
+                        Family::Major => "j7",
+                        Family::Minor => "-7",
+                        _ => "7",
+                    };
+                    tsv += &format!("{name}\t{phrase}\t{}\t{}\t{}{q}\tC-maj\n", bar as f64 * 4.0 + k.at, k.note, NAMES[h.chord.root as usize]);
+                    if k.last {
+                        phrase += 1;
+                    }
+                }
+            }
+        }
+        std::fs::write(std::env::var("SOLO_TSV").unwrap_or("lines.tsv".into()), tsv).unwrap();
     }
 
     #[test]
