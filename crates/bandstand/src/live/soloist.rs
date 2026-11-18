@@ -833,6 +833,20 @@ impl Idea {
     }
 }
 
+/// Where the line stands after its last bar, in beats from the next bar line, for the band
+/// to play around it (answers in its rests). `end`: the phrase in progress ends there (none:
+/// resting); `push`: its last note is anticipated, an 8th early; `next_start`: the next
+/// phrase comes in there: while resting, the rest as drawn; while playing, the end plus the
+/// player's median rest at this tempo and heat. A forecast: the next bar can still cut a phrase
+/// short (a light bar, a hit, a fill) or move a rest's end a bar either way (a light or busy
+/// bar, a hit, a crash).
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct PhrasePlan {
+    pub end: Option<f64>,
+    pub push: bool,
+    pub next_start: f64,
+}
+
 /// A phrase as the soloist planned it when it started: where (beats from its bar line), how
 /// long, what kind, moved how far, where it aims to end (beats from the bar line, maybe bars
 /// on) and whether anticipated, and its skeleton (beats from the bar line, the note).
@@ -1130,6 +1144,16 @@ impl Line {
             }
         }
         n
+    }
+
+    /// The phrase in progress and the next one's start, after [`Line::bar`]: [`PhrasePlan`].
+    pub fn phrase_plan(&self, p: &Profile) -> PhrasePlan {
+        if self.phrase <= 1e-9 {
+            return PhrasePlan { end: None, push: false, next_start: self.rest.max(0.0) };
+        }
+        let heat = 1.0 - LIFT_PHRASE * self.lift as f64;
+        let rest = ((p.rest.0.clamp(0.5, 10.0) * heat * self.tempo_rest * 2.0).round().max(1.0)) / 2.0;
+        PhrasePlan { end: Some(self.phrase), push: self.push, next_start: self.phrase + rest }
     }
 
     /// This bar's thinking (after [`Line::bar`]).
@@ -1817,7 +1841,7 @@ pub fn target_weights(p: &Profile, m: &Moment) -> [f32; 10] {
 }
 
 /// The note of degree `k` ([`target_weights`]) of the chord nearest `near`.
-fn target_note(h: &Harm, k: usize, near: u8) -> u8 {
+pub(crate) fn target_note(h: &Harm, k: usize, near: u8) -> u8 {
     if k < 5 {
         return tone_near(h, k, near);
     }
@@ -1832,7 +1856,7 @@ fn resolves_minor(ch: &impl Changes, a: f64, h: &Harm) -> bool {
 
 /// The blues scale over chord `h`: the key's where the chord sits in it (I, ii, bIII, IV, V,
 /// bVII), else the chord's own (a major chord's: its relative minor's, the same notes).
-fn blues_scale(key: Option<u8>, h: &Harm) -> Option<[u8; 6]> {
+pub(crate) fn blues_scale(key: Option<u8>, h: &Harm) -> Option<[u8; 6]> {
     let root = h.chord.root;
     let tonic = match key {
         Some(k) if [0, 2, 3, 5, 7, 10].contains(&((root + 12 - k) % 12)) => k,
@@ -1847,7 +1871,7 @@ fn blues_scale(key: Option<u8>, h: &Harm) -> Option<[u8; 6]> {
 /// The notes into `target` by `device`, the target last, coming from above (`from` 1) or below
 /// (-1), using up to `k` notes before it; how many (0: none queued).
 #[allow(clippy::too_many_arguments)]
-fn into_target(device: Device, target: u8, from: i32, k: usize, now: &Harm, blues: Option<[u8; 6]>, p: &Profile, r: &mut Rng, out: &mut [u8; 5]) -> usize {
+pub(crate) fn into_target(device: Device, target: u8, from: i32, k: usize, now: &Harm, blues: Option<[u8; 6]>, p: &Profile, r: &mut Rng, out: &mut [u8; 5]) -> usize {
     let run = k.min(out.len() - 1);
     let mut walk = |step: &mut dyn FnMut(u8) -> u8| {
         let mut x = target;
@@ -2383,6 +2407,46 @@ mod tests {
         assert!(altered(&into_minor) > altered(&into_major) + 0.1, "{into_major:?} {into_minor:?}");
         // b9 over G7 is A flat.
         assert_eq!(target_note(&h, 5, 70) % 12, 8);
+    }
+
+    #[test]
+    fn the_phrase_plan_says_where_the_line_ends_and_comes_back() {
+        // The plan made after each bar against where the notes went.
+        let p = prof(Soloist::Bird);
+        let mut line = Line::default();
+        let mut r = Rng::new(5);
+        let mut sounded: Vec<(f64, Played)> = Vec::new();
+        let mut plans = Vec::new();
+        for bar in 0..800u64 {
+            let ch = Planned { bar, bars: 32, bpm: 160.0, heard: Heard::default() };
+            let mut out = [Played::default(); 24];
+            let n = line.bar(p, &ch, &mut r, false, &mut out);
+            sounded.extend(out[..n].iter().map(|k| (bar as f64 * 4.0 + k.at, *k)));
+            plans.push((bar as f64 * 4.0 + 4.0, line.phrase_plan(p)));
+        }
+        let (mut ends, mut ends_ok, mut rests, mut rests_ok, mut by) = (0, 0, 0, 0, 0.0);
+        for (at, plan) in &plans {
+            let after = || sounded.iter().filter(move |(t, _)| *t >= *at - 1e-6);
+            if let Some(e) = plan.end {
+                // The phrase's last note starts by its planned end (never after it).
+                if let Some((t, _)) = after().find(|(_, k)| k.last) {
+                    ends += 1;
+                    assert!(*t < at + e + 1e-6, "last note at {t}, after the planned end {}", at + e);
+                    ends_ok += ((at + e - t) < 0.6) as usize;
+                    // The next phrase: about the median rest later.
+                    if let Some((s, _)) = after().find(|(s, _)| *s > *t + 1e-6 && sounded.iter().any(|(u, k)| (*u - *t).abs() < 1e-9 && k.last)) {
+                        by += (s - (at + plan.next_start)).abs();
+                    }
+                }
+            } else if let Some((t, _)) = after().next() {
+                rests += 1;
+                rests_ok += ((t - (at + plan.next_start)).abs() < 1e-6) as usize;
+            }
+        }
+        let (e, s) = (ends_ok as f64 / ends as f64, rests_ok as f64 / rests as f64);
+        eprintln!("ends on plan {e:.2} of {ends}, rests on plan {s:.2} of {rests}, next start off by {:.2} beats", by / ends as f64);
+        assert!(ends > 200 && rests > 50, "{ends} {rests}");
+        assert!(e > 0.75 && s > 0.75, "ends {e:.2}, rests {s:.2}");
     }
 
     #[test]
