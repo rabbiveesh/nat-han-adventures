@@ -37,6 +37,10 @@ enclosure = 0.11            ; one above and one below into a strong-beat chord t
 pentatonic = 0.33           ; a run of four through the chord's pentatonic
 anticipation = 0.42         ; a phrase starts on the "and" before the bar line
 falls = 0.02                ; a fall off a phrase's last note
+modes = 0.65 0.30 0.05       ; between targets: over the changes, scalar runs, the key's blues (our picks, scalar by their run shares)
+devices = 0.15 0.04 0.10     ; into a strong-beat target: a scale run, a blues run, an arpeggio (our picks)
+dom_tensions = 0.50        ; a dominant's targets on a tension (9 13 #11, b9 #9 b13), else 3 or 7; 3 5 7 on major/minor
+altered = 0.35             ; altered tensions among those (their altered share of tensions over dom7, reharm.txt)
 
 [dynamics]
 ; Loud in, fading all the way to a soft last note; louder going up.

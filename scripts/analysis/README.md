@@ -85,3 +85,18 @@ output today is byte-identical to the saved report from the time. The rest were 
 - `wjazzd_reharm.py`: how each soloist implies reharmonisation, so the band can reharm to suit them: degree classes over dominants, tritone-sub fits, anticipating the next chord, superimposed ii-Vs, side-slips, major-3rd triad runs, and outside notes over minor and major. Each has a chance baseline. Results in `results/reharm.txt`.
 - `wjazzd_style.py`: style beyond the notes. Covers swing, lay-back and jitter by tempo; register across choruses; phrase edges and held anticipations against the changes; density through an 8-bar section and the turnaround; steps, leaps and runs by tempo; dynamics by register, phrase and chorus; legato and loudness-ghosted off-beats. Results in `results/style.txt`.
 - `wjazzd_more.py`: the remaining habits. Covers blue notes, tensions resolving by step, hemiola and 3-note contour groupings, the soloist against the database's bass notes, long notes' degrees, and phrase length and rest by tempo. Each has a chance baseline. Results in `results/more.txt`.
+
+## Targets, devices and modes
+
+`wjazzd_devices.py`: each soloist's strong-beat notes by chord family (over dominants: plain,
+natural tension, altered), how the line gets into them (enclosure, scale run, blues run,
+arpeggio, half or whole step, leap, after a rest) and each phrase's mode (over the changes,
+scalar, blues). `--notes` reads the engine's own lines the same way; the ignored `dump_lines`
+test in `soloist.rs` writes them, so the `.player` keys `modes`, `devices` and `altered` can
+be set until the engine matches the records.
+
+```bash
+python3 -I scripts/analysis/wjazzd_devices.py <wjazzd.db> > scripts/analysis/results/devices.txt
+SOLO_TSV=/tmp/lines.tsv cargo test -p bandstand --lib dump_lines -- --ignored
+python3 -I scripts/analysis/wjazzd_devices.py --notes /tmp/lines.tsv
+```

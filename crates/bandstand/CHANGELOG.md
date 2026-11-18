@@ -39,6 +39,48 @@ GitHub Release's notes.
   are struck and swell back.
 - `FontVoicing::big_band` balances the band as big band records do (drums up, bass and
   guitar down); `FontVoicing::trims` sets any channel's level (MIDI expression).
+- **Sections sound like players** (SoundFont): each voice of a section chord a few ms
+  off and its own velocity, the lead voice on top; the guitar strums; held horn notes
+  grow a vibrato (CC 1). `big_band` picks the jazz kit (the drum channel's program now
+  picks the kit) and the guitar plays the GM jazz guitar. Tried with GeneralUser GS.
+- **Inner voices**: each section's pads take a device: a bloom (from a unison out to the
+  voicing in contrary motion), a pyramid (voices entering bottom up), a line cliché in
+  an inner voice, or a 4-3 suspension.
+- A new note takes its channel's bend, expression and vibrato over (a fall no longer
+  drags the next note flat).
+- **Call and response**: an answer echoes what the band just heard, the line's last two
+  to four notes in their rhythm and contour (or upside down), else one of the tune's own
+  motifs, else a stock answer; a riff is the tune's motif half the time (three quarters
+  in a shout), taken from any of its first four phrases; punches with no planned hits
+  kick the tune's anticipations. The sections are busier (they lay out far less, a free
+  band's riff plays on without breathing, an answer can come every bar) and the riffs
+  louder.
+- **Mixed like a big band record** (SoundFont): `big_band` puts the horns on top (the
+  trumpets the apex, the saxes a few dB under, the low horns and drums under them, the
+  bass, piano and guitar the floor), the stage panned (saxes left, brass right, piano
+  left, guitar right, soloist, bass and drums centred) with a room round the horns and
+  the rhythm section drier, and the piano plays in the holes: with upper sections on the
+  stand its chords drop out where a section chord is struck or held.
+- **Dynamics you can hear** (SoundFont): the velocity curve follows the musicians'
+  volume about as a player's level goes (12 against 15 about 3 dB, 6 about 13 dB; it was
+  under 3 dB across the whole range), every single note struck a little differently, and
+  the default gain up to match (3.0). With sections the tune is shaped like a horn
+  player shapes it (louder up high, the 8th before an and ghosted, long notes swelling,
+  the section rising to its seventh bar); the sections play two under what's asked, so
+  accents and the build (now to +3) have room, and the punches build and lean on
+  anticipations. `big_band`'s trims rebalanced to keep each part's level.
+- **The devices in more places**: each pass picks its colour (a device, unison or not, an
+  ending). A riff's long notes open up with the device and its quick ones go unison; an
+  answer can start in unison and bloom on its last note; the shout plays its fast notes in
+  octaves (trumpets over saxes) and ends a phrase in a wedge (top up, bottom down a half
+  step at a time) or a bloom.
+- **Less is more**: the sections and low horns lay out far more, a riff behind a soloist
+  breathes two bars on and two off, one answer a bar at most.
+- **Soli with sections**: in a soli chorus the saxes play the quartet's counterpoint
+  itself (the tune and the alto line on the altos, the tenor line on the tenors), up
+  front; the block-chord soli is louder.
+- With upper sections on the stand the band reharms a third as often, and only behind
+  a solo (`BandInput::sections`).
 - `Yes! We Have No Bananas` (1923) joins the library.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the

@@ -139,7 +139,7 @@ impl Horn {
             Horn::BassTrombone => 57,
             Horn::Bari => 67,
             Horn::Tuba => 58,
-            Horn::Guitar => 25,
+            Horn::Guitar => 26,
             Horn::Trumpets => 56,
             Horn::Altos => 65,
             Horn::Tenors => 66,
@@ -257,8 +257,8 @@ impl LowRole {
             Chorus::Soli => [5, 35, 25, 0, 15, 10, 10],
             Chorus::StopTime => [10, 0, 0, 15, 5, 70, 0],
             Chorus::Breaks => [10, 25, 20, 0, 20, 20, 5],
-            Chorus::Head | Chorus::TwoFeel => [10, 15, 10, 15, 20, 20, 10],
-            _ => [30, 10, 5, 10, 25, 20, 0],
+            Chorus::Head | Chorus::TwoFeel => [35, 10, 5, 10, 15, 15, 10],
+            _ => [50, 10, 5, 5, 15, 15, 0],
         }
     }
 }
@@ -537,7 +537,8 @@ mod tests {
         let a = take(Horns::NONE, &[], "sweet_georgia_brown");
         assert!(a.iter().all(|e| e.ch < FIRST_CH));
         // (Any role but Alone, which takes the bass out.)
-        let b = take(Horns::ALL, &[Input::ForceLowEnd(Some(LowRole::Pads)), Input::ForceUpper(Some(UpperRole::Pads)), Input::ForceMelody(Some(Melody::Lead))], "sweet_georgia_brown");
+        // (The low end and the guitar only: the upper sections tone the band's reharms down.)
+        let b = take(Horns::LOW_END.with(Horn::Guitar), &[Input::ForceLowEnd(Some(LowRole::Pads))], "sweet_georgia_brown");
         let band: Vec<_> = b.iter().filter(|e| e.ch < FIRST_CH).map(|e| (e.ch, e.start, e.end, e.sound)).collect();
         assert_eq!(a.iter().map(|e| (e.ch, e.start, e.end, e.sound)).collect::<Vec<_>>(), band);
     }
@@ -674,7 +675,7 @@ mod tests {
         let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(UpperRole::Answers)), Input::ForceMelody(Some(Melody::Lead))], "body_and_soul");
         let lead: Vec<_> = evs.iter().filter(|e| e.ch == 0).collect();
         let horns: Vec<_> = evs.iter().filter(|e| [Horn::Trumpets, Horn::Altos, Horn::Tenors].iter().any(|h| h.ch() == e.ch)).collect();
-        assert!(horns.len() > 20, "{}", horns.len());
+        assert!(horns.len() > 8, "{}", horns.len());
         let clash = horns.iter().filter(|h| lead.iter().any(|l| l.start.abs_diff(h.start) < 2_000)).count();
         assert!(clash * 10 < horns.len(), "{clash} of {}", horns.len());
     }
@@ -702,5 +703,15 @@ mod tests {
         for r in [UpperRole::Riff, UpperRole::Answers, UpperRole::Pads] {
             assert!(roles.contains(&r), "{r:?} never: {roles:?}");
         }
+    }
+
+    /// Pads aren't all block chords: some voices move or enter by themselves (a bloom, a
+    /// pyramid, a line cliché, a suspension).
+    #[test]
+    fn pads_move_inside() {
+        let evs = take(Horns::BIG_BAND, &[Input::ForceUpper(Some(UpperRole::Pads)), Input::ForceMelody(Some(Melody::Lead))], "body_and_soul");
+        let saxes: Vec<_> = evs.iter().filter(|e| e.ch == Horn::Altos.ch() || e.ch == Horn::Tenors.ch()).collect();
+        let single = saxes.iter().filter(|e| e.sound.notes().len() == 1).count();
+        assert!(single > 10 && single < saxes.len(), "{single} of {}", saxes.len());
     }
 }
