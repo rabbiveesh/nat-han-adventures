@@ -243,13 +243,13 @@ fn chorus_plan(ctx: &Ctx, horns: Horns, s: usize) -> Section {
             // A blowing chorus builds: alone, then pads or answers, then the riff.
             _ => {
                 if s == 0 && n > 1 {
-                    pick(c(s, 31), &[(Tacet, 0.85), (Pads, 0.15)])
+                    pick(c(s, 31), &[(Tacet, 0.5), (Pads, 0.25), (Answers, 0.25)])
                 } else if last {
-                    pick(c(s, 32), &[(Riff, 0.55), (Answers, 0.3), (Tacet, 0.15)])
+                    pick(c(s, 32), &[(Riff, 0.6), (Answers, 0.35), (Tacet, 0.05)])
                 } else if s == 1 {
-                    pick(c(s, 33), &[(Tacet, 0.35), (Pads, 0.35), (Answers, 0.3)])
+                    pick(c(s, 33), &[(Tacet, 0.15), (Pads, 0.3), (Answers, 0.35), (Riff, 0.2)])
                 } else {
-                    pick(c(s, 34), &[(Tacet, 0.3), (Riff, 0.35), (Answers, 0.35)])
+                    pick(c(s, 34), &[(Tacet, 0.1), (Riff, 0.45), (Answers, 0.45)])
                 }
             }
         };
@@ -302,9 +302,9 @@ fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
             Take::Line(melody) => {
                 // Less is more: the tune often alone with the rhythm section.
                 let role = if two || (k == 0 && ctx.bar.pass == 0) {
-                    pick(c(k, 42), &[(Tacet, 0.6), (Pads, 0.25), (Answers, 0.15)])
+                    pick(c(k, 42), &[(Tacet, 0.4), (Pads, 0.3), (Answers, 0.3)])
                 } else {
-                    pick(c(k, 43), &[(Tacet, 0.35), (Pads, 0.25), (Answers, 0.3), (Riff, 0.1)])
+                    pick(c(k, 43), &[(Tacet, 0.15), (Pads, 0.25), (Answers, 0.4), (Riff, 0.2)])
                 };
                 Section { role, melody }
             }
@@ -320,12 +320,14 @@ pub fn figure(ctx: &Ctx) -> Figure {
     let theme_odds = if ctx.band.intro.is_some() {
         1.0
     } else if ctx.band.chorus == Chorus::Shout {
-        0.6
+        0.75
     } else {
-        0.25
+        0.5
     };
     if x < theme_odds {
-        let t = theme(ctx);
+        // The intro takes the tune's opening; a chorus any of its first phrases' motifs.
+        let k = if ctx.band.intro.is_some() { 0 } else { (unit(ctx.seed, ctx.bar.pass, 0, 52) * 4.0) as usize };
+        let t = theme_at(ctx, k);
         if t.len() >= 3 {
             return t;
         }
@@ -337,11 +339,18 @@ pub fn figure(ctx: &Ctx) -> Figure {
 /// The tune's theme: the rhythm and contour of its first two bars with three notes or more,
 /// on 8ths, its steps the melody's ups and downs.
 pub fn theme(ctx: &Ctx) -> Figure {
+    theme_at(ctx, 0)
+}
+
+/// The `k`th two-bar motif of the tune's first eight bars (bars 0-1, 2-3, ...: the first with
+/// three notes or more from there, or the opening's).
+fn theme_at(ctx: &Ctx, k: usize) -> Figure {
     let arr = ctx.arrangement;
     let bb = ctx.bb();
     let tr = &arr.tracks[0];
     let bars = arr.bar_events[0].len();
-    for start in 0..bars.saturating_sub(1).min(8) {
+    let first = (2 * k).min(bars.saturating_sub(2));
+    for start in (first..bars.saturating_sub(1).min(8)).chain(0..first) {
         let (lo, _) = arr.bar_events[0][start];
         let (_, hi) = arr.bar_events[0][start + 1];
         let notes: Vec<(f64, f64, i32)> = tr.events[lo..hi]
@@ -390,6 +399,45 @@ pub fn theme(ctx: &Ctx) -> Figure {
         return out;
     }
     Vec::new()
+}
+
+/// The line's last figure before `gap` (its last two to four notes, the last no more than a
+/// beat and a half before the gap), as an answer fitting `room`: on 8ths, its steps the
+/// line's ups and downs (`invert`: the other way).
+fn echo(heard: &[(f64, f64, i32)], gap: f64, room: f64, invert: bool) -> Option<Vec<(f64, f64, i32)>> {
+    let before: Vec<&(f64, f64, i32)> = heard.iter().filter(|n| n.0 < gap - 0.1).collect();
+    let last = before.last()?;
+    if gap - (last.0 + last.1) > 1.5 || before.len() < 2 {
+        return None;
+    }
+    let tail = &before[before.len().saturating_sub(4)..];
+    let t0 = tail[0].0;
+    let q = |b: f64| (b * 2.0).round() / 2.0;
+    let mut out = Vec::new();
+    let mut step = 0;
+    for (k, n) in tail.iter().enumerate() {
+        if k > 0 {
+            let iv = n.2 - tail[k - 1].2;
+            if iv != 0 {
+                step += iv.signum() * ((iv.abs() as f64 / 3.5).round() as i32).max(1) * if invert { -1 } else { 1 };
+            }
+        }
+        let b = q(n.0 - t0);
+        let next = tail.get(k + 1).map_or(b + n.1, |m| q(m.0 - t0));
+        let d = q(n.1).max(0.5).min((next - b).max(0.4));
+        if b + d > room + 0.25 || out.last().is_some_and(|l: &(f64, f64, i32)| l.0 == b) {
+            break;
+        }
+        out.push((b, d, step.clamp(-3, 3)));
+    }
+    (out.len() >= 2).then_some(out)
+}
+
+/// Two to four notes of a motif (a [`Figure`]) fitting `room`, from its first.
+fn motif(fig: &Figure, room: f64) -> Option<Vec<(f64, f64, i32)>> {
+    let t0 = fig.first()?.0 as f64 * 4.0 + fig.first()?.1;
+    let out: Vec<(f64, f64, i32)> = fig.iter().map(|f| (f.0 as f64 * 4.0 + f.1 - t0, f.2, f.3)).take_while(|f| f.0 + f.1 <= room + 0.25).take(4).collect();
+    (out.len() >= 2).then_some(out)
 }
 
 /// A top note for chord `c` near `center`: its nearest guide tone (third or seventh), moved
@@ -713,22 +761,23 @@ impl<'a, 'b> Writer<'a, 'b> {
         let build = ctx.bar.song_bar % SECTION >= SECTION - 2;
         let (want, vol) = if shout && both_bars {
             // Brass call, saxes answer.
-            (if half == 0 { Group::Brass } else { Group::Saxes }, 13)
+            (if half == 0 { Group::Brass } else { Group::Saxes }, 15)
         } else if shout {
-            (Group::All, 13)
+            (Group::All, 15)
         } else if build && ctx.band.intro.is_none() {
-            (Group::All, 12)
+            (Group::All, 14)
         } else {
-            (Group::Saxes, 11)
+            (Group::Saxes, 13)
         };
         let group = self.group(want)?;
-        // Behind a soloist the riff breathes: two bars on, two off (the Riffs chorus keeps
-        // its ostinato going; a shout, an intro and a section's last bars play through).
-        let ostinato = ctx.band.chorus == Chorus::Riffs || shout || ctx.band.intro.is_some() || build;
+        // Behind a soloist with the band held in the riff breathes: two bars on, two off (a
+        // free band keeps it going, as do the Riffs chorus, a shout, an intro and a
+        // section's last bars).
+        let ostinato = ctx.freedom[0] >= 0.5 || ctx.band.chorus == Chorus::Riffs || shout || ctx.band.intro.is_some() || build;
         if !ostinato && ctx.bar.song_bar % 4 >= 2 {
             return None;
         }
-        let vol = (vol + self.build()).min(14) as u8;
+        let vol = (vol + self.build()).min(15) as u8;
         let center = if group == Group::Saxes { 69 } else { 74 };
         let at = |f: &(u8, f64, f64, i32)| f.0 as f64 * 4.0 + f.1;
         for (i, f) in fig.iter().enumerate().filter(|(_, f)| f.0 == half) {
@@ -758,7 +807,7 @@ impl<'a, 'b> Writer<'a, 'b> {
 
     /// Answers in the line's rests and under its long notes (`line`: its notes this bar, as
     /// (beat, end)).
-    fn answers(&self, out: &mut Vec<NoteEvent>, line: &[(f64, f64)], vol: u8) {
+    fn answers(&self, out: &mut Vec<NoteEvent>, line: &[(f64, f64)], heard: &[(f64, f64, i32)], vol: u8) {
         let ctx = self.ctx;
         let bb = ctx.bb();
         let mut gaps: Vec<(f64, f64)> = Vec::new();
@@ -777,25 +826,31 @@ impl<'a, 'b> Writer<'a, 'b> {
         if bb - cursor >= 1.5 {
             gaps.push((cursor, bb));
         }
-        // One answer a bar at most, in a real rest, and every other bar unless the line
-        // leaves the whole bar open: room for the line to breathe too.
+        // One answer a bar at most, in a real rest: room for the line to breathe too.
         for (i, &(g0, g1)) in gaps.iter().take(1).enumerate() {
             let start = ((g0 + 0.25) * 2.0).ceil() / 2.0;
             let room = g1 - start;
-            if room < 1.5 || (ctx.bar.index % 2 == 1 && room < 3.0) {
+            if room < 1.5 {
                 continue;
             }
-            let fits: Vec<(usize, f64)> = ANSWERS.iter().enumerate().filter(|(_, a)| a.iter().map(|n| n.0 + n.1).fold(0.0, f64::max) <= room + 0.5).map(|(k, _)| (k, 1.0)).collect();
-            if fits.is_empty() {
-                continue;
-            }
-            let k = pick(unit(ctx.seed, ctx.bar.index, i as u64, 60), &fits);
+            // Call and response: the band answers with what it just heard, the line's last
+            // figure in its rhythm (its contour, or turned upside down); else one of the
+            // tune's own motifs; else a stock answer.
+            let coin = unit(ctx.seed, ctx.bar.index, i as u64, 63);
+            let fig = echo(heard, g0, room, coin < 0.3)
+                .filter(|_| coin < 0.7)
+                .or_else(|| (coin < 0.85).then(|| motif(&theme_at(ctx, ctx.bar.index as usize % 4), room)).flatten())
+                .or_else(|| {
+                    let fits: Vec<(usize, f64)> = ANSWERS.iter().enumerate().filter(|(_, a)| a.iter().map(|n| n.0 + n.1).fold(0.0, f64::max) <= room + 0.5).map(|(k, _)| (k, 1.0)).collect();
+                    (!fits.is_empty()).then(|| ANSWERS[pick(unit(ctx.seed, ctx.bar.index, i as u64, 60), &fits)].to_vec())
+                });
+            let Some(fig) = fig else { continue };
             let want = if (ctx.bar.index as usize + i).is_multiple_of(2) { Group::Brass } else { Group::Saxes };
             let Some(group) = self.group(want) else { return };
             let center = if group == Group::Saxes { 69 } else { 74 };
             let vol = (vol as i32 + self.build()).min(14) as u8;
-            let n = ANSWERS[k].len();
-            for (j, &(b, d, step)) in ANSWERS[k].iter().enumerate() {
+            let n = fig.len();
+            for (j, &(b, d, step)) in fig.iter().enumerate() {
                 let b = start + b;
                 if b >= g1 - 0.25 || b >= bb {
                     continue;
@@ -837,10 +892,15 @@ impl<'a, 'b> Writer<'a, 'b> {
         }
     }
 
-    fn punches(&self, out: &mut Vec<NoteEvent>) {
+    fn punches(&self, out: &mut Vec<NoteEvent>, tune: &[(f64, f64, i32)]) {
         let ctx = self.ctx;
         let plan = ctx.band;
         let mut at: Vec<f64> = (0..16).filter(|k| plan.hits & 1 << k != 0).map(|k| k as f64 / 4.0).filter(|&b| b < ctx.bb()).collect();
+        if at.is_empty() {
+            // The tune's own kicks: its pushed notes (an 8th ahead of a beat, held) punched
+            // with it, as an ensemble kicks the melody's anticipations.
+            at = tune.iter().filter(|n| (n.0.fract() - 0.5).abs() < 0.1 && n.1 >= 0.9).map(|n| n.0).take(2).collect();
+        }
         if at.is_empty() {
             let figures: [&[f64]; 4] = [&[1.5], &[2.5], &[0.0, 1.5], &[3.5]];
             let f = figures[(unit(ctx.seed, ctx.bar.index, 0, 13) * 4.0) as usize % 4];
@@ -952,6 +1012,17 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
     }
     // The line as played this bar (where answers go).
     let line: Vec<(f64, f64)> = band.iter().filter(|e| e.ch == 0 && !matches!(e.sound, Sound::Drum(_))).map(|e| (ctx.rel(e), ctx.rel(e) + ctx.len(e))).collect();
+    // Its notes (what the answers echo).
+    let mut heard: Vec<(f64, f64, i32)> = band
+        .iter()
+        .filter(|e| e.ch == 0)
+        .filter_map(|e| match e.sound {
+            Sound::Note(n) => Some((ctx.rel(e), ctx.len(e), n as i32)),
+            Sound::Arp(a) => a.notes().iter().max().map(|&n| (ctx.rel(e), ctx.len(e), n as i32)),
+            _ => None,
+        })
+        .collect();
+    heard.sort_by(|a, b| a.0.total_cmp(&b.0));
     // The line onto the horn that has it.
     let mut free = mine;
     if let Some(h) = sec.melody.horn() {
@@ -993,7 +1064,7 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
             }
             let held: Vec<(f64, f64)> = tune.iter().map(|&(b, d, _)| (b, b + d)).collect();
             let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE });
-            brass.answers(out, &held, 12);
+            brass.answers(out, &held, &tune, 13);
             band.retain(|e| e.ch != 0);
         }
         UpperRole::Tutti => {
@@ -1001,11 +1072,11 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
             band.retain(|e| e.ch != 0);
         }
         UpperRole::Pads => w.pads(out),
-        UpperRole::Punches => w.punches(out),
+        UpperRole::Punches => w.punches(out, &tune),
         UpperRole::Riff => {
             w.riff(out, &figure(ctx), plan_.chorus == Chorus::Shout);
         }
-        UpperRole::Answers => w.answers(out, &line, 12),
+        UpperRole::Answers => w.answers(out, &line, &heard, 13),
         UpperRole::Tacet => {}
     }
     piano_in_the_holes(ctx, band, out);

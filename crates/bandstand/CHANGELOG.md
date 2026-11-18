@@ -42,6 +42,13 @@ GitHub Release's notes.
   an inner voice, or a 4-3 suspension.
 - A new note takes its channel's bend, expression and vibrato over (a fall no longer
   drags the next note flat).
+- **Call and response**: an answer echoes what the band just heard, the line's last two
+  to four notes in their rhythm and contour (or upside down), else one of the tune's own
+  motifs, else a stock answer; a riff is the tune's motif half the time (three quarters
+  in a shout), taken from any of its first four phrases; punches with no planned hits
+  kick the tune's anticipations. The sections are busier (they lay out far less, a free
+  band's riff plays on without breathing, an answer can come every bar) and the riffs
+  louder.
 - **Mixed like a big band record** (SoundFont): `big_band` puts the horns on top (the
   trumpets the apex, the saxes a few dB under, the low horns and drums under them, the
   bass, piano and guitar the floor), the stage panned (saxes left, brass right, piano
