@@ -7,6 +7,15 @@ GitHub Release's notes.
 
 ## Unreleased
 
+- **Voicings.** The big band's sections voice their chords by a shape rolled each chorus
+  (`live::voicing`): drop 2 as before, drop 2 and 4, spread, fourths, stacked fifths with
+  a crunch, clusters, upper-structure triads and the theme's own intervals. Passing notes
+  can take a diminished chord, planing, plain chord tones, any chord that doesn't clash,
+  Barry Harris's sixth-diminished (borrowing toward the next chord), or the next chord's
+  tones early. Voices balance as top, lead, even or pyramid (per-note velocity,
+  `Fx::balance`), and sections thin to two or three voices, never with a half step or a
+  minor 9th under the lead or a second down low. `Input::ForceVoicing`, `ForcePassing`,
+  `ForceBalance`, `ForceVoices`; `CommittedBar::voicing`.
 - **Five.** A song can be in 5/4 with a chord chart (`meter = 5/4`; two chords to a bar
   split 3+2, `chart::parse_in`). Every bar has pulses (`live::arrange::pulses`: in five,
   0, 1½, 3 and 4, the 3 as two dotted quarters): the walking bass steps on them, the

@@ -130,6 +130,15 @@ pub enum Input {
     /// standing up from its section; `None`: the arranger passes it round), from the next bar
     /// committed.
     ForceMelody(Option<super::arranger::Melody>),
+    /// Override the upper sections' voicing shape ([`super::voicing::Style`]; `None`: the
+    /// arranger rolls one a chorus), from the next bar committed.
+    ForceVoicing(Option<super::voicing::Style>),
+    /// Override what goes under their passing notes ([`super::voicing::Passing`]).
+    ForcePassing(Option<super::voicing::Passing>),
+    /// Override how their voices balance ([`super::voicing::Balance`]).
+    ForceBalance(Option<super::voicing::Balance>),
+    /// Override how many voices each upper section plays (2 to 4).
+    ForceVoices(Option<u8>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -283,6 +292,8 @@ pub struct CommittedBar {
     pub upper: Option<super::horns::UpperRole>,
     /// Who plays the lead's line in it (`None`: no upper sections).
     pub melody: Option<super::arranger::Melody>,
+    /// How the upper sections voice their chords in it (`None`: no upper sections).
+    pub voicing: Option<super::voicing::Voicing>,
 }
 
 /// One musician, for UIs.
@@ -461,6 +472,7 @@ pub struct Engine {
     forced_low: Option<super::horns::LowRole>,
     forced_upper: Option<super::horns::UpperRole>,
     forced_melody: Option<super::arranger::Melody>,
+    forced_voicing: super::voicing::Force,
     /// The horns' notes for the bar being committed.
     horn_buf: Vec<NoteEvent>,
     /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
@@ -541,6 +553,7 @@ impl Engine {
             forced_low: None,
             forced_upper: None,
             forced_melody: None,
+            forced_voicing: super::voicing::Force::default(),
             horn_buf: Vec::with_capacity(256),
             tapped: None,
         })
@@ -847,8 +860,9 @@ impl Engine {
         }
         let low = super::horns::write(&ctx, self.config.horns, self.forced_low, &mut self.scratch, &mut self.horn_buf);
         super::horns::write_guitar(&ctx, self.config.horns, &mut self.horn_buf);
-        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, self.musicians[0].ahead(), &mut self.scratch, &mut self.horn_buf);
+        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, self.forced_voicing, self.musicians[0].ahead(), &mut self.scratch, &mut self.horn_buf);
         let (upper, melody) = (section.map(|s| s.role), section.map(|s| s.melody));
+        let voicing = section.map(|_| super::arranger::voicing_of(&ctx, self.forced_voicing));
         self.scratch.append(&mut self.horn_buf);
         let events = self.scratch.len() as u32;
         // What the soloist hears next bar: the comp's figure in this one.
@@ -894,7 +908,7 @@ impl Engine {
             self.committed.pop_front();
         }
         let thought = self.musicians[0].thought();
-        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low, upper, melody });
+        self.committed.push_back(CommittedBar { slot, harmony, tuning, intensity, events, orns, band, soloist, thought, low, upper, melody, voicing });
         self.prev_band = band;
         self.prev_harmony = Some(harmony);
         self.next_bar += 1;
@@ -1082,6 +1096,22 @@ impl Engine {
             }
             Input::ForceMelody(m) => {
                 self.forced_melody = m;
+                None
+            }
+            Input::ForceVoicing(s) => {
+                self.forced_voicing.style = s;
+                None
+            }
+            Input::ForcePassing(p) => {
+                self.forced_voicing.passing = p;
+                None
+            }
+            Input::ForceBalance(b) => {
+                self.forced_voicing.balance = b;
+                None
+            }
+            Input::ForceVoices(n) => {
+                self.forced_voicing.voices = n;
                 None
             }
             Input::SetBalance(b) => {

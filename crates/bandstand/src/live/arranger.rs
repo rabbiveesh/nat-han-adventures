@@ -21,10 +21,11 @@
 
 use super::band::HitKind;
 use super::chorus::Chorus;
-use super::horns::{Horn, Horns, SECTION, changes, close, drop2, four, unit};
+use super::horns::{Horn, Horns, SECTION, changes, drop2, four, unit};
 use super::musician::Ctx;
 use super::ornament::Harm;
 use super::soloist::{LineAhead, Soloist};
+use super::voicing::{self, Balance, Passing, Style, Voicing};
 use super::voice::{NoteEvent, Sound};
 use crate::chart::Chord;
 use crate::mml::EventKind;
@@ -491,6 +492,10 @@ struct Writer<'a, 'b> {
     free: Horns,
     /// How the notes about to be played are phrased ([`Writer::phrase`]).
     art: std::cell::Cell<Art>,
+    /// How the chords are voiced ([`voicing`]).
+    v: Voicing,
+    /// The chord the line is heading for (the tune sets it note by note).
+    next: std::cell::Cell<Option<Chord>>,
 }
 
 /// How a note is played: louder or not, how much of its length, a fall (negative) or doit
@@ -509,8 +514,30 @@ impl Art {
 }
 
 impl<'a, 'b> Writer<'a, 'b> {
-    fn new(ctx: &'a Ctx<'b>, free: Horns) -> Self {
-        Writer { ctx, free, art: std::cell::Cell::new(Art::PLAIN) }
+    fn new(ctx: &'a Ctx<'b>, free: Horns, v: Voicing) -> Self {
+        Writer { ctx, free, art: std::cell::Cell::new(Art::PLAIN), v, next: std::cell::Cell::new(None) }
+    }
+
+    /// The chorus's voicing, heading for the next chord.
+    fn vv(&self) -> Voicing {
+        Voicing { next: self.next.get(), ..self.v }
+    }
+
+    /// The trumpets' voicing under `top`.
+    fn brass_v(&self, top: i32, c: Chord, passing: bool) -> Vec<i32> {
+        voicing::finish(&self.v, voicing::brass(&self.vv(), top, c, passing), c)
+    }
+
+    /// The saxes' voicing under `top`.
+    fn sax_v(&self, top: i32, c: Chord, passing: bool) -> Vec<i32> {
+        voicing::finish(&self.v, voicing::saxes(&self.vv(), top, c, passing), c)
+    }
+
+    /// One sax section's voices on its own (close for drop 2, the style otherwise).
+    fn one_sax_v(&self, top: i32, c: Chord, passing: bool) -> Vec<i32> {
+        let v = self.vv();
+        let x = if v.style == Style::Drop2 { voicing::brass(&v, top, c, passing) } else { voicing::four_voices(&v, top, c, passing) };
+        voicing::finish(&self.v, x, c)
     }
 
     /// A section's top note on `h` near `near`, aimed as the featured soloist aims their
@@ -606,6 +633,7 @@ impl<'a, 'b> Writer<'a, 'b> {
         let d = (d * a.len).max(0.2);
         let mut e = self.ctx.make(&t, b, d, Sound::Arp(crate::mml::Arp::new(&ns)));
         e.fx.swell = a.swell;
+        e.fx.balance = self.v.balance;
         if a.fall != 0 {
             let fall = if h == Horn::Trumpets { a.fall } else { a.fall * 2 / 3 };
             // Over the note's last half, a quarter second at most.
@@ -633,19 +661,21 @@ impl<'a, 'b> Writer<'a, 'b> {
         let brass = group != Group::Saxes && self.brass();
         let saxes = group != Group::Brass && self.saxes();
         let top_tp = octave_into(top, 67, 82);
+        let under = self.v.balance.saxes_under();
         if brass {
-            out.push((Horn::Trumpets, close(top_tp, c, passing).to_vec(), 0));
+            out.push((Horn::Trumpets, self.brass_v(top_tp, c, passing).to_vec(), 0));
         }
         if saxes {
             let top_sx = if brass { top_tp - 12 } else { octave_into(top, 62, 76) };
-            let v = drop2(close(top_sx, c, passing));
+            let v = self.sax_v(top_sx, c, passing);
             match (self.free.has(Horn::Altos), self.free.has(Horn::Tenors)) {
                 (true, true) => {
-                    out.push((Horn::Altos, v[..2].to_vec(), 1));
-                    out.push((Horn::Tenors, v[2..].to_vec(), 1));
+                    let k = v.len().div_ceil(2);
+                    out.push((Horn::Altos, v[..k].to_vec(), under));
+                    out.push((Horn::Tenors, v[k..].to_vec(), under));
                 }
-                (true, false) => out.push((Horn::Altos, close(top_sx, c, passing).to_vec(), 1)),
-                (false, true) => out.push((Horn::Tenors, close(top_sx - 5, c, passing).to_vec(), 1)),
+                (true, false) => out.push((Horn::Altos, self.one_sax_v(top_sx, c, passing).to_vec(), under)),
+                (false, true) => out.push((Horn::Tenors, self.one_sax_v(top_sx - 5, c, passing).to_vec(), under)),
                 _ => {}
             }
         }
@@ -972,12 +1002,14 @@ impl<'a, 'b> Writer<'a, 'b> {
         let saxes = group != Group::Brass;
         let top_tp = octave_into(top, 67, 84);
         if brass {
-            self.play(out, Horn::Trumpets, vol, b, d, &close(top_tp, c, false));
+            self.play(out, Horn::Trumpets, vol, b, d, &self.brass_v(top_tp, c, false));
         }
         if saxes && self.saxes() {
-            let v = drop2(close(if self.brass() { top_tp - 12 } else { octave_into(top, 62, 77) }, c, false));
-            self.play(out, Horn::Altos, vol.saturating_sub(2), b, d, &v[..2]);
-            self.play(out, Horn::Tenors, vol.saturating_sub(2), b, d, &v[2..]);
+            let v = self.sax_v(if self.brass() { top_tp - 12 } else { octave_into(top, 62, 77) }, c, false);
+            let under = self.v.balance.saxes_under() + 1;
+            let k = v.len().div_ceil(2);
+            self.play(out, Horn::Altos, vol.saturating_sub(under), b, d, &v[..k]);
+            self.play(out, Horn::Tenors, vol.saturating_sub(under), b, d, &v[k..]);
         }
     }
 
@@ -989,6 +1021,9 @@ impl<'a, 'b> Writer<'a, 'b> {
             let Some(h) = ctx.harm_at(b) else { continue };
             let c = h.chord;
             let passing = d < 0.75 && b.fract() > 0.1;
+            // Where the line's heading: the chord under its next note.
+            let to = tune.get(i + 1).map_or(b + d, |x| x.0);
+            self.next.set(ctx.harm_at(to).map(|h| h.chord).filter(|n| *n != c));
             // A phrase ends where the tune rests (unknown past the bar line: only inside it).
             let room = tune.get(i + 1).map_or(if b + d < bb - 0.75 { bb - b - d } else { 0.0 }, |x| x.0 - b - d);
             self.phrase(b, d, room >= 0.75, room, tutti);
@@ -1013,15 +1048,19 @@ impl<'a, 'b> Writer<'a, 'b> {
             }
             if !tutti {
                 // (Soli up front: the section has the tune.)
-                let v = drop2(close(octave_into(n, 62, 77), c, passing));
-                self.play(out, Horn::Altos, 15, b, d, &v[..2]);
-                self.play(out, Horn::Tenors, 14, b, d, &v[2..]);
+                let v = self.sax_v(octave_into(n, 62, 77), c, passing);
+                let k = v.len().div_ceil(2);
+                self.play(out, Horn::Altos, 15, b, d, &v[..k]);
+                self.play(out, Horn::Tenors, 14, b, d, &v[k..]);
             } else {
-                let v = close(octave_into(n, 67, 84), c, passing);
+                let top = octave_into(n, 67, 84);
+                let v = self.brass_v(top, c, passing);
                 self.play(out, Horn::Trumpets, 13, b, d, &v);
-                let s = drop2(v.map(|x| x - 12));
-                self.play(out, Horn::Altos, 12, b, d, &s[..2]);
-                self.play(out, Horn::Tenors, 12, b, d, &s[2..]);
+                let s = if self.v.style == Style::Drop2 && v.len() == 4 { voicing::finish(&self.v, drop2([v[0], v[1], v[2], v[3]].map(|x| x - 12)), c) } else { self.sax_v(top - 12, c, passing) };
+                let sx = 13 - self.v.balance.saxes_under();
+                let k = s.len().div_ceil(2);
+                self.play(out, Horn::Altos, sx, b, d, &s[..k]);
+                self.play(out, Horn::Tenors, sx, b, d, &s[k..]);
             }
         }
     }
@@ -1029,7 +1068,8 @@ impl<'a, 'b> Writer<'a, 'b> {
 
 /// The upper sections' bar: the section's plan played, the line moved onto the horn that has
 /// it. Returns the plan (`None`: no upper sections on the stand).
-pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melody: Option<Melody>, ahead: Option<LineAhead>, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<Section> {
+#[allow(clippy::too_many_arguments)]
+pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melody: Option<Melody>, force_v: voicing::Force, ahead: Option<LineAhead>, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<Section> {
     let upper = Horns::NONE.with(Horn::Trumpets).with(Horn::Altos).with(Horn::Tenors);
     let mine = horns.iter().filter(|h| upper.has(*h)).fold(Horns::NONE, Horns::with);
     if mine.is_empty() {
@@ -1093,7 +1133,8 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
     if plan_.tacet || plan_.solo_break {
         return Some(sec);
     }
-    let w = Writer::new(ctx, free);
+    let v = voicing_of(ctx, force_v);
+    let w = Writer::new(ctx, free, v);
     match sec.role {
         UpperRole::Soli => {
             if ctx.band.soli.is_some() && free.has(Horn::Altos) {
@@ -1105,7 +1146,7 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
                 w.tune(out, &tune, false);
             }
             let held: Vec<(f64, f64)> = tune.iter().map(|&(b, d, _)| (b, b + d)).collect();
-            let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE });
+            let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE }, v);
             brass.answers(out, &held, &tune, None, 13);
             band.retain(|e| e.ch != 0);
         }
@@ -1238,6 +1279,54 @@ impl Device {
         let x = unit(ctx.seed, ctx.bar.pass, (ctx.bar.song_bar / SECTION) as u64, 80);
         pick(x, &[(Device::Plain, 0.2), (Device::Bloom, 0.25), (Device::Pyramid, 0.2), (Device::Cliche, 0.2), (Device::Suspension, 0.15)])
     }
+}
+
+/// The chorus's voicing ([`voicing`]), rolled once a pass (`force`: overrides): the shape
+/// (drop 2 most often, the interval-built ones more as the freedom rises), the passing chords
+/// (any chord that fits, more often the freer the band), and the balance between the voices
+/// (the denser the shape, the more the lead stands over shaded inner voices or the bottom
+/// carries the weight).
+pub fn voicing_of(ctx: &Ctx, force: voicing::Force) -> Voicing {
+    let c = |what: u64| unit(ctx.seed, ctx.bar.pass, 0, what);
+    let f = ctx.freedom[0].clamp(0.0, 1.0) as f64;
+    let style = force.style.unwrap_or_else(|| {
+        pick(
+            c(100),
+            &[
+                (Style::Drop2, 0.45 - 0.25 * f),
+                (Style::Drop24, 0.1),
+                (Style::Spread, 0.1),
+                (Style::Quartal, 0.05 + 0.08 * f),
+                (Style::Fifths, 0.05 + 0.08 * f),
+                (Style::Cluster, 0.02 + 0.05 * f),
+                (Style::Upper, 0.05 + 0.08 * f),
+                (Style::Theme, 0.05 + 0.06 * f),
+            ],
+        )
+    });
+    let passing = force.passing.unwrap_or_else(|| pick(c(101), &[(Passing::Dim, 0.5 - 0.3 * f), (Passing::Planing, 0.25), (Passing::Plain, 0.15), (Passing::Free, 0.05 + 0.4 * f), (Passing::Harris, 0.2), (Passing::Lean, 0.1 + 0.2 * f)]));
+    let dense = matches!(style, Style::Cluster | Style::Fifths | Style::Quartal | Style::Upper) || passing == Passing::Free;
+    let balance = force.balance.unwrap_or_else(|| {
+        if dense {
+            pick(c(102), &[(Balance::Lead, 0.5), (Balance::Pyramid, 0.35), (Balance::Top, 0.15)])
+        } else {
+            pick(c(102), &[(Balance::Top, 0.5), (Balance::Lead, 0.2), (Balance::Pyramid, 0.2), (Balance::Even, 0.1)])
+        }
+    });
+    // The theme: the tune's opening notes.
+    let notes: Vec<i32> = ctx.arrangement.tracks[0]
+        .events
+        .iter()
+        .filter_map(|e| match e.kind {
+            EventKind::Note(n) => Some(n as i32),
+            _ => None,
+        })
+        .take(12)
+        .collect();
+    // Four voices mostly; three or two more often the denser the shape (a section doesn't
+    // fill every gap).
+    let voices = force.voices.unwrap_or_else(|| if dense { pick(c(103), &[(4u8, 0.5), (3, 0.35), (2, 0.15)]) } else { pick(c(103), &[(4u8, 0.75), (3, 0.2), (2, 0.05)]) });
+    Voicing { style, passing, balance, theme: voicing::theme_cell(&notes), salt: ctx.seed ^ ctx.bar.pass.wrapping_mul(0x5851_F42D_4C95_7F2D), voices, borrow: 0.1 + 0.5 * f as f32, next: None }
 }
 
 /// How a phrase's last long note ends in a tutti.
