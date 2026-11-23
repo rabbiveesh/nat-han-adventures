@@ -714,4 +714,31 @@ mod tests {
         let single = saxes.iter().filter(|e| e.sound.notes().len() == 1).count();
         assert!(single > 10 && single < saxes.len(), "{single} of {}", saxes.len());
     }
+
+    /// The quartet soli's locked climax takes the chorus's voicing: block chords on the
+    /// saxes, the fifths' crunch on top.
+    #[test]
+    fn the_locked_soli_takes_the_chorus_voicing() {
+        use crate::live::voicing::Style;
+        let soli = Input::ForceChorus(Some(Call { chorus: Chorus::Soli, key_up: false }));
+        let evs = take(Horns::BIG_BAND, &[soli, Input::ForceVoicing(Some(Style::Fifths)), Input::ForceVoices(Some(4))], "sweet_georgia_brown");
+        let chords: Vec<Vec<u8>> = evs
+            .iter()
+            .filter(|e| e.ch == Horn::Altos.ch())
+            .filter_map(|e| match e.sound {
+                Sound::Arp(a) if a.notes().len() >= 2 => Some(a.notes().to_vec()),
+                _ => None,
+            })
+            .collect();
+        assert!(chords.len() > 8, "the altos play chords in the locked section: {}", chords.len());
+        let crunch = chords
+            .iter()
+            .filter(|c| {
+                let mut c = (*c).clone();
+                c.sort_unstable();
+                c[c.len() - 1] - c[c.len() - 2] == 2
+            })
+            .count();
+        assert!(crunch * 3 > chords.len(), "{crunch} of {} with a whole step on top", chords.len());
+    }
 }

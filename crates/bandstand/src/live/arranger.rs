@@ -1137,7 +1137,12 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
     let w = Writer::new(ctx, free, v);
     match sec.role {
         UpperRole::Soli => {
-            if ctx.band.soli.is_some() && free.has(Horn::Altos) {
+            if ctx.band.soli.is_some_and(|s| s.texture == super::soli::Texture::Locked) && free.has(Horn::Altos) {
+                // The quartet's locked section is block chords under the tune: the section
+                // voices it the chorus's way (the comp's and the tenor's lines drop out).
+                band.retain(|e| !matches!((e.ch, e.sound), (1 | 4, Sound::Note(_))));
+                w.tune(out, &tune, false);
+            } else if ctx.band.soli.is_some() && free.has(Horn::Altos) {
                 // The quartet's soli, orchestrated: the tune and the comp's alto line on the
                 // altos, its tenor line on the tenors (the counterpoint as written: front line,
                 // canon, chorale...), each a player, up front.
