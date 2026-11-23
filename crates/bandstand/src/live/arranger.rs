@@ -1029,7 +1029,7 @@ impl<'a, 'b> Writer<'a, 'b> {
 
 /// The upper sections' bar: the section's plan played, the line moved onto the horn that has
 /// it. Returns the plan (`None`: no upper sections on the stand).
-pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melody: Option<Melody>, ahead: Option<LineAhead>, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<Section> {
+pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melody: Option<Melody>, ahead: Option<LineAhead>, call: bool, band: &mut Vec<NoteEvent>, out: &mut Vec<NoteEvent>) -> Option<Section> {
     let upper = Horns::NONE.with(Horn::Trumpets).with(Horn::Altos).with(Horn::Tenors);
     let mine = horns.iter().filter(|h| upper.has(*h)).fold(Horns::NONE, Horns::with);
     if mine.is_empty() {
@@ -1051,6 +1051,10 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
     }
     if matches!(sec.role, UpperRole::Soli | UpperRole::Tutti) && tune.is_empty() {
         sec.role = UpperRole::Pads;
+    }
+    // Behind the head, with the sections answering, the lead plays its tune as a call.
+    if call && sec.role == UpperRole::Answers && !plan_.chorus.lead_solos(ctx.freedom[0]) && !plan_.tacet {
+        call_phrasing(ctx, band);
     }
     // The line as played this bar (where answers go).
     let line: Vec<(f64, f64)> = band.iter().filter(|e| e.ch == 0 && !matches!(e.sound, Sound::Drum(_))).map(|e| (ctx.rel(e), ctx.rel(e) + ctx.len(e))).collect();
@@ -1147,6 +1151,47 @@ fn piano_in_the_holes(ctx: &Ctx, band: &mut Vec<NoteEvent>, out: &[NoteEvent]) {
 /// low; an 8th on the and leaned on and the one before it ghosted; a long note leaned into;
 /// a phrase's last short note let go; the 8-bar section rising to its sixth and seventh
 /// bars. (The line's notes this bar, wherever it went; a soloist shapes their own.)
+/// Call and response: the lead plays the tune as a call, so the sections' answers have room.
+/// A held note (two beats or more, ties included) stops after a beat, as a singer leading a
+/// call stops and lets the answer in; the rest of a note held over the bar line goes; a
+/// quarter or longer is played short (60%); 8ths and quicker runs stay as they are. The
+/// answers then find the rests this opens ([`Writer::answers`]).
+pub fn call_phrasing(ctx: &Ctx, band: &mut Vec<NoteEvent>) {
+    let spb = ctx.spb();
+    let is_line = |e: &NoteEvent| e.ch == 0 && !matches!(e.sound, Sound::Drum(_));
+    let mut idx: Vec<usize> = (0..band.len()).filter(|&i| is_line(&band[i])).collect();
+    idx.sort_by_key(|&i| band[i].start);
+    let mut drop = vec![false; band.len()];
+    let mut k = 0;
+    while k < idx.len() {
+        let head = idx[k];
+        // A note tied in from the last bar: that bar's call already let it go.
+        if band[head].tie && ctx.rel(&band[head]) < 1e-6 {
+            drop[head] = true;
+            k += 1;
+            continue;
+        }
+        // The note and the pieces tied to it.
+        let mut end = band[head].end;
+        let mut j = k + 1;
+        while j < idx.len() && band[idx[j]].tie && band[idx[j]].start <= end + 1 && band[idx[j]].sound == band[head].sound {
+            end = end.max(band[idx[j]].end);
+            drop[idx[j]] = true;
+            j += 1;
+        }
+        let d = (end - band[head].start) as f64 / spb;
+        let to = if d >= 2.0 - 1e-6 { 1.0 } else if d >= 1.0 - 1e-6 { d * 0.6 } else { d };
+        band[head].end = band[head].start + (to.min(d) * spb) as u64;
+        k = j;
+    }
+    let mut i = 0;
+    band.retain(|_| {
+        let keep = !drop[i];
+        i += 1;
+        keep
+    });
+}
+
 fn shape_line(ctx: &Ctx, band: &mut [NoteEvent]) {
     let line_ch = [0, Horn::Trumpets.ch(), Horn::Altos.ch(), Horn::Tenors.ch()];
     let mut idx: Vec<usize> = (0..band.len()).filter(|&i| line_ch.contains(&band[i].ch) && matches!(band[i].sound, Sound::Note(_))).collect();

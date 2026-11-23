@@ -514,7 +514,11 @@ mod tests {
     use crate::live::{Engine, EngineConfig, Input, library};
 
     fn take(horns: Horns, inputs: &[Input], song: &str) -> Vec<NoteEvent> {
-        let mut e = Engine::with_config(&library::load(song).unwrap(), 32_000, EngineConfig { seed: 5, horns, ..EngineConfig::default() }).unwrap();
+        take_with(EngineConfig { seed: 5, horns, ..EngineConfig::default() }, inputs, song)
+    }
+
+    fn take_with(config: EngineConfig, inputs: &[Input], song: &str) -> Vec<NoteEvent> {
+        let mut e = Engine::with_config(&library::load(song).unwrap(), 32_000, config).unwrap();
         e.tap(true);
         e.post(Input::LevelStart);
         e.post(Input::SetFreedom { lead: 0.7, comp: 0.7, bass: 0.7, drums: 0.7, dynamics: 0.5 });
@@ -678,6 +682,25 @@ mod tests {
         assert!(horns.len() > 8, "{}", horns.len());
         let clash = horns.iter().filter(|h| lead.iter().any(|l| l.start.abs_diff(h.start) < 2_000)).count();
         assert!(clash * 10 < horns.len(), "{clash} of {}", horns.len());
+    }
+
+    /// Call and response: with the sections answering the head, the lead calls (no note held
+    /// past a beat, quarters short), and the answers get more room than the tune as written
+    /// leaves them.
+    #[test]
+    fn the_lead_calls_and_the_sections_answer() {
+        let inputs = [Input::ForceUpper(Some(UpperRole::Answers)), Input::ForceMelody(Some(Melody::Lead)), Input::ForceChorus(Some(Call { chorus: Chorus::Head, key_up: false }))];
+        let cfg = |call_and_response| EngineConfig { seed: 5, horns: Horns::BIG_BAND, call_and_response, ..EngineConfig::default() };
+        let (call, plain) = (take_with(cfg(true), &inputs, "body_and_soul"), take_with(cfg(false), &inputs, "body_and_soul"));
+        let lead = |evs: &[NoteEvent]| evs.iter().filter(|e| e.ch == 0).map(|e| e.end - e.start).collect::<Vec<_>>();
+        let answers = |evs: &[NoteEvent]| evs.iter().filter(|e| [Horn::Trumpets, Horn::Altos, Horn::Tenors].iter().any(|h| h.ch() == e.ch)).count();
+        let (lc, lp) = (lead(&call), lead(&plain));
+        // A beat at 32 kHz (Body and Soul is at 192 bpm here, drifting a few either way).
+        let beat = 32_000 * 60 / 192;
+        assert!(lp.iter().any(|&d| d > 2 * beat as u64), "the tune as written holds notes");
+        assert!(lc.iter().all(|&d| d <= beat as u64 * 13 / 10), "a held note runs on: {:?}", lc.iter().max());
+        assert!(lc.iter().sum::<u64>() * 10 < lp.iter().sum::<u64>() * 9, "the call sounds less: {} vs {}", lc.iter().sum::<u64>(), lp.iter().sum::<u64>());
+        assert!(answers(&call) > answers(&plain), "more answers: {} vs {}", answers(&call), answers(&plain));
     }
 
     /// Over a long take the arranger uses its whole kit: the line passed round, riffs, answers,

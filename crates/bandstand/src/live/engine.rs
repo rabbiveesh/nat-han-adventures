@@ -165,11 +165,16 @@ pub struct EngineConfig {
     pub duck: bool,
     /// The horns on the stand ([`super::horns`]; none: the combo alone).
     pub horns: super::horns::Horns,
+    /// Call and response: while the sections answer the head
+    /// ([`super::horns::UpperRole::Answers`]), the lead phrases the tune as a call, shorter
+    /// notes and long ones cut off after a beat, to leave the answers room
+    /// ([`super::arranger::call_phrasing`]). No effect without upper sections.
+    pub call_and_response: bool,
 }
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true, horns: super::horns::Horns::NONE }
+        EngineConfig { seed: 1, commit_lead_beats: 1.0, self_directed: false, intro: false, drift_bpm: DRIFT_BPM, loose: 1.0, soloist: None, duck: true, horns: super::horns::Horns::NONE, call_and_response: true }
     }
 }
 
@@ -847,7 +852,7 @@ impl Engine {
         }
         let low = super::horns::write(&ctx, self.config.horns, self.forced_low, &mut self.scratch, &mut self.horn_buf);
         super::horns::write_guitar(&ctx, self.config.horns, &mut self.horn_buf);
-        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, self.musicians[0].ahead(), &mut self.scratch, &mut self.horn_buf);
+        let section = super::arranger::write_upper(&ctx, self.config.horns, self.forced_upper, self.forced_melody, self.musicians[0].ahead(), self.config.call_and_response, &mut self.scratch, &mut self.horn_buf);
         let (upper, melody) = (section.map(|s| s.role), section.map(|s| s.melody));
         self.scratch.append(&mut self.horn_buf);
         let events = self.scratch.len() as u32;

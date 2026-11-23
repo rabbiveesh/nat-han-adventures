@@ -707,11 +707,14 @@ impl VoiceBank {
             0 => pan(PULSE1_PAN, PULSE_GAIN),
             1 => pan(PULSE2_PAN, PULSE_GAIN),
             2 => pan(0.0, TRIANGLE_GAIN),
-            _ => pan(0.0, NOISE_GAIN),
+            3 => pan(0.0, NOISE_GAIN),
+            _ => pan(PULSE3_PAN, PULSE_GAIN),
         };
         match ch {
             0..=2 => self.tones[ch].gain = (l * g, r * g),
-            _ => self.drums.gain = (l * g, r * g),
+            3 => self.drums.gain = (l * g, r * g),
+            // (The third pulse, the soli's tenor: it was the drums' before.)
+            _ => self.tones[3].gain = (l * g, r * g),
         }
         // The third pulse is the comp's: it follows pulse 2.
         if ch == 1 {
