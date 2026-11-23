@@ -829,8 +829,9 @@ impl<'a, 'b> Writer<'a, 'b> {
     }
 
     /// Answers in the line's rests and under its long notes (`line`: its notes this bar, as
-    /// (beat, end)).
-    fn answers(&self, out: &mut Vec<NoteEvent>, line: &[(f64, f64)], heard: &[(f64, f64, i32)], ahead: Option<LineAhead>, vol: u8) {
+    /// (beat, end)). `gap`: the shortest rest an answer goes in (a beat and a half; a beat
+    /// behind a lead playing [`call_phrasing`], whose calls stop a beat short).
+    fn answers(&self, out: &mut Vec<NoteEvent>, line: &[(f64, f64)], heard: &[(f64, f64, i32)], ahead: Option<LineAhead>, vol: u8, gap: f64) {
         let ctx = self.ctx;
         let bb = ctx.bb();
         let mut gaps: Vec<(f64, f64)> = Vec::new();
@@ -838,7 +839,7 @@ impl<'a, 'b> Writer<'a, 'b> {
         let mut sorted = line.to_vec();
         sorted.sort_by(|a, b| a.0.total_cmp(&b.0));
         for &(s, e) in &sorted {
-            if s - cursor >= 1.5 {
+            if s - cursor >= gap - 1e-9 {
                 gaps.push((cursor, s));
             }
             if e - s >= 2.5 {
@@ -846,7 +847,7 @@ impl<'a, 'b> Writer<'a, 'b> {
             }
             cursor = cursor.max(e);
         }
-        if bb - cursor >= 1.5 {
+        if bb - cursor >= gap - 1e-9 {
             gaps.push((cursor, bb));
         }
         // What the soloist has planned past the bar line ([`LineAhead`]): a phrase still
@@ -856,7 +857,8 @@ impl<'a, 'b> Writer<'a, 'b> {
             && (last.1 - bb).abs() < 1e-9
         {
             match a.end {
-                Some(_) if last.1 - last.0 < 3.0 => {
+                // (A calling lead leaves its breath to the answer.)
+                Some(_) if last.1 - last.0 < 3.0 && gap >= 1.5 => {
                     gaps.pop();
                 }
                 Some(_) => {}
@@ -865,10 +867,10 @@ impl<'a, 'b> Writer<'a, 'b> {
         }
         // One answer a bar at most, in a real rest: room for the line to breathe too.
         for (i, &(g0, g1)) in gaps.iter().take(1).enumerate() {
-            let start = ((g0 + 0.25) * 2.0).ceil() / 2.0;
+            let start = if gap < 1.5 { (g0 * 2.0).ceil() / 2.0 } else { ((g0 + 0.25) * 2.0).ceil() / 2.0 };
             // (Notes start in this bar; only the last rings past the bar line.)
             let room = g1.min(bb + 1.0) - start;
-            if room < 1.5 {
+            if room < gap.min(1.5) - 1e-9 {
                 continue;
             }
             // Call and response: the band answers with what it just heard, the line's last
@@ -1053,7 +1055,8 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         sec.role = UpperRole::Pads;
     }
     // Behind the head, with the sections answering, the lead plays its tune as a call.
-    if call && sec.role == UpperRole::Answers && !plan_.chorus.lead_solos(ctx.freedom[0]) && !plan_.tacet {
+    let calling = call && sec.role == UpperRole::Answers && !plan_.chorus.lead_solos(ctx.freedom[0]) && !plan_.tacet;
+    if calling {
         call_phrasing(ctx, band);
     }
     // The line as played this bar (where answers go).
@@ -1110,7 +1113,7 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
             }
             let held: Vec<(f64, f64)> = tune.iter().map(|&(b, d, _)| (b, b + d)).collect();
             let brass = Writer::new(ctx, if free.has(Horn::Trumpets) { Horns::NONE.with(Horn::Trumpets) } else { Horns::NONE });
-            brass.answers(out, &held, &tune, None, 13);
+            brass.answers(out, &held, &tune, None, 13, 1.5);
             band.retain(|e| e.ch != 0);
         }
         UpperRole::Tutti => {
@@ -1122,7 +1125,7 @@ pub fn write_upper(ctx: &Ctx, horns: Horns, force: Option<UpperRole>, force_melo
         UpperRole::Riff => {
             w.riff(out, &figure(ctx), plan_.chorus == Chorus::Shout);
         }
-        UpperRole::Answers => w.answers(out, &line, &heard, ahead, 13),
+        UpperRole::Answers => w.answers(out, &line, &heard, ahead, 13, if calling { 1.0 } else { 1.5 }),
         UpperRole::Tacet => {}
     }
     piano_in_the_holes(ctx, band, out);
@@ -1152,8 +1155,8 @@ fn piano_in_the_holes(ctx: &Ctx, band: &mut Vec<NoteEvent>, out: &[NoteEvent]) {
 /// a phrase's last short note let go; the 8-bar section rising to its sixth and seventh
 /// bars. (The line's notes this bar, wherever it went; a soloist shapes their own.)
 /// Call and response: the lead plays the tune as a call, so the sections' answers have room.
-/// A held note (two beats or more, ties included) stops after a beat, as a singer leading a
-/// call stops and lets the answer in; the rest of a note held over the bar line goes; a
+/// A held note (two beats or more, with its ties and the turn it opens with) stops after a
+/// beat, as a singer leading a call stops and lets the answer in; the rest of a note held over the bar line goes; a
 /// quarter or longer is played short (60%); 8ths and quicker runs stay as they are. The
 /// answers then find the rests this opens ([`Writer::answers`]).
 pub fn call_phrasing(ctx: &Ctx, band: &mut Vec<NoteEvent>) {
@@ -1171,17 +1174,24 @@ pub fn call_phrasing(ctx: &Ctx, band: &mut Vec<NoteEvent>) {
             k += 1;
             continue;
         }
-        // The note and the pieces tied to it.
+        // The note with what's slurred onto it (a tie, or the turn or grace notes it opens
+        // with): one sung note.
         let mut end = band[head].end;
         let mut j = k + 1;
-        while j < idx.len() && band[idx[j]].tie && band[idx[j]].start <= end + 1 && band[idx[j]].sound == band[head].sound {
+        while j < idx.len() && band[idx[j]].tie && band[idx[j]].start <= end + (0.05 * spb) as u64 {
             end = end.max(band[idx[j]].end);
-            drop[idx[j]] = true;
             j += 1;
         }
         let d = (end - band[head].start) as f64 / spb;
         let to = if d >= 2.0 - 1e-6 { 1.0 } else if d >= 1.0 - 1e-6 { d * 0.6 } else { d };
-        band[head].end = band[head].start + (to.min(d) * spb) as u64;
+        let cut = band[head].start + (to.min(d) * spb) as u64;
+        for &i in &idx[k..j] {
+            if band[i].start >= cut {
+                drop[i] = true;
+            } else if band[i].end > cut {
+                band[i].end = cut;
+            }
+        }
         k = j;
     }
     let mut i = 0;

@@ -9,8 +9,10 @@ GitHub Release's notes.
 
 - **Call and response.** While the upper sections answer the head (`UpperRole::Answers`),
   the lead plays the tune as a call (`arranger::call_phrasing`): a note held two beats or
-  more stops after one, a quarter or longer is played short, 8ths stay as written, so the
-  answers find more rests (about half again as many answers in a chorus of Body and Soul).
+  more stops after one, a quarter or longer is played short, 8ths stay as written (a note
+  and its turns or grace notes count as one), so the answers find more rests, and behind a
+  call they answer in a one-beat breath too (a 1.5-beat rest otherwise): about half again as
+  many answers in a chorus of Body and Soul, twice as many over Sevivon.
   On by default with the horns on the stand; `EngineConfig::call_and_response` turns it off
   (a new field: a struct literal without `..Default::default()` needs it).
 - **Fix:** `Input::SetChannelGain { ch: 4, .. }` set the chip drums' level instead of the
