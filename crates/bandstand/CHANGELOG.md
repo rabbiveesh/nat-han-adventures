@@ -21,6 +21,13 @@ GitHub Release's notes.
   turnaround twice round, a ii–V or sus vamp over a pedal, or the tune's last four
   (`IntroKind::Turn`, `IntroKind::all`; Vamp, Rhythm, Dameron and Chromatic are turnarounds
   now). The tag ending goes round on a different one each time (`EndBar::turn`).
+- **A signature turnaround**: a performance plays one turnaround (the intro's, else one the
+  band picks; `Engine::turnaround`) wherever the tune has a turnaround of its own (the two
+  bars before a section that starts home, `chorus::TurnSpot`): behind a solo as it is, under
+  the tune only where it or a relative (`chorus::relatives`) fits the melody's strong beats
+  and long notes (`chorus::turn_fits`), more often as the comp loosens (`SubKind::Turnaround`,
+  `Input::ForceSpots`). The tags and the tag ending play it too. Minor turnarounds join
+  `TURNS` (`MAJOR_TURNS`, `in_mode`) for minor tunes and sections.
 - **Round again**: after a solo chorus on a tune that ends home, the band can go round its
   last two bars on a turnaround while the soloist blows on (4 to 8 bars, then the next
   chorus), more often as the band loosens (`chorus::tag_for`, `BandPlan::tag`, label

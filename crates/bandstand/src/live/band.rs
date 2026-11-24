@@ -112,6 +112,9 @@ pub enum SubKind {
     IiV,
     /// An intro's or an ending's own changes ([`super::chorus::harmony`]).
     Arranged,
+    /// The performance's signature turnaround at one of the tune's turnarounds
+    /// ([`super::chorus::TurnSpot`]).
+    Turnaround,
 }
 
 /// The shared plan of one bar.
@@ -228,6 +231,10 @@ pub struct BandInput<'a> {
     pub ending: Option<EndBar>,
     /// The bar is in a turnaround tag at the end of a solo (the soloist blows on).
     pub tag: Option<chorus::Tag>,
+    /// The bar is in one of the tune's turnarounds, where the performance's signature
+    /// turnaround can go ([`chorus::TurnSpot`]); forced in or out (`None`: by the dial).
+    pub spot: Option<chorus::TurnSpot>,
+    pub force_spots: Option<bool>,
     /// The reharm the soloist's lines ask for: rate against the dial's, and the weights of a
     /// tritone sub and a ii-V ([`super::soloist::Profile::reharm`]).
     pub reharm: [f32; 3],
@@ -567,6 +574,34 @@ impl BandPlan {
                     }
                     plan.subs[0] = Some(Sub { from: 0.0, to, chord: c, kind: SubKind::Tritone });
                 }
+            }
+        }
+        // The performance's signature turnaround at the tune's own (the two bars before a
+        // section that starts home): behind a solo as it is, under the tune only where it (or a
+        // relative) fits the melody; more often as the comp loosens. Both bars or neither.
+        if let Some(sp) = input.spot
+            && !arranged_bar
+            && plan.tag.is_none()
+            && !plan.tacet
+            && swing
+            && plan.trade != Trade::Drums
+        {
+            let solo = plan.chorus.lead_solos(input.freedom[0]) && plan.soli.is_none();
+            let turn = if solo { Some(sp.solo) } else { sp.head };
+            let p = match input.force_spots {
+                Some(on) => on as u8 as f64,
+                None if solo => ((comp as f64 - 0.2) * 1.1).clamp(0.0, 0.85),
+                None => ((comp as f64 - 0.5) * 1.4).clamp(0.0, 0.7),
+            };
+            if let Some(t) = turn
+                && rng(input.seed, 8, slot.pass * 4096 + sp.start as u64, 11).chance(p)
+            {
+                let chords = chorus::TURNS[t as usize % chorus::TURNS.len()].bar(input.key, sp.k);
+                let half = (bb / 2.0).floor().max(1.0);
+                plan.subs = [
+                    Some(Sub { from: 0.0, to: half, chord: chords[0], kind: SubKind::Turnaround }),
+                    Some(Sub { from: half, to: bb, chord: chords[1], kind: SubKind::Turnaround }),
+                ];
             }
         }
         plan

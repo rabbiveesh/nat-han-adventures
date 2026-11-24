@@ -9,7 +9,7 @@ use nat_han_adventures::audio::{
     Music,
     live::{
         Engine, EngineConfig, Input,
-        band::HitKind,
+        band::{HitKind, SubKind},
         chorus::{self, Call, Chorus, EndKind, EndStep, IntroKind},
         engine::CommittedBar,
         library,
@@ -335,6 +335,44 @@ fn levels_start_with_an_intro() {
         assert!(play(s, 1, &[freedom(0.35)], 4)[0].c.band.intro.is_none());
     }
     assert!(kinds.len() >= 2, "{kinds:?}");
+}
+
+/// The performance's signature turnaround at the tune's own turnarounds: both bars of a spot
+/// (the two before a section that starts home) or neither; behind a solo the signature itself
+/// (or its minor counterpart); under the head only one that fits the tune (it or a relative).
+/// Never with the spots off.
+#[test]
+fn the_signature_turnaround_flavours_the_tune() {
+    let lady = chorus::TURNS.iter().position(|t| t.name == "Lady Bird").unwrap() as u8;
+    let mut spots = 0;
+    for m in LOOPING {
+        let s = song(m);
+        let n = s.bars();
+        for (call, on) in [(Chorus::Blowing, true), (Chorus::Head, true), (Chorus::Blowing, false)] {
+            let setup = [freedom(1.0), force(call), Input::ForceTurn(Some(lady)), Input::ForceSpots(Some(on)), Input::ForceTag(Some(false))];
+            let bars = play(s, 5, &setup, n as u64);
+            let turned: Vec<&Bar> = bars.iter().filter(|b| b.c.band.subs.iter().flatten().any(|x| x.kind == SubKind::Turnaround)).collect();
+            if !on {
+                assert!(turned.is_empty(), "{m:?}");
+                continue;
+            }
+            for b in &turned {
+                let (k, start) = chorus::turn_spot(b.c.slot.song_bar, n).expect("a spot");
+                // Its partner turned too (on a pass after the first fill: both in the take).
+                let partner = if k == 0 { start + 1 } else { start };
+                assert!(turned.iter().any(|x| x.c.slot.song_bar == partner), "{m:?}: bar {} alone", b.c.slot.song_bar);
+                let roots: Vec<u8> = b.c.band.subs.iter().flatten().map(|x| (x.chord.root + 12 - s.key) % 12).collect();
+                let fits = |t: u8| chorus::TURNS[t as usize].bar(0, k).map(|c| c.root).to_vec() == roots;
+                if call == Chorus::Blowing {
+                    assert!(fits(lady) || fits(chorus::in_mode(lady, true)), "{m:?}: {roots:?}");
+                } else {
+                    assert!(chorus::relatives(lady).into_iter().chain(chorus::relatives(chorus::in_mode(lady, true))).any(fits), "{m:?}: {roots:?}");
+                }
+                spots += 1;
+            }
+        }
+    }
+    assert!(spots >= 8, "{spots} spot bars");
 }
 
 /// A turnaround tag: after a solo chorus the band goes round the tune's last two bars again

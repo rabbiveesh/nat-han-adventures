@@ -149,8 +149,13 @@ pub enum Input {
     /// every solo chorus that can take one, `Some(false)` never, `None` as the dial rolls.
     /// With [`Input::ForceTurn`], the turnaround they go round on.
     ForceTag(Option<bool>),
-    /// The turnaround ([`super::chorus::TURNS`]) the tags and the tag ending play.
+    /// The performance's signature turnaround ([`super::chorus::TURNS`]): the tags, the tag
+    /// ending and the turnarounds in the tune play it (`None`: the intro's, or the band picks).
     ForceTurn(Option<u8>),
+    /// The signature turnaround at the tune's own turnarounds (the two bars before a section
+    /// that starts home, [`super::chorus::TurnSpot`]): `Some(true)` wherever it goes,
+    /// `Some(false)` never, `None` as the dial rolls.
+    ForceSpots(Option<bool>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -426,6 +431,10 @@ struct Ending {
     turn: u8,
 }
 
+/// Per song bar a turnaround spot starts on: whether it's in the minor, and the turnaround
+/// that goes under the tune there (none: the tune clashes with them all).
+type Spots = Vec<Option<(bool, Option<u8>)>>;
+
 /// A turnaround tag the band is going round ([`chorus::Tag`]): its first bar (absolute), how
 /// many, the turnaround.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -500,6 +509,12 @@ pub struct Engine {
     tag: Option<SoloTag>,
     forced_tag: Option<bool>,
     forced_turn: Option<u8>,
+    forced_spots: Option<bool>,
+    /// The signature turnaround the band rolled (when the intro didn't pick one), and the
+    /// tune's turnaround spots for a signature: per song bar a spot starts on, what goes under
+    /// the tune there (`Some(None)`: a spot the tune clashes with every relative at).
+    rolled_turn: Option<u8>,
+    spots: Option<(u8, Spots)>,
     /// The horns' notes for the bar being committed.
     horn_buf: Vec<NoteEvent>,
     /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
@@ -586,6 +601,9 @@ impl Engine {
             tag: None,
             forced_tag: None,
             forced_turn: None,
+            forced_spots: None,
+            rolled_turn: None,
+            spots: None,
             horn_buf: Vec::with_capacity(256),
             tapped: None,
         })
@@ -814,6 +832,8 @@ impl Engine {
         if self.config.self_directed {
             self.direct(director::Events::default());
         }
+        // (Before the shape's borrowed: the spots are worked out on first use.)
+        let spot = if !waltz && harmony == Harmony::Original { self.turn_spot(slot.song_bar) } else { None };
         let intensity = (0.5 + self.energy).clamp(0.0, 1.0);
         self.energy *= ENERGY_DECAY;
         let bpm = match (&self.waltz, waltz) {
@@ -863,6 +883,7 @@ impl Engine {
             .ending
             .filter(|e| slot.index >= e.from)
             .map(|e| chorus::EndBar { kind: e.kind, k: (slot.index - e.from) as u8, n: e.n, tail: e.tail, turn: e.turn });
+        let spot = spot.filter(|_| intro.is_none() && ending.is_none());
         let tag = self
             .tag
             .filter(|t| !waltz && ending.is_none() && (t.from..t.from + t.n as u64).contains(&slot.index))
@@ -887,6 +908,8 @@ impl Engine {
             intro,
             ending,
             tag,
+            spot,
+            force_spots: self.forced_spots,
             reharm: soloist.profile().map_or(soloist::BAND_REHARM, |p| p.reharm()),
             sections: [super::horns::Horn::Trumpets, super::horns::Horn::Altos, super::horns::Horn::Tenors].into_iter().any(|h| self.config.horns.has(h)),
             horns: self.config.horns,
@@ -1001,9 +1024,15 @@ impl Engine {
             return;
         }
         let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
-        let Some(kind) = chorus::intro_for(self.config.seed ^ sh.song_hash, chorus::dial(freedom)).map(|k| self.forced_intro.unwrap_or(k)) else {
+        let minor = self.minor_tune();
+        let rolled = chorus::intro_for(self.config.seed ^ self.shape.song_hash, chorus::dial(freedom)).map(|k| match k {
+            chorus::IntroKind::Turn(t) => chorus::IntroKind::Turn(chorus::in_mode(t, minor)),
+            k => k,
+        });
+        let Some(kind) = rolled.map(|k| self.forced_intro.unwrap_or(k)) else {
             return;
         };
+        let sh = &self.shape;
         let entry = sh.bars - n;
         self.spans[0] = Span { waltz: false, start: 0, entry, end: sh.len - sh.bar_starts[entry], pass: 0, first_bar: 0, intro: true };
         self.next_song_bar = entry;
@@ -1033,18 +1062,108 @@ impl Engine {
             return None;
         }
         let original = self.arrangements[harmony_index(Harmony::Original)].as_ref()?;
-        let home = |bar: usize| original.harm_at(bar as f64 * sh.bar_beats).is_some_and(|h| h.chord.root % 12 == sh.key % 12 && h.chord.family() == crate::chart::Family::Major);
-        if !home(entry) && !home(entry + 1) {
+        let home = |bar: usize, f: crate::chart::Family| original.harm_at(bar as f64 * sh.bar_beats).is_some_and(|h| h.chord.root % 12 == sh.key % 12 && h.chord.family() == f);
+        let (major, minor) = (crate::chart::Family::Major, crate::chart::Family::Minor);
+        let in_minor = if home(entry, major) || home(entry + 1, major) {
+            false
+        } else if home(entry, minor) || home(entry + 1, minor) {
+            true
+        } else {
             return None;
-        }
+        };
         let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
         let (seed, dial) = (self.config.seed ^ sh.song_hash, chorus::dial(freedom));
         let (n, turn) = match self.forced_tag {
             Some(true) => chorus::tag_for(seed, sp.pass, 1.0).unwrap_or((4, chorus::turn_for(seed, sp.pass, dial))),
             _ => chorus::tag_for(seed, sp.pass, dial)?,
         };
-        self.tag = Some(SoloTag { from: slot.index, n, turn: self.forced_turn.unwrap_or(turn) });
+        let _ = turn;
+        let turn = chorus::in_mode(self.signature(), in_minor);
+        self.tag = Some(SoloTag { from: slot.index, n, turn });
         Some(entry)
+    }
+
+    /// The performance's signature turnaround: forced, else the intro's, else rolled once.
+    fn signature(&mut self) -> u8 {
+        if let Some(t) = self.forced_turn {
+            return t;
+        }
+        if let Some(chorus::IntroKind::Turn(t)) = self.intro {
+            return t;
+        }
+        let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
+        *self.rolled_turn.get_or_insert_with(|| chorus::turn_for(self.config.seed ^ self.shape.song_hash, 0, chorus::dial(freedom)))
+    }
+
+    /// The performance's signature turnaround ([`chorus::TURNS`]) as it stands: forced, the
+    /// intro's, or the one the band rolled (`None` till it rolls one).
+    pub fn turnaround(&self) -> Option<u8> {
+        self.forced_turn.or(match self.intro {
+            Some(chorus::IntroKind::Turn(t)) => Some(t),
+            _ => self.rolled_turn,
+        })
+    }
+
+    /// Does the tune end on a minor tonic (its last bar's, else its first's, chord)?
+    fn minor_tune(&self) -> bool {
+        let sh = &self.shape;
+        let Some(arr) = self.arrangements[harmony_index(Harmony::Original)].as_ref() else {
+            return false;
+        };
+        let at = |bar: usize| arr.harm_at(bar as f64 * sh.bar_beats).map(|h| h.chord).filter(|c| c.root % 12 == sh.key % 12);
+        at(sh.bars - 1).or_else(|| at(0)).is_some_and(|c| c.family() == crate::chart::Family::Minor)
+    }
+
+    /// Bar `song_bar`'s turnaround spot ([`chorus::TurnSpot`]), if it's in one (the next
+    /// section starting home), in the song's own chart and meter.
+    fn turn_spot(&mut self, song_bar: usize) -> Option<chorus::TurnSpot> {
+        let (k, start) = chorus::turn_spot(song_bar, self.shape.bars)?;
+        let sig = self.signature();
+        if self.spots.as_ref().is_none_or(|(s, _)| *s != sig) {
+            let spots = self.find_spots(sig);
+            self.spots = Some((sig, spots));
+        }
+        let (minor, head) = (*self.spots.as_ref()?.1.get(start)?)?;
+        Some(chorus::TurnSpot { solo: chorus::in_mode(sig, minor), head, k, start })
+    }
+
+    fn find_spots(&self, sig: u8) -> Spots {
+        let sh = &self.shape;
+        let (bars, bb, key) = (sh.bars, sh.bar_beats, sh.key % 12);
+        let Some(arr) = self.arrangements[harmony_index(Harmony::Original)].as_ref() else {
+            return vec![None; bars];
+        };
+        let chord = |bar: usize| arr.harm_at(bar as f64 * bb).map(|h| h.chord);
+        use crate::chart::Family::{Major, Minor};
+        let home = |bar: usize, f| chord(bar).is_some_and(|c| c.root % 12 == key && c.family() == f);
+        let tries = [chorus::relatives(chorus::in_mode(sig, false)), chorus::relatives(chorus::in_mode(sig, true))];
+        (0..bars)
+            .map(|start| {
+                if chorus::turn_spot(start, bars) != Some((0, start)) || start + 1 >= bars {
+                    return None;
+                }
+                // The next section starts home, in the major or the minor: whatever the two bars
+                // were, a turnaround leads there (the melody check keeps the head safe).
+                let next = (start + 2) % bars;
+                let minor = if home(next, Major) {
+                    false
+                } else if home(next, Minor) {
+                    true
+                } else {
+                    return None;
+                };
+                let tries = &tries[minor as usize];
+                let (lo, hi) = (arr.bar_events[0].get(start)?.0, arr.bar_events[0].get(start + 1)?.1);
+                let notes: Vec<(f64, f64, i32)> = arr.tracks[0].events[lo..hi]
+                    .iter()
+                    .filter_map(|e| match e.kind {
+                        crate::mml::EventKind::Note(n) => Some((e.start - start as f64 * bb, e.dur, n as i32)),
+                        _ => None,
+                    })
+                    .collect();
+                Some((minor, tries.iter().copied().find(|&t| chorus::turn_fits(&chorus::TURNS[t as usize], key, bb, &notes))))
+            })
+            .collect()
     }
 
     fn push_span(&mut self, s: Span) {
@@ -1151,7 +1270,7 @@ impl Engine {
                         Input::EndWith(kind) => kind,
                         _ => chorus::ending_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom)),
                     };
-                    let turn = self.forced_turn.unwrap_or_else(|| chorus::turn_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom)));
+                    let turn = chorus::in_mode(self.signature(), self.minor_tune());
                     self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, false), tail: false, turn });
                 }
                 None
@@ -1216,6 +1335,10 @@ impl Engine {
             }
             Input::ForceTurn(t) => {
                 self.forced_turn = t.map(|t| t % chorus::TURNS.len() as u8);
+                None
+            }
+            Input::ForceSpots(s) => {
+                self.forced_spots = s;
                 None
             }
             Input::SetBalance(b) => {
