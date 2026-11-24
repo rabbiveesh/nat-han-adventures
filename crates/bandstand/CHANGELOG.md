@@ -129,6 +129,8 @@ GitHub Release's notes.
 - **Tiger Rag** (1917) joins the library as `tiger_rag`, transcribed from the sheet: the
   first strain (Bb, the stop-time break strain in F over a chromatic bass, Bb again) and the
   "hold that tiger" chorus, 56 bars.
+- **Muskrat Ramble** as written (from a lead sheet): in Ab, 48 bars, the first strain's eight
+  four times (to C minor and back home) and the second strain; it was a loose guess before.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the
   mix exactly) and writes its notes as text. `examples/stems.rs` makes seeded takes.
