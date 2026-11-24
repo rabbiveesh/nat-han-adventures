@@ -1329,11 +1329,12 @@ pub fn voicing_of(ctx: &Ctx, force: voicing::Force) -> Voicing {
                 (Style::Cluster, 0.02 + 0.05 * f),
                 (Style::Upper, 0.05 + 0.08 * f),
                 (Style::Theme, 0.05 + 0.06 * f),
+                (Style::Power, 0.03 + 0.07 * f),
             ],
         )
     });
     let passing = force.passing.unwrap_or_else(|| pick(c(101), &[(Passing::Dim, 0.5 - 0.3 * f), (Passing::Planing, 0.25), (Passing::Plain, 0.15), (Passing::Free, 0.05 + 0.4 * f), (Passing::Harris, 0.2), (Passing::Lean, 0.1 + 0.2 * f)]));
-    let dense = matches!(style, Style::Cluster | Style::Fifths | Style::Quartal | Style::Upper) || passing == Passing::Free;
+    let dense = matches!(style, Style::Cluster | Style::Fifths | Style::Quartal | Style::Upper | Style::Power) || passing == Passing::Free;
     let balance = force.balance.unwrap_or_else(|| {
         if dense {
             pick(c(102), &[(Balance::Lead, 0.5), (Balance::Pyramid, 0.35), (Balance::Top, 0.15)])

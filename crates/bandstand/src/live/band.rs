@@ -141,6 +141,8 @@ pub struct BandPlan {
     /// A bar of the tune's intro, or of its ending.
     pub intro: Option<Intro>,
     pub ending: Option<EndBar>,
+    /// A bar of a turnaround tag at the end of a solo ([`chorus::Tag`]).
+    pub tag: Option<chorus::Tag>,
     /// Comp, bass and drums rest the whole bar (a break's second bar; a Basie ending's plinks
     /// are the comp's alone).
     pub tacet: bool,
@@ -161,7 +163,7 @@ impl BandPlan {
     /// Is the bar arranged beyond the written parts in a way every player must follow, even at
     /// freedom 0 (a forced chorus, an ending)?
     pub fn arranged(&self) -> bool {
-        self.chorus != Chorus::Head || self.key_up || self.intro.is_some() || self.ending.is_some() || self.tacet || self.hit_kind == HitKind::Stop
+        self.chorus != Chorus::Head || self.key_up || self.intro.is_some() || self.ending.is_some() || self.tag.is_some() || self.tacet || self.hit_kind == HitKind::Stop
     }
 
     /// What the HUD's band readout says about the bar: an ending or the intro, the feel, the
@@ -172,6 +174,9 @@ impl BandPlan {
         }
         if self.intro.is_some() {
             return "INTRO";
+        }
+        if self.tag.is_some() {
+            return "ROUND AGAIN";
         }
         if self.feel != Feel::Swing {
             return self.feel.label();
@@ -221,6 +226,8 @@ pub struct BandInput<'a> {
     /// The bar is in the tune's intro, or its ending.
     pub intro: Option<Intro>,
     pub ending: Option<EndBar>,
+    /// The bar is in a turnaround tag at the end of a solo (the soloist blows on).
+    pub tag: Option<chorus::Tag>,
     /// The reharm the soloist's lines ask for: rate against the dial's, and the weights of a
     /// tritone sub and a ii-V ([`super::soloist::Profile::reharm`]).
     pub reharm: [f32; 3],
@@ -336,7 +343,9 @@ impl BandPlan {
             let c = input.chorus(slot.pass);
             (plan.chorus, plan.key_up) = (c.chorus, c.key_up);
         }
-        if let Some((chords, half)) = chorus::harmony(input.key, bb, plan.intro, plan.ending) {
+        plan.tag = input.tag.filter(|_| !arranged_bar);
+        let tag_chords = plan.tag.map(|t| (t.chords(input.key), (bb / 2.0).floor().max(1.0)));
+        if let Some((chords, half)) = chorus::harmony(input.key, bb, plan.intro, plan.ending).or(tag_chords) {
             plan.subs = if chords[0] == chords[1] {
                 [Some(Sub { from: 0.0, to: bb, chord: chords[0], kind: SubKind::Arranged }), None]
             } else {
@@ -452,6 +461,14 @@ impl BandPlan {
                 _ => Fill::None,
             };
         }
+        // A tag's last bar fills into the next chorus (its others into each time round).
+        if let Some(t) = plan.tag {
+            if t.last() {
+                plan.fill = Fill::Full;
+            } else if t.k % 2 == 1 && plan.fill == Fill::None && drums >= 0.3 {
+                plan.fill = Fill::Short;
+            }
+        }
         if plan.tacet || plan.hit_kind == HitKind::Stop {
             plan.fill = Fill::None;
         }
@@ -512,7 +529,7 @@ impl BandPlan {
         // The band's reharmonization: comp and bass together, high freedom (a soli's lines
         // follow it too).
         let under_tune = input.sections && !plan.chorus.lead_solos(input.freedom[0]);
-        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet && !under_tune {
+        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && plan.tag.is_none() && !plan.tacet && !under_tune {
             let [rate, w_tri, w_iiv] = input.reharm;
             let rate = if input.sections { rate / 3.0 } else { rate };
             let p = (0.5 * high(comp) * rate as f64).min(0.9);

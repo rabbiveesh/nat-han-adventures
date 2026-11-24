@@ -334,7 +334,47 @@ fn levels_start_with_an_intro() {
         assert!(plain.iter().all(|b| b.c.band.intro.is_none()) && plain[0].c.slot.song_bar == 0);
         assert!(play(s, 1, &[freedom(0.35)], 4)[0].c.band.intro.is_none());
     }
-    assert_eq!(kinds.len(), 2, "{kinds:?}");
+    assert!(kinds.len() >= 2, "{kinds:?}");
+}
+
+/// A turnaround tag: after a solo chorus the band goes round the tune's last two bars again
+/// on a turnaround (the soloist's pass still), then fills into the next chorus. Never after
+/// a head, never with tags off.
+#[test]
+fn solos_go_round_again_on_a_turnaround() {
+    let mut tagged = 0;
+    for m in LOOPING {
+        let s = song(m);
+        let n = s.bars();
+        let setup = [freedom(1.0), force(Chorus::Blowing), Input::ForceTag(Some(true)), Input::ForceTurn(Some(13))];
+        let bars = play(s, 3, &setup, (n + 10) as u64);
+        let tag: Vec<_> = bars.iter().filter_map(|b| b.c.band.tag.map(|t| (b, t))).collect();
+        if tag.is_empty() {
+            continue;
+        }
+        tagged += 1;
+        let len = tag[0].1.n as usize;
+        assert_eq!(tag.len(), len, "{m:?}");
+        assert_eq!(tag[0].0.c.slot.index, n as u64, "{m:?}: the tag comes after the chorus");
+        for (k, (b, t)) in tag.iter().enumerate() {
+            assert_eq!((b.c.slot.pass, b.c.slot.song_bar, t.k as usize), (0, n - 2 + k % 2, k), "{m:?}");
+            assert_eq!(b.c.band.label(), "ROUND AGAIN");
+            // Lady Bird: I bIII7 | bVI7 bII7.
+            let roots: Vec<u8> = b.c.band.subs.iter().flatten().map(|x| (x.chord.root + 12 - s.key) % 12).collect();
+            assert_eq!(roots, if k % 2 == 0 { [0, 3] } else { [8, 1] }, "{m:?}");
+        }
+        assert!(tag[len - 1].0.c.band.fill != Default::default());
+        let next = &bars[n + len];
+        assert_eq!((next.c.slot.pass, next.c.slot.song_bar), (1, 0), "{m:?}");
+        assert!(next.c.band.tag.is_none());
+        // Tags off, or the head: straight round.
+        for setup in [[freedom(1.0), force(Chorus::Blowing), Input::ForceTag(Some(false))], [freedom(1.0), force(Chorus::Head), Input::ForceTag(Some(true))]] {
+            let bars = play(s, 3, &setup, (n + 2) as u64);
+            assert!(bars.iter().all(|b| b.c.band.tag.is_none()), "{m:?}");
+            assert_eq!(bars[n].c.slot.song_bar, 0);
+        }
+    }
+    assert!(tagged >= 3, "{tagged} tunes tagged");
 }
 
 /// End: the band plays an ending from the next bar on, its last chord the tonic in every

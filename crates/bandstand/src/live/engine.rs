@@ -142,6 +142,15 @@ pub enum Input {
     /// Override the soli's texture ([`super::soli::Texture`]: the counterpoint kinds, or
     /// locked block chords), in a soli chorus and a head's sax soli.
     ForceSoli(Option<super::soli::Texture>),
+    /// Override the tune's intro ([`super::chorus::IntroKind`]), when it gets one (the dial
+    /// high enough, from the top): post it before the first fill.
+    ForceIntro(Option<super::chorus::IntroKind>),
+    /// Turnaround tags at the end of solos ([`super::chorus::tag_for`]): `Some(true)` after
+    /// every solo chorus that can take one, `Some(false)` never, `None` as the dial rolls.
+    /// With [`Input::ForceTurn`], the turnaround they go round on.
+    ForceTag(Option<bool>),
+    /// The turnaround ([`super::chorus::TURNS`]) the tags and the tag ending play.
+    ForceTurn(Option<u8>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -414,6 +423,16 @@ struct Ending {
     from: u64,
     n: u8,
     tail: bool,
+    turn: u8,
+}
+
+/// A turnaround tag the band is going round ([`chorus::Tag`]): its first bar (absolute), how
+/// many, the turnaround.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SoloTag {
+    from: u64,
+    n: u8,
+    turn: u8,
 }
 
 impl Ending {
@@ -477,6 +496,10 @@ pub struct Engine {
     forced_melody: Option<super::arranger::Melody>,
     forced_voicing: super::voicing::Force,
     forced_soli: Option<super::soli::Texture>,
+    forced_intro: Option<chorus::IntroKind>,
+    tag: Option<SoloTag>,
+    forced_tag: Option<bool>,
+    forced_turn: Option<u8>,
     /// The horns' notes for the bar being committed.
     horn_buf: Vec<NoteEvent>,
     /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
@@ -559,6 +582,10 @@ impl Engine {
             forced_melody: None,
             forced_voicing: super::voicing::Force::default(),
             forced_soli: None,
+            forced_intro: None,
+            tag: None,
+            forced_tag: None,
+            forced_turn: None,
             horn_buf: Vec::with_capacity(256),
             tapped: None,
         })
@@ -750,10 +777,18 @@ impl Engine {
         let sp = *self.spans.back().expect("a span");
         let mut replan = false;
         if slot.song_bar == 0 && slot.loop_start != sp.start {
-            // A new loop pass.
-            let len = self.shape_of(sp.waltz).len;
-            self.push_span(Span { start: slot.start, entry: 0, end: slot.start + len, pass: slot.pass, first_bar: slot.index, intro: false, ..sp });
-            self.next_song_bar = 0;
+            if let Some(entry) = self.tag_round(&sp, &slot) {
+                // Round the tune's last two bars again (a tag): still the soloist's pass.
+                let sh = &self.shape;
+                let end = slot.start + sh.len - sh.bar_starts[entry];
+                self.push_span(Span { start: slot.start, entry, end, pass: sp.pass, first_bar: slot.index, intro: false, waltz: false });
+                self.next_song_bar = entry;
+            } else {
+                // A new loop pass.
+                let len = self.shape_of(sp.waltz).len;
+                self.push_span(Span { start: slot.start, entry: 0, end: slot.start + len, pass: slot.pass, first_bar: slot.index, intro: false, ..sp });
+                self.next_song_bar = 0;
+            }
         }
         let cur = *self.spans.back().expect("a span");
         let want_waltz = harmony == Harmony::Waltz;
@@ -824,8 +859,14 @@ impl Engine {
             let n = chorus::INTRO_BARS;
             chorus::Intro { kind, k: (slot.song_bar + n as usize).saturating_sub(shape.bars) as u8, n }
         });
-        let ending =
-            self.ending.filter(|e| slot.index >= e.from).map(|e| chorus::EndBar { kind: e.kind, k: (slot.index - e.from) as u8, n: e.n, tail: e.tail });
+        let ending = self
+            .ending
+            .filter(|e| slot.index >= e.from)
+            .map(|e| chorus::EndBar { kind: e.kind, k: (slot.index - e.from) as u8, n: e.n, tail: e.tail, turn: e.turn });
+        let tag = self
+            .tag
+            .filter(|t| !waltz && ending.is_none() && (t.from..t.from + t.n as u64).contains(&slot.index))
+            .map(|t| chorus::Tag { turn: t.turn, k: (slot.index - t.from) as u8, n: t.n });
         let band = BandPlan::decide(&BandInput {
             seed: self.config.seed ^ shape.song_hash,
             slot,
@@ -845,6 +886,7 @@ impl Engine {
             force_chorus: self.forced_chorus,
             intro,
             ending,
+            tag,
             reharm: soloist.profile().map_or(soloist::BAND_REHARM, |p| p.reharm()),
             sections: [super::horns::Horn::Trumpets, super::horns::Horn::Altos, super::horns::Horn::Tenors].into_iter().any(|h| self.config.horns.has(h)),
             horns: self.config.horns,
@@ -925,7 +967,7 @@ impl Engine {
         // bar; the last bar of an ending ends the timeline.
         if !shape.looping && self.ending.is_none() && slot.song_bar + 1 == shape.bars && chorus::dial(freedom) >= chorus::END_DIAL {
             let kind = chorus::EndKind::Basie;
-            self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, true), tail: true });
+            self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, true), tail: true, turn: 0 });
         }
         if self.ending.is_some_and(|e| self.next_bar == e.end()) {
             self.spans.back_mut().expect("a span").end = slot.end;
@@ -959,13 +1001,50 @@ impl Engine {
             return;
         }
         let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
-        let Some(kind) = chorus::intro_for(self.config.seed ^ sh.song_hash, chorus::dial(freedom)) else {
+        let Some(kind) = chorus::intro_for(self.config.seed ^ sh.song_hash, chorus::dial(freedom)).map(|k| self.forced_intro.unwrap_or(k)) else {
             return;
         };
         let entry = sh.bars - n;
         self.spans[0] = Span { waltz: false, start: 0, entry, end: sh.len - sh.bar_starts[entry], pass: 0, first_bar: 0, intro: true };
         self.next_song_bar = entry;
         self.intro = Some(kind);
+    }
+
+    /// At the loop end after span `sp`: go round the tune's last two bars again on a
+    /// turnaround (a tag, [`chorus::tag_for`])? The song bar to go round from, if so. Only
+    /// after a chorus the lead blew on, in swing in the song's own meter, with the tune ending
+    /// home (on its tonic, major); a tag goes on till it's played its bars.
+    fn tag_round(&mut self, sp: &Span, slot: &BarSlot) -> Option<usize> {
+        let sh = &self.shape;
+        if sp.waltz || sp.intro || !sh.looping || self.ending.is_some() || sh.bars < 8 || self.forced_tag == Some(false) {
+            self.tag = None;
+            return None;
+        }
+        let entry = sh.bars - 2;
+        if let Some(t) = self.tag {
+            if slot.index < t.from + t.n as u64 {
+                return Some(entry);
+            }
+            self.tag = None;
+            return None;
+        }
+        let prev = &self.prev_band;
+        if !prev.chorus.lead_solos(self.freedom.lead) || prev.key_up || prev.feel != Feel::Swing || prev.ending.is_some() {
+            return None;
+        }
+        let original = self.arrangements[harmony_index(Harmony::Original)].as_ref()?;
+        let home = |bar: usize| original.harm_at(bar as f64 * sh.bar_beats).is_some_and(|h| h.chord.root % 12 == sh.key % 12 && h.chord.family() == crate::chart::Family::Major);
+        if !home(entry) && !home(entry + 1) {
+            return None;
+        }
+        let freedom = [self.freedom.lead, self.freedom.comp, self.freedom.bass, self.freedom.drums];
+        let (seed, dial) = (self.config.seed ^ sh.song_hash, chorus::dial(freedom));
+        let (n, turn) = match self.forced_tag {
+            Some(true) => chorus::tag_for(seed, sp.pass, 1.0).unwrap_or((4, chorus::turn_for(seed, sp.pass, dial))),
+            _ => chorus::tag_for(seed, sp.pass, dial)?,
+        };
+        self.tag = Some(SoloTag { from: slot.index, n, turn: self.forced_turn.unwrap_or(turn) });
+        Some(entry)
     }
 
     fn push_span(&mut self, s: Span) {
@@ -1072,7 +1151,8 @@ impl Engine {
                         Input::EndWith(kind) => kind,
                         _ => chorus::ending_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom)),
                     };
-                    self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, false), tail: false });
+                    let turn = self.forced_turn.unwrap_or_else(|| chorus::turn_for(self.config.seed ^ self.shape.song_hash, self.next_bar, chorus::dial(freedom)));
+                    self.ending = Some(Ending { kind, from: self.next_bar, n: chorus::end_bars(kind, false), tail: false, turn });
                 }
                 None
             }
@@ -1124,6 +1204,18 @@ impl Engine {
             }
             Input::ForceSoli(t) => {
                 self.forced_soli = t;
+                None
+            }
+            Input::ForceIntro(k) => {
+                self.forced_intro = k;
+                None
+            }
+            Input::ForceTag(t) => {
+                self.forced_tag = t;
+                None
+            }
+            Input::ForceTurn(t) => {
+                self.forced_turn = t.map(|t| t % chorus::TURNS.len() as u8);
                 None
             }
             Input::SetBalance(b) => {

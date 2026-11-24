@@ -45,10 +45,15 @@ pub enum Style {
     Upper,
     /// The tune's opening intervals stacked down from the top.
     Theme,
+    /// "Jazz power chords" (Berkman, *The Jazz Harmony Book*: a friend's name for them): the
+    /// chord's root kept, its quality swapped for a harder one with the top in it: maj7#5,
+    /// m(maj7), m7b6, dim(maj7), 7sus4b9, 7sus4 with the 3rd. Strong and heavy; other shapes
+    /// where none holds the top.
+    Power,
 }
 
 impl Style {
-    pub const ALL: [Style; 8] = [Style::Drop2, Style::Drop24, Style::Spread, Style::Quartal, Style::Fifths, Style::Cluster, Style::Upper, Style::Theme];
+    pub const ALL: [Style; 9] = [Style::Drop2, Style::Drop24, Style::Spread, Style::Quartal, Style::Fifths, Style::Cluster, Style::Upper, Style::Theme, Style::Power];
 
     pub fn slug(self) -> &'static str {
         match self {
@@ -60,6 +65,7 @@ impl Style {
             Style::Cluster => "cluster",
             Style::Upper => "upper",
             Style::Theme => "theme",
+            Style::Power => "power",
         }
     }
 
@@ -79,7 +85,7 @@ pub enum Passing {
     /// The chord's own tones.
     Plain,
     /// Any chord that doesn't clash with it (a major 7th, minor 7th, dominant, half
-    /// diminished, diminished, a stack of fourths, minor b6 or augmented major 7th, the
+    /// diminished, diminished, a stack of fourths, or one of the power chords, [`POWER`], the
     /// passing note on any of its tones;
     /// nothing a half step or a minor 9th under it): the funkier the higher the freedom.
     Free,
@@ -332,10 +338,40 @@ pub fn lean(v: &Voicing, top: i32) -> [i32; 4] {
     if below.len() >= 3 { [top, below[0], below[1], below[2]] } else { dim }
 }
 
+/// Berkman's "jazz power chords", over the root: maj7#5, m(maj7), m7b6, dim(maj7), 7sus4b9,
+/// 7sus4 with the 3rd.
+pub const POWER: [[i32; 4]; 6] = [[0, 4, 8, 11], [0, 3, 7, 11], [0, 3, 8, 10], [0, 3, 6, 11], [1, 5, 7, 10], [0, 4, 5, 10]];
+
+/// A power chord on `c`'s root with `top` in it (the one nearest the chord's own quality
+/// first: a major chord's maj7#5 or sus with the 3rd, a minor's m(maj7) or m7b6, a dominant's
+/// sus chords, a diminished's dim(maj7)), close under the top.
+pub fn power(top: i32, c: Chord) -> Option<[i32; 4]> {
+    let r = c.root as i32;
+    let order: [usize; 6] = match c.family() {
+        Family::Major => [0, 5, 1, 2, 4, 3],
+        Family::Minor => [1, 2, 3, 0, 4, 5],
+        Family::Dominant => [4, 5, 0, 2, 1, 3],
+        _ => [3, 2, 1, 4, 0, 5],
+    };
+    order.iter().map(|&i| POWER[i]).find_map(|sh| {
+        let pcs: Vec<i32> = sh.iter().map(|i| (r + i) % 12).collect();
+        if !pcs.contains(&pc(top)) {
+            return None;
+        }
+        let below: Vec<i32> = (top - 12..top).rev().filter(|n| pcs.contains(&pc(*n))).take(3).collect();
+        // (Nothing a half step under the lead: the next one down instead.)
+        if below.len() < 3 || below[0] == top - 1 {
+            return None;
+        }
+        Some([top, below[0], below[1], below[2]])
+    })
+}
+
 /// The free passing chords' shapes, intervals above their root.
-/// (Major 7th, minor 7th, dominant, half diminished, diminished, fourths, minor b6,
-/// augmented major 7th.)
-const PASSING_SHAPES: [[i32; 4]; 8] = [[0, 4, 7, 11], [0, 3, 7, 10], [0, 4, 7, 10], [0, 3, 6, 10], [0, 3, 6, 9], [0, 5, 10, 15], [0, 3, 7, 8], [0, 4, 8, 11]];
+/// (Major 7th, minor 7th, dominant, half diminished, diminished, fourths, and the power
+/// chords: maj7#5, m(maj7), m7b6, dim(maj7), 7sus4b9, 7sus4 with the 3rd.)
+const PASSING_SHAPES: [[i32; 4]; 12] =
+    [[0, 4, 7, 11], [0, 3, 7, 10], [0, 4, 7, 10], [0, 3, 6, 10], [0, 3, 6, 9], [0, 5, 10, 15], POWER[0], POWER[1], POWER[2], POWER[3], POWER[4], POWER[5]];
 
 /// A passing chord of any quality under `top` that doesn't clash with it, close under the top
 /// (the top on any of its tones), picked by `salt` and the note.
@@ -380,6 +416,7 @@ fn shape(v: &Voicing, top: i32, c: Chord) -> [i32; 4] {
         Style::Fifths => four(stack(top, 4, &[2, 7, 7], &avail)),
         Style::Cluster => four(stack(top, 4, &[2, 1, 2], &avail)),
         Style::Theme => four(stack(top, 4, &v.theme, &avail)),
+        Style::Power => power(top, c).unwrap_or_else(|| four(stack(top, 4, &[2, 7, 7], &avail))),
         Style::Upper => {
             let r = c.root as i32;
             // The triad over the guide tones: a dominant's on the 9th (9 #11 13; on an
@@ -535,7 +572,7 @@ mod tests {
                 let x = four_voices(&v(s), top, c, false);
                 assert_eq!(x[0], top, "{s:?} {name}: {x:?}");
                 assert!(x.windows(2).all(|w| w[0] > w[1]), "{s:?} {name}: not descending {x:?}");
-                if !matches!(s, Style::Drop2 | Style::Drop24 | Style::Spread | Style::Upper) {
+                if !matches!(s, Style::Drop2 | Style::Drop24 | Style::Spread | Style::Upper | Style::Power) {
                     let ok = available(c);
                     for n in &x[1..] {
                         assert!(ok.contains(&n.rem_euclid(12)), "{s:?} {name}: {n} not available in {x:?}");
@@ -614,6 +651,17 @@ mod tests {
         let x = four_voices(&h, 74, chord("C6"), true);
         let f6 = chord_tones(chord("F6"));
         assert!(x[1..].iter().any(|n| f6.contains(&n.rem_euclid(12))), "{x:?}");
+    }
+
+    #[test]
+    fn power_chords() {
+        // Cmaj7 under a G#: C maj7#5 (G# E C? no: under the G#, E C B? B is the half step
+        // under C, fine; close: G# E C... the maj7#5 is C E G# B: under G#, E, C, B).
+        assert_eq!(power(80, chord("Cmaj7")), Some([80, 76, 72, 71]));
+        // Cm7 under a B: C m(maj7): B G Eb C.
+        assert_eq!(power(83, chord("Cm7")), Some([83, 79, 75, 72]));
+        // C7 under an F: 7sus4b9 (Db F G Bb): F Db Bb G.
+        assert_eq!(power(77, chord("C7")), Some([77, 73, 70, 67]));
     }
 
     #[test]

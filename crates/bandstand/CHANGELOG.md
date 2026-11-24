@@ -16,6 +16,17 @@ GitHub Release's notes.
   `Fx::balance`), and sections thin to two or three voices, never with a half step or a
   minor 9th under the lead or a second down low. `Input::ForceVoicing`, `ForcePassing`,
   `ForceBalance`, `ForceVoices`; `CommittedBar::voicing`.
+- **Turnarounds** (Dave Berkman's, *The Jazz Harmony Book* ch. 7): `chorus::TURNS`, 22 of
+  them (diminished passing chords, modal interchange, tritone subs, Lady Bird). An intro is a
+  turnaround twice round, a ii–V or sus vamp over a pedal, or the tune's last four
+  (`IntroKind::Turn`, `IntroKind::all`; Vamp, Rhythm, Dameron and Chromatic are turnarounds
+  now). The tag ending goes round on a different one each time (`EndBar::turn`).
+- **Round again**: after a solo chorus on a tune that ends home, the band can go round its
+  last two bars on a turnaround while the soloist blows on (4 to 8 bars, then the next
+  chorus), more often as the band loosens (`chorus::tag_for`, `BandPlan::tag`, label
+  "ROUND AGAIN"). `Input::ForceTag`, `Input::ForceTurn`.
+- **Power chords** (Berkman's): `voicing::Style::Power`, the colour chords Δ7#5, -Δ7, -7b6,
+  oΔ7, 7sus4b9 and 7sus4(3) on the chord's own root, and among the free passing chords.
 - **Soli everywhere.** A head's sax soli eight gets the quartet's counterpoint too
   (`soli::plan_eight`: block chords most often, a counterpoint texture otherwise), and the
   locked texture (a soli chorus's climax) block-voices the tune with the chorus's voicing.
