@@ -1,8 +1,8 @@
-; Tiger Rag (Original Dixieland Jass Band, 1917)
-; Converted from src/audio/songs.rs. Each line ends with its bar numbers.
+; Hold That Plunger: our own rag (it started life as a stand-in for Tiger Rag, sounded nothing
+; like it, and was too good to lose). Converted from src/audio/songs.rs. Each line ends with its bar numbers.
 
 [song]
-title = Tiger Rag (Original Dixieland Jass Band, 1917)
+title = Hold That Plunger
 bpm = 192
 swing = 0.28
 key = Bb

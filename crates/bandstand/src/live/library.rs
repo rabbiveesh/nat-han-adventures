@@ -9,7 +9,7 @@ use crate::Music;
 pub const FILES: [(&str, &str); 13] = [
     ("sweet_georgia_brown", include_str!("../../music/sweet_georgia_brown.song")),
     ("the_entertainer", include_str!("../../music/the_entertainer.song")),
-    ("tiger_rag", include_str!("../../music/tiger_rag.song")),
+    ("hold_that_plunger", include_str!("../../music/hold_that_plunger.song")),
     ("muskrat_ramble", include_str!("../../music/muskrat_ramble.song")),
     ("st_louis_blues", include_str!("../../music/st_louis_blues.song")),
     ("i_got_rhythm", include_str!("../../music/i_got_rhythm.song")),
@@ -27,7 +27,7 @@ pub fn stem(music: Music) -> &'static str {
     match music {
         Music::Title => "sweet_georgia_brown",
         Music::World(0 | 1) => "the_entertainer",
-        Music::World(2) => "tiger_rag",
+        Music::World(2) => "hold_that_plunger",
         Music::World(3) => "muskrat_ramble",
         Music::World(4) => "st_louis_blues",
         Music::World(_) => "i_got_rhythm",

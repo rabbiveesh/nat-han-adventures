@@ -546,7 +546,7 @@ mod tests {
     #[test]
     fn every_horn_note_is_in_range() {
         for role in LowRole::ALL {
-            for song in ["sweet_georgia_brown", "tiger_rag", "body_and_soul"] {
+            for song in ["sweet_georgia_brown", "hold_that_plunger", "body_and_soul"] {
                 for e in take(Horns::ALL, &[Input::ForceLowEnd(Some(role))], song) {
                     let Some(h) = Horn::from_ch(e.ch) else { continue };
                     let (lo, hi) = h.range();
@@ -638,10 +638,10 @@ mod tests {
 
     #[test]
     fn tacet_is_silent_and_roles_vary() {
-        let evs = take(Horns::LOW_END, &[Input::ForceLowEnd(Some(LowRole::Tacet))], "tiger_rag");
+        let evs = take(Horns::LOW_END, &[Input::ForceLowEnd(Some(LowRole::Tacet))], "hold_that_plunger");
         assert!(evs.iter().all(|e| e.ch < FIRST_CH));
         // Unforced, a long tune's sections don't all do the same thing.
-        let mut e = Engine::with_config(&library::load("tiger_rag").unwrap(), 32_000, EngineConfig { seed: 9, horns: Horns::ALL, ..EngineConfig::default() }).unwrap();
+        let mut e = Engine::with_config(&library::load("hold_that_plunger").unwrap(), 32_000, EngineConfig { seed: 9, horns: Horns::ALL, ..EngineConfig::default() }).unwrap();
         e.post(Input::LevelStart);
         e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
         let mut roles = std::collections::HashSet::new();

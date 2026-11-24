@@ -536,9 +536,18 @@ impl Lead {
         }
     }
 
-    /// The intro's last bar: four swung 8ths up (by scale steps) into the head's first note.
+    /// The intro's last bar: the tune's own pickup if its last bar has one written (three notes
+    /// or more after beat 1: "Oh when the"), else four swung 8ths up (by scale steps) into the
+    /// head's first note.
     fn pickup(&mut self, ctx: &Ctx, t: &NoteEvent) {
         let bb = ctx.bb();
+        let written: Vec<NoteEvent> = self.src.iter().filter(|e| ctx.rel(e) >= 0.9 && !e.tie).copied().collect();
+        if written.len() >= 3 {
+            for e in written {
+                push(&mut self.dst, e);
+            }
+            return;
+        }
         let target = ctx.next_first_note(0).unwrap_or(72);
         let from = bb - 2.0;
         let scale = scale_at(ctx, from);

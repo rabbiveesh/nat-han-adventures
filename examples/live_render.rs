@@ -3,7 +3,7 @@
 //!
 //! ```sh
 //! cargo run --release --example live_render                     # every song, the default script
-//! cargo run --release --example live_render -- out/ tiger_rag   # one song, somewhere else
+//! cargo run --release --example live_render -- out/ hold_that_plunger   # one song, somewhere else
 //! ```
 //!
 //! The script (bars count from 1, as played: a waltz bar is a bar), with the engine directing

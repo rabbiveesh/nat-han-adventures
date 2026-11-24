@@ -541,7 +541,7 @@ mod tests {
             return;
         };
         let font = FontVoicing::load(&bytes).unwrap();
-        let mut e = Engine::with_config(&library::load("tiger_rag").unwrap(), 32_000, EngineConfig::default()).unwrap();
+        let mut e = Engine::with_config(&library::load("hold_that_plunger").unwrap(), 32_000, EngineConfig::default()).unwrap();
         e.use_font(FontVoicing::combo(font)).unwrap();
         e.post(Input::LevelStart);
         let mut out = vec![Frame::ZERO; 32_000 * 4];

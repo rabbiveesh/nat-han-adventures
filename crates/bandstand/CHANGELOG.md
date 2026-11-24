@@ -120,6 +120,12 @@ GitHub Release's notes.
 - With upper sections on the stand the band reharms a third as often, and only behind
   a solo (`BandInput::sections`).
 - `Yes! We Have No Bananas` (1923) joins the library.
+- **When the Saints** as it's sung: bar 1 is "saints" with the pickup at the end of the last
+  bar (each phrase on its eight's ONE), the "Oh Lord I want to be in that number" line in its
+  real rhythm, the chords under it. An intro's last bar plays a tune's own written pickup
+  (three notes or more after beat 1) instead of a scale run.
+- **Breaking:** `tiger_rag` is now `hold_that_plunger` ("Hold That Plunger"): it was never
+  Tiger Rag, just our own rag.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the
   mix exactly) and writes its notes as text. `examples/stems.rs` makes seeded takes.

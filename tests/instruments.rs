@@ -47,15 +47,15 @@ const BEFORE_INSTRUMENTS: [(Music, Harmony, bool, u64); 80] = [
     (Music::World(1), Harmony::Waltz, false, 0xc87f9999c57cc40f),
     (Music::World(1), Harmony::Waltz, true, 0xb277be7695d39aad),
     (Music::World(2), Harmony::Original, false, 0xf8651fc190060f94),
-    (Music::World(2), Harmony::Original, true, 0x0fe6f2072ae56b5e),
+    (Music::World(2), Harmony::Original, true, 0x0e4616140a207048),
     (Music::World(2), Harmony::Coltrane, false, 0xeed775813c787c94),
-    (Music::World(2), Harmony::Coltrane, true, 0x230f8e2808f12590),
+    (Music::World(2), Harmony::Coltrane, true, 0x08497a9ea4bd3aca),
     (Music::World(2), Harmony::Quartal, false, 0x2c1a3a3acf5c9520),
-    (Music::World(2), Harmony::Quartal, true, 0xbf733bfb4b4cd103),
+    (Music::World(2), Harmony::Quartal, true, 0x2b7fb978979f7945),
     (Music::World(2), Harmony::MelodicMinor, false, 0x8eefeebe56aa94f2),
-    (Music::World(2), Harmony::MelodicMinor, true, 0xc48a8f670fbd04b6),
+    (Music::World(2), Harmony::MelodicMinor, true, 0xbac877c8aca65f59),
     (Music::World(2), Harmony::Waltz, false, 0x867897bf4df2d788),
-    (Music::World(2), Harmony::Waltz, true, 0xf7d7cf8a46287793),
+    (Music::World(2), Harmony::Waltz, true, 0xb01b365acb560b57),
     (Music::World(3), Harmony::Original, false, 0x8bcabd60688a4746),
     (Music::World(3), Harmony::Original, true, 0xfd8ab91a329f3acf),
     (Music::World(3), Harmony::Coltrane, false, 0xb6a80700930a4611),
@@ -96,16 +96,16 @@ const BEFORE_INSTRUMENTS: [(Music, Harmony, bool, u64); 80] = [
     (Music::LevelClear, Harmony::MelodicMinor, true, 0xfc3a52c12b3e7032),
     (Music::LevelClear, Harmony::Waltz, false, 0xd007b6408295b16b),
     (Music::LevelClear, Harmony::Waltz, true, 0x52c46d273b221f5c),
-    (Music::Victory, Harmony::Original, false, 0x4e7baa256237229e),
-    (Music::Victory, Harmony::Original, true, 0x327df4de1be9ae5b),
-    (Music::Victory, Harmony::Coltrane, false, 0x0ea3c22744be5d9f),
-    (Music::Victory, Harmony::Coltrane, true, 0x35fc0547fe1f3dad),
-    (Music::Victory, Harmony::Quartal, false, 0x395a45883426c27e),
-    (Music::Victory, Harmony::Quartal, true, 0x9bf829faa3829a2a),
-    (Music::Victory, Harmony::MelodicMinor, false, 0x671b02e5736412c9),
-    (Music::Victory, Harmony::MelodicMinor, true, 0x1c84a92bdd2235fd),
-    (Music::Victory, Harmony::Waltz, false, 0x5748d5a0df72094a),
-    (Music::Victory, Harmony::Waltz, true, 0x859b05d2cf669c6f),
+    (Music::Victory, Harmony::Original, false, 0xcff11bcb02f6301e),
+    (Music::Victory, Harmony::Original, true, 0xe1c56ad25e7a78f8),
+    (Music::Victory, Harmony::Coltrane, false, 0x3a37037ab98ba277),
+    (Music::Victory, Harmony::Coltrane, true, 0xd8b7bba74adb10eb),
+    (Music::Victory, Harmony::Quartal, false, 0xea51258243f4351a),
+    (Music::Victory, Harmony::Quartal, true, 0x62e7092563908d0b),
+    (Music::Victory, Harmony::MelodicMinor, false, 0xf00f720cee5e9c98),
+    (Music::Victory, Harmony::MelodicMinor, true, 0x21844c88b827b966),
+    (Music::Victory, Harmony::Waltz, false, 0x76dc554debb630f2),
+    (Music::Victory, Harmony::Waltz, true, 0xea45a13aa79c5a70),
 ];
 
 #[test]
@@ -341,7 +341,7 @@ fn macros_dont_depend_on_the_block_size() {
 /// A free band switching instruments on the fly still renders the same whatever the block.
 #[test]
 fn songs_with_instruments_dont_depend_on_the_block_size() {
-    let file = library::load("tiger_rag").unwrap();
+    let file = library::load("hold_that_plunger").unwrap();
     let run = |block: usize| {
         let mut e = Engine::with_config(&file, synth::SAMPLE_RATE, EngineConfig { seed: 3, ..EngineConfig::on_grid() }).unwrap();
         e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });

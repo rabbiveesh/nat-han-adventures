@@ -20,13 +20,13 @@ fn engine(stem: &str) -> Engine {
 fn the_sound_plays_engines() {
     let (mut sound, mut handle) = LiveSoundData::new().split();
     let info = MockInfoBuilder::new().build();
-    handle.play(engine("tiger_rag"), 0.0, 0.0);
+    handle.play(engine("hold_that_plunger"), 0.0, 0.0);
     let n = 3 * ENGINE_RATE as usize;
     let mut out = vec![Frame::ZERO; n];
     for chunk in out.chunks_mut(128) {
         sound.process(chunk, 1.0 / ENGINE_RATE as f64, &info);
     }
-    let mut direct = engine("tiger_rag");
+    let mut direct = engine("hold_that_plunger");
     let mut want = vec![nat_han_adventures::audio::Frame::ZERO; n];
     direct.fill(&mut want);
     assert!(out[3..].iter().zip(&want).all(|(a, b)| a.left == b.left && a.right == b.right), "not a passthrough");

@@ -18,7 +18,7 @@ tunes, player profiles and bass lines are compiled in.
 ```rust
 use bandstand::{Frame, live::{Engine, Input, library}};
 
-let mut engine = Engine::new(&library::load("tiger_rag").unwrap(), 32_000).unwrap();
+let mut engine = Engine::new(&library::load("hold_that_plunger").unwrap(), 32_000).unwrap();
 engine.post(Input::LevelStart);
 let mut out = [Frame::ZERO; 512];
 engine.fill(&mut out);
