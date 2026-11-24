@@ -228,6 +228,12 @@ pub struct BandInput<'a> {
     /// reharm far harder than a piano does, so the band reharms a third as often, and only
     /// behind a solo (never under the tune).
     pub sections: bool,
+    /// The horns on the stand, and the forced upper role: a head's sax soli gets the
+    /// quartet's counterpoint ([`super::arranger::head_soli`]).
+    pub horns: super::horns::Horns,
+    pub force_upper: Option<super::horns::UpperRole>,
+    /// The soli's texture, forced (every soli bar takes it).
+    pub force_soli: Option<soli::Texture>,
 }
 
 impl BandInput<'_> {
@@ -368,6 +374,28 @@ impl BandPlan {
                 plan.soli = Some(s);
             }
             _ => {}
+        }
+        // A head's sax soli (an eight the arranger gives the saxes, or the sections forced
+        // to soli): the quartet's counterpoint for its eight bars.
+        {
+            use super::horns::{Horn, UpperRole};
+            let saxes = input.horns.has(Horn::Altos) && input.horns.has(Horn::Tenors);
+            let upper = [Horn::Trumpets, Horn::Altos, Horn::Tenors].into_iter().filter(|h| input.horns.has(*h)).fold(super::horns::Horns::NONE, super::horns::Horns::with);
+            let framed = plan.intro.is_some() || plan.ending.is_some();
+            let soli_eight = match input.force_upper {
+                Some(r) => r == UpperRole::Soli && !framed,
+                None => saxes && super::arranger::head_soli(input.seed, slot.pass, plan.chorus, input.freedom[0], upper, slot.song_bar, input.bars, framed),
+            };
+            if swing && saxes && plan.soli.is_none() && soli_eight {
+                let s = soli::plan_eight(input.seed, slot.pass, slot.song_bar, input.bars);
+                plan.swell = s.swell();
+                plan.soli = Some(s);
+            }
+            if let (Some(s), Some(t)) = (plan.soli.as_mut(), input.force_soli) {
+                s.texture = t;
+                s.tenor = true;
+                s.stretto = t == soli::Texture::Canon && s.len >= 4 && s.bar + 2 >= s.len;
+            }
         }
         if let Some(e) = plan.ending {
             plan.swell = -e.fade();

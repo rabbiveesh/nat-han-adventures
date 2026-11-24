@@ -273,15 +273,48 @@ fn chorus_plan(ctx: &Ctx, horns: Horns, s: usize) -> Section {
 fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
     use UpperRole::*;
     let c = |k: usize, what: u64| unit(ctx.seed, ctx.bar.pass, k as u64, what);
-    let (tp, al, te) = (horns.has(Horn::Trumpets), horns.has(Horn::Altos), horns.has(Horn::Tenors));
     let two = ctx.band.chorus == Chorus::TwoFeel;
+    match head_take(ctx.seed, ctx.bar.pass, two, horns, s, n) {
+        Take::Soli => Section { role: Soli, melody: Melody::Lead },
+        Take::Tutti => Section { role: Tutti, melody: Melody::Lead },
+        Take::Line(melody) => {
+            // Less is more: the tune often alone with the rhythm section.
+            let role = if two || (s == 0 && ctx.bar.pass == 0) {
+                pick(c(s, 42), &[(Tacet, 0.4), (Pads, 0.3), (Answers, 0.3)])
+            } else {
+                pick(c(s, 43), &[(Tacet, 0.15), (Pads, 0.25), (Answers, 0.4), (Riff, 0.2)])
+            };
+            Section { role, melody }
+        }
+    }
+}
+
+/// Whether the saxes take section `s` of a head in soli (the band plans the quartet's
+/// counterpoint for it then: [`super::band`]). Needs `bars` (the song's), the chorus, the
+/// lead's freedom and the band's own plan's intro and ending, as [`chorus_plan`] reads them.
+#[allow(clippy::too_many_arguments)]
+pub fn head_soli(seed: u64, pass: u64, chorus: Chorus, lead_freedom: f32, horns: Horns, song_bar: usize, bars: usize, framed: bool) -> bool {
+    if framed || chorus.lead_solos(lead_freedom) {
+        return false;
+    }
+    if matches!(chorus, Chorus::Soli | Chorus::Shout | Chorus::StopTime | Chorus::Riffs | Chorus::Breaks | Chorus::Strolling) {
+        return false;
+    }
+    let n = bars.div_ceil(SECTION).max(1);
+    head_take(seed, pass, chorus == Chorus::TwoFeel, horns, song_bar / SECTION, n) == Take::Soli
+}
+
+/// Who takes section `s` (of `n`) of a head: the lead first, a section or a horn in the
+/// middle (never the same twice running), the lead or everyone last.
+fn head_take(seed: u64, pass: u64, two: bool, horns: Horns, s: usize, n: usize) -> Take {
+    let c = |k: usize, what: u64| unit(seed, pass, k as u64, what);
+    let (tp, al, te) = (horns.has(Horn::Trumpets), horns.has(Horn::Altos), horns.has(Horn::Tenors));
     let mut prev = Take::Line(Melody::Lead);
-    let mut out = Section { role: Pads, melody: Melody::Lead };
     for k in 0..=s {
         let take = if k == 0 {
             Take::Line(Melody::Lead)
         } else if k + 1 >= n {
-            let tutti = if ctx.bar.pass == 0 { 0.35 } else { 0.5 };
+            let tutti = if pass == 0 { 0.35 } else { 0.5 };
             if tp && (al || te) && !two && c(k, 40) < tutti { Take::Tutti } else { Take::Line(Melody::Lead) }
         } else {
             let opts: Vec<(Take, f64)> = [
@@ -295,24 +328,14 @@ fn head(ctx: &Ctx, horns: Horns, s: usize, n: usize) -> Section {
             .filter(|&(t, _, ok)| ok && t != prev)
             .map(|(t, w, _)| (t, w))
             .collect();
-            pick(c(k, 41), &opts)
+            if opts.is_empty() { Take::Line(Melody::Lead) } else { pick(c(k, 41), &opts) }
         };
+        if k == s {
+            return take;
+        }
         prev = take;
-        out = match take {
-            Take::Soli => Section { role: Soli, melody: Melody::Lead },
-            Take::Tutti => Section { role: Tutti, melody: Melody::Lead },
-            Take::Line(melody) => {
-                // Less is more: the tune often alone with the rhythm section.
-                let role = if two || (k == 0 && ctx.bar.pass == 0) {
-                    pick(c(k, 42), &[(Tacet, 0.4), (Pads, 0.3), (Answers, 0.3)])
-                } else {
-                    pick(c(k, 43), &[(Tacet, 0.15), (Pads, 0.25), (Answers, 0.4), (Riff, 0.2)])
-                };
-                Section { role, melody }
-            }
-        };
     }
-    out
+    prev
 }
 
 /// The chorus's riff: one of [`FIGURES`], or the tune's theme (more often in a shout and always

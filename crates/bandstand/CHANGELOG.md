@@ -16,6 +16,10 @@ GitHub Release's notes.
   `Fx::balance`), and sections thin to two or three voices, never with a half step or a
   minor 9th under the lead or a second down low. `Input::ForceVoicing`, `ForcePassing`,
   `ForceBalance`, `ForceVoices`; `CommittedBar::voicing`.
+- **Soli everywhere.** A head's sax soli eight gets the quartet's counterpoint too
+  (`soli::plan_eight`: block chords most often, a counterpoint texture otherwise), and the
+  locked texture (a soli chorus's climax) block-voices the tune with the chorus's voicing.
+  `Input::ForceSoli` picks the texture.
 - **Five.** A song can be in 5/4 with a chord chart (`meter = 5/4`; two chords to a bar
   split 3+2, `chart::parse_in`). Every bar has pulses (`live::arrange::pulses`: in five,
   0, 1½, 3 and 4, the 3 as two dotted quarters): the walking bass steps on them, the

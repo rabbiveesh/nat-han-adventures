@@ -741,4 +741,25 @@ mod tests {
             .count();
         assert!(crunch * 3 > chords.len(), "{crunch} of {} with a whole step on top", chords.len());
     }
+
+    /// A head's sax soli gets the quartet's counterpoint (a texture forced: the canon, the
+    /// alto's line its own notes), or block chords when locked.
+    #[test]
+    fn a_head_soli_takes_the_counterpoint() {
+        use crate::live::soli::Texture;
+        let head = Input::ForceChorus(Some(Call { chorus: Chorus::Head, key_up: false }));
+        let altos = |t: Texture| {
+            // (In swing: the feels have no soli.)
+            let swing = Input::ForceFeel(Some(crate::live::feel::Feel::Swing));
+            let evs = take(Horns::BIG_BAND, &[head, swing, Input::ForceUpper(Some(UpperRole::Soli)), Input::ForceSoli(Some(t))], "sweet_georgia_brown");
+            let ch = Horn::Altos.ch();
+            let notes = evs.iter().filter(|e| e.ch == ch && matches!(e.sound, Sound::Note(_))).count();
+            let chords = evs.iter().filter(|e| e.ch == ch && matches!(e.sound, Sound::Arp(_))).count();
+            (notes, chords)
+        };
+        let (n, c) = altos(Texture::Canon);
+        assert!(n > 20 && c * 10 < n, "canon: {n} single notes, {c} chords");
+        let (n, c) = altos(Texture::Locked);
+        assert!(c > 20, "locked: {n} single notes, {c} chords");
+    }
 }

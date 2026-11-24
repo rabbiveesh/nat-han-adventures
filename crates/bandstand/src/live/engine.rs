@@ -139,6 +139,9 @@ pub enum Input {
     ForceBalance(Option<super::voicing::Balance>),
     /// Override how many voices each upper section plays (2 to 4).
     ForceVoices(Option<u8>),
+    /// Override the soli's texture ([`super::soli::Texture`]: the counterpoint kinds, or
+    /// locked block chords), in a soli chorus and a head's sax soli.
+    ForceSoli(Option<super::soli::Texture>),
     /// The stereo balance, -1 hard left .. 1 hard right: it glides there
     /// ([`super::desk::BALANCE_GLIDE_SECS`]). Side B steers Han with it.
     SetBalance(f32),
@@ -473,6 +476,7 @@ pub struct Engine {
     forced_upper: Option<super::horns::UpperRole>,
     forced_melody: Option<super::arranger::Melody>,
     forced_voicing: super::voicing::Force,
+    forced_soli: Option<super::soli::Texture>,
     /// The horns' notes for the bar being committed.
     horn_buf: Vec<NoteEvent>,
     /// [`Engine::tap`]: every event committed, kept for [`Engine::take_tapped`].
@@ -554,6 +558,7 @@ impl Engine {
             forced_upper: None,
             forced_melody: None,
             forced_voicing: super::voicing::Force::default(),
+            forced_soli: None,
             horn_buf: Vec::with_capacity(256),
             tapped: None,
         })
@@ -842,6 +847,9 @@ impl Engine {
             ending,
             reharm: soloist.profile().map_or(soloist::BAND_REHARM, |p| p.reharm()),
             sections: [super::horns::Horn::Trumpets, super::horns::Horn::Altos, super::horns::Horn::Tenors].into_iter().any(|h| self.config.horns.has(h)),
+            horns: self.config.horns,
+            force_upper: self.forced_upper,
+            force_soli: self.forced_soli,
         });
         ctx.band = &band;
         // A feel section gets the feel's own soloists (measured over funk and Latin grooves);
@@ -1112,6 +1120,10 @@ impl Engine {
             }
             Input::ForceVoices(n) => {
                 self.forced_voicing.voices = n;
+                None
+            }
+            Input::ForceSoli(t) => {
+                self.forced_soli = t;
                 None
             }
             Input::SetBalance(b) => {
