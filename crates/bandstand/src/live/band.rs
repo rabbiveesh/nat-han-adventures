@@ -585,6 +585,8 @@ impl BandPlan {
             && !plan.tacet
             && swing
             && plan.trade != Trade::Drums
+            // (A riff chorus's riff is the comp's figure on the written changes.)
+            && plan.chorus != Chorus::Riffs
         {
             let solo = plan.chorus.lead_solos(input.freedom[0]) && plan.soli.is_none();
             let turn = if solo { Some(sp.solo) } else { sp.head };
