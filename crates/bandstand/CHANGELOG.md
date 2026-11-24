@@ -126,6 +126,9 @@ GitHub Release's notes.
   (three notes or more after beat 1) instead of a scale run.
 - **Breaking:** `tiger_rag` is now `hold_that_plunger` ("Hold That Plunger"): it was never
   Tiger Rag, just our own rag.
+- **Tiger Rag** (1917) joins the library as `tiger_rag`, transcribed from the sheet: the
+  first strain (Bb, the stop-time break strain in F over a chromatic bass, Bb again) and the
+  "hold that tiger" chorus, 56 bars.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the
   mix exactly) and writes its notes as text. `examples/stems.rs` makes seeded takes.
