@@ -224,7 +224,7 @@ pub fn reharmonize(track: &Track, chart: &Chart, harmony: Harmony) -> Track {
         })
         .collect();
 
-    let plans: Vec<Plan> = notes
+    let mut plans: Vec<Plan> = notes
         .iter()
         .enumerate()
         .map(|(k, &(_, start, dur, pitch))| {
@@ -269,6 +269,20 @@ pub fn reharmonize(track: &Track, chart: &Chart, harmony: Harmony) -> Track {
             }
         })
         .collect();
+    // Quartal swaps an avoid note on a strong beat (or held): a repeat of it over the same
+    // chord goes with it, so a repeated note stays repeated.
+    if harmony == Harmony::Quartal {
+        let seg = |k: usize| sounding(&orig, beats, notes[k].1, notes[k].2);
+        for pass in [0, 1] {
+            let order: Vec<usize> = if pass == 0 { (1..notes.len()).collect() } else { (1..notes.len()).rev().collect() };
+            for k in order {
+                let (a, b) = if pass == 0 { (k - 1, k) } else { (k, k - 1) };
+                if notes[a].3 == notes[b].3 && seg(a) == seg(b) && plans[b] == Plan::Keep && matches!(plans[a], Plan::Pc(_)) {
+                    plans[b] = plans[a];
+                }
+            }
+        }
+    }
 
     let mut out: Vec<i32> = choose_octaves(&notes, &plans);
     // Approach notes, right to left (so chains of them lead into each other).

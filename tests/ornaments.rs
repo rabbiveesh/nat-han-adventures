@@ -455,7 +455,14 @@ fn each_soloist_gets_their_bassist() {
     let stats = |s: Soloist| {
         let (mut moves, mut repeats, mut halves, mut leaps, mut beats, mut triplets) = (0, 0, 0, 0, 0, 0);
         for seed in 1..4 {
-            let setup = [freedom(0.6), Input::ForceSoloist(Some(s)), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
+            // (On the tune's own changes: no turnaround tags, no signature turnarounds.)
+            let setup = [
+                freedom(0.6),
+                Input::ForceSoloist(Some(s)),
+                Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false })),
+                Input::ForceTag(Some(false)),
+                Input::ForceSpots(Some(false)),
+            ];
             let (_, bars) = play(song(Music::World(1)), seed, &setup, |_| vec![], 96);
             for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {
                 let line: Vec<&NoteEvent> = b.ch(2).collect();
@@ -494,7 +501,8 @@ fn sunny_side_gets_bryants_paired_quarters() {
     use nat_han_adventures::audio::live::chorus::{Call, Chorus};
     let file = SongFile::parse(library::text("sunny_side").unwrap()).unwrap();
     assert_eq!(file.bassist.as_deref(), Some("bryant"));
-    let setup = [freedom(0.6), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false }))];
+    // (On the tune's own changes: no turnaround tags, no signature turnarounds.)
+    let setup = [freedom(0.6), Input::ForceChorus(Some(Call { chorus: Chorus::Blowing, key_up: false })), Input::ForceTag(Some(false)), Input::ForceSpots(Some(false))];
     let (_, bars) = play(&file, 3, &setup, |_| vec![], 96);
     let (mut walking, mut paired) = (0, 0);
     for b in bars.iter().filter(|b| b.c.orns[2].has(Orn::Walking)) {

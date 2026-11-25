@@ -144,6 +144,7 @@ pub fn ui(ed: &mut Editor, ui: &mut egui::Ui) {
                 SubKind::Backdoor => "backdoor",
                 SubKind::IiV => "ii",
                 SubKind::Arranged => "arranged",
+                SubKind::Turnaround => "turnaround",
             };
             notes.push(format!("{} {kind}", s.chord));
         }

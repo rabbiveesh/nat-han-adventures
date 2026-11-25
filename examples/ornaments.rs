@@ -5,7 +5,7 @@
 //!
 //! ```sh
 //! cargo run --release --example ornaments                        # every song, 0 / 0.35 / 0.7
-//! cargo run --release --example ornaments -- out/ tiger_rag      # one song, somewhere else
+//! cargo run --release --example ornaments -- out/ hold_that_plunger      # one song, somewhere else
 //! cargo run --release --example ornaments -- out/ all before     # a file-name prefix
 //! cargo run --release --example ornaments -- out/ feels          # the feels (see `feels`)
 //! cargo run --release --example ornaments -- out/ soli           # soli choruses (see `soli`)
@@ -363,7 +363,7 @@ fn choruses(dir: &Path) {
     save("choruses_sweet_georgia_brown", &all, &log);
     // Choruses against feels.
     let combos = [
-        ("tiger_rag", Chorus::StopTime, Feel::Funk),
+        ("hold_that_plunger", Chorus::StopTime, Feel::Funk),
         ("sweet_georgia_brown", Chorus::Soli, Feel::Bossa),
         ("muskrat_ramble", Chorus::Riffs, Feel::Samba),
         ("i_got_rhythm", Chorus::Breaks, Feel::Rock),
@@ -378,7 +378,7 @@ fn choruses(dir: &Path) {
         save(&format!("combo_{}_{}_{stem}", chorus.slug(), feel.slug()), &out, &l);
     }
     // The whole show: an intro, the band's own arrangement for a while, an ending.
-    for stem in ["tiger_rag", "i_got_rhythm", "the_entertainer"] {
+    for stem in ["hold_that_plunger", "i_got_rhythm", "the_entertainer"] {
         let file = parse(stem);
         let end = 6 * file_bars(&file) + 1;
         let script = move |bar: u64| match bar {
@@ -403,7 +403,7 @@ fn soli(dir: &Path, prefix: &str) {
     let call = Call { chorus: Chorus::Soli, key_up: false };
     let takes = [
         ("sweet_georgia_brown", 0.5f32),
-        ("tiger_rag", 0.5),
+        ("hold_that_plunger", 0.5),
         ("i_got_rhythm", 0.5),
         ("st_louis_blues", 0.5),
         ("when_the_saints", 0.5),
@@ -426,7 +426,7 @@ fn soli(dir: &Path, prefix: &str) {
 /// songs, a pass each at freedom 0.5 with the intro, to `grid_<song>.wav` and `human_<song>.wav`,
 /// with `human_<song>.txt` also listing each bar's tempo.
 fn human(dir: &Path) {
-    for stem in ["sweet_georgia_brown", "tiger_rag", "embraceable_you", "st_louis_blues"] {
+    for stem in ["sweet_georgia_brown", "hold_that_plunger", "embraceable_you", "st_louis_blues"] {
         let file = SongFile::parse(library::text(stem).unwrap()).expect("song parses");
         let f = 0.5;
         let script = move |bar: u64| {

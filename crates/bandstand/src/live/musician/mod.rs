@@ -413,7 +413,7 @@ impl Ctx<'_> {
 /// The ornaments `orns` a player rolled, made to fit the bar's chorus, intro or ending (see the
 /// module docs).
 pub fn arranged(role: Role, band: &BandPlan, orns: Orns) -> Orns {
-    use super::chorus::{Chorus, EndStep, IntroKind};
+    use super::chorus::{Chorus, EndStep};
     let mut o = orns;
     let drop = |o: &mut Orns, list: &[Orn]| {
         for x in list {
@@ -444,8 +444,8 @@ pub fn arranged(role: Role, band: &BandPlan, orns: Orns) -> Orns {
         Role::Comp => {
             let charleston = chorus == Chorus::TwoFeel
                 || time
-                || band.intro.is_some_and(|i| i.kind == IntroKind::Vamp);
-            let quarters = band.intro.is_some_and(|i| i.kind == IntroKind::Pedal);
+                || band.intro.is_some_and(|i| i.kind.vamps());
+            let quarters = band.intro.is_some_and(|i| i.kind.pedals());
             if charleston || quarters {
                 drop(&mut o, &[Orn::Charleston, Orn::FreddieGreen, Orn::Fourths]);
                 o.add(if charleston {
@@ -457,10 +457,10 @@ pub fn arranged(role: Role, band: &BandPlan, orns: Orns) -> Orns {
         }
         Role::Bass => {
             let two = chorus == Chorus::TwoFeel;
-            let pedal = band.intro.is_some_and(|i| i.kind == IntroKind::Pedal);
+            let pedal = band.intro.is_some_and(|i| i.kind.pedals());
             let walk = (chorus.walks() && band.intro.is_none())
                 || time
-                || band.intro.is_some_and(|i| i.kind == IntroKind::Vamp);
+                || band.intro.is_some_and(|i| i.kind.vamps());
             if two || pedal || walk {
                 drop(
                     &mut o,

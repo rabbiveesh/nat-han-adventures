@@ -7,6 +7,37 @@ GitHub Release's notes.
 
 ## Unreleased
 
+- **Voicings.** The big band's sections voice their chords by a shape rolled each chorus
+  (`live::voicing`): drop 2 as before, drop 2 and 4, spread, fourths, stacked fifths with
+  a crunch, clusters, upper-structure triads and the theme's own intervals. Passing notes
+  can take a diminished chord, planing, plain chord tones, any chord that doesn't clash,
+  Barry Harris's sixth-diminished (borrowing toward the next chord), or the next chord's
+  tones early. Voices balance as top, lead, even or pyramid (per-note velocity,
+  `Fx::balance`), and sections thin to two or three voices, never with a half step or a
+  minor 9th under the lead or a second down low. `Input::ForceVoicing`, `ForcePassing`,
+  `ForceBalance`, `ForceVoices`; `CommittedBar::voicing`.
+- **Turnarounds** (Dave Berkman's, *The Jazz Harmony Book* ch. 7): `chorus::TURNS`, 22 of
+  them (diminished passing chords, modal interchange, tritone subs, Lady Bird). An intro is a
+  turnaround twice round, a ii–V or sus vamp over a pedal, or the tune's last four
+  (`IntroKind::Turn`, `IntroKind::all`; Vamp, Rhythm, Dameron and Chromatic are turnarounds
+  now). The tag ending goes round on a different one each time (`EndBar::turn`).
+- **A signature turnaround**: a performance plays one turnaround (the intro's, else one the
+  band picks; `Engine::turnaround`) wherever the tune has a turnaround of its own (the two
+  bars before a section that starts home, `chorus::TurnSpot`): behind a solo as it is, under
+  the tune only where it or a relative (`chorus::relatives`) fits the melody's strong beats
+  and long notes (`chorus::turn_fits`), more often as the comp loosens (`SubKind::Turnaround`,
+  `Input::ForceSpots`). The tags and the tag ending play it too. Minor turnarounds join
+  `TURNS` (`MAJOR_TURNS`, `in_mode`) for minor tunes and sections.
+- **Round again**: after a solo chorus on a tune that ends home, the band can go round its
+  last two bars on a turnaround while the soloist blows on (4 to 8 bars, then the next
+  chorus), more often as the band loosens (`chorus::tag_for`, `BandPlan::tag`, label
+  "ROUND AGAIN"). `Input::ForceTag`, `Input::ForceTurn`.
+- **Power chords** (Berkman's): `voicing::Style::Power`, the colour chords Δ7#5, -Δ7, -7b6,
+  oΔ7, 7sus4b9 and 7sus4(3) on the chord's own root, and among the free passing chords.
+- **Soli everywhere.** A head's sax soli eight gets the quartet's counterpoint too
+  (`soli::plan_eight`: block chords most often, a counterpoint texture otherwise), and the
+  locked texture (a soli chorus's climax) block-voices the tune with the chorus's voicing.
+  `Input::ForceSoli` picks the texture.
 - **Five.** A song can be in 5/4 with a chord chart (`meter = 5/4`; two chords to a bar
   split 3+2, `chart::parse_in`). Every bar has pulses (`live::arrange::pulses`: in five,
   0, 1½, 3 and 4, the 3 as two dotted quarters): the walking bass steps on them, the
@@ -89,6 +120,17 @@ GitHub Release's notes.
 - With upper sections on the stand the band reharms a third as often, and only behind
   a solo (`BandInput::sections`).
 - `Yes! We Have No Bananas` (1923) joins the library.
+- **When the Saints** as it's sung: bar 1 is "saints" with the pickup at the end of the last
+  bar (each phrase on its eight's ONE), the "Oh Lord I want to be in that number" line in its
+  real rhythm, the chords under it. An intro's last bar plays a tune's own written pickup
+  (three notes or more after beat 1) instead of a scale run.
+- **Breaking:** `tiger_rag` is now `hold_that_plunger` ("Hold That Plunger"): it was never
+  Tiger Rag, just our own rag.
+- **Tiger Rag** (1917) joins the library as `tiger_rag`, transcribed from the sheet: the
+  first strain (Bb, the stop-time break strain in F over a chromatic bass, Bb again) and the
+  "hold that tiger" chorus, 56 bars.
+- **Muskrat Ramble** as written (from a lead sheet): in Ab, 48 bars, the first strain's eight
+  four times (to C minor and back home) and the second strain; it was a loose guess before.
 - **Stems** (`soundfont`): `Engine::tap` / `take_tapped` collect every committed note;
   `live::stems` renders each part dry and mono through its own synth (they sum to the
   mix exactly) and writes its notes as text. `examples/stems.rs` makes seeded takes.

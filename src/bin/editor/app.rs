@@ -638,7 +638,7 @@ mod tests {
 
     #[test]
     fn mute_and_solo_mix() {
-        let mut e = Editor::new(repo_root(), Some("tiger_rag"), AudioOutput::Headless);
+        let mut e = Editor::new(repo_root(), Some("hold_that_plunger"), AudioOutput::Headless);
         e.solo[2] = true;
         e.remix();
         assert_eq!(e.dials.mix, [0.0, 0.0, 1.0, 0.0]);
@@ -653,7 +653,7 @@ mod tests {
     /// it; the preview renders.
     #[test]
     fn auditions_switch_a_channel_without_writing() {
-        let mut e = Editor::new(repo_root(), Some("tiger_rag"), AudioOutput::Headless);
+        let mut e = Editor::new(repo_root(), Some("hold_that_plunger"), AudioOutput::Headless);
         let before = e.doc.text.clone();
         e.audition(0, "brass");
         let (song, _) = e.engine_song().unwrap();

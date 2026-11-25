@@ -112,6 +112,9 @@ pub enum SubKind {
     IiV,
     /// An intro's or an ending's own changes ([`super::chorus::harmony`]).
     Arranged,
+    /// The performance's signature turnaround at one of the tune's turnarounds
+    /// ([`super::chorus::TurnSpot`]).
+    Turnaround,
 }
 
 /// The shared plan of one bar.
@@ -141,6 +144,8 @@ pub struct BandPlan {
     /// A bar of the tune's intro, or of its ending.
     pub intro: Option<Intro>,
     pub ending: Option<EndBar>,
+    /// A bar of a turnaround tag at the end of a solo ([`chorus::Tag`]).
+    pub tag: Option<chorus::Tag>,
     /// Comp, bass and drums rest the whole bar (a break's second bar; a Basie ending's plinks
     /// are the comp's alone).
     pub tacet: bool,
@@ -161,7 +166,7 @@ impl BandPlan {
     /// Is the bar arranged beyond the written parts in a way every player must follow, even at
     /// freedom 0 (a forced chorus, an ending)?
     pub fn arranged(&self) -> bool {
-        self.chorus != Chorus::Head || self.key_up || self.intro.is_some() || self.ending.is_some() || self.tacet || self.hit_kind == HitKind::Stop
+        self.chorus != Chorus::Head || self.key_up || self.intro.is_some() || self.ending.is_some() || self.tag.is_some() || self.tacet || self.hit_kind == HitKind::Stop
     }
 
     /// What the HUD's band readout says about the bar: an ending or the intro, the feel, the
@@ -172,6 +177,9 @@ impl BandPlan {
         }
         if self.intro.is_some() {
             return "INTRO";
+        }
+        if self.tag.is_some() {
+            return "ROUND AGAIN";
         }
         if self.feel != Feel::Swing {
             return self.feel.label();
@@ -221,6 +229,12 @@ pub struct BandInput<'a> {
     /// The bar is in the tune's intro, or its ending.
     pub intro: Option<Intro>,
     pub ending: Option<EndBar>,
+    /// The bar is in a turnaround tag at the end of a solo (the soloist blows on).
+    pub tag: Option<chorus::Tag>,
+    /// The bar is in one of the tune's turnarounds, where the performance's signature
+    /// turnaround can go ([`chorus::TurnSpot`]); forced in or out (`None`: by the dial).
+    pub spot: Option<chorus::TurnSpot>,
+    pub force_spots: Option<bool>,
     /// The reharm the soloist's lines ask for: rate against the dial's, and the weights of a
     /// tritone sub and a ii-V ([`super::soloist::Profile::reharm`]).
     pub reharm: [f32; 3],
@@ -228,6 +242,12 @@ pub struct BandInput<'a> {
     /// reharm far harder than a piano does, so the band reharms a third as often, and only
     /// behind a solo (never under the tune).
     pub sections: bool,
+    /// The horns on the stand, and the forced upper role: a head's sax soli gets the
+    /// quartet's counterpoint ([`super::arranger::head_soli`]).
+    pub horns: super::horns::Horns,
+    pub force_upper: Option<super::horns::UpperRole>,
+    /// The soli's texture, forced (every soli bar takes it).
+    pub force_soli: Option<soli::Texture>,
 }
 
 impl BandInput<'_> {
@@ -330,7 +350,9 @@ impl BandPlan {
             let c = input.chorus(slot.pass);
             (plan.chorus, plan.key_up) = (c.chorus, c.key_up);
         }
-        if let Some((chords, half)) = chorus::harmony(input.key, bb, plan.intro, plan.ending) {
+        plan.tag = input.tag.filter(|_| !arranged_bar);
+        let tag_chords = plan.tag.map(|t| (t.chords(input.key), (bb / 2.0).floor().max(1.0)));
+        if let Some((chords, half)) = chorus::harmony(input.key, bb, plan.intro, plan.ending).or(tag_chords) {
             plan.subs = if chords[0] == chords[1] {
                 [Some(Sub { from: 0.0, to: bb, chord: chords[0], kind: SubKind::Arranged }), None]
             } else {
@@ -368,6 +390,28 @@ impl BandPlan {
                 plan.soli = Some(s);
             }
             _ => {}
+        }
+        // A head's sax soli (an eight the arranger gives the saxes, or the sections forced
+        // to soli): the quartet's counterpoint for its eight bars.
+        {
+            use super::horns::{Horn, UpperRole};
+            let saxes = input.horns.has(Horn::Altos) && input.horns.has(Horn::Tenors);
+            let upper = [Horn::Trumpets, Horn::Altos, Horn::Tenors].into_iter().filter(|h| input.horns.has(*h)).fold(super::horns::Horns::NONE, super::horns::Horns::with);
+            let framed = plan.intro.is_some() || plan.ending.is_some();
+            let soli_eight = match input.force_upper {
+                Some(r) => r == UpperRole::Soli && !framed,
+                None => saxes && super::arranger::head_soli(input.seed, slot.pass, plan.chorus, input.freedom[0], upper, slot.song_bar, input.bars, framed),
+            };
+            if swing && saxes && plan.soli.is_none() && soli_eight {
+                let s = soli::plan_eight(input.seed, slot.pass, slot.song_bar, input.bars);
+                plan.swell = s.swell();
+                plan.soli = Some(s);
+            }
+            if let (Some(s), Some(t)) = (plan.soli.as_mut(), input.force_soli) {
+                s.texture = t;
+                s.tenor = true;
+                s.stretto = t == soli::Texture::Canon && s.len >= 4 && s.bar + 2 >= s.len;
+            }
         }
         if let Some(e) = plan.ending {
             plan.swell = -e.fade();
@@ -423,6 +467,14 @@ impl BandPlan {
                 EndStep::Time if e.k % 2 == 1 => Fill::Short,
                 _ => Fill::None,
             };
+        }
+        // A tag's last bar fills into the next chorus (its others into each time round).
+        if let Some(t) = plan.tag {
+            if t.last() {
+                plan.fill = Fill::Full;
+            } else if t.k % 2 == 1 && plan.fill == Fill::None && drums >= 0.3 {
+                plan.fill = Fill::Short;
+            }
         }
         if plan.tacet || plan.hit_kind == HitKind::Stop {
             plan.fill = Fill::None;
@@ -484,7 +536,7 @@ impl BandPlan {
         // The band's reharmonization: comp and bass together, high freedom (a soli's lines
         // follow it too).
         let under_tune = input.sections && !plan.chorus.lead_solos(input.freedom[0]);
-        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && !plan.tacet && !under_tune {
+        if comp >= 0.6 && bass >= 0.3 && plan.trade != Trade::Drums && !arranged_bar && plan.tag.is_none() && !plan.tacet && !under_tune {
             let [rate, w_tri, w_iiv] = input.reharm;
             let rate = if input.sections { rate / 3.0 } else { rate };
             let p = (0.5 * high(comp) * rate as f64).min(0.9);
@@ -522,6 +574,36 @@ impl BandPlan {
                     }
                     plan.subs[0] = Some(Sub { from: 0.0, to, chord: c, kind: SubKind::Tritone });
                 }
+            }
+        }
+        // The performance's signature turnaround at the tune's own (the two bars before a
+        // section that starts home): behind a solo as it is, under the tune only where it (or a
+        // relative) fits the melody; more often as the comp loosens. Both bars or neither.
+        if let Some(sp) = input.spot
+            && !arranged_bar
+            && plan.tag.is_none()
+            && !plan.tacet
+            && swing
+            && plan.trade != Trade::Drums
+            // (A riff chorus's riff is the comp's figure on the written changes.)
+            && plan.chorus != Chorus::Riffs
+        {
+            let solo = plan.chorus.lead_solos(input.freedom[0]) && plan.soli.is_none();
+            let turn = if solo { Some(sp.solo) } else { sp.head };
+            let p = match input.force_spots {
+                Some(on) => on as u8 as f64,
+                None if solo => ((comp as f64 - 0.2) * 1.1).clamp(0.0, 0.85),
+                None => ((comp as f64 - 0.5) * 1.4).clamp(0.0, 0.7),
+            };
+            if let Some(t) = turn
+                && rng(input.seed, 8, slot.pass * 4096 + sp.start as u64, 11).chance(p)
+            {
+                let chords = chorus::TURNS[t as usize % chorus::TURNS.len()].bar(input.key, sp.k);
+                let half = (bb / 2.0).floor().max(1.0);
+                plan.subs = [
+                    Some(Sub { from: 0.0, to: half, chord: chords[0], kind: SubKind::Turnaround }),
+                    Some(Sub { from: half, to: bb, chord: chords[1], kind: SubKind::Turnaround }),
+                ];
             }
         }
         plan

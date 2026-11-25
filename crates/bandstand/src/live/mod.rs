@@ -94,6 +94,7 @@ pub mod engine;
 pub mod feel;
 pub mod arranger;
 pub mod horns;
+pub mod voicing;
 #[cfg(feature = "soundfont")]
 pub mod font;
 pub mod instrument;

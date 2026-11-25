@@ -45,6 +45,8 @@ pub enum Texture {
 }
 
 impl Texture {
+    pub const ALL: [Texture; 6] = [Texture::FrontLine, Texture::Canon, Texture::Chorale, Texture::Answers, Texture::Cliche, Texture::Locked];
+
     /// The textures a section can roll (the locked voicing is the climax's).
     pub const ROLLED: [Texture; 5] = [Texture::FrontLine, Texture::Canon, Texture::Chorale, Texture::Answers, Texture::Cliche];
 
@@ -117,6 +119,22 @@ pub fn plan(seed: u64, pass: u64, song_bar: usize, bars: usize) -> SoliBar {
     let tenor = section > 0 || sections == 1 || texture == Texture::Locked;
     let stretto = texture == Texture::Canon && n >= 4 && k + 2 >= n;
     SoliBar { texture, section: section as u8, bar: k as u8, len: n as u8, tenor, stretto, last }
+}
+
+/// The plan for a bar of one soli eight inside another chorus (a head's middle eight): block
+/// chords under the tune most often (locked, voiced the chorus's way), else one of the
+/// counterpoint textures for the eight, now and then locking for its last bars (the climax).
+pub fn plan_eight(seed: u64, pass: u64, song_bar: usize, bars: usize) -> SoliBar {
+    let (k, n) = in_section(song_bar, bars);
+    let section = song_bar / 8;
+    let mut r = super::band::rng(seed, 11, pass ^ (section as u64) << 32, 0x5012);
+    let block = r.below(5) < 3;
+    let mut texture = if block { Texture::Locked } else { Texture::ROLLED[r.below(Texture::ROLLED.len())] };
+    if !block && r.below(2) == 0 && n >= 4 && k >= n / 2 {
+        texture = Texture::Locked;
+    }
+    let stretto = texture == Texture::Canon && n >= 4 && k + 2 >= n;
+    SoliBar { texture, section: section as u8, bar: k as u8, len: n as u8, tenor: true, stretto, last: true }
 }
 
 /// A note of a line: its beat from the bar line, its length in beats, its pitch; `tie`: held

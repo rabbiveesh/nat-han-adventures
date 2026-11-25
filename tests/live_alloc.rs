@@ -43,7 +43,7 @@ static ALLOC: Counting = Counting;
 
 #[test]
 fn fill_doesnt_allocate() {
-    for (stem, f) in [("sweet_georgia_brown", 0.7), ("muskrat_ramble", 1.0), ("shave_and_a_haircut", 0.7), ("tiger_rag", 0.4)] {
+    for (stem, f) in [("sweet_georgia_brown", 0.7), ("muskrat_ramble", 1.0), ("shave_and_a_haircut", 0.7), ("hold_that_plunger", 0.4)] {
         let file = library::load(stem).unwrap();
         let mut e = Engine::with_config(&file, 32_000, EngineConfig { intro: true, ..EngineConfig::default() }).unwrap();
         // (Every harmony, the waltz and its meter switches included.)
