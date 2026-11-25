@@ -1789,3 +1789,86 @@ fn down_calls_the_band() {
     app.update();
     assert_eq!(app.world().resource::<Calls>().0, 1);
 }
+
+// --- Walls stay walls -----------------------------------------------------------------------
+
+/// Does Nat's box overlap a solid tile of `level`?
+fn in_a_wall(level: &Level, p: Vec2) -> bool {
+    let half = Vec2::new(tuning::PLAYER_SIZE.0, tuning::PLAYER_SIZE.1) / 2.0;
+    let (min, max) = (p - half + 0.01, p + half - 0.01);
+    let rows = |y: f32| level.height as i32 - 1 - (y / TILE).floor() as i32;
+    let cols = (min.x / TILE).floor() as i32..=(max.x / TILE).floor() as i32;
+    (rows(max.y)..=rows(min.y)).any(|r| cols.clone().any(|c| level.tile(c, r).is_solid()))
+}
+
+/// Puts Nat at `at` (box center), standing still.
+fn put_nat(app: &mut App, at: Vec2) {
+    let e = single::<Player>(app);
+    app.world_mut().get_mut::<Pos>(e).unwrap().0 = at;
+    app.world_mut().get_mut::<Body>(e).unwrap().vel = Vec2::ZERO;
+}
+
+/// Rides `app`'s lift for `secs`, failing the first step Nat's inside a wall of `level`.
+fn ride_clear_of_walls(app: &mut App, level: &Level, secs: f32) {
+    for k in 0..(secs as f64 / DT).round() as usize {
+        app.update();
+        let p = player_pos(app);
+        assert!(!in_a_wall(level, p), "step {k}: Nat at {p} is inside a wall");
+    }
+}
+
+/// A lift up past a ledge: standing on its very edge, the rest of him over the ledge's side.
+const LIFT_LEDGE: &str = "name: Lift ledge
+1: dx=0 dy=5 period=4 kind=plunger
+---
+##############
+######........
+######........
+######........
+..............
+..............
+..P..........G
+######111.....
+##############
+";
+
+#[test]
+fn a_lift_past_a_ledge_never_carries_nat_into_it() {
+    let level = Level::parse(LIFT_LEDGE).unwrap();
+    let mut app = app(LIFT_LEDGE);
+    // 1 px of Nat on the lift (cols 6-8), 11 px over the floor left of it, under the ledge.
+    let floor = (level.height - 7) as f32 * TILE;
+    put_nat(&mut app, Vec2::new(6.0 * TILE - tuning::PLAYER_SIZE.0 / 2.0 + 1.0, standing(floor)));
+    // Up to the top (2 s), past the ledge (rows 1-3, cols 0-5), and back down.
+    ride_clear_of_walls(&mut app, &level, 4.0);
+    // He was shoved onto the lift and rode it, not scraped off.
+    assert!(body(&mut app).on_ground);
+    assert!(player_pos(&mut app).x >= 6.0 * TILE + tuning::PLAYER_SIZE.0 / 2.0 - 0.01, "on the lift: {}", player_pos(&mut app));
+    assert_eq!(counted::<PlayerDied>(&app), 0);
+}
+
+#[test]
+fn pipe_maze_plunger_never_carries_nat_into_the_wall() {
+    // The bug as found: Pipe Maze's first plunger (cols 51-53, rising 7 tiles from row 18 up the
+    // shaft whose left wall, col 50, starts at row 12), Nat on its left edge.
+    let text = include_str!("../levels/04.txt");
+    let level = Level::parse(text).unwrap();
+    let mut app = app(text);
+    let floor = (level.height - 18) as f32 * TILE;
+    put_nat(&mut app, Vec2::new(51.0 * TILE - tuning::PLAYER_SIZE.0 / 2.0 + 0.5, standing(floor)));
+    ride_clear_of_walls(&mut app, &level, 5.0);
+}
+
+#[test]
+fn nat_inside_a_wall_is_pushed_out_the_shortest_way() {
+    let level = Level::parse(LIFT_LEDGE).unwrap();
+    let mut app = app(LIFT_LEDGE);
+    // 4 px into the ledge's side (col 5, rows 1-3), mid row 2: back out into the shaft, not up
+    // through the ledge (which, with the ceiling over it, is solid all the way up).
+    let y = (level.height as f32 - 2.5) * TILE;
+    put_nat(&mut app, Vec2::new(6.0 * TILE + tuning::PLAYER_SIZE.0 / 2.0 - 4.0, y));
+    app.update();
+    let p = player_pos(&mut app);
+    assert!(!in_a_wall(&level, p), "still in the wall at {p}");
+    assert!((p.x - (6.0 * TILE + tuning::PLAYER_SIZE.0 / 2.0)).abs() < 0.01 && (p.y - y).abs() < 1.0, "out at {p}");
+}
