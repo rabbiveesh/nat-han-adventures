@@ -364,6 +364,10 @@ pub fn step_body(
     dt: f32,
 ) -> Contact {
     let mood = fall.tiles;
+    // Inside the walls already (see the push out at the end): out first.
+    if let Some(out) = unstick(level, *pos, body.half) {
+        *pos = out;
+    }
     // --- Caught in a wall cushion: held still, then slung (aimed by what's held as it fires).
     let mut slung = false;
     if body.pad != 0.0 {
@@ -551,11 +555,32 @@ pub fn step_body(
             let feet = pos.y - half.y;
             let before = if body.riding == Some(c.id) { bottom_before } else { bottom_before - carry.y };
             if before >= c.top.min(c.prev_top) - ONE_WAY_SLACK && feet <= c.top + EPS {
-                pos.y = c.top + half.y;
+                // Never into a wall: a rider mostly off the edge, its head under a ledge the
+                // platform carries it past, is shoved onto the platform (or, if that's no
+                // room either, scraped off it).
+                let Some(x) = onto(level, solids, Vec2::new(pos.x, c.top + half.y), half, c) else { continue };
+                *pos = Vec2::new(x, c.top + half.y);
                 ground = true;
                 riding = Some(c.id);
             }
         }
+    }
+    // However it got there (an edge case above, a teleport, a tile that changed under it), a
+    // body never stays inside the walls: it's pushed out the shortest way.
+    if let Some(out) = unstick(level, *pos, half) {
+        if out.y > pos.y + EPS {
+            // Pushed up out of a floor: standing on it.
+            ground = true;
+            riding = None;
+        }
+        if out.x != pos.x {
+            body.vel.x = 0.0;
+            body.launch = 0.0;
+        }
+        if out.y < pos.y - EPS {
+            body.vel.y = body.vel.y.min(0.0);
+        }
+        *pos = out;
     }
     if ground {
         body.vel.y = 0.0;
@@ -583,6 +608,78 @@ pub fn step_body(
         caught: false,
     }
 }
+
+/// A wall for [`in_wall`]: solid, and not a brick (a head rising into a brick is inside it
+/// for the step that smashes it).
+fn wall(t: Tile) -> bool {
+    t.is_solid() && t != Tile::Brick
+}
+
+/// Does a box (center `pos`, half extents `half`) overlap a wall tile?
+pub(crate) fn in_wall(level: &Level, pos: Vec2, half: Vec2) -> bool {
+    let (xs, ys) = cells(pos - half, pos + half);
+    ys.into_iter().any(|j| xs.clone().any(|i| wall(tile_at(level, i, j))))
+}
+
+/// Where a rider of `c` standing at `at` goes: `at.x` if that's clear of the walls (and of
+/// `solids`), else nudged sideways just clear of the tiles it overlaps, as long as it's still
+/// on the carrier; `None` if there's no room on it.
+fn onto(level: &Level, solids: &[(Vec2, Vec2)], at: Vec2, half: Vec2, c: &Carrier) -> Option<f32> {
+    let clear = |x: f32| {
+        let p = Vec2::new(x, at.y);
+        let on = x + half.x > c.x - c.half_w + EPS && x - half.x < c.x + c.half_w - EPS;
+        let boxed = solids.iter().any(|&(min, max)| {
+            p.x + half.x > min.x + EPS && p.x - half.x < max.x - EPS && p.y + half.y > min.y + EPS && p.y - half.y < max.y - EPS
+        });
+        on && !boxed && !in_wall(level, p, half)
+    };
+    if clear(at.x) {
+        return Some(at.x);
+    }
+    let (xs, ys) = cells(at - half, at + half);
+    let walls: Vec<i32> = xs.filter(|&i| ys.clone().any(|j| wall(tile_at(level, i, j)))).collect();
+    // Clear of every wall column left of the middle, or right of it.
+    let right = walls.iter().filter(|&&i| (i as f32 + 0.5) * TILE < at.x).map(|&i| (i + 1) as f32 * TILE + half.x).fold(f32::MIN, f32::max);
+    let left = walls.iter().filter(|&&i| (i as f32 + 0.5) * TILE >= at.x).map(|&i| i as f32 * TILE - half.x).fold(f32::MAX, f32::min);
+    [right, left].into_iter().filter(|x| x.abs() < f32::MAX / 2.0).filter(|&x| clear(x)).min_by(|a, b| (a - at.x).abs().total_cmp(&(b - at.x).abs()))
+}
+
+/// A box (center `pos`, half extents `half`) inside the walls: the nearest place it's clear of
+/// them (pushed out of the tiles it overlaps, one way or two, at most [`UNSTICK_REACH`]
+/// tiles), or `None` if it's clear already (or buried too deep to tell which way is out).
+pub(crate) fn unstick(level: &Level, pos: Vec2, half: Vec2) -> Option<Vec2> {
+    if !in_wall(level, pos, half) {
+        return None;
+    }
+    // Candidate x and y: where the box is, or flush against a tile edge near it.
+    let near = |c: f32, h: f32| {
+        let base = idx(c);
+        let mut v = vec![c];
+        for k in -UNSTICK_REACH..=UNSTICK_REACH + 1 {
+            let edge = (base + k) as f32 * TILE;
+            v.push(edge - h);
+            v.push(edge + h);
+        }
+        v
+    };
+    let mut best: Option<(f32, Vec2)> = None;
+    for &x in &near(pos.x, half.x) {
+        for &y in &near(pos.y, half.y) {
+            let p = Vec2::new(x, y);
+            let d = p.distance_squared(pos);
+            if best.is_some_and(|(b, _)| b <= d) || d > (UNSTICK_REACH as f32 * TILE).powi(2) {
+                continue;
+            }
+            if !in_wall(level, p, half) {
+                best = Some((d, p));
+            }
+        }
+    }
+    best.map(|(_, p)| p)
+}
+
+/// How far (tiles) [`unstick`] looks for a way out of the walls.
+const UNSTICK_REACH: i32 = 3;
 
 /// Han's head as Nat sees it (written by Han's systems): a one-way carrier while `solid`;
 /// jumping off it is the plunger boost while `boost`; while `block` (marching ahead) his body
