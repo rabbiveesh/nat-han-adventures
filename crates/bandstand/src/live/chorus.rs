@@ -298,7 +298,7 @@ pub const MAJOR_TURNS: usize = 22;
 
 /// The turnarounds the band knows ([`TURNS`]`[0]` the plain I–vi–ii–V everyone plays): the
 /// major ones Berkman's, then minor ones of our own (into a minor tonic: [`in_mode`]).
-pub const TURNS: [Turn; 30] = [
+pub const TURNS: [Turn; 31] = [
     Turn { name: "I VI7 ii V", chords: &[(0, Six), (9, Dom7), (2, Minor7), (7, Dom7)] },
     Turn { name: "iii VI7 ii V", chords: &[(4, Minor7), (9, Dom7), (2, Minor7), (7, Dom7)] },
     Turn { name: "I #Io ii V", chords: &[(0, Maj7), (1, Dim7), (2, Minor7), (7, Dom7)] },
@@ -329,6 +329,8 @@ pub const TURNS: [Turn; 30] = [
     Turn { name: "i-Δ7 i-7 iiø V7b9", chords: &[(0, MinMaj7), (0, Minor7), (2, HalfDim), (7, Dom7b9)] },
     Turn { name: "i bVII7 bVI7 V7b9", chords: &[(0, Minor7), (10, Dom7), (8, Dom7), (7, Dom7b9)] },
     Turn { name: "i bVI7 iiø bII7", chords: &[(0, Minor7), (8, Dom7), (2, HalfDim), (1, Dom7)] },
+    // The last two bars of Veesh's Sevivon tag: each held note the third of the next dominant.
+    Turn { name: "i II7b9 V7", chords: &[(0, Minor7), (2, Dom7b9), (7, Dom7), (7, Dom7b9)] },
 ];
 
 /// Is turnaround `t` a minor one (into a minor tonic)?

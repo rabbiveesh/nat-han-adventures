@@ -7,6 +7,8 @@ GitHub Release's notes.
 
 ## Unreleased
 
+- A ninth minor turnaround, "i II7b9 V7" (`TURNS[30]`), from the last two bars of a
+  Sevivon tag: each held note the third of the next dominant.
 - **Voicings.** The big band's sections voice their chords by a shape rolled each chorus
   (`live::voicing`): drop 2 as before, drop 2 and 4, spread, fourths, stacked fifths with
   a crunch, clusters, upper-structure triads and the theme's own intervals. Passing notes
