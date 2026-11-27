@@ -7,6 +7,8 @@ GitHub Release's notes.
 
 ## Unreleased
 
+- A ninth minor turnaround, "i II7b9 V7" (`TURNS[30]`), from the last two bars of a
+  Sevivon tag: each held note the third of the next dominant.
 - **Voicings.** The big band's sections voice their chords by a shape rolled each chorus
   (`live::voicing`): drop 2 as before, drop 2 and 4, spread, fourths, stacked fifths with
   a crunch, clusters, upper-structure triads and the theme's own intervals. Passing notes
@@ -38,6 +40,16 @@ GitHub Release's notes.
   (`soli::plan_eight`: block chords most often, a counterpoint texture otherwise), and the
   locked texture (a soli chorus's climax) block-voices the tune with the chorus's voicing.
   `Input::ForceSoli` picks the texture.
+- **Call and response.** While the upper sections answer the head (`UpperRole::Answers`),
+  the lead plays the tune as a call (`arranger::call_phrasing`): a note held two beats or
+  more stops after one, a quarter or longer is played short, 8ths stay as written (a note
+  and its turns or grace notes count as one), so the answers find more rests, and behind a
+  call they answer in a one-beat breath too (a 1.5-beat rest otherwise): about half again as
+  many answers in a chorus of Body and Soul, twice as many over Sevivon.
+  On by default with the horns on the stand; `EngineConfig::call_and_response` turns it off
+  (a new field: a struct literal without `..Default::default()` needs it).
+- **Fix:** `Input::SetChannelGain { ch: 4, .. }` set the chip drums' level instead of the
+  third pulse's.
 - **Five.** A song can be in 5/4 with a chord chart (`meter = 5/4`; two chords to a bar
   split 3+2, `chart::parse_in`). Every bar has pulses (`live::arrange::pulses`: in five,
   0, 1½, 3 and 4, the 3 as two dotted quarters): the walking bass steps on them, the
