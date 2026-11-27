@@ -9,7 +9,7 @@ use nat_han_adventures::audio::{
     Music,
     live::{
         Engine, EngineConfig, Input,
-        band::HitKind,
+        band::{HitKind, SubKind},
         chorus::{self, Call, Chorus, EndKind, EndStep, IntroKind},
         engine::CommittedBar,
         library,
@@ -334,7 +334,85 @@ fn levels_start_with_an_intro() {
         assert!(plain.iter().all(|b| b.c.band.intro.is_none()) && plain[0].c.slot.song_bar == 0);
         assert!(play(s, 1, &[freedom(0.35)], 4)[0].c.band.intro.is_none());
     }
-    assert_eq!(kinds.len(), 2, "{kinds:?}");
+    assert!(kinds.len() >= 2, "{kinds:?}");
+}
+
+/// The performance's signature turnaround at the tune's own turnarounds: both bars of a spot
+/// (the two before a section that starts home) or neither; behind a solo the signature itself
+/// (or its minor counterpart); under the head only one that fits the tune (it or a relative).
+/// Never with the spots off.
+#[test]
+fn the_signature_turnaround_flavours_the_tune() {
+    let lady = chorus::TURNS.iter().position(|t| t.name == "Lady Bird").unwrap() as u8;
+    let mut spots = 0;
+    for m in LOOPING {
+        let s = song(m);
+        let n = s.bars();
+        for (call, on) in [(Chorus::Blowing, true), (Chorus::Head, true), (Chorus::Blowing, false)] {
+            let setup = [freedom(1.0), force(call), Input::ForceTurn(Some(lady)), Input::ForceSpots(Some(on)), Input::ForceTag(Some(false))];
+            let bars = play(s, 5, &setup, n as u64);
+            let turned: Vec<&Bar> = bars.iter().filter(|b| b.c.band.subs.iter().flatten().any(|x| x.kind == SubKind::Turnaround)).collect();
+            if !on {
+                assert!(turned.is_empty(), "{m:?}");
+                continue;
+            }
+            for b in &turned {
+                let (k, start) = chorus::turn_spot(b.c.slot.song_bar, n).expect("a spot");
+                // Its partner turned too (on a pass after the first fill: both in the take).
+                let partner = if k == 0 { start + 1 } else { start };
+                assert!(turned.iter().any(|x| x.c.slot.song_bar == partner), "{m:?}: bar {} alone", b.c.slot.song_bar);
+                let roots: Vec<u8> = b.c.band.subs.iter().flatten().map(|x| (x.chord.root + 12 - s.key) % 12).collect();
+                let fits = |t: u8| chorus::TURNS[t as usize].bar(0, k).map(|c| c.root).to_vec() == roots;
+                if call == Chorus::Blowing {
+                    assert!(fits(lady) || fits(chorus::in_mode(lady, true)), "{m:?}: {roots:?}");
+                } else {
+                    assert!(chorus::relatives(lady).into_iter().chain(chorus::relatives(chorus::in_mode(lady, true))).any(fits), "{m:?}: {roots:?}");
+                }
+                spots += 1;
+            }
+        }
+    }
+    assert!(spots >= 8, "{spots} spot bars");
+}
+
+/// A turnaround tag: after a solo chorus the band goes round the tune's last two bars again
+/// on a turnaround (the soloist's pass still), then fills into the next chorus. Never after
+/// a head, never with tags off.
+#[test]
+fn solos_go_round_again_on_a_turnaround() {
+    let mut tagged = 0;
+    for m in LOOPING {
+        let s = song(m);
+        let n = s.bars();
+        let setup = [freedom(1.0), force(Chorus::Blowing), Input::ForceTag(Some(true)), Input::ForceTurn(Some(13))];
+        let bars = play(s, 3, &setup, (n + 10) as u64);
+        let tag: Vec<_> = bars.iter().filter_map(|b| b.c.band.tag.map(|t| (b, t))).collect();
+        if tag.is_empty() {
+            continue;
+        }
+        tagged += 1;
+        let len = tag[0].1.n as usize;
+        assert_eq!(tag.len(), len, "{m:?}");
+        assert_eq!(tag[0].0.c.slot.index, n as u64, "{m:?}: the tag comes after the chorus");
+        for (k, (b, t)) in tag.iter().enumerate() {
+            assert_eq!((b.c.slot.pass, b.c.slot.song_bar, t.k as usize), (0, n - 2 + k % 2, k), "{m:?}");
+            assert_eq!(b.c.band.label(), "ROUND AGAIN");
+            // Lady Bird: I bIII7 | bVI7 bII7.
+            let roots: Vec<u8> = b.c.band.subs.iter().flatten().map(|x| (x.chord.root + 12 - s.key) % 12).collect();
+            assert_eq!(roots, if k % 2 == 0 { [0, 3] } else { [8, 1] }, "{m:?}");
+        }
+        assert!(tag[len - 1].0.c.band.fill != Default::default());
+        let next = &bars[n + len];
+        assert_eq!((next.c.slot.pass, next.c.slot.song_bar), (1, 0), "{m:?}");
+        assert!(next.c.band.tag.is_none());
+        // Tags off, or the head: straight round.
+        for setup in [[freedom(1.0), force(Chorus::Blowing), Input::ForceTag(Some(false))], [freedom(1.0), force(Chorus::Head), Input::ForceTag(Some(true))]] {
+            let bars = play(s, 3, &setup, (n + 2) as u64);
+            assert!(bars.iter().all(|b| b.c.band.tag.is_none()), "{m:?}");
+            assert_eq!(bars[n].c.slot.song_bar, 0);
+        }
+    }
+    assert!(tagged >= 3, "{tagged} tunes tagged");
 }
 
 /// End: the band plays an ending from the next bar on, its last chord the tonic in every

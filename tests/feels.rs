@@ -77,11 +77,12 @@ fn feels_of(bars: &[Bar]) -> Vec<Feel> {
 }
 
 /// The same seed and dial play the same feels in the same bars; the freer the band, the more
-/// bars in a feel; none at all up to 0.35 (the game's neutral), so the music there is as before.
+/// bars in a feel; none at all up to the feels' dial (`feel::MIN_DIAL`), so a struggling
+/// player's band plays as before.
 #[test]
 fn feels_are_deterministic_and_follow_the_dial() {
     let mut share = Vec::new();
-    for f in [0.35, 0.6, 0.9] {
+    for f in [0.3, 0.6, 0.9] {
         let mut feel_bars = 0;
         let mut all = 0;
         for (k, m) in LOOPING.into_iter().enumerate() {
@@ -92,13 +93,13 @@ fn feels_are_deterministic_and_follow_the_dial() {
             assert!(a[..8].iter().all(|b| b.c.band.feel == Feel::Swing), "{m:?}");
             feel_bars += a.iter().filter(|b| b.c.band.feel != Feel::Swing).count();
             all += a.len();
-            if f <= 0.35 {
+            if f <= 0.3 {
                 assert!(a.iter().all(|b| b.c.band.feel == Feel::Swing && !b.c.orns.iter().any(|o| o.has(Orn::Clave) || o.has(Orn::Backbeat))), "{m:?}");
             }
         }
         share.push(feel_bars as f64 / all as f64);
     }
-    println!("share of bars in a feel at 0.35 / 0.6 / 0.9: {share:?}");
+    println!("share of bars in a feel at 0.3 / 0.6 / 0.9: {share:?}");
     assert_eq!(share[0], 0.0);
     // (The arranged choruses share the loose end of the dial: no feels in a stop-time, soli,
     // breaks, two-feel or shout chorus.)

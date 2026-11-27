@@ -312,7 +312,11 @@ fn melodies_follow_the_reharmonization() {
                                 e.start
                             );
                         } else if e.dur < 1.5 {
-                            assert_eq!(x, y, "{name}: short weak-beat notes stay as written");
+                            // Unless it repeats a swapped note over the same chord (a repeat stays one).
+                            let repeat = |o: Option<&(&mml::Event, i32, i32)>| o.is_some_and(|&(p, px, py)| py == y && px == x && seg(p) == i);
+                            if !(repeat(k.checked_sub(1).and_then(|j| notes.get(j))) || repeat(notes.get(k + 1))) {
+                                assert_eq!(x, y, "{name}: short weak-beat notes stay as written");
+                            }
                         }
                     }
                     _ => {

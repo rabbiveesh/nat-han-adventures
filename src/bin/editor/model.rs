@@ -766,7 +766,7 @@ mod tests {
     /// The instruments tab edits the `[instruments]` lines in place.
     #[test]
     fn instrument_lines_are_edited_in_place() {
-        let text = library::text("tiger_rag").unwrap();
+        let text = library::text("hold_that_plunger").unwrap();
         let lines = instrument_lines(text);
         let brass = lines.iter().find(|l| l.name == "brass").unwrap();
         assert!(!brass.palette && brass.def.starts_with("vol") && brass.comment.contains("trumpet"));

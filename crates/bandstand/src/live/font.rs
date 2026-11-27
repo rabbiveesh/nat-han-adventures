@@ -334,7 +334,6 @@ impl FontVoices {
                 // louder or softer, the lead voice (the top) over the rest; the guitar strums.
                 let section = ev.ch >= super::horns::FIRST_CH;
                 let strum = super::horns::Horn::from_ch(ev.ch) == Some(super::horns::Horn::Guitar);
-                let top = a.notes().iter().copied().max().unwrap_or(0);
                 let ms = self.sample_rate as f64 / 1000.0;
                 for (i, &n) in a.notes().iter().enumerate() {
                     let k = n.min(127);
@@ -343,7 +342,8 @@ impl FontVoices {
                         let rank = a.notes().iter().filter(|&&x| x < n).count();
                         (ev.start + (rank as f64 * 5.0 * ms) as u64, vel as i32 + (h * 8.0 - 4.0) as i32)
                     } else if section {
-                        let lead = if n == top { 6 } else { 0 };
+                        let rank = a.notes().iter().filter(|&&x| x > n).count();
+                        let lead = ev.fx.balance.offset(rank, a.notes().len());
                         (ev.start + (h * 18.0 * ms) as u64, vel as i32 + lead + ((spread(ev.salt ^ 0x55, i as u64) * 14.0) as i32 - 7))
                     } else {
                         (ev.start, vel as i32)
@@ -541,7 +541,7 @@ mod tests {
             return;
         };
         let font = FontVoicing::load(&bytes).unwrap();
-        let mut e = Engine::with_config(&library::load("tiger_rag").unwrap(), 32_000, EngineConfig::default()).unwrap();
+        let mut e = Engine::with_config(&library::load("hold_that_plunger").unwrap(), 32_000, EngineConfig::default()).unwrap();
         e.use_font(FontVoicing::combo(font)).unwrap();
         e.post(Input::LevelStart);
         let mut out = vec![Frame::ZERO; 32_000 * 4];

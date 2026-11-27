@@ -39,7 +39,8 @@
 //! # Intros
 //! With [`super::engine::EngineConfig::intro`] (the game's levels), a tune that starts from the
 //! top with the band loose enough ([`INTRO_DIAL`]) gets a four-bar intro before the head
-//! ([`Intro`]): a vamp on I–VI–ii–V, or a ii–V over a dominant pedal. The engine plays it as
+//! ([`Intro`]): a turnaround twice round (one of [`TURNS`], Berkman's), a ii–V or a sus vamp
+//! over a dominant pedal, or the tune's own last four. The engine plays it as
 //! the song's last four bars (a partial pass: the head is still pass 0) with the harmony
 //! replaced ([`harmony`]); the lead lays out, then picks up into the head.
 //!
@@ -49,7 +50,7 @@
 //! ending after its last bar. Then the engine is finished.
 //! - **Basie**: a ii–V, the piano's three quiet plinks with the band out, the band's last chord
 //!   (a one-shot's: just the plinks and the chord);
-//! - **Tag**: the I–VI–ii–V turnaround three times, then the last chord;
+//! - **Tag**: a turnaround three times (another each time round), then the last chord;
 //! - **Vamp-out**: a ii–V vamped four times, quieter each time, then a soft last chord;
 //! - **Plain** (freedom 0): just the last chord.
 
@@ -269,13 +270,132 @@ pub fn break_bar(song_bar: usize, bars: usize) -> Option<usize> {
 
 // --- intros ---------------------------------------------------------------------------------
 
+/// A two-bar turnaround (or a four-bar one): its name, and two chords to a bar, as degrees
+/// above the key and qualities. From Dave Berkman's *The Jazz Harmony Book* (ch. 7, "The Last
+/// Circle"): the diminished passing chords, modal interchange, the tritone subs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Turn {
+    pub name: &'static str,
+    pub chords: &'static [(u8, Quality)],
+}
+
+impl Turn {
+    /// The chords of bar `k` of the turnaround played round and round in key `key`.
+    pub fn bar(&self, key: u8, k: u8) -> [Chord; 2] {
+        let n = self.chords.len();
+        let at = |i: usize| {
+            let (d, q) = self.chords[i % n];
+            Chord::new((key + d) % 12, q)
+        };
+        [at(2 * k as usize), at(2 * k as usize + 1)]
+    }
+}
+
+use Quality::{Dim7, Dom7, Dom7b9, HalfDim, Maj7, MinMaj7, Minor7, Six};
+
+/// The major turnarounds come first in [`TURNS`], this many; then the minor ones.
+pub const MAJOR_TURNS: usize = 22;
+
+/// The turnarounds the band knows ([`TURNS`]`[0]` the plain I–vi–ii–V everyone plays): the
+/// major ones Berkman's, then minor ones of our own (into a minor tonic: [`in_mode`]).
+pub const TURNS: [Turn; 30] = [
+    Turn { name: "I VI7 ii V", chords: &[(0, Six), (9, Dom7), (2, Minor7), (7, Dom7)] },
+    Turn { name: "iii VI7 ii V", chords: &[(4, Minor7), (9, Dom7), (2, Minor7), (7, Dom7)] },
+    Turn { name: "I #Io ii V", chords: &[(0, Maj7), (1, Dim7), (2, Minor7), (7, Dom7)] },
+    Turn { name: "I #IIo ii V", chords: &[(0, Maj7), (3, Dim7), (2, Minor7), (7, Dom7)] },
+    Turn { name: "I #Io ii #IIo iii VI ii V", chords: &[(0, Maj7), (1, Dim7), (2, Minor7), (3, Dim7), (4, Minor7), (9, Dom7), (2, Minor7), (7, Dom7)] },
+    Turn { name: "I bVII7 bVI7 V7", chords: &[(0, Maj7), (10, Dom7), (8, Dom7), (7, Dom7)] },
+    Turn { name: "I bIII7 bVIΔ V7", chords: &[(0, Maj7), (3, Dom7), (8, Maj7), (7, Dom7)] },
+    Turn { name: "I i ii V", chords: &[(0, Maj7), (0, Minor7), (2, Minor7), (7, Dom7)] },
+    Turn { name: "IΔ bIIIΔ bVIΔ bIIΔ", chords: &[(0, Maj7), (3, Maj7), (8, Maj7), (1, Maj7)] },
+    Turn { name: "IΔ bIIIΔ IIΔ bIIΔ", chords: &[(0, Maj7), (3, Maj7), (2, Maj7), (1, Maj7)] },
+    Turn { name: "I VI7 iiø V", chords: &[(0, Maj7), (9, Dom7), (2, HalfDim), (7, Dom7)] },
+    Turn { name: "I iv bVII7", chords: &[(0, Maj7), (5, Minor7), (10, Dom7), (10, Dom7)] },
+    Turn { name: "I bIII7 bVI7 V7", chords: &[(0, Maj7), (3, Dom7), (8, Dom7), (7, Dom7)] },
+    Turn { name: "Lady Bird", chords: &[(0, Maj7), (3, Dom7), (8, Dom7), (1, Dom7)] },
+    Turn { name: "I VI7 ii bII7", chords: &[(0, Maj7), (9, Dom7), (2, Minor7), (1, Dom7)] },
+    Turn { name: "I bIII7 ii bII7", chords: &[(0, Maj7), (3, Dom7), (2, Minor7), (1, Dom7)] },
+    Turn { name: "I bIII7 bvi bII7", chords: &[(0, Maj7), (3, Dom7), (8, Minor7), (1, Dom7)] },
+    Turn { name: "I bIII7 bVIΔ bII7", chords: &[(0, Maj7), (3, Dom7), (8, Maj7), (1, Dom7)] },
+    Turn { name: "I VI7 bVIΔ V7", chords: &[(0, Maj7), (9, Dom7), (8, Maj7), (7, Dom7)] },
+    Turn { name: "iii biii ii bII7", chords: &[(4, Minor7), (3, Minor7), (2, Minor7), (1, Dom7)] },
+    Turn { name: "iii VI7 bvi bII7", chords: &[(4, Minor7), (9, Dom7), (8, Minor7), (1, Dom7)] },
+    Turn { name: "iii bIII7 ii bII7", chords: &[(4, Minor7), (3, Dom7), (2, Minor7), (1, Dom7)] },
+    Turn { name: "i viø iiø V7b9", chords: &[(0, Minor7), (9, HalfDim), (2, HalfDim), (7, Dom7b9)] },
+    Turn { name: "i bVI7 iiø V7b9", chords: &[(0, Minor7), (8, Dom7), (2, HalfDim), (7, Dom7b9)] },
+    Turn { name: "i bIII7 bVI7 bII7", chords: &[(0, Minor7), (3, Dom7), (8, Dom7), (1, Dom7)] },
+    Turn { name: "i bVI7 V7b9", chords: &[(0, Minor7), (8, Dom7), (7, Dom7b9), (7, Dom7b9)] },
+    Turn { name: "i bIIIΔ bVIΔ bIIΔ", chords: &[(0, Minor7), (3, Maj7), (8, Maj7), (1, Maj7)] },
+    Turn { name: "i-Δ7 i-7 iiø V7b9", chords: &[(0, MinMaj7), (0, Minor7), (2, HalfDim), (7, Dom7b9)] },
+    Turn { name: "i bVII7 bVI7 V7b9", chords: &[(0, Minor7), (10, Dom7), (8, Dom7), (7, Dom7b9)] },
+    Turn { name: "i bVI7 iiø bII7", chords: &[(0, Minor7), (8, Dom7), (2, HalfDim), (1, Dom7)] },
+];
+
+/// Is turnaround `t` a minor one (into a minor tonic)?
+pub fn minor_turn(t: u8) -> bool {
+    t as usize % TURNS.len() >= MAJOR_TURNS
+}
+
+/// Turnaround `t`, or its counterpart in the other mode, to land on a major (`minor` false)
+/// or minor tonic.
+pub fn in_mode(t: u8, minor: bool) -> u8 {
+    let t = t as usize % TURNS.len();
+    let n_minor = TURNS.len() - MAJOR_TURNS;
+    (match (minor, t >= MAJOR_TURNS) {
+        (true, false) => MAJOR_TURNS + t % n_minor,
+        (false, true) => t - MAJOR_TURNS,
+        _ => t,
+    }) as u8
+}
+
+/// The turnaround the band picks (at `dial`): the plain one loose or not, the others more
+/// as the band gets looser.
+pub fn turn_for(seed: u64, bar: u64, dial: f32) -> u8 {
+    let mut r = band::rng(seed, 8, bar, 9);
+    if !r.chance((0.25 + 0.7 * dial as f64).min(0.9)) {
+        return 0;
+    }
+    1 + r.below(MAJOR_TURNS - 1) as u8
+}
+
 /// How a tune starts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum IntroKind {
-    /// I–VI | ii–V, twice.
-    Vamp,
-    /// ii–V in every bar over the dominant in the bass.
+    /// A ii–V in every bar over the dominant in the bass.
     Pedal,
+    /// A sus vamp: V7sus4 over its root, the last bar a V7b9.
+    Sus,
+    /// The tune's own last four bars (its changes as written): how most charts start.
+    Tune,
+    /// A turnaround ([`TURNS`]) twice round.
+    Turn(u8),
+}
+
+impl IntroKind {
+    /// Every intro: the three of their own, then the turnarounds.
+    pub fn all() -> impl Iterator<Item = IntroKind> {
+        [IntroKind::Pedal, IntroKind::Sus, IntroKind::Tune].into_iter().chain((0..TURNS.len() as u8).map(IntroKind::Turn))
+    }
+
+    pub fn slug(self) -> &'static str {
+        match self {
+            IntroKind::Pedal => "pedal",
+            IntroKind::Sus => "sus",
+            IntroKind::Tune => "last four",
+            IntroKind::Turn(i) => TURNS[i as usize % TURNS.len()].name,
+        }
+    }
+
+    /// The comp plays the Charleston and the bass walks (a turnaround vamp), as opposed to a
+    /// pedal (Freddie Green over a held bass).
+    pub fn vamps(self) -> bool {
+        !self.pedals()
+    }
+
+    /// The bass holds a pedal under it.
+    pub fn pedals(self) -> bool {
+        matches!(self, IntroKind::Pedal | IntroKind::Sus)
+    }
 }
 
 /// An intro bar: its kind, and which of how many.
@@ -300,7 +420,14 @@ pub fn intro_for(seed: u64, dial: f32) -> Option<IntroKind> {
     if dial < INTRO_DIAL {
         return None;
     }
-    Some(if band::rng(seed, 8, 0, 3).chance(0.5) { IntroKind::Vamp } else { IntroKind::Pedal })
+    let mut r = band::rng(seed, 8, 0, 3);
+    let x = r.f();
+    Some(match x {
+        x if x < 0.12 => IntroKind::Pedal,
+        x if x < 0.2 => IntroKind::Sus,
+        x if x < 0.38 => IntroKind::Tune,
+        _ => IntroKind::Turn(turn_for(seed, 0, dial)),
+    })
 }
 
 // --- endings --------------------------------------------------------------------------------
@@ -312,7 +439,8 @@ pub enum EndKind {
     Plain,
     /// A ii–V, three plinks, the last chord.
     Basie,
-    /// The I–VI–ii–V turnaround three times, then the last chord.
+    /// A turnaround three times (a different one each time round, [`TURNS`]), then the last
+    /// chord.
     Tag,
     /// A ii–V vamped four times, quieter and quieter, then a soft last chord.
     VampOut,
@@ -348,6 +476,8 @@ pub struct EndBar {
     pub n: u8,
     /// A one-shot's own ending (after its last bar: no ii–V first).
     pub tail: bool,
+    /// The tag's first turnaround ([`TURNS`]; each time round takes another).
+    pub turn: u8,
 }
 
 impl EndBar {
@@ -396,26 +526,165 @@ pub fn ending_for(seed: u64, bar: u64, dial: f32) -> EndKind {
 pub fn harmony(key: u8, bb: f64, intro: Option<Intro>, end: Option<EndBar>) -> Option<([Chord; 2], f64)> {
     let ch = |deg: u8, q: Quality| Chord::new(key + deg, q);
     let half = (bb / 2.0).floor().max(1.0);
-    let turnaround = |k: u8| {
-        if k.is_multiple_of(2) { [ch(0, Quality::Six), ch(9, Quality::Dom7)] } else { [ch(2, Quality::Minor7), ch(7, Quality::Dom7)] }
-    };
     let two_five = [ch(2, Quality::Minor7), ch(7, Quality::Dom7)];
     let tonic = ch(0, Quality::Six);
     if let Some(i) = intro {
-        return Some((if i.kind == IntroKind::Vamp { turnaround(i.k) } else { two_five }, half));
+        let chords = match i.kind {
+            IntroKind::Turn(t) => TURNS[t as usize % TURNS.len()].bar(key, i.k),
+            IntroKind::Pedal => two_five,
+            IntroKind::Sus if i.last() => [ch(7, Quality::Dom7b9), ch(7, Quality::Dom7b9)],
+            IntroKind::Sus => [ch(7, Quality::Sus4), ch(7, Quality::Sus4)],
+            // The tune's own changes.
+            IntroKind::Tune => return None,
+        };
+        return Some((chords, half));
     }
     let e = end?;
     let chords = match (e.step(), e.kind) {
         (EndStep::Final | EndStep::Plinks, _) => [tonic, tonic],
-        (EndStep::Time, EndKind::Tag) => turnaround(e.k),
+        (EndStep::Time, EndKind::Tag) => tag_turn(e.turn, e.k / 2).bar(key, e.k % 2),
         (EndStep::Time, _) => two_five,
     };
     Some((chords, half))
 }
 
+/// The turnaround a tag plays its `round`-th time round: from `turn`, a fresh one each time
+/// (the plain one first when `turn` is).
+pub fn tag_turn(turn: u8, round: u8) -> &'static Turn {
+    let turn = turn as usize % TURNS.len();
+    let (base, n) = if minor_turn(turn as u8) { (MAJOR_TURNS, TURNS.len() - MAJOR_TURNS) } else { (0, MAJOR_TURNS) };
+    &TURNS[base + (turn - base + 7 * round as usize) % n]
+}
+
+/// Does pitch `pc` sit on chord `c` (a chord tone or a tension it takes: a dominant any
+/// altered one, a major 7th the #11)?
+pub fn sits_on(c: Chord, pc: i32) -> bool {
+    let pc = pc.rem_euclid(12);
+    let rel = (pc - c.root as i32).rem_euclid(12);
+    super::voicing::available(c).contains(&pc)
+        || (c.family() == crate::chart::Family::Dominant && c.quality != Quality::Sus4 && [1, 3, 6, 8].contains(&rel))
+        || (c.quality == Quality::Maj7 && rel == 6)
+}
+
+/// Does turnaround `turn` (in `key`, bars of `bb` beats) go under the tune's two bars
+/// `notes` (start in beats from the first bar line, length, MIDI pitch)? Every note on a
+/// strong beat (1 and 3) and every long one must sit on the chord over it.
+pub fn turn_fits(turn: &Turn, key: u8, bb: f64, notes: &[(f64, f64, i32)]) -> bool {
+    let half = (bb / 2.0).floor().max(1.0);
+    notes.iter().all(|&(b, len, p)| {
+        let near = b.round();
+        let strong = (b - near).abs() < 0.15 && (near.rem_euclid(bb) == 0.0 || near.rem_euclid(bb) == half);
+        if !strong && len < 1.5 {
+            return true;
+        }
+        let k = (b / bb).floor().clamp(0.0, 1.0);
+        let chords = turn.bar(key, k as u8);
+        let c = if b - k * bb >= half - 0.15 { chords[1] } else { chords[0] };
+        sits_on(c, p)
+    })
+}
+
+/// The turnarounds to try under the tune for signature `sig`: itself, then its relatives
+/// (two of its chords or more the same), most alike first.
+pub fn relatives(sig: u8) -> Vec<u8> {
+    let me = &TURNS[sig as usize % TURNS.len()];
+    let same = |t: &Turn| me.chords.iter().zip(t.chords).filter(|(a, b)| a == b).count();
+    let mut v: Vec<(usize, u8)> = TURNS
+        .iter()
+        .enumerate()
+        .filter(|(i, t)| *i != sig as usize && minor_turn(*i as u8) == minor_turn(sig) && same(t) >= 2)
+        .map(|(i, t)| (same(t), i as u8))
+        .collect();
+    v.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+    std::iter::once(sig).chain(v.into_iter().map(|x| x.1)).collect()
+}
+
+/// The two bars before a section that starts home (bars 7-8 of an A, the tune's last two):
+/// where the band can play the performance's signature turnaround ([`TURNS`]). `solo`: the
+/// signature itself (behind a solo nothing can clash); `head`: the one that goes under the
+/// tune (the signature or a relative, [`turn_fits`]), if any; `k`: which of the two bars;
+/// `start`: the song bar the spot starts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TurnSpot {
+    pub solo: u8,
+    pub head: Option<u8>,
+    pub k: u8,
+    pub start: usize,
+}
+
+/// Is song bar `song_bar` (of `bars`) in a turnaround spot's two bars? Which, and the spot's
+/// first bar.
+pub fn turn_spot(song_bar: usize, bars: usize) -> Option<(u8, usize)> {
+    let (k, n) = in_section(song_bar, bars);
+    (n >= 4 && k + 2 >= n).then(|| ((k + 2 - n) as u8, song_bar - (k + 2 - n)))
+}
+
+/// A bar of a turnaround tag: the band goes round the tune's last two bars again on a
+/// turnaround ([`TURNS`]) while the soloist blows on, `n` bars, then the next chorus.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Tag {
+    pub turn: u8,
+    pub k: u8,
+    pub n: u8,
+}
+
+impl Tag {
+    pub fn last(&self) -> bool {
+        self.k + 1 == self.n
+    }
+
+    pub fn chords(&self, key: u8) -> [Chord; 2] {
+        TURNS[self.turn as usize % TURNS.len()].bar(key, self.k)
+    }
+}
+
+/// A turnaround tag at the end of a solo chorus (`pass`): how many bars and which turnaround,
+/// or none. Looser bands go round more often (never below a third of the dial).
+pub fn tag_for(seed: u64, pass: u64, dial: f32) -> Option<(u8, u8)> {
+    let mut r = band::rng(seed, 8, pass, 10);
+    let p = ((dial as f64 - 0.3) * 0.7).clamp(0.0, 0.45);
+    if !r.chance(p) {
+        return None;
+    }
+    let n = [4, 4, 6, 8][r.below(4)];
+    Some((n, turn_for(seed, pass, dial)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn intros_vary() {
+        // Every kind turns up over the seeds, and each one's changes are its own.
+        let mut seen = std::collections::HashSet::new();
+        for seed in 0..400 {
+            seen.insert(intro_for(seed, 1.0).unwrap());
+        }
+        // (A rolled turnaround is a major one: the engine takes a minor tune's counterpart.)
+        let all: Vec<IntroKind> = IntroKind::all().filter(|k| !matches!(k, IntroKind::Turn(t) if minor_turn(*t))).collect();
+        assert_eq!(seen.len(), all.len(), "{:?}", all.iter().filter(|k| !seen.contains(k)).collect::<Vec<_>>());
+        let at = |kind, k| harmony(0, 4.0, Some(Intro { kind, k, n: 4 }), None).map(|(c, _)| c);
+        // Lady Bird: C - Eb7 | Ab7 - Db7.
+        let lady = IntroKind::Turn(TURNS.iter().position(|t| t.name == "Lady Bird").unwrap() as u8);
+        assert_eq!(at(lady, 0).unwrap().map(|c| c.root), [0, 3]);
+        assert_eq!(at(lady, 1).unwrap().map(|c| c.root), [8, 1]);
+        // The four-bar one: C C#o | Dm D#o | Em A7 | Dm G7.
+        assert_eq!(at(IntroKind::Turn(4), 2).unwrap().map(|c| c.root), [4, 9]);
+        assert_eq!(at(IntroKind::Turn(4), 3).unwrap().map(|c| c.root), [2, 7]);
+        // The modes: a minor tune's counterpart of each, and back.
+        assert!(!minor_turn(in_mode(23, false)) && minor_turn(in_mode(13, true)) && in_mode(5, false) == 5);
+        assert!(relatives(23).iter().all(|&t| minor_turn(t)));
+        // Every turnaround heads home: its last chord a dominant (or a major 7th a half step up).
+        for t in TURNS {
+            let last = t.chords.last().unwrap();
+            assert!(matches!(last, (7 | 1 | 10, crate::chart::Quality::Dom7 | crate::chart::Quality::Dom7b9) | (1, crate::chart::Quality::Maj7)), "{}", t.name);
+        }
+        // The tune's own last bars: no substitute.
+        assert!(at(IntroKind::Tune, 0).is_none());
+        // The sus vamp resolves to a b9 on its last bar.
+        assert_eq!(at(IntroKind::Sus, 3).unwrap()[0].quality, crate::chart::Quality::Dom7b9);
+    }
 
     #[test]
     fn choruses_arrange_themselves() {
@@ -464,11 +733,38 @@ mod tests {
     }
 
     #[test]
+    fn turnarounds_fit_the_tune() {
+        // In C, the second bar's ONE tells them apart: the plain one's Dm7 against Lady Bird's
+        // Ab7. A G there is Dm7's 11th but Ab7's major 7th; an F# Ab7's 7th but Dm7's major 3rd.
+        let lady = TURNS.iter().position(|t| t.name == "Lady Bird").unwrap() as u8;
+        let (plain, lady_t) = (&TURNS[0], &TURNS[lady as usize]);
+        let g = [(0.0, 2.0, 72), (4.0, 2.0, 67)];
+        assert!(turn_fits(plain, 0, 4.0, &g) && !turn_fits(lady_t, 0, 4.0, &g));
+        let fs = [(0.0, 2.0, 72), (4.0, 2.0, 66)];
+        assert!(!turn_fits(plain, 0, 4.0, &fs) && turn_fits(lady_t, 0, 4.0, &fs));
+        // A D on three: A7's 4th, Eb7's major 7th. Neither.
+        let d = [(0.0, 2.0, 72), (2.0, 2.0, 74)];
+        assert!(!turn_fits(plain, 0, 4.0, &d) && !turn_fits(lady_t, 0, 4.0, &d));
+        // Quick notes off the beat never clash.
+        assert!(turn_fits(&TURNS[0], 0, 4.0, &[(0.0, 1.0, 72), (1.5, 0.5, 73)]));
+        // Relatives: itself first, then turnarounds sharing chords with it.
+        let r = relatives(lady);
+        assert_eq!(r[0], lady);
+        let same = |i: u8| TURNS[i as usize].chords.iter().zip(TURNS[lady as usize].chords).filter(|(a, b)| a == b).count();
+        assert!(r.len() > 2 && r[1..].iter().all(|&i| same(i) >= 2));
+        // The spots: bars 7-8 of each eight, and a twelve's last two.
+        assert_eq!(turn_spot(6, 32), Some((0, 6)));
+        assert_eq!(turn_spot(31, 32), Some((1, 30)));
+        assert_eq!(turn_spot(5, 32), None);
+        assert_eq!(turn_spot(10, 12), Some((0, 10)));
+    }
+
+    #[test]
     fn endings_end_on_the_tonic() {
         for kind in [EndKind::Plain, EndKind::Basie, EndKind::Tag, EndKind::VampOut] {
             for tail in [false, true] {
                 let n = end_bars(kind, tail);
-                let bars: Vec<EndBar> = (0..n).map(|k| EndBar { kind, k, n, tail }).collect();
+                let bars: Vec<EndBar> = (0..n).map(|k| EndBar { kind, k, n, tail, turn: 0 }).collect();
                 assert_eq!(bars.last().unwrap().step(), EndStep::Final);
                 assert_eq!(bars.iter().filter(|b| b.step() == EndStep::Plinks).count(), (kind == EndKind::Basie) as usize);
                 let (c, _) = harmony(5, 4.0, None, bars.last().copied()).unwrap();
@@ -476,10 +772,12 @@ mod tests {
             }
         }
         // The tag's turnaround: F6 D7 | Gm7 C7.
-        let tag = |k| harmony(5, 4.0, None, Some(EndBar { kind: EndKind::Tag, k, n: 7, tail: false })).unwrap().0;
+        let tag = |k| harmony(5, 4.0, None, Some(EndBar { kind: EndKind::Tag, k, n: 7, tail: false, turn: 0 })).unwrap().0;
         assert_eq!(tag(0).map(|c| c.root), [5, 2]);
         assert_eq!(tag(1).map(|c| c.root), [7, 0]);
+        // Then round again on another one.
+        assert_ne!(tag(2), tag(0));
         // A vamp-out fades.
-        assert!(EndBar { kind: EndKind::VampOut, k: 3, n: 5, tail: false }.fade() > 0.3);
+        assert!(EndBar { kind: EndKind::VampOut, k: 3, n: 5, tail: false, turn: 0 }.fade() > 0.3);
     }
 }

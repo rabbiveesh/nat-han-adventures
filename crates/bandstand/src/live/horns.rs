@@ -550,7 +550,7 @@ mod tests {
     #[test]
     fn every_horn_note_is_in_range() {
         for role in LowRole::ALL {
-            for song in ["sweet_georgia_brown", "tiger_rag", "body_and_soul"] {
+            for song in ["sweet_georgia_brown", "hold_that_plunger", "body_and_soul"] {
                 for e in take(Horns::ALL, &[Input::ForceLowEnd(Some(role))], song) {
                     let Some(h) = Horn::from_ch(e.ch) else { continue };
                     let (lo, hi) = h.range();
@@ -642,10 +642,10 @@ mod tests {
 
     #[test]
     fn tacet_is_silent_and_roles_vary() {
-        let evs = take(Horns::LOW_END, &[Input::ForceLowEnd(Some(LowRole::Tacet))], "tiger_rag");
+        let evs = take(Horns::LOW_END, &[Input::ForceLowEnd(Some(LowRole::Tacet))], "hold_that_plunger");
         assert!(evs.iter().all(|e| e.ch < FIRST_CH));
         // Unforced, a long tune's sections don't all do the same thing.
-        let mut e = Engine::with_config(&library::load("tiger_rag").unwrap(), 32_000, EngineConfig { seed: 9, horns: Horns::ALL, ..EngineConfig::default() }).unwrap();
+        let mut e = Engine::with_config(&library::load("hold_that_plunger").unwrap(), 32_000, EngineConfig { seed: 9, horns: Horns::ALL, ..EngineConfig::default() }).unwrap();
         e.post(Input::LevelStart);
         e.post(Input::SetFreedom { lead: 0.8, comp: 0.8, bass: 0.8, drums: 0.8, dynamics: 0.5 });
         let mut roles = std::collections::HashSet::new();
@@ -736,5 +736,53 @@ mod tests {
         let saxes: Vec<_> = evs.iter().filter(|e| e.ch == Horn::Altos.ch() || e.ch == Horn::Tenors.ch()).collect();
         let single = saxes.iter().filter(|e| e.sound.notes().len() == 1).count();
         assert!(single > 10 && single < saxes.len(), "{single} of {}", saxes.len());
+    }
+
+    /// The quartet soli's locked climax takes the chorus's voicing: block chords on the
+    /// saxes, the fifths' crunch on top.
+    #[test]
+    fn the_locked_soli_takes_the_chorus_voicing() {
+        use crate::live::voicing::Style;
+        let soli = Input::ForceChorus(Some(Call { chorus: Chorus::Soli, key_up: false }));
+        let evs = take(Horns::BIG_BAND, &[soli, Input::ForceVoicing(Some(Style::Fifths)), Input::ForceVoices(Some(4))], "sweet_georgia_brown");
+        let chords: Vec<Vec<u8>> = evs
+            .iter()
+            .filter(|e| e.ch == Horn::Altos.ch())
+            .filter_map(|e| match e.sound {
+                Sound::Arp(a) if a.notes().len() >= 2 => Some(a.notes().to_vec()),
+                _ => None,
+            })
+            .collect();
+        assert!(chords.len() > 8, "the altos play chords in the locked section: {}", chords.len());
+        let crunch = chords
+            .iter()
+            .filter(|c| {
+                let mut c = (*c).clone();
+                c.sort_unstable();
+                c[c.len() - 1] - c[c.len() - 2] == 2
+            })
+            .count();
+        assert!(crunch * 3 > chords.len(), "{crunch} of {} with a whole step on top", chords.len());
+    }
+
+    /// A head's sax soli gets the quartet's counterpoint (a texture forced: the canon, the
+    /// alto's line its own notes), or block chords when locked.
+    #[test]
+    fn a_head_soli_takes_the_counterpoint() {
+        use crate::live::soli::Texture;
+        let head = Input::ForceChorus(Some(Call { chorus: Chorus::Head, key_up: false }));
+        let altos = |t: Texture| {
+            // (In swing: the feels have no soli.)
+            let swing = Input::ForceFeel(Some(crate::live::feel::Feel::Swing));
+            let evs = take(Horns::BIG_BAND, &[head, swing, Input::ForceUpper(Some(UpperRole::Soli)), Input::ForceSoli(Some(t))], "sweet_georgia_brown");
+            let ch = Horn::Altos.ch();
+            let notes = evs.iter().filter(|e| e.ch == ch && matches!(e.sound, Sound::Note(_))).count();
+            let chords = evs.iter().filter(|e| e.ch == ch && matches!(e.sound, Sound::Arp(_))).count();
+            (notes, chords)
+        };
+        let (n, c) = altos(Texture::Canon);
+        assert!(n > 20 && c * 10 < n, "canon: {n} single notes, {c} chords");
+        let (n, c) = altos(Texture::Locked);
+        assert!(c > 20, "locked: {n} single notes, {c} chords");
     }
 }
